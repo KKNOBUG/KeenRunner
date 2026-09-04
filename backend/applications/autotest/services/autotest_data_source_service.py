@@ -13,7 +13,7 @@
   resolve_enabled_data_source，及ensure_request_step/ensure_case_allows_data_source准入校验
 - 矩阵落库：apply_dataframe_payload（前端矩阵解析清洗）
 - 路径收集与矩阵构建：从步骤报文采集JSONPath/XPath生成垂直矩阵（/build接口）
-- 字段同步：sync_data_source_fields（按报文最新字段重建矩阵，/update_fields接口）
+- 字段同步：sync_data_source_fields（按报文最新字段重建矩阵，/update_fields接口；正交易场景新增字段按报文原始值回填）
 - 步骤元信息回写：sync_step_data_source_meta/clear_step_data_source_meta
 - 场景名称与身份补齐：场景列提取、重复检测、新建身份生成（树保存一致性校验消费）
 """
@@ -34,6 +34,7 @@ from backend.applications.autotest.services.autotest_data_source_parser import (
     AXIS_VERTICAL,
     extract_scene_names_from_matrix,
     is_section_marker,
+    json_safe_value,
     parse_dataframe_matrix_async,
     resolve_matrix_axis,
 )
@@ -43,6 +44,7 @@ from backend.services import get_current_username
 
 __all__ = [
     "DEFAULT_SCENE_NAMES",
+    "NORMAL_SCENE_NAME",
     "resolve_case",
     "resolve_step",
     "resolve_case_and_step",
@@ -53,6 +55,7 @@ __all__ = [
     "build_blank_vertical_matrix",
     "build_vertical_matrix_from_step",
     "sync_data_source_fields",
+    "collect_step_report_original",
     "sync_step_data_source_meta",
     "clear_step_data_source_meta",
     "data_source_scene_names",
@@ -60,7 +63,9 @@ __all__ = [
     "fill_create_identity",
 ]
 
-DEFAULT_SCENE_NAMES = ("场景1名称", )
+DEFAULT_SCENE_NAMES = ("场景1名称",)
+# 正交易场景固定场景名：前端按此名导入场景列/行，字段同步按此名回填新增字段值
+NORMAL_SCENE_NAME = "正交易场景"
 _REQUEST_STEP_TYPES = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
 
 
@@ -91,11 +96,7 @@ def _enum_value(raw: Any) -> str:
 # 用例/步骤/数据源定位
 # ---------------------------------------------------------------------------
 
-async def resolve_case(
-        services: AutoTestApiServices,
-        case_id: Optional[int] = None,
-        case_code: Optional[str] = None,
-) -> AutoTestCaseModel:
+async def resolve_case(services: AutoTestApiServices, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseModel:
     """
     根据case_id优先、否则case_code定位启用中的用例。
 
@@ -112,11 +113,7 @@ async def resolve_case(
     raise ParameterException(message="请提供参数[case_id或case_code]")
 
 
-async def resolve_step(
-        services: AutoTestApiServices,
-        step_id: Optional[int] = None,
-        step_code: Optional[str] = None,
-) -> AutoTestStepModel:
+async def resolve_step(services: AutoTestApiServices, step_id: Optional[int] = None, step_code: Optional[str] = None) -> AutoTestStepModel:
     """
     根据step_id优先、否则step_code定位启用中的步骤。
 
@@ -226,10 +223,7 @@ async def resolve_enabled_data_source(
     )
 
 
-async def apply_dataframe_payload(
-        dataframe: Optional[List[Any]],
-        axis: Optional[int],
-) -> Optional[Dict[str, Any]]:
+async def apply_dataframe_payload(dataframe: Optional[List[Any]], axis: Optional[int]) -> Optional[Dict[str, Any]]:
     """
     解析并清洗二维矩阵，生成dataset/dataset_names/dataframe/axis。
 
@@ -260,6 +254,26 @@ async def apply_dataframe_payload(
 # 路径收集与矩阵构建
 # ---------------------------------------------------------------------------
 
+def _kv_originals(kv_list: Optional[List[Any]], *, skip_file: bool = False) -> Dict[str, Any]:
+    """
+    将[{key,value,type}]转为JSONPath→原始值映射，保留出现顺序并按路径去重。
+
+    :param kv_list: 键值列表
+    :param skip_file: 为True时跳过type=file的项
+    :return: 形如$.key的路径到原始值的映射
+    """
+    originals: Dict[str, Any] = {}
+    for item in kv_list or []:
+        item_type = str(_field(item, "type") or "").strip().lower()
+        if skip_file and item_type == "file":
+            continue
+        key = str(_field(item, "key") or "").strip()
+        if not key:
+            continue
+        originals[f"$.{key}"] = _field(item, "value")
+    return originals
+
+
 def _kv_jsonpaths(kv_list: Optional[List[Any]], *, skip_file: bool = False) -> List[str]:
     """
     将[{key,value,type}]转为JSONPath列表，保留出现顺序并去重。
@@ -268,21 +282,35 @@ def _kv_jsonpaths(kv_list: Optional[List[Any]], *, skip_file: bool = False) -> L
     :param skip_file: 为True时跳过type=file的项
     :return: 形如$.key的路径列表
     """
-    paths: List[str] = []
-    seen: set = set()
-    for item in kv_list or []:
-        item_type = str(_field(item, "type") or "").strip().lower()
-        if skip_file and item_type == "file":
-            continue
-        key = str(_field(item, "key") or "").strip()
-        if not key:
-            continue
-        path = f"$.{key}"
-        if path in seen:
-            continue
-        seen.add(path)
-        paths.append(path)
-    return paths
+    return list(_kv_originals(kv_list, skip_file=skip_file))
+
+
+def _flatten_json_leaf_values(data: Any, prefix: str = "$") -> Dict[str, Any]:
+    """
+    将JSON展平为叶子JSONPath→原始值映射，保留文档序，值维持原类型。
+
+    :param data: dict/list/标量
+    :param prefix: 当前路径前缀
+    :return: 叶子路径到原始值的映射
+    """
+    originals: Dict[str, Any] = {}
+    if isinstance(data, dict):
+        for key, value in data.items():
+            path = f"{prefix}.{key}"
+            if isinstance(value, (dict, list)) and value:
+                originals.update(_flatten_json_leaf_values(value, path))
+            else:
+                originals[path] = value
+        return originals
+    if isinstance(data, list):
+        for index, value in enumerate(data):
+            path = f"{prefix}[{index}]"
+            if isinstance(value, (dict, list)) and value:
+                originals.update(_flatten_json_leaf_values(value, path))
+            else:
+                originals[path] = value
+        return originals
+    return originals
 
 
 def _flatten_json_leaf_paths(data: Any, prefix: str = "$") -> List[str]:
@@ -293,28 +321,7 @@ def _flatten_json_leaf_paths(data: Any, prefix: str = "$") -> List[str]:
     :param prefix: 当前路径前缀
     :return: 叶子路径列表
     """
-    paths: List[str] = []
-    if isinstance(data, dict):
-        if not data:
-            return paths
-        for key, value in data.items():
-            path = f"{prefix}.{key}"
-            if isinstance(value, (dict, list)) and value:
-                paths.extend(_flatten_json_leaf_paths(value, path))
-            else:
-                paths.append(path)
-        return paths
-    if isinstance(data, list):
-        if not data:
-            return paths
-        for index, value in enumerate(data):
-            path = f"{prefix}[{index}]"
-            if isinstance(value, (dict, list)) and value:
-                paths.extend(_flatten_json_leaf_paths(value, path))
-            else:
-                paths.append(path)
-        return paths
-    return paths
+    return list(_flatten_json_leaf_values(data, prefix))
 
 
 def _xml_local_name(tag: str) -> str:
@@ -324,36 +331,35 @@ def _xml_local_name(tag: str) -> str:
     return tag or ""
 
 
-def _flatten_xml_xpath_paths(xml_text: str) -> List[str]:
+def _flatten_xml_xpath_values(xml_text: str) -> Dict[str, Any]:
     """
-    按文档序将XML叶子与属性展平为ElementTree XPath（./Child、./Child/@attr）。
+    按文档序将XML叶子与属性展平为ElementTree XPath→文本值映射（./Child、./Child/@attr）。
+
+    叶子值取节点文本去除首尾空白，属性值保持原样。
 
     :param xml_text: XML字符串
-    :return: XPath列表；非法XML返回空列表
+    :return: XPath到文本值的映射；非法XML返回空字典
     """
     text = str(xml_text or "").strip()
     if not text:
-        return []
+        return {}
     try:
         root = ElementTree.fromstring(text)
     except ElementTree.ParseError:
-        return []
+        return {}
 
-    paths: List[str] = []
+    originals: Dict[str, Any] = {}
 
     def walk(elem: ElementTree.Element, xpath_prefix: str) -> None:
-        for attr_name in elem.attrib:
+        for attr_name, attr_value in elem.attrib.items():
             local_attr = _xml_local_name(attr_name)
             if xpath_prefix == ".":
-                paths.append(f"./@{local_attr}")
+                originals[f"./@{local_attr}"] = attr_value
             else:
-                paths.append(f"{xpath_prefix}/@{local_attr}")
+                originals[f"{xpath_prefix}/@{local_attr}"] = attr_value
         children = list(elem)
         if not children:
-            if xpath_prefix == ".":
-                paths.append(".")
-            else:
-                paths.append(xpath_prefix)
+            originals["." if xpath_prefix == "." else xpath_prefix] = (elem.text or "").strip()
             return
         name_total = Counter(_xml_local_name(child.tag) for child in children)
         name_seen: Counter = Counter()
@@ -369,7 +375,17 @@ def _flatten_xml_xpath_paths(xml_text: str) -> List[str]:
             walk(child, child_prefix)
 
     walk(root, ".")
-    return paths
+    return originals
+
+
+def _flatten_xml_xpath_paths(xml_text: str) -> List[str]:
+    """
+    按文档序将XML叶子与属性展平为ElementTree XPath（./Child、./Child/@attr）。
+
+    :param xml_text: XML字符串
+    :return: XPath列表；非法XML返回空列表
+    """
+    return list(_flatten_xml_xpath_values(xml_text))
 
 
 def _parse_json_body(request_body: Any) -> Any:
@@ -448,6 +464,34 @@ def build_vertical_matrix_from_step(step: AutoTestStepModel) -> List[List[Any]]:
     return matrix
 
 
+def collect_step_report_original(step: AutoTestStepModel) -> Dict[str, Any]:
+    """
+    采集步骤报文字段路径→原始值映射(HEAD/BODY分区)，值保持报文原类型。
+
+    路径规则与字段同步一致：请求头$.Key、JSON叶子JSONPath、XML叶子XPath、键值型$.Key；
+    HEAD在前BODY在后，同路径时BODY值覆盖；逐值经json_safe_value兑底保证JSON可序列化。
+
+    :param step: 步骤实例(取request_args_type与报文)
+    :return: 字段路径→原始值映射
+    """
+    originals: Dict[str, Any] = {}
+    originals.update(_kv_originals(getattr(step, "request_header", None)))
+    args = _enum_value(getattr(step, "request_args_type", None))
+    if args == AutoTestReqArgsType.JSON.value:
+        payload = _parse_json_body(getattr(step, "request_body", None))
+        if payload is not None:
+            originals.update(_flatten_json_leaf_values(payload))
+    elif args == AutoTestReqArgsType.XML.value:
+        originals.update(_flatten_xml_xpath_values(getattr(step, "request_text", None) or ""))
+    elif args == AutoTestReqArgsType.PARAMS.value:
+        originals.update(_kv_originals(getattr(step, "request_params", None)))
+    elif args == AutoTestReqArgsType.FORM_DATA.value:
+        originals.update(_kv_originals(getattr(step, "request_form_data", None), skip_file=True))
+    elif args == AutoTestReqArgsType.X_WWW_FORM_URLENCODED.value:
+        originals.update(_kv_originals(getattr(step, "request_form_urlencoded", None)))
+    return {path: json_safe_value(value) for path, value in originals.items()}
+
+
 # ---------------------------------------------------------------------------
 # 步骤元信息回写
 # ---------------------------------------------------------------------------
@@ -502,24 +546,55 @@ async def clear_step_data_source_meta(
 # 字段同步
 # ---------------------------------------------------------------------------
 
+def _rebuild_scene_values(
+        old_values: Optional[List[Any]],
+        empty: List[Any],
+        normal_index: int,
+        originals: Optional[Dict[str, Any]],
+        path: str,
+) -> List[Any]:
+    """
+    字段同步取场景值：保留字段搬移原值；新增字段其余场景补空，正交易场景按报文原始值回填。
+
+    :param old_values: 原矩阵中该字段的场景值行/列，字段不存在时为None
+    :param empty: 补空基准(与场景数等长)
+    :param normal_index: 正交易场景在场景维度中的序号，-1表示未导入
+    :param originals: 报文原始值映射
+    :param path: 字段路径
+    :return: 该字段同步后的场景值
+    """
+    if old_values is not None:
+        return list(old_values)
+    values = list(empty)
+    if normal_index >= 0 and originals:
+        value = originals.get(path)
+        values[normal_index] = "" if value is None else value
+    return values
+
+
 def _rebuild_vertical_matrix(
         matrix: List[List[Any]],
         head_paths: List[str],
         body_paths: List[str],
+        originals: Optional[Dict[str, Any]] = None,
 ) -> List[List[Any]]:
     """
     垂直模式字段同步：以报文最新路径为准重建HEAD/BODY分区行，ASSERT分区原样保留。
 
-    保留字段的场景值从原矩阵按路径匹配搬移；新增字段场景值为空；删除字段整行剔除。
+    保留字段的场景值从原矩阵按路径匹配搬移；删除字段整行剔除；
+    新增字段其余场景补空，正交易场景列按报文原始值回填(未导入正交易场景则补空)。
 
     :param matrix: 原垂直矩阵
     :param head_paths: 报文最新HEAD路径
     :param body_paths: 报文最新BODY路径
+    :param originals: 报文原始值映射，供正交易场景列回填新增字段值
     :return: 重建后的垂直矩阵
     """
     scene_names = extract_scene_names_from_matrix(matrix, AXIS_VERTICAL)
     col_count = 1 + len(scene_names)
     empty = [""] * len(scene_names)
+    # 正交易场景在场景维度中的列号(0起)，-1表示未导入
+    normal_col = scene_names.index(NORMAL_SCENE_NAME) if originals and NORMAL_SCENE_NAME in scene_names else -1
     # 原矩阵按分区+路径索引场景值，供保留字段搬移
     old_values: Dict[Tuple[str, str], List[Any]] = {}
     section: Optional[str] = None
@@ -541,10 +616,10 @@ def _rebuild_vertical_matrix(
     result: List[List[Any]] = [header_row]
     result.append(["HEAD", *empty])
     for path in head_paths:
-        result.append([path, *old_values.get(("HEAD", path), empty)])
+        result.append([path, *_rebuild_scene_values(old_values.get(("HEAD", path)), empty, normal_col, originals, path)])
     result.append(["BODY", *empty])
     for path in body_paths:
-        result.append([path, *old_values.get(("BODY", path), empty)])
+        result.append([path, *_rebuild_scene_values(old_values.get(("BODY", path)), empty, normal_col, originals, path)])
     result.extend(assert_rows)
     return result
 
@@ -553,15 +628,18 @@ def _rebuild_horizontal_matrix(
         matrix: List[List[Any]],
         head_paths: List[str],
         body_paths: List[str],
+        originals: Optional[Dict[str, Any]] = None,
 ) -> List[List[Any]]:
     """
     水平模式字段同步：以报文最新路径为准重建HEAD/BODY分区列，ASSERT分区原样保留。
 
-    保留字段的场景值从原矩阵按路径匹配搬移；新增字段场景值为空；删除字段整列剔除。
+    保留字段的场景值从原矩阵按路径匹配搬移；删除字段整列剔除；
+    新增字段其余场景补空，正交易场景行按报文原始值回填(未导入正交易场景则补空)。
 
     :param matrix: 原水平矩阵
     :param head_paths: 报文最新HEAD路径
     :param body_paths: 报文最新BODY路径
+    :param originals: 报文原始值映射，供正交易场景行回填新增字段值
     :return: 重建后的水平矩阵
     """
     scene_names = extract_scene_names_from_matrix(matrix, AXIS_HORIZONTAL)
@@ -581,45 +659,53 @@ def _rebuild_horizontal_matrix(
             old_cols[(section, cell)] = col_idx
         elif section in ("ASSERT_HEAD", "ASSERT_BODY"):
             assert_col_indices.append(col_idx)
+    # 正交易场景行号(原矩阵1+行序，result同序)：新增字段按报文原始值回填该行，-1表示未导入
+    normal_row = -1
+    if originals:
+        for row_idx, row in enumerate(matrix[1:]):
+            if row and str(row[0] if row[0] is not None else "").strip() == NORMAL_SCENE_NAME:
+                normal_row = row_idx
+                break
     # 新列顺序：场景名列 + HEAD标记+字段列 + BODY标记+字段列 + ASSERT列原样
+    # 列映射项：int=原矩阵列号；None=分区标记列；(分区, 路径)=新增字段列
     new_header: List[Any] = [header[0] if header else ""]
-    new_col_map: List[Optional[int]] = [0]
+    new_col_map: List[Any] = [0]
     new_header.append("HEAD")
     new_col_map.append(None)
     for path in head_paths:
         new_header.append(path)
-        new_col_map.append(old_cols.get(("HEAD", path)))
+        new_col_map.append(old_cols.get(("HEAD", path)) if ("HEAD", path) in old_cols else ("HEAD", path))
     new_header.append("BODY")
     new_col_map.append(None)
     for path in body_paths:
         new_header.append(path)
-        new_col_map.append(old_cols.get(("BODY", path)))
+        new_col_map.append(old_cols.get(("BODY", path)) if ("BODY", path) in old_cols else ("BODY", path))
     for col_idx in assert_col_indices:
         new_header.append(header[col_idx])
         new_col_map.append(col_idx)
     result: List[List[Any]] = [new_header]
-    for row in matrix[1:]:
+    for row_idx, row in enumerate(matrix[1:]):
         new_row: List[Any] = []
-        for src_col in new_col_map:
-            if src_col is None:
+        for src in new_col_map:
+            if src is None:
                 new_row.append("")
-            elif src_col < len(row):
-                new_row.append(row[src_col])
+            elif isinstance(src, int):
+                new_row.append(row[src] if src < len(row) else "")
+            elif row_idx == normal_row:
+                value = originals.get(src[1])
+                new_row.append("" if value is None else value)
             else:
                 new_row.append("")
         result.append(new_row)
     return result
 
 
-async def sync_data_source_fields(
-        step: AutoTestStepModel,
-        dataframe: List[Any],
-        axis: Optional[int],
-) -> Dict[str, Any]:
+async def sync_data_source_fields(step: AutoTestStepModel, dataframe: List[Any], axis: Optional[int]) -> Dict[str, Any]:
     """
     按步骤当前报文同步数据源矩阵字段：新增字段补空值，删除字段剔除，保留字段场景值不动。
 
-    仅同步HEAD/BODY分区，ASSERT分区原样保留；方向以矩阵实际结构为准。
+    仅同步HEAD/BODY分区，ASSERT分区原样保留，方向以矩阵实际结构为准；
+    正交易场景列/行的新增字段按报文原始值回填，其余场景补空。
 
     :param step: 步骤实例(取request_args_type与报文)
     :param dataframe: 数据源当前二维矩阵
@@ -629,10 +715,11 @@ async def sync_data_source_fields(
     used_axis = resolve_matrix_axis(dataframe, declared_axis=axis)
     head_paths = _collect_head_paths(step)
     body_paths = _collect_body_paths(step)
+    originals = collect_step_report_original(step)
     if used_axis == AXIS_VERTICAL:
-        new_matrix = _rebuild_vertical_matrix(dataframe, head_paths, body_paths)
+        new_matrix = _rebuild_vertical_matrix(dataframe, head_paths, body_paths, originals)
     else:
-        new_matrix = _rebuild_horizontal_matrix(dataframe, head_paths, body_paths)
+        new_matrix = _rebuild_horizontal_matrix(dataframe, head_paths, body_paths, originals)
     step_data, dataset_names, norm_matrix, final_axis = await parse_dataframe_matrix_async(
         new_matrix, axis=used_axis
     )
@@ -710,11 +797,7 @@ def data_source_duplicate_scene_names(ds: Any) -> List[str]:
     return duplicates
 
 
-def fill_create_identity(
-        data_in: AutoTestDataSourceCreate,
-        case: AutoTestCaseModel,
-        step: AutoTestStepModel,
-) -> AutoTestDataSourceCreate:
+def fill_create_identity(data_in: AutoTestDataSourceCreate, case: AutoTestCaseModel, step: AutoTestStepModel) -> AutoTestDataSourceCreate:
     """用已解析的用例/步骤补齐创建入参中的标识字段。"""
     return data_in.model_copy(
         update={
