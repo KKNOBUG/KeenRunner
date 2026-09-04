@@ -319,11 +319,14 @@ class Extractors:
             )
             for op_resp in response_json:
                 if isinstance(op_resp, dict) and source_strip in op_resp.get("variable_name", []):
+                    # 同名存储变量不break：后执行的操作覆盖先执行的(与变量池同名覆盖语义一致)；
+                    # 执行异常的操作sql_data/redis_data为None，不视为覆盖，保留前序有效数据
                     if "redis_data" in op_resp:
-                        expr_executive_data = op_resp["redis_data"]
+                        op_data: Any = op_resp["redis_data"]
                     else:
-                        expr_executive_data = op_resp.get("sql_data")
-                    break
+                        op_data: Any = op_resp.get("sql_data")
+                    if op_data is not None:
+                        expr_executive_data = op_data
             if expr_executive_data is not None:
                 return Extractors._extract_json_payload(
                     data=expr_executive_data,
