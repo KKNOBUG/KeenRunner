@@ -129,3 +129,9 @@ class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
     date_to: Optional[str] = Field(None, description="最后执行时间-止")
     env_id: Optional[int] = Field(None, ge=1, description="涉及环境ID")
     env_name: Optional[str] = Field(None, max_length=64, description="涉及环境名称")
+
+
+class AutoTestApiTaskId(BaseModel):
+    """单任务主键入参：供执行/启动/停止/复制等单任务操作端点共用。"""
+
+    task_id: int = Field(..., ge=1, description="任务主键ID")

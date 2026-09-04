@@ -203,6 +203,38 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
+    async def copy_task(self, task_id: int, operate_user: Optional[str] = None) -> AutoTestTaskModel:
+        """
+        完全复刻任务记录生成新任务：业务配置原样复制，task_code重新生成、
+        task_enabled默认停用(避免复制后立即产生双调度)、执行痕迹(last_execute_time/state/user)重置。
+
+        :param task_id: 源任务主键ID
+        :param operate_user: 当前操作人，作为新任务的created_user/updated_user
+        :return: 复制生成的新任务实例
+        """
+        source = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
+        # 新名称=原名+微秒时间戳后缀：(task_name, task_project)唯一性由时间戳唯一性保证，无需查重；
+        # 原名按后缀长度截断，确保不超task_name上限255
+        suffix: str = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        new_task_name: str = f"{source.task_name[:255 - len(suffix) - 1]}_{suffix}"
+        copy_in = AutoTestApiTaskCreate(
+            task_name=new_task_name,
+            task_desc=source.task_desc,
+            task_type=source.task_type,
+            task_project=source.task_project,
+            task_execute_mode=source.task_execute_mode,
+            task_case_ids=source.task_case_ids,
+            task_kwargs=source.task_kwargs,
+            dataset_enabled=source.dataset_enabled,
+            cases_execute_config=source.cases_execute_config,
+            task_schedule_expr=source.task_schedule_expr,
+            task_periodic_expr=source.task_periodic_expr,
+            task_notify=source.task_notify,
+            task_notifier=source.task_notifier,
+            created_user=operate_user,
+        )
+        return await self.create_task(task_in=copy_in)
+
     async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestTaskModel:
         """
         更新任务，根据task_id或task_code定位并校验(task_name, task_project)唯一。

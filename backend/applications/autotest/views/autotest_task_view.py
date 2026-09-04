@@ -8,7 +8,7 @@
 """
 import os
 import traceback
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Body, Query, Depends, Path
 from starlette.responses import FileResponse
@@ -20,6 +20,7 @@ from backend.applications.autotest.models.autotest_env_model import AutoTestEnvM
 from backend.applications.autotest.schemas.autotest_record_schema import AutoTestApiRecordSelect
 from backend.applications.autotest.schemas.autotest_task_schema import (
     AutoTestApiTaskCreate,
+    AutoTestApiTaskId,
     AutoTestApiTaskSchedulePreview,
     AutoTestApiTaskSelect,
     AutoTestApiTaskUpdate,
@@ -277,7 +278,7 @@ async def search_tasks(
 
 @autotest_task.post("/run", summary="执行任务", description="立即执行任务")
 async def run_task(
-        task_in: Dict[str, Any] = Body(..., description="任务ID"),
+        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -288,9 +289,7 @@ async def run_task(
     :return: 统一HTTP响应
     """
     try:
-        task_id = task_in.get("task_id")
-        if task_id is None:
-            return ParameterResponse(message="参数[task_id]不允许为空")
+        task_id: int = task_in.task_id
         await services.task_curd.get_by_id(task_id=task_id, on_error=True, state__not=1)
         from backend.celery_scheduler.tasks.task_autotest_case import run_autotest_task
         from backend.enums import AutoTestReportType
@@ -319,7 +318,7 @@ async def run_task(
 
 @autotest_task.post("/start", summary="启动任务", description="启用任务调度")
 async def start_task(
-        task_in: Dict[str, Any] = Body(..., description="任务ID"),
+        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -330,9 +329,7 @@ async def start_task(
     :return: 统一HTTP响应
     """
     try:
-        task_id = task_in.get("task_id")
-        if task_id is None:
-            return ParameterResponse(message="参数[task_id]不允许为空")
+        task_id: int = task_in.task_id
         from backend.services.ctx import get_current_username
         # 启停调度视为任务修改刷新维护人：调度触发的执行，执行人归因到最后操作者
         instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=True, updated_user=get_current_username())
@@ -358,7 +355,7 @@ async def start_task(
 
 @autotest_task.post("/stop", summary="停止任务", description="关闭任务调度")
 async def stop_task(
-        task_in: Dict[str, Any] = Body(..., description="任务ID"),
+        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
@@ -369,9 +366,7 @@ async def stop_task(
     :return: 统一HTTP响应
     """
     try:
-        task_id = task_in.get("task_id")
-        if task_id is None:
-            return ParameterResponse(message="参数[task_id]不允许为空")
+        task_id: int = task_in.task_id
         from backend.services.ctx import get_current_username
         # 停用调度同样视为任务修改，刷新维护人保持“最后修改人”语义一致
         instance = await services.task_curd.set_task_enabled(task_id=task_id, enabled=False, updated_user=get_current_username())
@@ -393,6 +388,49 @@ async def stop_task(
     except Exception as e:
         LOGGER.error(f"关闭任务调度失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"停止失败，异常描述: {e}")
+
+
+@autotest_task.post("/copy", summary="复制任务", description="根据用例id或code查询任务并复刻")
+async def copy_task(
+        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    完全复刻任务记录生成新任务。
+
+    复制规则：业务配置(用例/执行配置/定时表达式等)原样复制；
+    task_code重新生成、task_enabled停用、执行痕迹(最后执行时间/人/结果)重置。
+
+    :param task_in: 任务入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        task_id: int = task_in.task_id
+        from backend.services.ctx import get_current_username
+        instance = await services.task_curd.copy_task(task_id=task_id, operate_user=get_current_username())
+        data = await instance.to_dict(
+            exclude_fields={
+                "state",
+                "created_user", "created_time",
+                "updated_user", "updated_time",
+                "reserve_1", "reserve_2", "reserve_3",
+            },
+            replace_fields={"id": "task_id"},
+        )
+        LOGGER.info(f"复制任务成功，源task_id={task_id}，新task_id={instance.id}")
+        return SuccessResponse(message="复制成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"复制任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"复制失败，异常描述: {e}")
 
 
 @autotest_task.post("/schedule_preview", summary="定时执行预览", description="按时效与定时表达式正推即将到来的触发日期时间(近10次)")
