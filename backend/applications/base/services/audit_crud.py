@@ -106,7 +106,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
         :param order: 排序字段列表；由调用方提供，空则["-created_time"]
         :return: (总记录数, 当前页审计日志列表)
         """
-        order_fields: list = self._normalize_order(order) or ["-created_time"]
+        order_fields: list = self.normalize_order_fields(order) or ["-created_time"]
         base_query = self.model.filter(search)
         page_query = (
             base_query

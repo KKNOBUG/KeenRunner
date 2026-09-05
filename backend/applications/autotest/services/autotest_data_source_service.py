@@ -9,8 +9,7 @@
 数据源业务服务：位于视图层与CRUD/解析器之间的无状态函数集合。
 
 职责分组（按数据源操作链路组织）：
-- 用例/步骤/数据源定位：resolve_case/resolve_step/resolve_case_and_step/
-  resolve_enabled_data_source，及ensure_request_step/ensure_case_allows_data_source准入校验
+- 用例/步骤/数据源定位：resolve_case_and_step/resolve_enabled_data_source，及ensure_request_step/ensure_case_allows_data_source准入校验
 - 矩阵落库：apply_dataframe_payload（前端矩阵解析清洗）
 - 路径收集与矩阵构建：从步骤报文采集JSONPath/XPath生成垂直矩阵（/build接口）
 - 字段同步：sync_data_source_fields（按报文最新字段重建矩阵，/update_fields接口；正交易场景新增字段按报文原始值回填）
@@ -32,9 +31,9 @@ from backend.applications.autotest.services.autotest_data_source_crud import mak
 from backend.applications.autotest.services.autotest_data_source_parser import (
     AXIS_HORIZONTAL,
     AXIS_VERTICAL,
+    cell_text_value,
     extract_scene_names_from_matrix,
     is_section_marker,
-    json_safe_value,
     parse_dataframe_matrix_async,
     resolve_matrix_axis,
 )
@@ -45,8 +44,6 @@ from backend.services import get_current_username
 __all__ = [
     "DEFAULT_SCENE_NAMES",
     "NORMAL_SCENE_NAME",
-    "resolve_case",
-    "resolve_step",
     "resolve_case_and_step",
     "ensure_request_step",
     "ensure_case_allows_data_source",
@@ -64,9 +61,8 @@ __all__ = [
 ]
 
 DEFAULT_SCENE_NAMES = ("场景1名称",)
-# 正交易场景固定场景名：前端按此名导入场景列/行，字段同步按此名回填新增字段值
 NORMAL_SCENE_NAME = "正交易场景"
-_REQUEST_STEP_TYPES = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
+REQUEST_STEP_TYPES = (AutoTestStepType.HTTP, AutoTestStepType.TCP)
 
 
 # ---------------------------------------------------------------------------
@@ -96,39 +92,6 @@ def _enum_value(raw: Any) -> str:
 # 用例/步骤/数据源定位
 # ---------------------------------------------------------------------------
 
-async def resolve_case(services: AutoTestApiServices, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseModel:
-    """
-    根据case_id优先、否则case_code定位启用中的用例。
-
-    :param services: CRUD聚合
-    :param case_id: 用例主键
-    :param case_code: 用例标识
-    :return: 用例实例
-    """
-    if case_id:
-        return await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
-    code = _text(case_code)
-    if code:
-        return await services.case_curd.get_by_code(case_code=code, on_error=True, state__not=1)
-    raise ParameterException(message="请提供参数[case_id或case_code]")
-
-
-async def resolve_step(services: AutoTestApiServices, step_id: Optional[int] = None, step_code: Optional[str] = None) -> AutoTestStepModel:
-    """
-    根据step_id优先、否则step_code定位启用中的步骤。
-
-    :param services: CRUD聚合
-    :param step_id: 步骤主键
-    :param step_code: 步骤标识
-    :return: 步骤实例
-    """
-    if step_id:
-        return await services.step_curd.get_by_id(step_id=step_id, on_error=True, state__not=1)
-    code = _text(step_code)
-    if code:
-        return await services.step_curd.get_by_code(step_code=code, on_error=True, state__not=1)
-    raise ParameterException(message="请提供参数[step_id或step_code]")
-
 
 async def resolve_case_and_step(
         services: AutoTestApiServices,
@@ -151,18 +114,16 @@ async def resolve_case_and_step(
     has_step = bool(step_id) or bool(_text(step_code))
     if not (has_case and has_step):
         raise ParameterException(message="请提供(case_id或case_code)且(step_id或step_code)")
-    case = await resolve_case(services, case_id=case_id, case_code=case_code)
-    step = await resolve_step(services, step_id=step_id, step_code=step_code)
+    case: AutoTestCaseModel = await services.case_curd.get_by_unique(case_id=case_id, case_code=case_code, state__not=1)
+    step: AutoTestStepModel = await services.step_curd.get_by_unique(step_id=step_id, step_code=step_code, state__not=1)
     if step.case_id != case.id:
-        raise NotFoundException(
-            message=f"未命中对应用例步骤, case_id={case.id}, step_id={step.id}"
-        )
+        raise NotFoundException(message=f"未命中对应用例步骤, case_id={case.id}, step_id={step.id}")
     return case, step
 
 
 def ensure_request_step(step: AutoTestStepModel) -> None:
     """仅HTTP/TCP请求步骤允许绑定数据源。"""
-    if step.step_type not in _REQUEST_STEP_TYPES:
+    if step.step_type not in REQUEST_STEP_TYPES:
         raise ParameterException(message="仅支持对HTTP/TCP请求步骤使用数据源")
 
 
@@ -464,15 +425,16 @@ def build_vertical_matrix_from_step(step: AutoTestStepModel) -> List[List[Any]]:
     return matrix
 
 
-def collect_step_report_original(step: AutoTestStepModel) -> Dict[str, Dict[str, Any]]:
+def collect_step_report_original(step: AutoTestStepModel) -> Dict[str, Dict[str, str]]:
     """
-    采集步骤报文原始值映射，按HEAD/BODY分区隔离，值保持报文原类型。
+    采集步骤报文原始值映射，按HEAD/BODY分区隔离，值统一文本化为字符串。
 
     路径规则与字段同步一致：请求头$.Key、JSON叶子JSONPath、XML叶子XPath、键值型$.Key；
-    HEAD与BODY分区独立存放，同路径互不覆盖；逐值经json_safe_value兑底保证JSON可序列化。
+    HEAD与BODY分区独立存放，同路径互不覆盖；逐值经cell_text_value文本化，
+    与数据源dataset字符串化存储协议对齐（类型语义由执行注入侧按报文原字段适配）。
 
     :param step: 步骤实例(取request_args_type与报文)
-    :return: 分区名->字段路径->原始值映射，如{"HEAD": {"$.Token": "x"}, "BODY": {"$.id": 1}}
+    :return: 分区名->字段路径->原始文本值映射，如{"HEAD": {"$.Token": "x"}, "BODY": {"$.id": "1"}}
     """
     originals: Dict[str, Dict[str, Any]] = {"HEAD": {}, "BODY": {}}
     originals["HEAD"].update(_kv_originals(getattr(step, "request_header", None)))
@@ -490,7 +452,7 @@ def collect_step_report_original(step: AutoTestStepModel) -> Dict[str, Dict[str,
     elif args == AutoTestReqArgsType.X_WWW_FORM_URLENCODED.value:
         originals["BODY"].update(_kv_originals(getattr(step, "request_form_urlencoded", None)))
     return {
-        section: {path: json_safe_value(value) for path, value in mapping.items()}
+        section: {path: cell_text_value(value) for path, value in mapping.items()}
         for section, mapping in originals.items()
     }
 
@@ -538,7 +500,7 @@ async def clear_step_data_source_meta(
     filters: Dict[str, Any] = {
         "case_id": case_id,
         "state": 0,
-        "step_type__in": list(_REQUEST_STEP_TYPES),
+        "step_type__in": list(REQUEST_STEP_TYPES),
     }
     if _text(step_code):
         filters["step_code"] = _text(step_code)

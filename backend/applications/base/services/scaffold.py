@@ -418,6 +418,28 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     def __init__(self, model: Type[ModelType]):
         self.model = model
 
+    @staticmethod
+    def normalize_order_fields(order: Optional[list]) -> list:
+        """
+        规范化排序字段列表：过滤None/空串，拒绝非字符串元素。
+
+        :param order: 原始排序字段列表
+        :return: 可用于order_by的字段列表
+        """
+        if not order:
+            return []
+        cleaned: list = []
+        for item in order:
+            if item is None:
+                continue
+            if not isinstance(item, str):
+                raise ParameterException(message=f"排序字段必须为字符串, 收到: {type(item).__name__}")
+            field = item.strip()
+            if not field or field in ("-", "+"):
+                continue
+            cleaned.append(field)
+        return cleaned
+
     def fill_created_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
         创建时自动写入created_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
@@ -511,12 +533,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         return await self.model.filter(id=id, **kwargs).first()
 
-    async def get_by_conditions(
-            self,
-            only_one: bool = True,
-            on_error: bool = True,
-            **kwargs
-    ) -> Optional[Union[ModelType, List[ModelType]]]:
+    async def get_by_conditions(self, only_one: bool = True, on_error: bool = True, **kwargs) -> Optional[Union[ModelType, List[ModelType]]]:
         """
         根据条件查询对象。
 
@@ -539,28 +556,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             raise NotFoundException(message=error_message)
         return instances
 
-    @staticmethod
-    def _normalize_order(order: Optional[list]) -> list:
-        """
-        规范化排序字段列表：过滤None/空串，拒绝非字符串元素。
-
-        :param order: 原始排序字段列表
-        :return: 可用于order_by的字段列表
-        """
-        if not order:
-            return []
-        cleaned: list = []
-        for item in order:
-            if item is None:
-                continue
-            if not isinstance(item, str):
-                raise ParameterException(message=f"排序字段必须为字符串, 收到: {type(item).__name__}")
-            field = item.strip()
-            if not field or field in ("-", "+"):
-                continue
-            cleaned.append(field)
-        return cleaned
-
     async def list(
             self,
             page: int,
@@ -579,7 +574,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :param related: 预加载的关联字段列表
         :return: (总记录数, 当前页记录列表)
         """
-        order: list = self._normalize_order(order)
+        order: list = self.normalize_order_fields(order)
         related: list = related or []
         query = self.model.filter(search)
         return (
@@ -724,7 +719,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         LOGGER.info(f"硬删除成功: {self.model.__name__}(id={id})")
         return obj
 
-    async def batch_hard_delete(self, ids: List[int]) -> int:
+    async def hard_batch_delete(self, ids: List[int]) -> int:
         """
         批量硬删除：从数据库中永久移除多条记录。
 
@@ -766,11 +761,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """检查是否存在符合条件的记录。"""
         return await self.model.filter(**kwargs).exists()
 
-    async def aggregate(
-            self,
-            search: Q = Q(),
-            **aggregations
-    ) -> Dict[str, Any]:
+    async def aggregate(self, search: Q = Q(), **aggregations) -> Dict[str, Any]:
         """
         聚合查询，支持sum/avg/max/min/count。
 
@@ -800,12 +791,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             }
         return {key: None for key in aggregations.keys()}
 
-    async def group_by(
-            self,
-            field: str,
-            search: Q = Q(),
-            **aggregations
-    ) -> List[Dict[str, Any]]:
+    async def group_by(self, field: str, search: Q = Q(), **aggregations) -> List[Dict[str, Any]]:
         """
         分组统计查询。
 

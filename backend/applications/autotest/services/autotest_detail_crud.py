@@ -254,7 +254,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
             query = self.model.filter(search)
             return (
                 await query.count(),
-                await query.offset((page - 1) * page_size).limit(page_size).order_by(*self._normalize_order(order)).values(*DETAIL_LIST_FIELDS)
+                await query.offset((page - 1) * page_size).limit(page_size).order_by(*self.normalize_order_fields(order)).values(*DETAIL_LIST_FIELDS)
             )
         except FieldError as e:
             error_message: str = f"查询明细信息失败, 错误描述: {e}"

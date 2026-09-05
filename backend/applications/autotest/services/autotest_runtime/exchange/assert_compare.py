@@ -36,7 +36,9 @@ class AssertionCompare:
     @classmethod
     def _normalize_value(cls, value: Any) -> Any:
         """
-        将值标准化为便于比较的类型：数字字符串转int/float，true/false转bool，前导零串保留原串。
+        将值标准化为便于比较的类型：数字字符串转int/float，true/false/null文本转bool/None，前导零串保留原串。
+
+        null文本归一用于数据源dataset字符串化存储后的兼容：期望值"null"与响应null字段可判定相等。
 
         :param value: 任意值
         :return: 标准化后的值或原值
@@ -62,6 +64,8 @@ class AssertionCompare:
                 return True
             if lowered == "false":
                 return False
+            if lowered == "null":
+                return None
         return value
 
     @classmethod

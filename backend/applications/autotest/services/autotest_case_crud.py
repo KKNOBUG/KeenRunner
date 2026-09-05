@@ -110,6 +110,22 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
             raise NotFoundException(message=error_message)
         return instance
 
+    async def get_by_unique(self, case_id: int, case_code: str, **kwargs) -> Optional[AutoTestCaseModel]:
+        """
+        根据case_id优先、否则case_code定位启用中的用例。
+
+        :param case_id: 用例主键ID
+        :param case_code: 用例标识代码
+        :param kwargs: 额外过滤条件
+        :return: 数据源实例或None
+        """
+        if case_id:
+            return await self.get_by_id(case_id=case_id, on_error=True, **kwargs)
+        case_code = (case_code or "").strip()
+        if case_code:
+            return await self.get_by_code(case_code=case_code, on_error=True, **kwargs)
+        raise ParameterException(message="查询用例信息失败, 参数[case_id, case_code]不允许同时为空")
+
     @staticmethod
     async def get_case_ids_by_request_step(
             step_type: Optional[AutoTestStepType] = None,

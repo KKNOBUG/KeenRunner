@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 from backend.applications.autotest.schemas.autotest_step_schema import StepAssertValidatorItem
+from backend.applications.autotest.services.autotest_runtime.datagram.value_adapter import expand_dataset_special_value
 from backend.applications.autotest.services.autotest_runtime.exchange.assert_compare import AssertionCompare
 from backend.applications.autotest.services.autotest_runtime.exchange.extractors import Extractors
 from backend.applications.autotest.services.autotest_runtime.placeholders.resolver import PlaceholderResolver
@@ -213,17 +214,6 @@ class AssertPipeline:
         if not isinstance(step_struct, dict):
             return
 
-        def _resolve_expected(raw_expected: Any) -> Any:
-            """若提供finished_variables，则对期望值做占位符解析。"""
-            if finished_variables is None:
-                return raw_expected
-            return PlaceholderResolver.resolve_placeholders(
-                value=raw_expected,
-                logger_object=log_callback,
-                is_core_engine=is_core_engine,
-                finished_variables=finished_variables,
-            )
-
         def _append_one(
                 *,
                 except_path: str,
@@ -233,7 +223,18 @@ class AssertPipeline:
                 skip_error: Optional[str] = None,
         ) -> None:
             """追加一条断言结果；skip_error非空时直接记失败。"""
-            resolved_except_value = _resolve_expected(except_value)
+            if finished_variables is None:
+                resolved_except_value = except_value
+            else:
+                # 期望值先做占位符解析，再展开dataset特殊值文本
+                resolved_except_value = expand_dataset_special_value(
+                    value=PlaceholderResolver.resolve_placeholders(
+                        value=except_value,
+                        logger_object=log_callback,
+                        is_core_engine=is_core_engine,
+                        finished_variables=finished_variables,
+                    )
+                )
             if skip_error:
                 validator_results.append({
                     "name": except_path,

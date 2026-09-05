@@ -145,6 +145,22 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             raise NotFoundException(message=error_message)
         return instance
 
+    async def get_by_unique(self, step_id: int, step_code: str, **kwargs) -> Optional[AutoTestStepModel]:
+        """
+        根据step_id优先、否则step_code定位启用中的用例。
+
+        :param step_id: 步骤主键ID
+        :param step_code: 步骤标识代码
+        :param kwargs: 额外过滤条件
+        :return: 数据源实例或None
+        """
+        if step_id:
+            return await self.get_by_id(case_id=step_id, on_error=True, **kwargs)
+        step_code = (step_code or "").strip()
+        if step_code:
+            return await self.get_by_code(step_code=step_code, on_error=True, **kwargs)
+        raise ParameterException(message="查询步骤信息失败, 参数[step_id, step_code]不允许同时为空")
+
     async def get_case_tree(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseStepTreeLoadResult:
         """
         根据用例ID或case_code获取该用例的步骤树(含引用脚本步骤及统计)。

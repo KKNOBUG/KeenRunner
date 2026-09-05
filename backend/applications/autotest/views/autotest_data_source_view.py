@@ -50,7 +50,6 @@ from backend.applications.autotest.services.autotest_data_source_service import 
     ensure_case_allows_data_source,
     ensure_request_step,
     fill_create_identity,
-    resolve_case,
     resolve_case_and_step,
     resolve_enabled_data_source,
     sync_data_source_fields,
@@ -205,7 +204,7 @@ async def create_data_source(
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_data_source.delete("/delete", summary="删除数据源", description="软删除数据源并解绑步骤指针")
+@autotest_data_source.delete("/delete", summary="删除数据源", description="删除数据源并解绑步骤指针")
 async def delete_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
@@ -216,7 +215,7 @@ async def delete_data_source(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    软删除数据源并清空对应步骤的data_source_id/name/desc。
+    删除数据源并清空对应步骤的data_source_id/name/desc。
 
     定位：data_source_id或data_source_code优先；否则(case_id或case_code)且(step_id或step_code)。
 
@@ -241,12 +240,8 @@ async def delete_data_source(
             on_error=True,
         )
         async with in_transaction():
-            deleted = await services.data_source_curd.soft_delete(id=instance.id)
-            await clear_step_data_source_meta(
-                services,
-                case_id=instance.case_id,
-                step_code=instance.step_code,
-            )
+            deleted = await services.data_source_curd.hard_delete(id=instance.id)
+            await clear_step_data_source_meta(services, case_id=instance.case_id, step_code=instance.step_code)
         data = await _serialize_data_source(deleted)
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
@@ -271,14 +266,18 @@ async def unbind_case_data_source(
     :return: 统一HTTP响应
     """
     try:
-        case = await resolve_case(services, case_id=data_in.case_id, case_code=data_in.case_code)
+        case_instance = await services.case_curd.get_by_unique(
+            case_id=data_in.case_id,
+            case_code=data_in.case_code,
+            state__not=1
+        )
         async with in_transaction():
             source_ids = await services.data_source_curd.model.filter(
-                case_id=case.id,
+                case_id=case_instance.id,
                 state=0,
             ).values_list("id", flat=True)
-            deleted_count: int = await services.data_source_curd.soft_delete_batch(ids=list(source_ids))
-            cleared_count: int = await clear_step_data_source_meta(services, case_id=case.id)
+            deleted_count: int = await services.data_source_curd.hard_batch_delete(ids=list(source_ids))
+            cleared_count: int = await clear_step_data_source_meta(services, case_id=case_instance.id)
         return SuccessResponse(message="解绑成功", data={"data_source": deleted_count, "step": cleared_count})
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -539,7 +538,7 @@ async def update_data_source_fields(
         return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询已有数据源矩阵或根据步骤报文构建垂直矩阵，并附带按HEAD/BODY分区隔离的报文原始值映射")
+@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询或构建数据源矩阵，并附带报文原始值映射")
 async def build_data_source(
         data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
         data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
@@ -1442,8 +1441,7 @@ async def batch_step_dataset_download(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/batch_step_template_download", summary="下载数据源汇总模板",
-                          description="按用例所有HTTP/TCP请求步骤报文构建默认原始数据汇总模板xlsx")
+@autotest_data_source.get("/batch_step_template_download", summary="下载数据源汇总模板", description="根据用例汇总导出所有请求步骤报文构建模板xlsx")
 async def batch_step_template_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),

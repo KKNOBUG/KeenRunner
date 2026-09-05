@@ -12,12 +12,14 @@
 - 四分区：HEAD / BODY / ASSERT_HEAD / ASSERT_BODY(大小写不敏感)，分区标记所在行/列不允许用户内容
 - 方向：AXIS_HORIZONTAL=0水平(第0行分区标记+字段名，第0列场景名)，
         AXIS_VERTICAL=1垂直(第0列分区标记+字段名，第0行场景名)
-- 前导'标记：强制文本，落库时剥去引号；纯空白值加'保护避免空格丢失
+- 存储类型：单元格一律以字符串读取并落库（不做数字/布尔/null推断）；
+  执行注入时由 datagram/value_adapter 按请求报文原字段类型适配（详见 value_adapter 模块）
+- 存量兼容：前导'为旧版强制文本协议标记，读取时剥去引号后按字符串存储
 - 空单元格：以_CELL_OMIT省略，不覆盖步骤原值
 
 数据流：
     读取(_read_excel_*) → 方向识别(_detect/_resolve) → 清洗(_clean/_clear/_trim)
-    → sheet解析(_parse_sheet_*) → 类型转换(_dataset_field_value/_excel_typed_value)
+    → sheet解析(_parse_sheet_*) → 字符串化(_dataset_field_value)
     → dataset输出(normalize_dataset_record)
 
 对外入口(__all__)：
@@ -25,8 +27,8 @@
 - parse_xlsx_first_sheet_async：单步骤上传，仅解析首个sheet
 - parse_dataframe_matrix_async：前端保存矩阵解析
 - json_safe_value / parse_kv_string / is_section_marker / extract_scene_names_from_matrix /
-  normalize_dataset_record / detect_matrix_axis / resolve_matrix_axis / clean_matrix_by_axis：
-  视图层与数据源服务的复用工具
+  normalize_dataset_record / detect_matrix_axis / resolve_matrix_axis / clean_matrix_by_axis /
+  cell_text_value：视图层与数据源服务的复用工具
 """
 import asyncio
 import math
@@ -52,6 +54,7 @@ __all__ = [
     "normalize_dataset_record",
     "extract_scene_names_from_matrix",
     "clean_matrix_by_axis",
+    "cell_text_value",
     "parse_dataframe_matrix_async",
     "parse_xlsx_first_sheet_async",
     "parse_xlsx_to_parsed_data_async",
@@ -74,12 +77,6 @@ AXIS_VERTICAL = 1
 # dataset 字段省略标记：未填写的单元格不覆盖步骤原值
 _CELL_OMIT = object()
 
-# 严格数字正则：不匹配前导零（0 本身、0.x、.x 除外），用于 _excel_typed_value 类型推断
-_STRICT_NUMBER_RE = re.compile(r'^-?(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$')
-
-# orjson序列化仅支持64位整数，超出范围的整数文本保持字符串落库
-_INT64_MIN, _INT64_MAX = -(2 ** 63), 2 ** 63 - 1
-
 
 # ---------------------------------------------------------------------------
 # 对外入口
@@ -101,8 +98,10 @@ async def parse_dataframe_matrix_async(
     if not matrix:
         return {}, [], [], AXIS_VERTICAL if axis not in (AXIS_HORIZONTAL, AXIS_VERTICAL) else axis
 
-    axis = resolve_matrix_axis(matrix, declared_axis=axis)
-    norm_matrix = clean_matrix_by_axis(matrix, axis)
+    # 全矩阵仅做一次pad(含json_safe_value全量转换)，方向识别与清洗共用，避免重复消耗
+    padded = _pad_matrix(matrix)
+    axis = _axis_from_padded(padded, declared_axis=axis)
+    norm_matrix = _clean_padded_matrix(padded, axis)
     if not norm_matrix:
         return {}, [], [], axis
     # 分区标记所在行/列不允许用户内容（防粘贴等绕过前端拦截的脏值），先剔除再做空白保护
@@ -315,6 +314,11 @@ def resolve_matrix_axis(matrix: List[List[Any]], declared_axis: Optional[int] = 
     padded = _pad_matrix(matrix)
     if not padded:
         return declared_axis if declared_axis in (AXIS_HORIZONTAL, AXIS_VERTICAL) else AXIS_VERTICAL
+    return _axis_from_padded(padded, declared_axis=declared_axis)
+
+
+def _axis_from_padded(padded: List[List[Any]], declared_axis: Optional[int]) -> int:
+    """对已对齐矩阵识别方向；识别失败回落declared_axis，无回落时抛出。"""
     try:
         return detect_matrix_axis(pd.DataFrame(padded).values)
     except ValueError:
@@ -363,7 +367,11 @@ def clean_matrix_by_axis(matrix: List[List[Any]], axis: int) -> List[List[Any]]:
     :param axis: 0水平 / 1垂直
     :return: 清洗后的二维矩阵
     """
-    padded = _pad_matrix(matrix)
+    return _clean_padded_matrix(_pad_matrix(matrix), axis)
+
+
+def _clean_padded_matrix(padded: List[List[Any]], axis: int) -> List[List[Any]]:
+    """对已对齐(含json_safe_value)的矩阵执行方向清洗；与resolve_matrix_axis共用pad结果。"""
     if not padded:
         return []
     row_count = len(padded)
@@ -563,13 +571,11 @@ def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
                         has_data = True
 
         for section, rows in sections.items():
-            # HEAD/ASSERT_HEAD 分区不转换布尔值和 null，保持原始字符串
-            is_head_section = section in ("head", "assert_head")
             for r in rows:
                 key = first_col[r]
                 if not key:
                     continue
-                typed = _dataset_field_value(data_values[r, col_idx], skip_bool_null=is_head_section)
+                typed = _dataset_field_value(data_values[r, col_idx])
                 if typed is _CELL_OMIT:
                     continue
                 record[section][str(key).strip()] = typed
@@ -619,9 +625,7 @@ def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         record = {k: {} for k in _DATAGRAM_SECTION_MARKS}
         has_data = False
         for col_idx, section, field_key in field_columns:
-            # HEAD/ASSERT_HEAD 分区不转换布尔值和 null，保持原始字符串
-            is_head_section = section in ("head", "assert_head")
-            typed = _dataset_field_value(data_values[row_idx, col_idx], skip_bool_null=is_head_section)
+            typed = _dataset_field_value(data_values[row_idx, col_idx])
             if typed is _CELL_OMIT:
                 continue
             record[section][field_key] = typed
@@ -708,59 +712,39 @@ def _cell_is_blank(value: Any) -> bool:
     return isinstance(value, str) and value == ""
 
 
-def _excel_typed_value(value: Any, skip_bool_null: bool = False) -> Any:
+def cell_text_value(value: Any) -> str:
     """
-    按 Excel 编写习惯解释单元格类型。
+    将报文原始值转为单元格文本（dataframe/data_original统一字符串协议）。
 
-    前导单引号强制为文本（引号本身不落库）；含 ${} 占位符保持字符串；
-    整格为 true/false/null（大小写不敏感）时转为布尔 / JSON null；
-    无前导零的数字文本转为 int/float（如 "1"→1, "1.5"→1.5），
-    有前导零的保持字符串（如 "00001991" 不变）。
-
-    :param value: 原始单元格值
-    :param skip_bool_null: 为 True 时跳过 true/false/null 转换（用于 HEAD/ASSERT_HEAD 分区）
-    :return: 供 dataset 使用的类型化值
+    :param value: 报文原始值(bool/int/float/str/None等)
+    :return: 文本形态：bool为true/false、整值浮点去除.0、None为空串、其余str()
     """
-    if not isinstance(value, str):
-        return value
-    if value.startswith("'"):
-        return value[1:]
-    if "${" in value:
-        return value
-    if not skip_bool_null:
-        token = value.lower()
-        if token == "true":
-            return True
-        if token == "false":
-            return False
-        if token == "null":
-            return None
-    # 数字转换：无前导零的纯数字文本 → int/float；超64位整数与inf溢出保持字符串
-    if _STRICT_NUMBER_RE.match(value):
-        try:
-            if '.' in value or 'e' in value.lower():
-                number = float(value)
-                return value if math.isinf(number) else number
-            number = int(value)
-            if _INT64_MIN <= number <= _INT64_MAX:
-                return number
-        except (ValueError, OverflowError):
-            pass
-    return value
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
-def _dataset_field_value(value: Any, skip_bool_null: bool = False) -> Any:
+def _dataset_field_value(value: Any) -> Any:
     """
-    将单元格转为 dataset 字段值。
+    将单元格转为 dataset 字段值；存储层统一字符串化，不做类型推断。
+
+    类型语义移交执行注入侧：datagram/value_adapter 按请求报文原字段类型适配。
+    存量兼容：前导'为旧版强制文本协议标记，读取时剥去引号；
+    Excel原生数值/布尔单元格转文本（true/false小写、整值浮点去除.0），保持书写值形态。
 
     :param value: 原始单元格
-    :param skip_bool_null: 为 True 时跳过 true/false/null 转换（用于 HEAD/ASSERT_HEAD 分区）
-    :return: _CELL_OMIT 表示省略；None 表示显式 JSON null
+    :return: _CELL_OMIT 表示省略；否则为字符串形态字段值
     """
     safe = json_safe_value(value)
     if _cell_is_blank(safe):
         return _CELL_OMIT
-    return _excel_typed_value(safe, skip_bool_null=skip_bool_null)
+    if isinstance(safe, str):
+        return safe[1:] if safe.startswith("'") else safe
+    return cell_text_value(safe)
 
 
 # ---------------------------------------------------------------------------
