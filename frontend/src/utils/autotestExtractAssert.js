@@ -9,7 +9,7 @@ export const EXTRACT_MODE_REDIS = 'redis'
 
 /** 断言：HTTP/TCP 响应 + 变量池 */
 export const ASSERT_MODE_RESPONSE = 'response'
-/** 断言：数据库步骤，来源为 variable_name */
+/** 断言：数据库步骤，固定变量池（存储变量结果已并入变量池） */
 export const ASSERT_MODE_DATABASE = 'database'
 /** 断言：Redis 步骤，来源为 variable_name */
 export const ASSERT_MODE_REDIS = 'redis'
@@ -56,8 +56,15 @@ export const RESPONSE_ASSERT_OBJECT_OPTIONS = [
 
 export const PYTHON_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
 
+/** 数据库步骤断言固定对象：仅变量池 */
+export const DB_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
+
 export const DB_JSONPATH_PLACEHOLDER =
     '如 $.sql_data[0].列名、$.sql_count、$.env_name（相对该 variable_name 对应执行结果项，字段均在外层）'
+
+/** 数据库步骤断言（固定变量池）的表达式提示：存储变量与计数变量已写入变量池 */
+export const DB_ASSERT_POOL_JSONPATH_PLACEHOLDER =
+    '如 $.变量名[0].列名、$.变量名_count（相对变量池：存储变量对应SQL结果集，存储变量_count对应影响行数）'
 
 export const REDIS_JSONPATH_PLACEHOLDER =
     '如 $.[0] 或 $.[1][0]（相对该 variable_name 对应 redis_data 命令结果列表）'
@@ -143,7 +150,7 @@ export function getExtractPlaceholder(object) {
 }
 
 export function getAssertPlaceholder(object, assertMode) {
-  if (assertMode === ASSERT_MODE_DATABASE) return DB_JSONPATH_PLACEHOLDER
+  if (assertMode === ASSERT_MODE_DATABASE) return DB_ASSERT_POOL_JSONPATH_PLACEHOLDER
   if (assertMode === ASSERT_MODE_REDIS) return REDIS_JSONPATH_PLACEHOLDER
   if (object === '变量池' || assertMode === ASSERT_MODE_PYTHON) {
     return 'JSONPath，如：$.token 或 $.list[0].name'

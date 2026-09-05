@@ -227,6 +227,22 @@ async function handleStartTask(row) {
   }
 }
 
+/** 复制任务（完全复刻配置，重置执行痕迹并停用调度） */
+async function handleCopyTask(row) {
+  const taskId = row?.task_id
+  if (taskId == null) {
+    window.$message?.warning?.('缺少任务 ID')
+    return
+  }
+  try {
+    const res = await api.copyApiTask({ task_id: taskId })
+    window.$message?.success?.(res?.message || '复制成功')
+    $table.value?.handleSearch?.()
+  } catch (_) {
+    /* 错误由 http 拦截器提示 */
+  }
+}
+
 /** 停止调度（task_enabled=false） */
 async function handleStopTask(row) {
   const taskId = row?.task_id
@@ -625,6 +641,12 @@ const columns = computed(() => {
           key: 'edit',
           icon: renderIcon('material-symbols:edit-outline', {size: 16}),
           onClick: () => openEdit(row),
+        },
+        {
+          label: '复制',
+          key: 'copy',
+          icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
+          onClick: () => handleCopyTask(row),
         },
         {
           label: '日志',

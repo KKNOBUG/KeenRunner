@@ -548,7 +548,7 @@ const onlyShowFailed = ref(false)
 const detailDrawerVisible = ref(false)
 const currentDetail = ref(null)
 
-/** 明细表 code：本次执行使用的 Python 代码快照（krun_autotest_api_details.code） */
+/** 明细表 code：本次执行使用的 Python 代码快照 */
 const reportPythonCodeFromDetail = computed(() => {
   const c = currentDetail.value?.code
   if (c == null) return ''
@@ -1158,10 +1158,7 @@ const detailColumns = [
         h(NButton, {
           size: 'small',
           type: 'primary',
-          onClick: () => {
-            currentDetail.value = row
-            detailDrawerVisible.value = true
-          }
+          onClick: () => openDetail(row)
         }, {default: () => '详情'}),
         h(NButton, {
           size: 'small',
@@ -1179,6 +1176,18 @@ const detailColumns = [
     },
   },
 ]
+
+// 打开单条明细详情：列表为轻量列，报文/变量等大字段按行从详情接口补拉，失败时保留轻量字段展示
+const openDetail = async (row) => {
+  currentDetail.value = row
+  detailDrawerVisible.value = true
+  try {
+    const res = await api.getApiDetail({ detail_id: row.detail_id })
+    if (res?.data) currentDetail.value = { ...row, ...res.data }
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '查询明细详情失败')
+  }
+}
 
 watch(
     () => [props.show, props.reportRow],

@@ -204,7 +204,8 @@
               v-model="state.form.assert_validators"
               mode="database"
               :readonly="props.readonly"
-              :source-options="storageVariableSelectOptions"
+              :source-options="DB_ASSERT_OBJECT_OPTIONS"
+              lock-source
           />
         </n-tab-pane>
       </n-tabs>
@@ -237,6 +238,7 @@ import {
   buildAssertListFromDict,
   buildExtractListFromDict,
   countDictKeys,
+  DB_ASSERT_OBJECT_OPTIONS,
   EXTRACT_MODE_DATABASE,
   hydrateAssertDictFromBackend,
   hydrateExtractDictFromBackend,

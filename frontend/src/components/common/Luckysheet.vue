@@ -109,12 +109,6 @@ const isEmptyCellValue = (value) => value == null || value === ''
 const isBlankString = (value) => typeof value === 'string' && value.trim() === ''
 
 /**
- * 严格数字正则（与后端 _STRICT_NUMBER_RE 保持一致）：
- * 不匹配前导零（0 本身、0.x、.x 除外），用于读回时的数字类型重推断。
- */
-const NUMBER_RE = /^-?(?:(?:0|[1-9]\d*)(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/
-
-/**
  * 将值写入 Luckysheet 单元格。
  * 前导 ' 是"强制文本"协议标记（对齐 Excel）：标记本身不展示给用户，
  * 通过单元格 qp=1 属性承载，保证内容原样保留（含首尾空白、前导零）。
@@ -146,19 +140,17 @@ const valueToLuckysheetCell = (value, extra = {}) => {
 }
 
 /**
- * 读取 Luckysheet 单元格值（Excel 语义）：
- * - qp=1（用户输入过前导 '，或加载的强制文本）：返回 ' + 原文，原样保留
- * - 纯数字文本：重推断为 number，允许编辑改变类型（'000200 → 18 → 数字 18）
- * - 其他字符串：trim 后返回；true/false 保持字符串
- * - 非字符串值（number/boolean）：原样返回
+ * 读取 Luckysheet 单元格值（统一字符串协议，与后端 dataset 字符串化存储对齐）：
+ * - 非字符串值（number/boolean）仅字符串化，不再做数字类型重推断（类型语义由后端注入侧适配）
+ * - qp=1 强制文本单元格原样返回（含首尾空白、前导零），不再回填 ' 前缀
+ * - 其他字符串 trim 后返回；空值/空串返回 null
  */
 const readLuckysheetCell = (cell) => {
   if (cell == null) return null
   const raw = cell.v !== undefined && cell.v !== null ? cell.v : cell.m
   if (raw === undefined || raw === null || raw === '') return null
-  if (typeof raw !== 'string') return raw
-  if (cell.qp === 1) return `'${raw}`
-  if (NUMBER_RE.test(raw)) return Number(raw)
+  if (typeof raw !== 'string') return String(raw)
+  if (cell.qp === 1) return raw
   return raw.trim()
 }
 
@@ -373,6 +365,22 @@ const isSelectionColumnWide = () => {
     for (const sel of selections) {
       if (!sel || !sel.row || !Array.isArray(sel.row)) continue
       if (sel.row[0] === 0 && sel.row[1] >= totalRows - 1) return true
+    }
+  } catch (_) {}
+  return false
+}
+
+/** 整行选择特征：删行时行头选区列范围为全列宽，用于豁免「删行选区覆盖保护列」的误伤（与 isSelectionColumnWide 对称） */
+const isSelectionRowWide = () => {
+  if (!luckysheetRef.value || !isReady.value) return false
+  try {
+    const sheetData = luckysheetRef.value.getSheetData() || []
+    const totalCols = sheetData[0]?.length || 0
+    if (totalCols === 0) return false
+    const selections = luckysheetRef.value.getluckysheet_select_save() || []
+    for (const sel of selections) {
+      if (!sel || !sel.column || !Array.isArray(sel.column)) continue
+      if (sel.column[0] === 0 && sel.column[1] >= totalCols - 1) return true
     }
   } catch (_) {}
   return false
@@ -618,7 +626,8 @@ const setupDeletionProtection = () => {
   if (!Array.isArray(props.protectedRowKeywords) || !props.protectedRowKeywords.length) return
 
   const shouldBlock = () =>
-      ((hasProtectedRowInSelection() && !isSelectionColumnWide()) || hasProtectedColumnInSelection())
+      ((hasProtectedRowInSelection() && !isSelectionColumnWide()) ||
+       (hasProtectedColumnInSelection() && !isSelectionRowWide()))
   const interceptClick = (e) => {
     if (shouldBlock()) {
       e.stopImmediatePropagation()

@@ -25,8 +25,8 @@ const apiOrigin = computed(() => {
   return fromEnv || fromConst
 })
 
-/** 与 backend/configure/project_config.py 中 APP_REDOC_URL 一致（默认 /krun/redoc） */
-const iframeSrc = computed(() => `${apiOrigin.value}/krun/redoc`)
+/** 与 backend/configure/project_config.py 中 APP_REDOC_URL 一致（默认 /KeenRunner/redoc） */
+const iframeSrc = computed(() => `${apiOrigin.value}/KeenRunner/redoc`)
 </script>
 
 <style scoped>

@@ -1900,6 +1900,11 @@ const handleAddStep = (type, parentId) => {
     void handleSummaryDownloadDatasource()
     return
   }
+  // 【数据驱动】模板下载：导出所有请求步骤的默认数据模板
+  if (type === 'template_download_datasource') {
+    void handleTemplateDownloadDatasource()
+    return
+  }
   const created = insertStep(parentId, type)
   if (created) {
     selectedKeys.value = [created.id]
@@ -1908,7 +1913,7 @@ const handleAddStep = (type, parentId) => {
 }
 
 const handleAddStepToBranch = (type, parentId, branchIndex) => {
-  if (type === 'quote_public_script' || type === 'copy_steps' || type === 'batch_upload_datasource' || type === 'summary_download_datasource') {
+  if (type === 'quote_public_script' || type === 'copy_steps' || type === 'batch_upload_datasource' || type === 'summary_download_datasource' || type === 'template_download_datasource') {
     handleAddStep(type, parentId)
     return
   }
@@ -1940,9 +1945,11 @@ const {
   batchUploadFileRef,
   batchUploadLoading,
   summaryDownloadLoading,
+  templateDownloadLoading,
   handleBatchUploadDatasource,
   onBatchUploadFileChange,
   handleSummaryDownloadDatasource,
+  handleTemplateDownloadDatasource,
 } = useDataSourceBatch({ caseId, loadSteps: () => loadSteps() })
 
 

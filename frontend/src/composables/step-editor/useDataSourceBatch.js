@@ -13,6 +13,7 @@ export function useDataSourceBatch({ caseId, loadSteps }) {
     const batchUploadFileRef = ref(null)
     const batchUploadLoading = ref(false)
     const summaryDownloadLoading = ref(false)
+    const templateDownloadLoading = ref(false)
 
     const handleBatchUploadDatasource = () => {
         if (!caseId.value) {
@@ -65,12 +66,32 @@ export function useDataSourceBatch({ caseId, loadSteps }) {
         }
     }
 
+    const handleTemplateDownloadDatasource = async () => {
+        if (!caseId.value) {
+            window.$message?.warning?.('请先保存用例后再下载模板')
+            return
+        }
+        if (templateDownloadLoading.value) return
+        templateDownloadLoading.value = true
+        try {
+            const res = await api.batchStepTemplateDownload({ case_id: caseId.value })
+            await downloadBlobResponse(res, '数据源汇总模板.xlsx')
+            window.$message?.success?.('下载成功')
+        } catch (e) {
+            window.$message?.error?.(e?.message || '下载失败')
+        } finally {
+            templateDownloadLoading.value = false
+        }
+    }
+
     return {
         batchUploadFileRef,
         batchUploadLoading,
         summaryDownloadLoading,
+        templateDownloadLoading,
         handleBatchUploadDatasource,
         onBatchUploadFileChange,
         handleSummaryDownloadDatasource,
+        handleTemplateDownloadDatasource,
     }
 }

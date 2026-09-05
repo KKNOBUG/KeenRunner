@@ -1,5 +1,5 @@
 // 结构化定时表达式(task_schedule_expr)前端工具：编辑状态⇄后端契约转换、摘要与预览格式化、任务列表标签流展示
-// 后端契约：ONLY_ONCE={"trigger_dates":[...]}；UNBOUNDED={"trigger_cycle","trigger_weeks"/"trigger_month","trigger_times"}
+// 后端契约：两种模式均落 trigger_month×trigger_times(编辑回显)；ONLY_ONCE={trigger_dates,trigger_month,trigger_times}；UNBOUNDED={trigger_cycle,trigger_weeks/trigger_month,trigger_times}
 import dayjs from 'dayjs'
 
 export const PERIODIC_ONLY_ONCE = '执行1次'
@@ -65,7 +65,11 @@ export function buildSchedulePayload(state) {
       for (const t of times) dates.push(`${now.format('YYYY-MM')}-${pad2(d)} ${t}`)
     }
     if (!dates.length) return null
-    return { periodic: PERIODIC_ONLY_ONCE, schedule: { trigger_dates: dates } }
+    return {
+      periodic: PERIODIC_ONLY_ONCE,
+      // 日期多选与时间点随表达式落库：回显直读；trigger_dates为二者展开产物(当月不存在的日期被跳过)，反推必有损
+      schedule: { trigger_dates: dates, trigger_month: days, trigger_times: times },
+    }
   }
 
   if (!state.cycle) return null
@@ -88,16 +92,9 @@ export function scheduleStateFromExpr(periodic, expr) {
   if (!periodic || !expr || typeof expr !== 'object') return state
   state.periodic = periodic
   if (periodic === PERIODIC_ONLY_ONCE) {
-    const daySet = new Set()
-    const timeSet = new Set()
-    for (const raw of Array.isArray(expr.trigger_dates) ? expr.trigger_dates : []) {
-      const m = String(raw || '').match(/^\d{4}-\d{2}-(\d{2}) (\d{2}:\d{2}:\d{2})$/)
-      if (!m) continue
-      daySet.add(Number(m[1]))
-      timeSet.add(m[2])
-    }
-    state.monthDays = asc(daySet)
-    state.times = asc(timeSet)
+    // 直读落库的日期多选与时间点，与buildSchedulePayload落库契约对称，不做本地反推
+    state.monthDays = asc(expr.trigger_month || [])
+    state.times = [...(expr.trigger_times || [])].sort()
     return state
   }
   state.cycle = expr.trigger_cycle || null

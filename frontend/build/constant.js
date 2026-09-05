@@ -1,7 +1,7 @@
 export const OUTPUT_DIR = 'dist'
-export const BACKEND_URL = 'http://172.20.10.2:8519'
-// export const BACKEND_URL = 'http://192.168.83.72:8519'
-// export const BACKEND_URL = 'http://192.168.195.72:8519'
+// export const BACKEND_URL = 'http://172.20.10.2:8518'
+export const BACKEND_URL = 'http://192.168.1.20:8518'
+// export const BACKEND_URL = 'http://192.168.169.94:8518'
 export const PROXY_CONFIG = {
     /**
      * @desc    替换匹配值
@@ -23,11 +23,11 @@ export const PROXY_CONFIG = {
 
 
 /**
- * 开发环境额外代理：Swagger/ReDoc 页面会请求 /krun/* 与 /static/swagger-ui/*
+ * 开发环境额外代理：Swagger/ReDoc 页面会请求 /KeenRunner/* 与 /static/swagger-ui/*
  * 若 iframe 使用相对路径（同域）时需配合 vite server.proxy
  */
 export const EXTRA_DEV_PROXY = {
-    '/krun': {
+    '/KeenRunner': {
         target: BACKEND_URL, changeOrigin: true,
     }, '/static': {
         target: BACKEND_URL, changeOrigin: true,

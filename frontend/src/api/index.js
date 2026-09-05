@@ -222,6 +222,11 @@ export default {
   },
   // 明细相关
   getApiDetailList: (data = {}) => request.post('/autotest/detail/search', data),
+  getApiDetail: (params = {}) => {
+    const queryParams = []
+    if (params.detail_id) queryParams.push(`detail_id=${params.detail_id}`)
+    return request.get(`/autotest/detail/get${queryParams.length ? '?' + queryParams.join('&') : ''}`)
+  },
 
   // 任务相关
   getApiTaskList: (data = {}) => request.post('/autotest/task/search', data),
@@ -239,6 +244,8 @@ export default {
   startApiTask: (data = {}) => request.post('/autotest/task/start', data),
   // 停止任务（关闭调度，task_enabled=false）
   stopApiTask: (data = {}) => request.post('/autotest/task/stop', data),
+  /** Body：{ task_id } —— 复制任务(完全复刻配置, 重置执行痕迹并停用调度) */
+  copyApiTask: (data = {}) => request.post('/autotest/task/copy', data),
   // 定时执行预览（近10次触发时间）
   previewTaskSchedule: (data = {}) => request.post('/autotest/task/schedule_preview', data),
   // 任务执行记录
@@ -296,13 +303,22 @@ export default {
         headers: { token: getToken() || '' },
       },
   ),
-  downloadHttpStepDatasetImportTemplate: () => axios.get(
-      `${import.meta.env.VITE_BASE_API}/autotest/data_source/import_template_download`,
+  /** params：case_id、step_id、step_code —— 单步骤数据源模板下载（blob，按步骤报文生成默认原始数据） */
+  singleStepTemplateDownload: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/autotest/data_source/single_step_template_download`,
       {
+        params,
         responseType: 'blob',
-        headers: {
-          token: getToken() || '',
-        },
+        headers: { token: getToken() || '' },
       },
   ),
+  /** params：case_id —— 汇总下载所有请求步骤的默认数据模板（blob） */
+  batchStepTemplateDownload: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/autotest/data_source/batch_step_template_download`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  )
 }

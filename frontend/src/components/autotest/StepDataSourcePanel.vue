@@ -233,6 +233,8 @@ const sheetColumns = ref([])
 const sheetData = ref([])
 const hasDbRecord = ref(false)
 const isDirty = ref(false)
+/** /build 附带的报文原始值映射(分区HEAD/BODY→字段路径→原始值，分区隔离同名字段)，导入正交易场景时本地消费 */
+const reportOriginals = ref({})
 const isLoading = ref(false)
 const hasLoaded = ref(false)
 /** 表格编辑缓存：步骤切换会销毁编辑器(key=step.id)，Luckysheet 先于本组件卸载，须用缓存拼 dataframe */
@@ -327,6 +329,7 @@ const loadStepDataframePreview = async (dataSourceIdOverride) => {
     applyMatrixToSheet([])
     axis.value = AXIS_VERTICAL
     hasDbRecord.value = false
+    reportOriginals.value = {}
     isDirty.value = false
     hasLoaded.value = true
     syncCacheFromSheetState()
@@ -350,6 +353,7 @@ const loadStepDataframePreview = async (dataSourceIdOverride) => {
     applyMatrixToSheet(matrix)
     axis.value = detectAxisFromMatrix(matrix)
     hasDbRecord.value = info.data_source_id != null
+    reportOriginals.value = info.data_original && typeof info.data_original === 'object' ? info.data_original : {}
     if (info.data_source_id != null) dataSourceId.value = info.data_source_id
     if (info.file_name != null) dataSourceName.value = String(info.file_name)
     if (info.file_desc != null) dataSourceDesc.value = String(info.file_desc || '')
@@ -358,6 +362,7 @@ const loadStepDataframePreview = async (dataSourceIdOverride) => {
     applyMatrixToSheet([])
     axis.value = AXIS_VERTICAL
     hasDbRecord.value = false
+    reportOriginals.value = {}
     isDirty.value = false
   } finally {
     isLoading.value = false
@@ -533,11 +538,12 @@ const dataSourceMoreOptions = computed(() => [
   { label: '撤销', key: 'undo', disabled: panelReadonly.value },
   { label: '重做', key: 'redo', disabled: panelReadonly.value },
   { type: 'divider', key: 'd1' },
+  { label: '导入数据源', key: 'import', disabled: panelReadonly.value || importLoading.value },
+  { label: '导出数据源', key: 'export', disabled: panelReadonly.value || exportLoading.value },
+  { label: '保存数据源', key: 'save', disabled: panelReadonly.value || saveLoading.value },
   { label: '同步报文字段', key: 'syncFields', disabled: panelReadonly.value || !hasDbRecord.value || syncFieldsLoading.value },
-  { label: '导入模板下载', key: 'downloadTemplate', disabled: panelReadonly.value || downloadTemplateLoading.value },
-  { label: '导入', key: 'import', disabled: panelReadonly.value || importLoading.value },
-  { label: '导出', key: 'export', disabled: panelReadonly.value || exportLoading.value },
-  { label: '保存', key: 'save', disabled: panelReadonly.value || saveLoading.value },
+  { label: '导入正交易场景', key: 'importNormalScene', disabled: panelReadonly.value },
+  { label: '数据源模板下载', key: 'templateDownload', disabled: panelReadonly.value || templateDownloadLoading.value },
   { type: 'divider', key: 'd2' },
   { label: isFullscreen.value ? '退出全屏' : '全屏', key: 'fullscreen' },
   { label: '解绑', key: 'unbind', disabled: panelReadonly.value || !hasDbRecord.value },
@@ -547,7 +553,8 @@ const onDataSourceMoreSelect = (key) => {
   if (key === 'undo') luckysheetRef.value?.getLuckysheet()?.undo?.()
   else if (key === 'redo') luckysheetRef.value?.getLuckysheet()?.redo?.()
   else if (key === 'syncFields') syncReportFields()
-  else if (key === 'downloadTemplate') downloadStepDataTemplate()
+  else if (key === 'importNormalScene') importNormalSceneStepData()
+  else if (key === 'templateDownload') downloadStepTemplate()
   else if (key === 'import') openImport()
   else if (key === 'export') dataSourceExport()
   else if (key === 'save') dataSourceSave()
@@ -626,6 +633,21 @@ const syncReportFields = async () => {
     $message.warning('请先保存步骤后再同步报文字段')
     return
   }
+  if (isDirty.value) {
+    // 同步以已落库数据为基准，先确认避免静默覆盖未保存编辑
+    const goOn = await new Promise((resolve) => {
+      window.$dialog?.confirm?.({
+        title: '同步报文字段',
+        type: 'warning',
+        content: '当前表格有未保存的编辑，同步将以已保存的数据为准并覆盖当前编辑。是否继续？',
+        positiveText: '继续同步',
+        negativeText: '先不同步',
+        confirm: () => resolve(true),
+        cancel: () => resolve(false),
+      }) ?? resolve(true)
+    })
+    if (!goOn) return
+  }
   syncFieldsLoading.value = true
   try {
     const payload = {}
@@ -644,20 +666,103 @@ const syncReportFields = async () => {
   }
 }
 
-/* ========================= 导入模板下载 ========================= */
-const downloadTemplateLoading = ref(false)
-const downloadStepDataTemplate = async () => {
-  if (downloadTemplateLoading.value) return
+/* ========================= 模板下载（按步骤报文生成默认原始数据） ========================= */
+const templateDownloadLoading = ref(false)
+const downloadStepTemplate = async () => {
+  if (templateDownloadLoading.value) return
+  const { caseId, stepId, stepCode } = getStepContext()
+  if (!caseId || !stepId || !stepCode) {
+    $message.warning('请先保存步骤后再下载模板')
+    return
+  }
+  templateDownloadLoading.value = true
   try {
-    downloadTemplateLoading.value = true
-    const res = await api.downloadHttpStepDatasetImportTemplate()
-    await downloadBlobResponse(res, '测试用例HTTP请求步骤数据源模板.xlsx')
+    const res = await api.singleStepTemplateDownload({ case_id: caseId, step_id: stepId, step_code: stepCode })
+    await downloadBlobResponse(res, '数据源导出模板.xlsx')
     $message.success('下载成功')
   } catch (e) {
     $message.error(`下载失败：${e?.message || e}`)
   } finally {
-    downloadTemplateLoading.value = false
+    templateDownloadLoading.value = false
   }
+}
+
+/* ========================= 导入正交易场景（本地插入，随保存落库） ========================= */
+const NORMAL_SCENE_NAME = '正交易场景'
+
+/** 在矩阵第2列(垂直)/第2行(水平)插入正交易场景：HEAD/BODY字段按所属分区取报文原始值(隔离同名字段)，其余填空；插入值全空时返回 null */
+const insertNormalSceneIntoMatrix = (matrix, originals) => {
+  const valueOf = (path, section) => {
+    const value = (originals?.[section] || {})[path]
+    return value === undefined || value === null ? '' : value
+  }
+  const newMatrix = matrix.map((row) => [...(row || [])])
+  const insertedValues = []
+  if (detectAxisFromMatrix(matrix) === AXIS_HORIZONTAL) {
+    // 水平：第0行为分区标记+字段名行，新场景行固定在第2行，原有场景行整体下移
+    const header = newMatrix[0] || []
+    const sceneRow = [NORMAL_SCENE_NAME]
+    let section = ''
+    for (let c = 1; c < header.length; c++) {
+      const cell = header[c] == null ? '' : String(header[c]).trim()
+      if (isSectionMarker(cell)) {
+        section = cell.toUpperCase()
+        sceneRow.push('')
+        continue
+      }
+      const value = (section === 'HEAD' || section === 'BODY') && cell ? valueOf(cell, section) : ''
+      insertedValues.push(value)
+      sceneRow.push(value)
+    }
+    newMatrix.splice(1, 0, sceneRow)
+  } else {
+    // 垂直：第0行为场景名行，新场景列固定在第2列，原有场景列整体右移
+    let section = ''
+    newMatrix.forEach((row, rowIndex) => {
+      const cell = row[0] == null ? '' : String(row[0]).trim()
+      if (rowIndex === 0) {
+        row.splice(1, 0, NORMAL_SCENE_NAME)
+        return
+      }
+      if (isSectionMarker(cell)) {
+        section = cell.toUpperCase()
+        row.splice(1, 0, '')
+        return
+      }
+      const value = (section === 'HEAD' || section === 'BODY') && cell ? valueOf(cell, section) : ''
+      insertedValues.push(value)
+      row.splice(1, 0, value)
+    })
+  }
+  if (!insertedValues.some((value) => value !== '' && String(value).trim() !== '')) return null
+  return newMatrix
+}
+
+const importNormalSceneStepData = () => {
+  if (!hasLoaded.value) {
+    $message.warning('数据源尚未加载完成，请稍后重试')
+    return
+  }
+  // 以当前表格内容(含未保存编辑)为插入基准，随保存/自动保存链路统一落库
+  const matrix = getCurrentDataframeMatrix()
+  if (!Array.isArray(matrix) || matrix.length < 2) {
+    $message.warning('当前没有可用字段，无法导入正交易场景')
+    return
+  }
+  if (extractSceneNamesFromMatrix(matrix).includes(NORMAL_SCENE_NAME)) {
+    $message.warning('该步骤已存在名称为“正交易场景”的测试数据，无法导入')
+    return
+  }
+  const nextMatrix = insertNormalSceneIntoMatrix(matrix, reportOriginals.value || {})
+  if (!nextMatrix) {
+    $message.warning('报文字段与数据源矩阵不匹配，正交易场景无可用数据')
+    return
+  }
+  applyMatrixToSheet(nextMatrix)
+  isDirty.value = true
+  // 与方向切换一致：Luckysheet 异步重建后下一拍刷新编辑缓存
+  Promise.resolve().then(() => refreshMatrixCache())
+  $message.success('正交易场景已插入，保存后生效')
 }
 
 /* ========================= 步骤切换自动保存 ========================= */

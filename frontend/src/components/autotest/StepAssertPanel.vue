@@ -59,10 +59,10 @@
                   <n-select
                       v-model:value="item.source"
                       :options="sourceOptions"
-                      placeholder="选择「请求」中的存储变量名（variable_name）"
-                      filterable
-                      clearable
-                      :disabled="readonly || !sourceOptions.length"
+                      :placeholder="lockSource ? '变量池' : '选择「请求」中的存储变量名（variable_name）'"
+                      :filterable="!lockSource"
+                      :clearable="!lockSource"
+                      :disabled="readonly || lockSource || !sourceOptions.length"
                   />
                 </n-form-item>
                 <n-form-item v-else-if="!isPython" label="断言对象" class="step-ev-fi">
@@ -158,6 +158,8 @@ const props = defineProps({
   defaultObject: { type: String, default: null },
   /** 锁定断言对象不可切换（独立断言步骤固定「变量池」并置灰） */
   lockObject: { type: Boolean, default: false },
+  /** 锁定断言来源不可切换（数据库步骤断言固定「变量池」并置灰） */
+  lockSource: { type: Boolean, default: false },
 })
 
 const model = defineModel({ type: Object, default: () => ({}) })

@@ -17,7 +17,7 @@ import { BACKEND_URL } from '~/build/constant'
 defineOptions({ name: 'Swagger文档' })
 
 /**
- * 必须与「后端」同源加载文档页，不能走 Vite 代理用 /krun/docs：
+ * 必须与「后端」同源加载文档页，不能走 Vite 代理用 /KeenRunner/docs：
  * 否则 iframe 的 document 在 localhost:5173，Swagger「Try it out」会把请求发到 5173 而非 FastAPI，表现为 404（不是 CORS）。
  */
 const apiOrigin = computed(() => {
@@ -26,8 +26,8 @@ const apiOrigin = computed(() => {
   return fromEnv || fromConst
 })
 
-/** 与 backend/configure/project_config.py 中 APP_DOCS_URL 一致（默认 /krun/docs） */
-const iframeSrc = computed(() => `${apiOrigin.value}/krun/docs`)
+/** 与 backend/configure/project_config.py 中 APP_DOCS_URL 一致（默认 /KeenRunner/docs） */
+const iframeSrc = computed(() => `${apiOrigin.value}/KeenRunner/docs`)
 </script>
 
 <style scoped>
