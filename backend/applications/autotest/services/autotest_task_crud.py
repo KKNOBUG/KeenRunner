@@ -50,6 +50,34 @@ def extract_task_involve_envs(cases_execute_config: Any) -> List[str]:
     return sorted(env_names)
 
 
+def extract_steps_execute_envs(cases_execute_config: Any) -> Dict[str, str]:
+    """
+    累积各用例steps_execute_config的步骤执行环境名称映射(任务级扁平映射)。
+
+    跨用例key重复时后者覆盖前者：step_id格式key全局唯一不受影响，
+    仅@@step_name格式key(或历史脏数据)存在极小概率冲突。
+
+    :param cases_execute_config: 任务级用例执行配置字典
+    :return: {步骤配置键(step_id|step_id_@@op_index): 环境名称}映射
+    """
+    if not isinstance(cases_execute_config, dict):
+        return {}
+    step_envs: Dict[str, str] = {}
+    for case_key, case_cfg in cases_execute_config.items():
+        # 跳过顶层全局键(env_mode/env_name)，仅累积case_id配置的步骤执行环境
+        if case_key in ("env_mode", "env_name"):
+            continue
+        if not isinstance(case_cfg, dict):
+            continue
+        steps_cfg = case_cfg.get("steps_execute_config")
+        if not isinstance(steps_cfg, dict):
+            continue
+        for step_key, step_cfg in steps_cfg.items():
+            env_name = step_cfg.get("env_name") if isinstance(step_cfg, dict) else None
+            if env_name not in (None, ""):
+                step_envs[str(step_key)] = str(env_name)
+    return step_envs
+
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     解析用例执行配置。

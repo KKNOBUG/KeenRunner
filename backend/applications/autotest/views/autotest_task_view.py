@@ -25,6 +25,7 @@ from backend.applications.autotest.schemas.autotest_task_schema import (
     AutoTestApiTaskSelect,
     AutoTestApiTaskUpdate,
 )
+from backend.applications.autotest.services.autotest_task_crud import extract_steps_execute_envs
 from backend.applications.autotest.services.autotest_task_schedule import (
     TaskSchedule,
     normalize_schedule,
@@ -267,6 +268,9 @@ async def search_tasks(
                 replace_fields={"id": "task_id"}
             ) for obj in instances
         ]
+        # 步骤执行环境映射：遍历cases_execute_config提取{步骤配置键(step_id|step_id_@@op_index): env_name}
+        for task_dict in data:
+            task_dict["steps_execute_env"] = extract_steps_execute_envs(task_dict.get("cases_execute_config"))
         LOGGER.info(f"根据条件分页查询任务列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
