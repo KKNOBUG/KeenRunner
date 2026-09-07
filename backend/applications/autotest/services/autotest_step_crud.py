@@ -155,7 +155,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
         :return: 数据源实例或None
         """
         if step_id:
-            return await self.get_by_id(case_id=step_id, on_error=True, **kwargs)
+            return await self.get_by_id(step_id=step_id, on_error=True, **kwargs)
         step_code = (step_code or "").strip()
         if step_code:
             return await self.get_by_code(step_code=step_code, on_error=True, **kwargs)
