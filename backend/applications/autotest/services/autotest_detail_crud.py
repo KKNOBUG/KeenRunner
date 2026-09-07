@@ -31,6 +31,7 @@ DETAIL_LIST_FIELDS: Tuple[str, ...] = (
     "id",
     "step_no", "step_name", "step_type", "step_state", "step_elapsed", "step_exec_except",
     "loop_cycles", "branch_index", "branch_match", "dataset_name", "response_elapsed",
+    "request_config_name", "request_env_name", "database_operates"
 )
 
 
