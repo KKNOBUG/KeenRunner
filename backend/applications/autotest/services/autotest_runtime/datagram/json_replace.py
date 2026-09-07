@@ -67,8 +67,8 @@ class JsonDatagram:
         """
         查询JSONPath在报文中的当前字段值，作为dataset值类型适配参考。
 
-        未命中返回空列表、多命中或容器值返回列表本身，二者经适配器按不采纳处理(跳过注入)；
-        查询异常返回_QUERY_UNRESOLVED哨兵，适配器走原样接受线路（与字段值为null的语义分离，
+        未命中返回空列表、多命中或容器值返回列表本身，二者经适配器原样接受(不做类型转换，由用户负责)；
+        查询异常返回_QUERY_UNRESOLVED哨兵，适配器同样走原样接受线路（与字段值为null的语义分离，
         为null字段类型恢复扩展保留区分）。
 
         :param datagram: 报文字典
@@ -81,30 +81,26 @@ class JsonDatagram:
             return _QUERY_UNRESOLVED
 
     @staticmethod
-    def _adapt_json_value(json_value: Any, datagram: Dict[str, Any], query_path: str, json_path: str, type_adapted: bool) -> Any:
+    def _adapt_json_value(json_value: Any, datagram: Dict[str, Any], query_path: str, type_adapted: bool) -> Any:
         """
-        解析注入值：body通道按报文原字段类型贴合适配，类型不贴合(不采纳哨兵)时记录跳过日志；
+        解析注入值：body通道按报文原字段类型适配(可转换则转换，无法转换原样接受由用户负责)；
         字符串通道(type_adapted=False)wire文本直写，不做贴合判断也不做类型参考查询。
 
         :param json_value: dataset字段值(字符串通道调用前已转wire文本)
         :param datagram: 类型参考查询的数据容器(body通道为报文字典或两段式inner子文档)
         :param query_path: 类型参考查询用的JSONPath(两段式时为inner路径)
-        :param json_path: 完整JSONPath表达式(日志定位用)
         :param type_adapted: JSON body通道True；header/form/urlencoded等字符串通道False
-        :return: 注入值；DatasetValueAdapter.ADAPT_REJECTED表示类型不贴合应跳过
+        :return: 适配后的注入值
         """
         if not type_adapted:
             return json_value
-        adapted = DatasetValueAdapter.adapt(
+        return DatasetValueAdapter.adapt(
             raw_value=json_value,
             target_value=JsonDatagram._query_target_value(
                 datagram=datagram,
                 json_path=query_path
             )
         )
-        if adapted is DatasetValueAdapter.ADAPT_REJECTED:
-            LOGGER.info(f"【报文替换】dataset值与报文字段类型不贴合已跳过: {json_path}")
-        return adapted
 
     @staticmethod
     def _by_jsonpath_modify_inner_content(
@@ -134,11 +130,8 @@ class JsonDatagram:
                 json_value=json_value,
                 datagram=datagram,
                 query_path=json_path,
-                json_path=json_path,
                 type_adapted=type_adapted
             )
-            if adapted is DatasetValueAdapter.ADAPT_REJECTED:
-                return
             JSONPathUtils.update(datagram, json_path, adapted)
             return
 
@@ -173,11 +166,8 @@ class JsonDatagram:
                 json_value=json_value,
                 datagram=inner_obj,
                 query_path=inner_path,
-                json_path=json_path,
                 type_adapted=type_adapted
             )
-            if adapted is DatasetValueAdapter.ADAPT_REJECTED:
-                return
             updated_inner_json = JSONPathUtils.update(inner_obj, inner_path, adapted)
             if not isinstance(updated_inner_json, str):
                 return
@@ -189,11 +179,8 @@ class JsonDatagram:
                 json_value=json_value,
                 datagram=outer_value,
                 query_path=inner_path,
-                json_path=json_path,
                 type_adapted=type_adapted
             )
-            if adapted is DatasetValueAdapter.ADAPT_REJECTED:
-                return
             updated_inner_json = JSONPathUtils.update(outer_value, inner_path, adapted)
             if not isinstance(updated_inner_json, str):
                 return

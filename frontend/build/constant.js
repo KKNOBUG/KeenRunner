@@ -1,7 +1,7 @@
 export const OUTPUT_DIR = 'dist'
 // export const BACKEND_URL = 'http://172.20.10.2:8518'
-export const BACKEND_URL = 'http://192.168.1.20:8518'
-// export const BACKEND_URL = 'http://192.168.169.94:8518'
+// export const BACKEND_URL = 'http://192.168.1.20:8518'
+export const BACKEND_URL = 'http://192.168.169.94:8518'
 export const PROXY_CONFIG = {
     /**
      * @desc    替换匹配值
