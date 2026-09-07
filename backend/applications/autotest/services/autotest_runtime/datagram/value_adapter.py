@@ -12,12 +12,12 @@ import math
 from typing import Any, Callable, Dict
 
 # 特殊值常量：用户在数据源单元格中编写的占位文本
-DATASET_EMPTY_TEXT = "#空值"
-DATASET_NULL_VALUE = "#空的"
-DATASET_SPACE_VALUE = "#空格"
+DATASET_EMPTY_TEXT = "#空字符串"
+DATASET_NULL_VALUE = "#NULL"
+DATASET_SPACE_VALUE = "#单个空格"
 
 # 注入后代表三个空格的固定常量
-DATASET_SPACE_EXPANDED = "   "
+DATASET_SPACE_EXPANDED = " "
 
 __all__ = [
     "DATASET_EMPTY_TEXT",
@@ -41,7 +41,7 @@ def expand_dataset_special_value(value: Any) -> Any:
         crt_value = (value or "").strip()
         if crt_value == DATASET_EMPTY_TEXT:
             return ""
-        if crt_value == DATASET_NULL_VALUE:
+        if crt_value.upper() == DATASET_NULL_VALUE:
             return None
         if crt_value == DATASET_SPACE_VALUE:
             return DATASET_SPACE_EXPANDED
