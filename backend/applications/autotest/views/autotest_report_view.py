@@ -6,7 +6,6 @@
 @Module  : autotest_report_view
 @DateTime: 2025/11/27 09:33
 """
-import asyncio
 import traceback
 from typing import Optional
 
@@ -18,6 +17,7 @@ from backend.applications.autotest.schemas.autotest_report_schema import (
     AutoTestApiReportCreate,
     AutoTestApiReportSelect,
     AutoTestApiReportUpdate,
+    AutoTestApiReportBatchDetailSelect,
     AutoTestApiReportBatchSelect,
 )
 from backend.configure import LOGGER
@@ -186,7 +186,7 @@ async def search_reports(
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    按条件分页查询报告列表。
+    执行历史主查询(执行维度)：一次执行唯一化为一行, 多数据源批次行携带批次标识供下钻报告明细; 任务调度报告不在此范围(由/search_batches查询)。
 
     :param report_in: 报告查询入参
     :param services: 自动化测试CRUD依赖聚合
@@ -213,11 +213,8 @@ async def search_reports(
             q &= Q(report_code__contains=report_in.report_code)
         if report_in.report_type:
             q &= Q(report_type=report_in.report_type.value)
-        # 与 zzt 一致：始终按 task_code 精确匹配；未传时等价于 IS NULL
-        if report_in.exclude_task_code:
-            q &= Q(task_code__isnull=True) | Q(task_code="")
-        else:
-            q &= Q(task_code=report_in.task_code)
+        # 接口固定只查手工执行报告(任务调度报告由/search_batches按task维度聚合查询)
+        q &= Q(task_code__isnull=True) | Q(task_code="")
         if report_in.batch_code:
             q &= Q(batch_code__contains=report_in.batch_code)
         if report_in.case_state is not None:
@@ -240,45 +237,7 @@ async def search_reports(
                 date_to = f"{date_to} 23:59:59"
             q &= Q(case_st_time__lte=date_to)
         q &= Q(state=report_in.state)
-        total, instances = await services.report_curd.select_reports(
-            search=q,
-            page=report_in.page,
-            page_size=report_in.page_size,
-            order=report_in.order
-        )
-        case_ids = [obj.case_id for obj in instances]
-        unique_case_ids = list(set(case_ids))
-        case_name_map = {}
-        if unique_case_ids:
-            case_name_map = dict(
-                await services.case_curd.model.filter(
-                    id__in=unique_case_ids,
-                    state__not=1
-                ).values_list("id", "case_name")
-            )
-        report_instances = await asyncio.gather(*[
-            obj.to_dict(
-                exclude_fields={
-                    "state",
-                    "created_user",
-                    "created_time",
-                    "reserve_1",
-                    "reserve_2",
-                    "reserve_3",
-                },
-                replace_fields={"id": "report_id"},
-            )
-            for obj in instances
-        ])
-        data = []
-        for item in report_instances:
-            ratio = item.get("step_pass_ratio", 0) or 0
-            try:
-                item["step_pass_ratio"] = f"{round(float(ratio), 2)}%"
-            except (TypeError, ValueError):
-                item["step_pass_ratio"] = "0.0%"
-            item["case_name"] = case_name_map.get(item["case_id"], "")
-            data.append(item)
+        total, data = await services.report_curd.search_reports(search=q, report_in=report_in)
         return SuccessResponse(message="报告列表查询成功", data=data, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -289,13 +248,43 @@ async def search_reports(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
+@autotest_report.post("/search_batch_reports", summary="查询同批次报告列表", description="根据batch_code精确分页查询同批次报告")
+async def search_batch_reports(
+        batch_detail_in: AutoTestApiReportBatchDetailSelect = Body(..., description="批次报告查询条件"),
+        services: AutoTestApiServices = Depends(get_autotest_api_services),
+):
+    """
+    批次报告下钻查询(报告维度)：面向“执行报告”抽屉, 按批次标识精确分页返回同一次执行的全部报告, 一行=一条报告。
+
+    :param batch_detail_in: 批次报告查询入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        state = 0 if batch_detail_in.state is None else batch_detail_in.state
+        total, data = await services.report_curd.search_batch_reports(
+            batch_code=batch_detail_in.batch_code,
+            state=state,
+            page=batch_detail_in.page,
+            page_size=batch_detail_in.page_size,
+        )
+        return SuccessResponse(message="批次报告列表查询成功", data=data, total=total)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"按batch_code查询批次报告列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
 @autotest_report.post("/search_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算成功/部分成功/失败状态")
 async def search_report_batches(
         batch_in: AutoTestApiReportBatchSelect = Body(..., description="批次查询条件"),
         services: AutoTestApiServices = Depends(get_autotest_api_services),
 ):
     """
-    任务执行历史专用：按批次聚合报告并返回执行结果。
+    任务执行历史查询(任务维度)：面向任务执行历史列表, 按任务标识聚合报告批次并计算执行结果, 一行=一个批次。
 
     :param batch_in: 含必填task_code；page/page_size针对批次数
     :param services: 自动化测试CRUD依赖聚合

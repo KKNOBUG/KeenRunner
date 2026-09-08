@@ -27,13 +27,6 @@ from backend.core.exceptions import (
     DataBaseStorageException,
 )
 
-DETAIL_LIST_FIELDS: Tuple[str, ...] = (
-    "id",
-    "step_no", "step_name", "step_type", "step_state", "step_elapsed", "step_exec_except",
-    "loop_cycles", "branch_index", "branch_match", "dataset_name", "response_elapsed",
-    "request_config_name", "request_env_name", "database_operates"
-)
-
 
 class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
 
@@ -255,7 +248,12 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
             query = self.model.filter(search)
             return (
                 await query.count(),
-                await query.offset((page - 1) * page_size).limit(page_size).order_by(*self.normalize_order_fields(order)).values(*DETAIL_LIST_FIELDS)
+                await query.offset((page - 1) * page_size).limit(page_size).order_by(*self.normalize_order_fields(order)).values(
+                    "id", "case_id",
+                    "step_no", "step_name", "step_type", "step_state", "step_elapsed", "step_exec_except",
+                    "loop_cycles", "branch_index", "branch_match", "dataset_name", "response_elapsed",
+                    "request_config_name", "request_env_name", "database_operates",
+                )
             )
         except FieldError as e:
             error_message: str = f"查询明细信息失败, 错误描述: {e}"

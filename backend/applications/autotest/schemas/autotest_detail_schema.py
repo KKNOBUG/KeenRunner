@@ -352,7 +352,6 @@ class AutoTestApiDetailSelect(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
-    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/接口ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
 
     step_id: Optional[int] = Field(None, description="步骤ID")

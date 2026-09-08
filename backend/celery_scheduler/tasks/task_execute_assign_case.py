@@ -63,7 +63,7 @@ async def _execute_step_tree_impl(
     :param case_id: 用例主键ID
     :param initial_variables: 初始会话变量列表
     :param report_type: 报告类型枚举
-    :param batch_code: 批次号；为空时自动生成
+    :param batch_code: 批次标识；为空且数据源数大于1时自动生成
     :param selected_dataset_names: 选中的数据源名称列表；空则单次执行
     :param steps_execute_config: 步骤执行环境配置覆盖
     :param created_user: 提交任务的用户账号
@@ -75,7 +75,8 @@ async def _execute_step_tree_impl(
     if selected_dataset_names is None:
         selected_dataset_names = []
     initial_variables = _normalize_initial_variables(initial_variables)
-    if not batch_code:
+    # 单数据源执行仅产生单条报告, 不打批次标识；多数据源执行则产生多条报告, 需要打批次标识
+    if not batch_code and len(selected_dataset_names) > 1:
         batch_code = _new_batch_code()
 
     step_crud = AutoTestStepCrud()
@@ -116,7 +117,7 @@ async def _execute_step_tree_impl(
 
     execute_runs = len(details)
     success_runs = sum(1 for r in details if r.get("success"))
-    case_ok = execute_runs > 0 and success_runs == execute_runs
+    case_ok = 0 < execute_runs == success_runs
     return {
         "parameterized": True,
         "batch_code": batch_code,

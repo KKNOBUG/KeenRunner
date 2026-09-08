@@ -792,13 +792,12 @@ async def execute_step_tree(
         if is_run_mode:
             try:
                 if not selected_dataset_names:
-                    batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+                    # 无数据源执行仅产生单条报告, 不打批次标识
                     result_data: Dict[str, Any] = await services.step_curd.execute_single_case(
                         case_id=case_id,
                         steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables,
                         report_type=AutoTestReportType.ASYNC_EXEC,
-                        batch_code=batch_code,
                     )
                     total_steps: int = int(result_data.get("total_steps") or 0)
                     success_steps: int = int(result_data.get("success_steps") or 0)
@@ -813,48 +812,16 @@ async def execute_step_tree(
                         total=1,
                     )
 
-                # # 参数化驱动：本项目按数据集同步循环执行
-                # details: List[Dict[str, Any]] = []
-                # batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
-                # for dataset_name in selected_dataset_names:
-                #     single_data = await services.step_curd.execute_single_case(
-                #         case_id=case_id,
-                #         steps_execute_config=steps_execute_config,
-                #         initial_variables=initial_variables or [],
-                #         report_type=AutoTestReportType.SYNC_EXEC,
-                #         batch_code=batch_code,
-                #         dataset_name=dataset_name,
-                #     )
-                #     single_data["dataset_name"] = dataset_name
-                #     details.append(single_data)
-                # execute_runs: int = len(details)
-                # success_runs: int = sum(1 for r in details if r.get("success"))
-                # failed_runs: int = execute_runs - success_runs
-                # case_ok: bool = execute_runs > 0 and failed_runs == 0
-                # success_rate: float = 100.0 if case_ok else 0.0
-                # return SuccessResponse(
-                #     message=(
-                #         f"参数化执行完成, 共{execute_runs}次运行, 成功{success_runs}次, "
-                #         f"失败{failed_runs}次, 用例成功率: {success_rate}%"
-                #     ),
-                #     data={
-                #         "parameterized": True,
-                #         "batch_code": batch_code,
-                #         "total_cases": 1,
-                #         "success_cases": 1 if case_ok else 0,
-                #         "failed_cases": 0 if case_ok else 1,
-                #         "success_rate": success_rate,
-                #         "execute_runs": execute_runs,
-                #         "details": details,
-                #     },
-                #     total=execute_runs,
-                # )
-
                 # 参数化驱动：下发Celery，由Worker池通过run_async执行协程
                 from backend.celery_scheduler.tasks.task_execute_assign_case import execute_step_tree_task
                 from backend.services import get_current_username
 
-                batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+                # 单数据源执行仅产生单条报告, 不打批次标识；多数据源执行则产生多条报告, 需要打批次标识
+                batch_code: Optional[str] = (
+                    f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
+                    if len(selected_dataset_names) > 1
+                    else None
+                )
                 initial_variables_payload: List[Dict[str, Any]] = [
                     item.model_dump() if isinstance(item, StepVariablesBase) else dict(item)
                     for item in (initial_variables or [])
@@ -952,8 +919,8 @@ async def execute_step_tree(
         else:
             debug_dataset_name: Optional[str] = None
 
-        batch_code: str = f"{int(datetime.now().timestamp())}-{uuid.uuid4().hex.upper()}"
-        engine = AutoTestStepExecutionEngine(save_report=True, batch_code=batch_code)
+        # 调试执行仅产生单条报告, 不打批次标识
+        engine = AutoTestStepExecutionEngine(save_report=True)
         results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details = await engine.execute_case(
             case=case_info,
             steps=all_root_steps,
@@ -997,7 +964,7 @@ async def execute_step_tree(
             "logs": {str(k): v for k, v in logs.items()},
             "session_variables": final_session_variables,
             "saved_to_database": True,
-            "batch_code": batch_code,
+            "batch_code": None,
             "report_code": report_code or getattr(report_instance, "report_code", None),
         }
         return SuccessResponse(

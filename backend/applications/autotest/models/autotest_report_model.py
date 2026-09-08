@@ -32,10 +32,10 @@ class AutoTestReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     step_pass_count = fields.IntField(default=0, ge=0, description="用例步骤成功数量(含所有子级步骤)")
     step_pass_ratio = fields.FloatField(default=0.0, ge=0.0, description="用例步骤成功率(含所有子级步骤)")
 
-    batch_code = fields.CharField(max_length=64, default=None, null=True, description="批次标识代码")
+    batch_code = fields.CharField(max_length=64, default=None, null=True, index=True, description="批次标识代码")
     report_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="报告标识代码")
     report_type = fields.CharEnumField(AutoTestReportType, description="报告类型")
-    task_code = fields.CharField(max_length=64, null=True, description="任务标识代码")
+    task_code = fields.CharField(max_length=64, null=True, index=True, description="任务标识代码")
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次执行使用的数据集/场景名称(参数化)")
     involve_envs = fields.JSONField(default=list, null=True, description="脚本执行时涉及应用环境列表")
 

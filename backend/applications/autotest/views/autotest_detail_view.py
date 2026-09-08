@@ -7,7 +7,7 @@
 @DateTime: 2025/11/27 14:25
 """
 import traceback
-from typing import Optional, List, Dict, Any
+from typing import Optional
 
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
@@ -234,11 +234,9 @@ async def search_step_details(
             page_size=detail_in.page_size,
             order=detail_in.order
         )
-        detail_serializes: List[Dict[str, Any]] = []
         for row in instances:
             row["detail_id"] = row.pop("id")
-            detail_serializes.append(row)
-        return SuccessResponse(message="查询成功", data=detail_serializes, total=total)
+        return SuccessResponse(message="查询成功", data=instances, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
