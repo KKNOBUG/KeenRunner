@@ -47,7 +47,7 @@ class ProjectConfig(BaseSettings):
     APP_OPENAPI_CSS_URL: str = "/static/swagger-ui/swagger-ui.css"
     APP_OPENAPI_FAVICON_URL: str = "/static/swagger-ui/favicon-32x32.png"
     APP_OPENAPI_JS_URL_REDOC: str = "/static/redoc/bundles/redoc.standalone.js"
-    APP_OPENAPI_FAVICON_URL_REDOC: str = "/static/redoc/favicon.png"
+    APP_OPENAPI_FAVICON_URL_REDOC: str = "/static/redoc/favicon-32x32.png"
     APP_OPENAPI_VERSION: str = "3.0.2"
 
     # 调试配置

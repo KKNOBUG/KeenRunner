@@ -218,7 +218,7 @@ def register_routers(app: FastAPI) -> None:
     swagger_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
     redoc_modules = sys.modules["fastapi.openapi.docs"].get_redoc_html.__kwdefaults__
     redoc_modules["redoc_js_url"] = "/static/redoc/bundles/redoc.standalone.js"
-    redoc_modules["redoc_favicon_url"] = "/static/redoc/favicon.png"
+    redoc_modules["redoc_favicon_url"] = "/static/redoc/favicon-32x32.png"
 
     # 导入路由蓝图
     from backend.applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
