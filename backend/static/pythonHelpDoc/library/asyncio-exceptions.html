@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="异常" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/library/asyncio-exceptions.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="源代码: Lib/asyncio/exceptions.py" />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_library_asyncio-exceptions_d03fc20a.png" />
+<meta property="og:image:alt" content="源代码: Lib/asyncio/exceptions.py" />
+<meta name="description" content="源代码: Lib/asyncio/exceptions.py" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>异常 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>异常 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
     <link rel="next" title="事件循环" href="asyncio-eventloop.html" />
     <link rel="prev" title="队列集" href="asyncio-queue.html" />
-    <link rel="canonical" href="https://docs.python.org/3/library/asyncio-exceptions.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/library/asyncio-exceptions.html">
       
     
 
@@ -41,48 +56,67 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="asyncio-queue.html"
-                        title="上一章">队列集</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="asyncio-eventloop.html"
-                        title="下一章">事件循环</a></p>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="asyncio-queue.html"
+                          title="上一章">队列集</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="asyncio-eventloop.html"
+                          title="下一章">事件循环</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/asyncio-exceptions.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/asyncio-exceptions.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -91,11 +125,12 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -107,7 +142,7 @@
           <a href="asyncio-queue.html" title="队列集"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -117,25 +152,33 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="ipc.html" >网络和进程间通信</a> &#187;</li>
           <li class="nav-item nav-item-3"><a href="asyncio.html" accesskey="U"><code class="xref py py-mod docutils literal notranslate"><span class="pre">asyncio</span></code> --- 异步 I/O</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">异常</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -146,72 +189,71 @@
           <div class="body" role="main">
             
   <section id="exceptions">
-<span id="asyncio-exceptions"></span><h1>异常<a class="headerlink" href="#exceptions" title="永久链接至标题">¶</a></h1>
-<p><strong>源代码:</strong> <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/asyncio/exceptions.py">Lib/asyncio/exceptions.py</a></p>
+<span id="asyncio-exceptions"></span><h1 class="translated">异常<a class="headerlink" href="#exceptions" title="Link to this heading">¶</a></h1>
+<p class="translated"><strong>源代码:</strong> <a class="extlink-source reference external" href="https://github.com/python/cpython/tree/3.12/Lib/asyncio/exceptions.py">Lib/asyncio/exceptions.py</a></p>
 <hr class="docutils" />
-<dl class="exception">
-<dt id="asyncio.TimeoutError">
-<em class="property">exception </em><code class="sig-prename descclassname">asyncio.</code><code class="sig-name descname">TimeoutError</code><a class="headerlink" href="#asyncio.TimeoutError" title="永久链接至目标">¶</a></dt>
-<dd><p>该操作已超过规定的截止日期。</p>
-<div class="admonition important">
-<p class="admonition-title">重要</p>
-<p>这个异常与内置 <a class="reference internal" href="exceptions.html#TimeoutError" title="TimeoutError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">TimeoutError</span></code></a> 异常不同。</p>
-</div>
-</dd></dl>
-
-<dl class="exception">
-<dt id="asyncio.CancelledError">
-<em class="property">exception </em><code class="sig-prename descclassname">asyncio.</code><code class="sig-name descname">CancelledError</code><a class="headerlink" href="#asyncio.CancelledError" title="永久链接至目标">¶</a></dt>
-<dd><p>该操作已被取消。</p>
-<p>取消asyncio任务时，可以捕获此异常以执行自定义操作。在几乎所有情况下，都必须重新引发异常。</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="asyncio.TimeoutError">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">asyncio.</span></span><span class="sig-name descname"><span class="pre">TimeoutError</span></span><a class="headerlink" href="#asyncio.TimeoutError" title="Link to this definition">¶</a></dt>
+<dd><p class="translated"><a class="reference internal" href="exceptions.html#TimeoutError" title="TimeoutError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">TimeoutError</span></code></a> 的一个已被弃用的别名，会在操作超出了给定的时限时引发。</p>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.8 版更改: </span><a class="reference internal" href="#asyncio.CancelledError" title="asyncio.CancelledError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">CancelledError</span></code></a> 现在是 <a class="reference internal" href="exceptions.html#BaseException" title="BaseException"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseException</span></code></a> 的子类。</p>
+<p><span class="versionmodified changed">在 3.11 版本发生变更: </span>这个类是 <a class="reference internal" href="exceptions.html#TimeoutError" title="TimeoutError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">TimeoutError</span></code></a> 的别名。</p>
 </div>
 </dd></dl>
 
-<dl class="exception">
-<dt id="asyncio.InvalidStateError">
-<em class="property">exception </em><code class="sig-prename descclassname">asyncio.</code><code class="sig-name descname">InvalidStateError</code><a class="headerlink" href="#asyncio.InvalidStateError" title="永久链接至目标">¶</a></dt>
-<dd><p><a class="reference internal" href="asyncio-task.html#asyncio.Task" title="asyncio.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">Task</span></code></a> 或 <a class="reference internal" href="asyncio-future.html#asyncio.Future" title="asyncio.Future"><code class="xref py py-class docutils literal notranslate"><span class="pre">Future</span></code></a> 的内部状态无效。</p>
-<p>在为已设置结果值的未来对象设置结果值等情况下，可以引发此问题。</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="asyncio.CancelledError">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">asyncio.</span></span><span class="sig-name descname"><span class="pre">CancelledError</span></span><a class="headerlink" href="#asyncio.CancelledError" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">该操作已被取消。</p>
+<p class="translated">取消asyncio任务时，可以捕获此异常以执行自定义操作。在几乎所有情况下，都必须重新引发异常。</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.8 版本发生变更: </span><a class="reference internal" href="#asyncio.CancelledError" title="asyncio.CancelledError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">CancelledError</span></code></a> 现在是 <a class="reference internal" href="exceptions.html#BaseException" title="BaseException"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseException</span></code></a> 的子类而不是 <a class="reference internal" href="exceptions.html#Exception" title="Exception"><code class="xref py py-class docutils literal notranslate"><span class="pre">Exception</span></code></a> 的子类。</p>
+</div>
 </dd></dl>
 
-<dl class="exception">
-<dt id="asyncio.SendfileNotAvailableError">
-<em class="property">exception </em><code class="sig-prename descclassname">asyncio.</code><code class="sig-name descname">SendfileNotAvailableError</code><a class="headerlink" href="#asyncio.SendfileNotAvailableError" title="永久链接至目标">¶</a></dt>
-<dd><p>&quot;sendfile&quot; 系统调用不适用于给定的套接字或文件类型。</p>
-<p>子类 <a class="reference internal" href="exceptions.html#RuntimeError" title="RuntimeError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">RuntimeError</span></code></a> 。</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="asyncio.InvalidStateError">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">asyncio.</span></span><span class="sig-name descname"><span class="pre">InvalidStateError</span></span><a class="headerlink" href="#asyncio.InvalidStateError" title="Link to this definition">¶</a></dt>
+<dd><p class="translated"><a class="reference internal" href="asyncio-task.html#asyncio.Task" title="asyncio.Task"><code class="xref py py-class docutils literal notranslate"><span class="pre">Task</span></code></a> 或 <a class="reference internal" href="asyncio-future.html#asyncio.Future" title="asyncio.Future"><code class="xref py py-class docutils literal notranslate"><span class="pre">Future</span></code></a> 的内部状态无效。</p>
+<p class="translated">在为已设置结果值的未来对象设置结果值等情况下，可以引发此问题。</p>
 </dd></dl>
 
-<dl class="exception">
-<dt id="asyncio.IncompleteReadError">
-<em class="property">exception </em><code class="sig-prename descclassname">asyncio.</code><code class="sig-name descname">IncompleteReadError</code><a class="headerlink" href="#asyncio.IncompleteReadError" title="永久链接至目标">¶</a></dt>
-<dd><p>请求的读取操作未完全完成。</p>
-<p>由 <a class="reference internal" href="asyncio-stream.html#asyncio-streams"><span class="std std-ref">asyncio stream APIs</span></a> 提出</p>
-<p>此异常是 <a class="reference internal" href="exceptions.html#EOFError" title="EOFError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">EOFError</span></code></a> 的子类。</p>
-<dl class="attribute">
-<dt id="asyncio.IncompleteReadError.expected">
-<code class="sig-name descname">expected</code><a class="headerlink" href="#asyncio.IncompleteReadError.expected" title="永久链接至目标">¶</a></dt>
-<dd><p>预期字节的总数（ <a class="reference internal" href="functions.html#int" title="int"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a> ）。</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="asyncio.SendfileNotAvailableError">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">asyncio.</span></span><span class="sig-name descname"><span class="pre">SendfileNotAvailableError</span></span><a class="headerlink" href="#asyncio.SendfileNotAvailableError" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">&quot;sendfile&quot; 系统调用不适用于给定的套接字或文件类型。</p>
+<p class="translated">子类 <a class="reference internal" href="exceptions.html#RuntimeError" title="RuntimeError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">RuntimeError</span></code></a> 。</p>
 </dd></dl>
 
-<dl class="attribute">
-<dt id="asyncio.IncompleteReadError.partial">
-<code class="sig-name descname">partial</code><a class="headerlink" href="#asyncio.IncompleteReadError.partial" title="永久链接至目标">¶</a></dt>
-<dd><p>到达流结束之前读取的 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 字符串。</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="asyncio.IncompleteReadError">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">asyncio.</span></span><span class="sig-name descname"><span class="pre">IncompleteReadError</span></span><a class="headerlink" href="#asyncio.IncompleteReadError" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">请求的读取操作未完全完成。</p>
+<p class="translated">由 <a class="reference internal" href="asyncio-stream.html#asyncio-streams"><span class="std std-ref">asyncio stream APIs</span></a> 提出</p>
+<p class="translated">此异常是 <a class="reference internal" href="exceptions.html#EOFError" title="EOFError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">EOFError</span></code></a> 的子类。</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="asyncio.IncompleteReadError.expected">
+<span class="sig-name descname"><span class="pre">expected</span></span><a class="headerlink" href="#asyncio.IncompleteReadError.expected" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">预期字节的总数（ <a class="reference internal" href="functions.html#int" title="int"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a> ）。</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="asyncio.IncompleteReadError.partial">
+<span class="sig-name descname"><span class="pre">partial</span></span><a class="headerlink" href="#asyncio.IncompleteReadError.partial" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">到达流结束之前读取的 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 字符串。</p>
 </dd></dl>
 
 </dd></dl>
 
-<dl class="exception">
-<dt id="asyncio.LimitOverrunError">
-<em class="property">exception </em><code class="sig-prename descclassname">asyncio.</code><code class="sig-name descname">LimitOverrunError</code><a class="headerlink" href="#asyncio.LimitOverrunError" title="永久链接至目标">¶</a></dt>
-<dd><p>在查找分隔符时达到缓冲区大小限制。</p>
-<p>由 <a class="reference internal" href="asyncio-stream.html#asyncio-streams"><span class="std std-ref">asyncio stream APIs</span></a> 提出</p>
-<dl class="attribute">
-<dt id="asyncio.LimitOverrunError.consumed">
-<code class="sig-name descname">consumed</code><a class="headerlink" href="#asyncio.LimitOverrunError.consumed" title="永久链接至目标">¶</a></dt>
-<dd><p>要消耗的字节总数。</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="asyncio.LimitOverrunError">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">asyncio.</span></span><span class="sig-name descname"><span class="pre">LimitOverrunError</span></span><a class="headerlink" href="#asyncio.LimitOverrunError" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">在查找分隔符时达到缓冲区大小限制。</p>
+<p class="translated">由 <a class="reference internal" href="asyncio-stream.html#asyncio-streams"><span class="std std-ref">asyncio stream APIs</span></a> 提出</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="asyncio.LimitOverrunError.consumed">
+<span class="sig-name descname"><span class="pre">consumed</span></span><a class="headerlink" href="#asyncio.LimitOverrunError.consumed" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">要消耗的字节总数。</p>
 </dd></dl>
 
 </dd></dl>
@@ -219,37 +261,46 @@
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="asyncio-queue.html"
-                        title="上一章">队列集</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="asyncio-eventloop.html"
-                        title="下一章">事件循环</a></p>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="asyncio-queue.html"
+                          title="上一章">队列集</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="asyncio-eventloop.html"
+                          title="下一章">事件循环</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/asyncio-exceptions.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/asyncio-exceptions.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -261,7 +312,7 @@
           <a href="asyncio-queue.html" title="队列集"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -271,48 +322,60 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="ipc.html" >网络和进程间通信</a> &#187;</li>
           <li class="nav-item nav-item-3"><a href="asyncio.html" ><code class="xref py py-mod docutils literal notranslate"><span class="pre">asyncio</span></code> --- 异步 I/O</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">异常</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

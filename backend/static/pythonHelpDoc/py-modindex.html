@@ -1,33 +1,36 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="./">
   <head>
     <meta charset="utf-8" />
-    <title>Python 模块索引 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Python 模块索引 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script src="_static/jquery.js"></script>
-    <script src="_static/underscore.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
-    <script src="_static/translations.js"></script>
+    <script src="_static/documentation_options.js?v=b90486a5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/translations.js?v=beaddf03"></script>
     
     <script src="_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="about.html" />
+    <link rel="author" title="关于此文档" href="about.html" />
     <link rel="index" title="索引" href="genindex.html" />
     <link rel="search" title="搜索" href="search.html" />
-    <link rel="copyright" title="版权所有" href="copyright.html" />
+    <link rel="copyright" title="版权" href="copyright.html" />
 
-    <link rel="canonical" href="https://docs.python.org/3/py-modindex.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/py-modindex.html">
       
     
 
@@ -39,9 +42,14 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="_static/py.svg" />
+<link rel="stylesheet" href="_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="_static/py.svg">
             <script type="text/javascript" src="_static/copybutton.js"></script>
-            <script type="text/javascript" src="_static/menu.js"></script> 
+            <script type="text/javascript" src="_static/menu.js"></script>
+            <script type="text/javascript" src="_static/search-focus.js"></script>
+            <script type="text/javascript" src="_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
 
     <script>
@@ -53,42 +61,53 @@
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
         </nav>
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="总目录"
+          <a href="genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="#" title="Python 模块索引"
              >模块</a> |</li>
 
-          <li><img src="_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -98,22 +117,30 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="index.html">3.8.20 Documentation</a> &#187;
+      <a href="index.html">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href="">Python 模块索引</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -168,17 +195,18 @@
        <td></td>
        <td>
        <a href="library/__main__.html#module-__main__"><code class="xref">__main__</code></a></td><td>
-       <em>The environment where the top-level script is run.</em></td></tr>
-     <tr>
-       <td></td>
-       <td>
-       <a href="library/_dummy_thread.html#module-_dummy_thread"><code class="xref">_dummy_thread</code></a></td><td>
-       <em>Drop-in replacement for the _thread module.</em></td></tr>
+       <em>The environment where top-level code is run. Covers command-line
+interfaces, import-time behavior, and ``__name__ == &#39;__main__&#39;``.</em></td></tr>
      <tr>
        <td></td>
        <td>
        <a href="library/_thread.html#module-_thread"><code class="xref">_thread</code></a></td><td>
        <em>Low-level threading API.</em></td></tr>
+     <tr>
+       <td></td>
+       <td>
+       <a href="library/tkinter.html#module-_tkinter"><code class="xref">_tkinter</code></a></td><td>
+       <em>A binary module that contains the low-level interface to Tcl/Tk.</em></td></tr>
      <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
      <tr class="cap" id="cap-a"><td></td><td>
        <strong>a</strong></td><td></td></tr>
@@ -190,7 +218,7 @@
      <tr>
        <td></td>
        <td>
-       <a href="library/aifc.html#module-aifc"><code class="xref">aifc</code></a></td><td>
+       <a href="library/aifc.html#module-aifc"><code class="xref">aifc</code></a></td><td><strong>已弃用:</strong>
        <em>Read and write audio files in AIFF or AIFC format.</em></td></tr>
      <tr>
        <td></td>
@@ -210,8 +238,8 @@
      <tr>
        <td></td>
        <td>
-       <a href="library/asynchat.html#module-asynchat"><code class="xref">asynchat</code></a></td><td>
-       <em>Support for asynchronous command/response protocols.</em></td></tr>
+       <a href="library/asynchat.html#module-asynchat"><code class="xref">asynchat</code></a></td><td><strong>已弃用:</strong>
+       <em>Removed in 3.12.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -220,9 +248,8 @@
      <tr>
        <td></td>
        <td>
-       <a href="library/asyncore.html#module-asyncore"><code class="xref">asyncore</code></a></td><td>
-       <em>A base class for developing asynchronous socket handling
-services.</em></td></tr>
+       <a href="library/asyncore.html#module-asyncore"><code class="xref">asyncore</code></a></td><td><strong>已弃用:</strong>
+       <em>Removed in 3.12.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -231,7 +258,7 @@ services.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/audioop.html#module-audioop"><code class="xref">audioop</code></a></td><td>
+       <a href="library/audioop.html#module-audioop"><code class="xref">audioop</code></a></td><td><strong>已弃用:</strong>
        <em>Manipulate raw audio data.</em></td></tr>
      <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
      <tr class="cap" id="cap-b"><td></td><td>
@@ -240,7 +267,7 @@ services.</em></td></tr>
        <td></td>
        <td>
        <a href="library/base64.html#module-base64"><code class="xref">base64</code></a></td><td>
-       <em>RFC 3548: Base16, Base32, Base64 Data Encodings;
+       <em>RFC 4648: Base16, Base32, Base64 Data Encodings;
 Base85 and Ascii85</em></td></tr>
      <tr>
        <td></td>
@@ -253,11 +280,6 @@ Base85 and Ascii85</em></td></tr>
        <a href="library/binascii.html#module-binascii"><code class="xref">binascii</code></a></td><td>
        <em>Tools for converting between binary and various ASCII-encoded binary
 representations.</em></td></tr>
-     <tr>
-       <td></td>
-       <td>
-       <a href="library/binhex.html#module-binhex"><code class="xref">binhex</code></a></td><td>
-       <em>Encode and decode files in binhex4 format.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -285,17 +307,17 @@ of the Unix cal program.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/cgi.html#module-cgi"><code class="xref">cgi</code></a></td><td>
+       <a href="library/cgi.html#module-cgi"><code class="xref">cgi</code></a></td><td><strong>已弃用:</strong>
        <em>Helpers for running Python scripts via the Common Gateway Interface.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/cgitb.html#module-cgitb"><code class="xref">cgitb</code></a></td><td>
+       <a href="library/cgitb.html#module-cgitb"><code class="xref">cgitb</code></a></td><td><strong>已弃用:</strong>
        <em>Configurable traceback handler for CGI scripts.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/chunk.html#module-chunk"><code class="xref">chunk</code></a></td><td>
+       <a href="library/chunk.html#module-chunk"><code class="xref">chunk</code></a></td><td><strong>已弃用:</strong>
        <em>Module to read IFF chunks.</em></td></tr>
      <tr>
        <td></td>
@@ -387,7 +409,7 @@ of the Unix cal program.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/crypt.html#module-crypt"><code class="xref">crypt</code></a> <em>(Unix)</em></td><td>
+       <a href="library/crypt.html#module-crypt"><code class="xref">crypt</code></a> <em>(Unix)</em></td><td><strong>已弃用:</strong>
        <em>The crypt() function used to check Unix passwords.</em></td></tr>
      <tr>
        <td></td>
@@ -449,12 +471,12 @@ terminal handling.</em></td></tr>
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/dbm.html#module-dbm.gnu"><code class="xref">dbm.gnu</code></a> <em>(Unix)</em></td><td>
-       <em>GNU&#39;s reinterpretation of dbm.</em></td></tr>
+       <em>GNU database manager</em></td></tr>
      <tr class="cg-4">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/dbm.html#module-dbm.ndbm"><code class="xref">dbm.ndbm</code></a> <em>(Unix)</em></td><td>
-       <em>The standard &#34;database&#34; interface, based on ndbm.</em></td></tr>
+       <em>The New Database Manager</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -471,343 +493,147 @@ terminal handling.</em></td></tr>
        <a href="library/dis.html#module-dis"><code class="xref">dis</code></a></td><td>
        <em>Disassembler for Python bytecode.</em></td></tr>
      <tr>
-       <td><img src="_static/minus.png" class="toggler"
-              id="toggle-5" style="display: none" alt="-" /></td>
+       <td></td>
        <td>
-       <a href="library/distutils.html#module-distutils"><code class="xref">distutils</code></a></td><td>
-       <em>Support for building and installing Python modules into an
-existing Python installation.</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.archive_util"><code class="xref">distutils.archive_util</code></a></td><td>
-       <em>Utility functions for creating archive files (tarballs, zip files, ...)</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.bcppcompiler"><code class="xref">distutils.bcppcompiler</code></a></td><td>
-       <em></em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.ccompiler"><code class="xref">distutils.ccompiler</code></a></td><td>
-       <em>Abstract CCompiler class</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.cmd"><code class="xref">distutils.cmd</code></a></td><td>
-       <em>Provides the abstract base class :class:`~distutils.cmd.Command`. This class
-is subclassed by the modules in the distutils.command subpackage.</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command"><code class="xref">distutils.command</code></a></td><td>
-       <em>Contains one module for each standard Distutils command.</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.bdist"><code class="xref">distutils.command.bdist</code></a></td><td>
-       <em>Build a binary installer for a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.bdist_dumb"><code class="xref">distutils.command.bdist_dumb</code></a></td><td>
-       <em>Build a &#34;dumb&#34; installer - a simple archive of files</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.bdist_msi"><code class="xref">distutils.command.bdist_msi</code></a></td><td>
-       <em>Build a binary distribution as a Windows MSI file</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.bdist_packager"><code class="xref">distutils.command.bdist_packager</code></a></td><td>
-       <em>Abstract base class for packagers</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.bdist_rpm"><code class="xref">distutils.command.bdist_rpm</code></a></td><td>
-       <em>Build a binary distribution as a Redhat RPM and SRPM</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.bdist_wininst"><code class="xref">distutils.command.bdist_wininst</code></a></td><td>
-       <em>Build a Windows installer</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.build"><code class="xref">distutils.command.build</code></a></td><td>
-       <em>Build all files of a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.build_clib"><code class="xref">distutils.command.build_clib</code></a></td><td>
-       <em>Build any C libraries in a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.build_ext"><code class="xref">distutils.command.build_ext</code></a></td><td>
-       <em>Build any extensions in a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.build_py"><code class="xref">distutils.command.build_py</code></a></td><td>
-       <em>Build the .py/.pyc files of a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.build_scripts"><code class="xref">distutils.command.build_scripts</code></a></td><td>
-       <em>Build the scripts of a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.check"><code class="xref">distutils.command.check</code></a></td><td>
-       <em>Check the meta-data of a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.clean"><code class="xref">distutils.command.clean</code></a></td><td>
-       <em>Clean a package build area</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.config"><code class="xref">distutils.command.config</code></a></td><td>
-       <em>Perform package configuration</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.install"><code class="xref">distutils.command.install</code></a></td><td>
-       <em>Install a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.install_data"><code class="xref">distutils.command.install_data</code></a></td><td>
-       <em>Install data files from a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.install_headers"><code class="xref">distutils.command.install_headers</code></a></td><td>
-       <em>Install C/C++ header files from a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.install_lib"><code class="xref">distutils.command.install_lib</code></a></td><td>
-       <em>Install library files from a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.install_scripts"><code class="xref">distutils.command.install_scripts</code></a></td><td>
-       <em>Install script files from a package</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.register"><code class="xref">distutils.command.register</code></a></td><td>
-       <em>Register a module with the Python Package Index</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.command.sdist"><code class="xref">distutils.command.sdist</code></a></td><td>
-       <em>Build a source distribution</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.core"><code class="xref">distutils.core</code></a></td><td>
-       <em>The core Distutils functionality</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.cygwinccompiler"><code class="xref">distutils.cygwinccompiler</code></a></td><td>
-       <em></em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.debug"><code class="xref">distutils.debug</code></a></td><td>
-       <em>Provides the debug flag for distutils</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.dep_util"><code class="xref">distutils.dep_util</code></a></td><td>
-       <em>Utility functions for simple dependency checking</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.dir_util"><code class="xref">distutils.dir_util</code></a></td><td>
-       <em>Utility functions for operating on directories and directory trees</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.dist"><code class="xref">distutils.dist</code></a></td><td>
-       <em>Provides the Distribution class, which represents the module distribution being
-built/installed/distributed</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.errors"><code class="xref">distutils.errors</code></a></td><td>
-       <em>Provides standard distutils exceptions</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.extension"><code class="xref">distutils.extension</code></a></td><td>
-       <em>Provides the Extension class, used to describe C/C++ extension modules in setup
-scripts</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.fancy_getopt"><code class="xref">distutils.fancy_getopt</code></a></td><td>
-       <em>Additional getopt functionality</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.file_util"><code class="xref">distutils.file_util</code></a></td><td>
-       <em>Utility functions for operating on single files</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.filelist"><code class="xref">distutils.filelist</code></a></td><td>
-       <em>The FileList class, used for poking about the file system and
-building lists of files.</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.log"><code class="xref">distutils.log</code></a></td><td>
-       <em>A simple logging mechanism, :pep:`282`-style</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.msvccompiler"><code class="xref">distutils.msvccompiler</code></a></td><td>
-       <em>Microsoft Compiler</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.spawn"><code class="xref">distutils.spawn</code></a></td><td>
-       <em>Provides the spawn() function</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.sysconfig"><code class="xref">distutils.sysconfig</code></a></td><td>
-       <em>Low-level access to configuration information of the Python interpreter.</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.text_file"><code class="xref">distutils.text_file</code></a></td><td>
-       <em>Provides the TextFile class, a simple interface to text files</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.unixccompiler"><code class="xref">distutils.unixccompiler</code></a></td><td>
-       <em>UNIX C Compiler</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.util"><code class="xref">distutils.util</code></a></td><td>
-       <em>Miscellaneous other utility functions</em></td></tr>
-     <tr class="cg-5">
-       <td></td>
-       <td>&#160;&#160;&#160;
-       <a href="distutils/apiref.html#module-distutils.version"><code class="xref">distutils.version</code></a></td><td>
-       <em>Implements classes that represent module version numbers.</em></td></tr>
+       <a href="library/distutils.html#module-distutils"><code class="xref">distutils</code></a></td><td><strong>已弃用:</strong>
+       <em>Removed in 3.12.</em></td></tr>
      <tr>
        <td></td>
        <td>
        <a href="library/doctest.html#module-doctest"><code class="xref">doctest</code></a></td><td>
        <em>Test pieces of code within docstrings.</em></td></tr>
-     <tr>
-       <td></td>
-       <td>
-       <a href="library/dummy_threading.html#module-dummy_threading"><code class="xref">dummy_threading</code></a></td><td>
-       <em>Drop-in replacement for the threading module.</em></td></tr>
      <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
      <tr class="cap" id="cap-e"><td></td><td>
        <strong>e</strong></td><td></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-6" style="display: none" alt="-" /></td>
+              id="toggle-5" style="display: none" alt="-" /></td>
        <td>
        <a href="library/email.html#module-email"><code class="xref">email</code></a></td><td>
        <em>Package supporting the parsing, manipulating, and generating
 email messages.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.charset.html#module-email.charset"><code class="xref">email.charset</code></a></td><td>
        <em>Character Sets</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.contentmanager.html#module-email.contentmanager"><code class="xref">email.contentmanager</code></a></td><td>
        <em>Storing and Retrieving Content from MIME Parts</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.encoders.html#module-email.encoders"><code class="xref">email.encoders</code></a></td><td>
        <em>Encoders for email message payloads.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.errors.html#module-email.errors"><code class="xref">email.errors</code></a></td><td>
        <em>The exception classes used by the email package.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.generator.html#module-email.generator"><code class="xref">email.generator</code></a></td><td>
        <em>Generate flat text email messages from a message structure.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.header.html#module-email.header"><code class="xref">email.header</code></a></td><td>
        <em>Representing non-ASCII headers</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.headerregistry.html#module-email.headerregistry"><code class="xref">email.headerregistry</code></a></td><td>
        <em>Automatic Parsing of headers based on the field name</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.iterators.html#module-email.iterators"><code class="xref">email.iterators</code></a></td><td>
        <em>Iterate over a  message object tree.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.message.html#module-email.message"><code class="xref">email.message</code></a></td><td>
        <em>The base class representing email messages.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.mime.html#module-email.mime"><code class="xref">email.mime</code></a></td><td>
        <em>Build MIME messages.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.application"><code class="xref">email.mime.application</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.audio"><code class="xref">email.mime.audio</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.base"><code class="xref">email.mime.base</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.image"><code class="xref">email.mime.image</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.message"><code class="xref">email.mime.message</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.multipart"><code class="xref">email.mime.multipart</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.nonmultipart"><code class="xref">email.mime.nonmultipart</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/email.mime.html#module-email.mime.text"><code class="xref">email.mime.text</code></a></td><td>
+       <em></em></td></tr>
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.parser.html#module-email.parser"><code class="xref">email.parser</code></a></td><td>
        <em>Parse flat text email messages to produce a message object structure.</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.policy.html#module-email.policy"><code class="xref">email.policy</code></a></td><td>
        <em>Controlling the parsing and generating of messages</em></td></tr>
-     <tr class="cg-6">
+     <tr class="cg-5">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/email.utils.html#module-email.utils"><code class="xref">email.utils</code></a></td><td>
        <em>Miscellaneous email package utilities.</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-7" style="display: none" alt="-" /></td>
+              id="toggle-6" style="display: none" alt="-" /></td>
        <td>
        <code class="xref">encodings</code></td><td>
        <em></em></td></tr>
-     <tr class="cg-7">
+     <tr class="cg-6">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/codecs.html#module-encodings.idna"><code class="xref">encodings.idna</code></a></td><td>
        <em>Internationalized Domain Names implementation</em></td></tr>
-     <tr class="cg-7">
+     <tr class="cg-6">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/codecs.html#module-encodings.mbcs"><code class="xref">encodings.mbcs</code></a></td><td>
        <em>Windows ANSI codepage</em></td></tr>
-     <tr class="cg-7">
+     <tr class="cg-6">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/codecs.html#module-encodings.utf_8_sig"><code class="xref">encodings.utf_8_sig</code></a></td><td>
@@ -859,11 +685,6 @@ installation or virtual environment.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/formatter.html#module-formatter"><code class="xref">formatter</code></a></td><td><strong>已移除:</strong>
-       <em>Generic output formatter and device interface.</em></td></tr>
-     <tr>
-       <td></td>
-       <td>
        <a href="library/fractions.html#module-fractions"><code class="xref">fractions</code></a></td><td>
        <em>Rational numbers.</em></td></tr>
      <tr>
@@ -908,6 +729,11 @@ long option names.</em></td></tr>
      <tr>
        <td></td>
        <td>
+       <a href="library/graphlib.html#module-graphlib"><code class="xref">graphlib</code></a></td><td>
+       <em>Functionality to operate with graph-like structures</em></td></tr>
+     <tr>
+       <td></td>
+       <td>
        <a href="library/grp.html#module-grp"><code class="xref">grp</code></a> <em>(Unix)</em></td><td>
        <em>The group database (getgrnam() and friends).</em></td></tr>
      <tr>
@@ -935,42 +761,42 @@ long option names.</em></td></tr>
        <em>Keyed-Hashing for Message Authentication (HMAC) implementation</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-8" style="display: none" alt="-" /></td>
+              id="toggle-7" style="display: none" alt="-" /></td>
        <td>
        <a href="library/html.html#module-html"><code class="xref">html</code></a></td><td>
        <em>Helpers for manipulating HTML.</em></td></tr>
-     <tr class="cg-8">
+     <tr class="cg-7">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/html.entities.html#module-html.entities"><code class="xref">html.entities</code></a></td><td>
        <em>Definitions of HTML general entities.</em></td></tr>
-     <tr class="cg-8">
+     <tr class="cg-7">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/html.parser.html#module-html.parser"><code class="xref">html.parser</code></a></td><td>
        <em>A simple parser that can handle HTML and XHTML.</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-9" style="display: none" alt="-" /></td>
+              id="toggle-8" style="display: none" alt="-" /></td>
        <td>
        <a href="library/http.html#module-http"><code class="xref">http</code></a></td><td>
        <em>HTTP status codes and messages</em></td></tr>
-     <tr class="cg-9">
+     <tr class="cg-8">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/http.client.html#module-http.client"><code class="xref">http.client</code></a></td><td>
        <em>HTTP and HTTPS protocol client (requires sockets).</em></td></tr>
-     <tr class="cg-9">
+     <tr class="cg-8">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/http.cookiejar.html#module-http.cookiejar"><code class="xref">http.cookiejar</code></a></td><td>
        <em>Classes for automatic handling of HTTP cookies.</em></td></tr>
-     <tr class="cg-9">
+     <tr class="cg-8">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/http.cookies.html#module-http.cookies"><code class="xref">http.cookies</code></a></td><td>
        <em>Support for HTTP state management (cookies).</em></td></tr>
-     <tr class="cg-9">
+     <tr class="cg-8">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/http.server.html#module-http.server"><code class="xref">http.server</code></a></td><td>
@@ -981,45 +807,55 @@ long option names.</em></td></tr>
      <tr>
        <td></td>
        <td>
+       <a href="library/idle.html#module-idlelib"><code class="xref">idlelib</code></a></td><td>
+       <em>Implementation package for the IDLE shell/editor.</em></td></tr>
+     <tr>
+       <td></td>
+       <td>
        <a href="library/imaplib.html#module-imaplib"><code class="xref">imaplib</code></a></td><td>
        <em>IMAP4 protocol client (requires sockets).</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/imghdr.html#module-imghdr"><code class="xref">imghdr</code></a></td><td>
+       <a href="library/imghdr.html#module-imghdr"><code class="xref">imghdr</code></a></td><td><strong>已弃用:</strong>
        <em>Determine the type of image contained in a file or byte stream.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/imp.html#module-imp"><code class="xref">imp</code></a></td><td><strong>已移除:</strong>
-       <em>Access the implementation of the import statement.</em></td></tr>
+       <a href="library/imp.html#module-imp"><code class="xref">imp</code></a></td><td><strong>已弃用:</strong>
+       <em>Removed in 3.12.</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-10" style="display: none" alt="-" /></td>
+              id="toggle-9" style="display: none" alt="-" /></td>
        <td>
        <a href="library/importlib.html#module-importlib"><code class="xref">importlib</code></a></td><td>
        <em>The implementation of the import machinery.</em></td></tr>
-     <tr class="cg-10">
+     <tr class="cg-9">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/importlib.html#module-importlib.abc"><code class="xref">importlib.abc</code></a></td><td>
        <em>Abstract base classes related to import</em></td></tr>
-     <tr class="cg-10">
+     <tr class="cg-9">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/importlib.html#module-importlib.machinery"><code class="xref">importlib.machinery</code></a></td><td>
        <em>Importers and path hooks</em></td></tr>
-     <tr class="cg-10">
+     <tr class="cg-9">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/importlib.metadata.html#module-importlib.metadata"><code class="xref">importlib.metadata</code></a></td><td>
-       <em>The implementation of the importlib metadata.</em></td></tr>
-     <tr class="cg-10">
+       <em>Accessing package metadata</em></td></tr>
+     <tr class="cg-9">
        <td></td>
        <td>&#160;&#160;&#160;
-       <a href="library/importlib.html#module-importlib.resources"><code class="xref">importlib.resources</code></a></td><td>
+       <a href="library/importlib.resources.html#module-importlib.resources"><code class="xref">importlib.resources</code></a></td><td>
        <em>Package resource reading, opening, and access</em></td></tr>
-     <tr class="cg-10">
+     <tr class="cg-9">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/importlib.resources.abc.html#module-importlib.resources.abc"><code class="xref">importlib.resources.abc</code></a></td><td>
+       <em>Abstract base classes for resources</em></td></tr>
+     <tr class="cg-9">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/importlib.html#module-importlib.util"><code class="xref">importlib.util</code></a></td><td>
@@ -1049,11 +885,11 @@ long option names.</em></td></tr>
        <strong>j</strong></td><td></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-11" style="display: none" alt="-" /></td>
+              id="toggle-10" style="display: none" alt="-" /></td>
        <td>
        <a href="library/json.html#module-json"><code class="xref">json</code></a></td><td>
        <em>Encode and decode the JSON format.</em></td></tr>
-     <tr class="cg-11">
+     <tr class="cg-10">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/json.html#module-json.tool"><code class="xref">json.tool</code></a></td><td>
@@ -1086,16 +922,16 @@ long option names.</em></td></tr>
        <em>Internationalization services.</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-12" style="display: none" alt="-" /></td>
+              id="toggle-11" style="display: none" alt="-" /></td>
        <td>
        <a href="library/logging.html#module-logging"><code class="xref">logging</code></a></td><td>
        <em>Flexible event logging system for applications.</em></td></tr>
-     <tr class="cg-12">
+     <tr class="cg-11">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/logging.config.html#module-logging.config"><code class="xref">logging.config</code></a></td><td>
        <em>Configuration of the logging module.</em></td></tr>
-     <tr class="cg-12">
+     <tr class="cg-11">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/logging.handlers.html#module-logging.handlers"><code class="xref">logging.handlers</code></a></td><td>
@@ -1116,7 +952,7 @@ long option names.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/mailcap.html#module-mailcap"><code class="xref">mailcap</code></a></td><td>
+       <a href="library/mailcap.html#module-mailcap"><code class="xref">mailcap</code></a></td><td><strong>已弃用:</strong>
        <em>Mailcap file handling.</em></td></tr>
      <tr>
        <td></td>
@@ -1147,7 +983,7 @@ constraints).</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/msilib.html#module-msilib"><code class="xref">msilib</code></a> <em>(Windows)</em></td><td>
+       <a href="library/msilib.html#module-msilib"><code class="xref">msilib</code></a> <em>(Windows)</em></td><td><strong>已弃用:</strong>
        <em>Creation of Microsoft Installer files, and CAB files.</em></td></tr>
      <tr>
        <td></td>
@@ -1156,36 +992,36 @@ constraints).</em></td></tr>
        <em>Miscellaneous useful routines from the MS VC++ runtime.</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-13" style="display: none" alt="-" /></td>
+              id="toggle-12" style="display: none" alt="-" /></td>
        <td>
        <a href="library/multiprocessing.html#module-multiprocessing"><code class="xref">multiprocessing</code></a></td><td>
        <em>Process-based parallelism.</em></td></tr>
-     <tr class="cg-13">
+     <tr class="cg-12">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/multiprocessing.html#module-multiprocessing.connection"><code class="xref">multiprocessing.connection</code></a></td><td>
        <em>API for dealing with sockets.</em></td></tr>
-     <tr class="cg-13">
+     <tr class="cg-12">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/multiprocessing.html#module-multiprocessing.dummy"><code class="xref">multiprocessing.dummy</code></a></td><td>
        <em>Dumb wrapper around threading.</em></td></tr>
-     <tr class="cg-13">
+     <tr class="cg-12">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/multiprocessing.html#module-multiprocessing.managers"><code class="xref">multiprocessing.managers</code></a></td><td>
        <em>Share data between process with shared objects.</em></td></tr>
-     <tr class="cg-13">
+     <tr class="cg-12">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/multiprocessing.html#module-multiprocessing.pool"><code class="xref">multiprocessing.pool</code></a></td><td>
        <em>Create pools of processes.</em></td></tr>
-     <tr class="cg-13">
+     <tr class="cg-12">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/multiprocessing.shared_memory.html#module-multiprocessing.shared_memory"><code class="xref">multiprocessing.shared_memory</code></a></td><td>
        <em>Provides shared memory for direct access across processes.</em></td></tr>
-     <tr class="cg-13">
+     <tr class="cg-12">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/multiprocessing.html#module-multiprocessing.sharedctypes"><code class="xref">multiprocessing.sharedctypes</code></a></td><td>
@@ -1201,12 +1037,12 @@ constraints).</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/nis.html#module-nis"><code class="xref">nis</code></a> <em>(Unix)</em></td><td>
+       <a href="library/nis.html#module-nis"><code class="xref">nis</code></a> <em>(Unix)</em></td><td><strong>已弃用:</strong>
        <em>Interface to Sun&#39;s NIS (Yellow Pages) library.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/nntplib.html#module-nntplib"><code class="xref">nntplib</code></a></td><td>
+       <a href="library/nntplib.html#module-nntplib"><code class="xref">nntplib</code></a></td><td><strong>已弃用:</strong>
        <em>NNTP protocol client (requires sockets).</em></td></tr>
      <tr>
        <td></td>
@@ -1224,15 +1060,15 @@ constraints).</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/optparse.html#module-optparse"><code class="xref">optparse</code></a></td><td><strong>已移除:</strong>
+       <a href="library/optparse.html#module-optparse"><code class="xref">optparse</code></a></td><td><strong>已弃用:</strong>
        <em>Command-line option parsing library.</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
-              id="toggle-14" style="display: none" alt="-" /></td>
+              id="toggle-13" style="display: none" alt="-" /></td>
        <td>
        <a href="library/os.html#module-os"><code class="xref">os</code></a></td><td>
        <em>Miscellaneous operating system interfaces.</em></td></tr>
-     <tr class="cg-14">
+     <tr class="cg-13">
        <td></td>
        <td>&#160;&#160;&#160;
        <a href="library/os.path.html#module-os.path"><code class="xref">os.path</code></a></td><td>
@@ -1240,16 +1076,11 @@ constraints).</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/ossaudiodev.html#module-ossaudiodev"><code class="xref">ossaudiodev</code></a> <em>(Linux, FreeBSD)</em></td><td>
+       <a href="library/ossaudiodev.html#module-ossaudiodev"><code class="xref">ossaudiodev</code></a> <em>(Linux, FreeBSD)</em></td><td><strong>已弃用:</strong>
        <em>Access to OSS-compatible audio devices.</em></td></tr>
      <tr class="pcap"><td></td><td>&#160;</td><td></td></tr>
      <tr class="cap" id="cap-p"><td></td><td>
        <strong>p</strong></td><td></td></tr>
-     <tr>
-       <td></td>
-       <td>
-       <a href="library/parser.html#module-parser"><code class="xref">parser</code></a></td><td>
-       <em>Access parse trees for Python source code.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1274,7 +1105,7 @@ pickle-machine opcodes, as well as some useful functions.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/pipes.html#module-pipes"><code class="xref">pipes</code></a> <em>(Unix)</em></td><td>
+       <a href="library/pipes.html#module-pipes"><code class="xref">pipes</code></a> <em>(Unix)</em></td><td><strong>已弃用:</strong>
        <em>A Python interface to Unix shell pipelines.</em></td></tr>
      <tr>
        <td></td>
@@ -1290,7 +1121,7 @@ pickle-machine opcodes, as well as some useful functions.</em></td></tr>
        <td></td>
        <td>
        <a href="library/plistlib.html#module-plistlib"><code class="xref">plistlib</code></a></td><td>
-       <em>Generate and parse Mac OS X plist files.</em></td></tr>
+       <em>Generate and parse Apple plist files.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1319,8 +1150,8 @@ pickle-machine opcodes, as well as some useful functions.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/pty.html#module-pty"><code class="xref">pty</code></a> <em>(Linux)</em></td><td>
-       <em>Pseudo-Terminal Handling for Linux.</em></td></tr>
+       <a href="library/pty.html#module-pty"><code class="xref">pty</code></a> <em>(Unix)</em></td><td>
+       <em>Pseudo-Terminal Handling for Unix.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1443,8 +1274,13 @@ pickle-machine opcodes, as well as some useful functions.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/smtpd.html#module-smtpd"><code class="xref">smtpd</code></a></td><td>
-       <em>A SMTP server implementation in Python.</em></td></tr>
+       <a href="library/site.html#module-sitecustomize"><code class="xref">sitecustomize</code></a></td><td>
+       <em></em></td></tr>
+     <tr>
+       <td></td>
+       <td>
+       <a href="library/smtpd.html#module-smtpd"><code class="xref">smtpd</code></a></td><td><strong>已弃用:</strong>
+       <em>Removed in 3.12.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1453,7 +1289,7 @@ pickle-machine opcodes, as well as some useful functions.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/sndhdr.html#module-sndhdr"><code class="xref">sndhdr</code></a></td><td>
+       <a href="library/sndhdr.html#module-sndhdr"><code class="xref">sndhdr</code></a></td><td><strong>已弃用:</strong>
        <em>Determine type of a sound file.</em></td></tr>
      <tr>
        <td></td>
@@ -1468,7 +1304,7 @@ pickle-machine opcodes, as well as some useful functions.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/spwd.html#module-spwd"><code class="xref">spwd</code></a> <em>(Unix)</em></td><td>
+       <a href="library/spwd.html#module-spwd"><code class="xref">spwd</code></a> <em>(Unix)</em></td><td><strong>已弃用:</strong>
        <em>The shadow password database (getspnam() and friends).</em></td></tr>
      <tr>
        <td></td>
@@ -1514,23 +1350,24 @@ os.lstat() and os.fstat().</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/sunau.html#module-sunau"><code class="xref">sunau</code></a></td><td>
+       <a href="library/sunau.html#module-sunau"><code class="xref">sunau</code></a></td><td><strong>已弃用:</strong>
        <em>Provide an interface to the Sun AU sound format.</em></td></tr>
-     <tr>
-       <td></td>
-       <td>
-       <a href="library/symbol.html#module-symbol"><code class="xref">symbol</code></a></td><td>
-       <em>Constants representing internal nodes of the parse tree.</em></td></tr>
      <tr>
        <td></td>
        <td>
        <a href="library/symtable.html#module-symtable"><code class="xref">symtable</code></a></td><td>
        <em>Interface to the compiler&#39;s internal symbol tables.</em></td></tr>
      <tr>
-       <td></td>
+       <td><img src="_static/minus.png" class="toggler"
+              id="toggle-14" style="display: none" alt="-" /></td>
        <td>
        <a href="library/sys.html#module-sys"><code class="xref">sys</code></a></td><td>
        <em>Access system-specific parameters and functions.</em></td></tr>
+     <tr class="cg-14">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/sys.monitoring.html#module-sys.monitoring"><code class="xref">sys.monitoring</code></a></td><td>
+       <em>Access and control event monitoring</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1558,7 +1395,7 @@ source files in a directory tree.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/telnetlib.html#module-telnetlib"><code class="xref">telnetlib</code></a></td><td>
+       <a href="library/telnetlib.html#module-telnetlib"><code class="xref">telnetlib</code></a></td><td><strong>已弃用:</strong>
        <em>Telnet client class.</em></td></tr>
      <tr>
        <td></td>
@@ -1579,13 +1416,48 @@ source files in a directory tree.</em></td></tr>
      <tr class="cg-15">
        <td></td>
        <td>&#160;&#160;&#160;
+       <a href="library/test.html#module-test.regrtest"><code class="xref">test.regrtest</code></a></td><td>
+       <em>Drives the regression test suite.</em></td></tr>
+     <tr class="cg-15">
+       <td></td>
+       <td>&#160;&#160;&#160;
        <a href="library/test.html#module-test.support"><code class="xref">test.support</code></a></td><td>
        <em>Support for Python&#39;s regression test suite.</em></td></tr>
      <tr class="cg-15">
        <td></td>
        <td>&#160;&#160;&#160;
+       <a href="library/test.html#module-test.support.bytecode_helper"><code class="xref">test.support.bytecode_helper</code></a></td><td>
+       <em>Support tools for testing correct bytecode generation.</em></td></tr>
+     <tr class="cg-15">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/test.html#module-test.support.import_helper"><code class="xref">test.support.import_helper</code></a></td><td>
+       <em>Support for import tests.</em></td></tr>
+     <tr class="cg-15">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/test.html#module-test.support.os_helper"><code class="xref">test.support.os_helper</code></a></td><td>
+       <em>Support for os tests.</em></td></tr>
+     <tr class="cg-15">
+       <td></td>
+       <td>&#160;&#160;&#160;
        <a href="library/test.html#module-test.support.script_helper"><code class="xref">test.support.script_helper</code></a></td><td>
        <em>Support for Python&#39;s script execution tests.</em></td></tr>
+     <tr class="cg-15">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/test.html#module-test.support.socket_helper"><code class="xref">test.support.socket_helper</code></a></td><td>
+       <em>Support for socket tests.</em></td></tr>
+     <tr class="cg-15">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/test.html#module-test.support.threading_helper"><code class="xref">test.support.threading_helper</code></a></td><td>
+       <em>Support for threading tests.</em></td></tr>
+     <tr class="cg-15">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/test.html#module-test.support.warnings_helper"><code class="xref">test.support.warnings_helper</code></a></td><td>
+       <em>Support for warnings tests.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1615,8 +1487,43 @@ source files in a directory tree.</em></td></tr>
      <tr class="cg-16">
        <td></td>
        <td>&#160;&#160;&#160;
+       <a href="library/tkinter.colorchooser.html#module-tkinter.colorchooser"><code class="xref">tkinter.colorchooser</code></a> <em>(Tk)</em></td><td>
+       <em>Color choosing dialog</em></td></tr>
+     <tr class="cg-16">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/dialog.html#module-tkinter.commondialog"><code class="xref">tkinter.commondialog</code></a> <em>(Tk)</em></td><td>
+       <em>Tkinter base class for dialogs</em></td></tr>
+     <tr class="cg-16">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/tkinter.dnd.html#module-tkinter.dnd"><code class="xref">tkinter.dnd</code></a> <em>(Tk)</em></td><td>
+       <em>Tkinter drag-and-drop interface</em></td></tr>
+     <tr class="cg-16">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/dialog.html#module-tkinter.filedialog"><code class="xref">tkinter.filedialog</code></a> <em>(Tk)</em></td><td>
+       <em>Dialog classes for file selection</em></td></tr>
+     <tr class="cg-16">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/tkinter.font.html#module-tkinter.font"><code class="xref">tkinter.font</code></a> <em>(Tk)</em></td><td>
+       <em>Tkinter font-wrapping class</em></td></tr>
+     <tr class="cg-16">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/tkinter.messagebox.html#module-tkinter.messagebox"><code class="xref">tkinter.messagebox</code></a> <em>(Tk)</em></td><td>
+       <em>Various types of alert dialogs</em></td></tr>
+     <tr class="cg-16">
+       <td></td>
+       <td>&#160;&#160;&#160;
        <a href="library/tkinter.scrolledtext.html#module-tkinter.scrolledtext"><code class="xref">tkinter.scrolledtext</code></a> <em>(Tk)</em></td><td>
        <em>Text widget with a vertical scroll bar.</em></td></tr>
+     <tr class="cg-16">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/dialog.html#module-tkinter.simpledialog"><code class="xref">tkinter.simpledialog</code></a> <em>(Tk)</em></td><td>
+       <em>Simple dialog windows</em></td></tr>
      <tr class="cg-16">
        <td></td>
        <td>&#160;&#160;&#160;
@@ -1637,6 +1544,11 @@ source files in a directory tree.</em></td></tr>
        <td>
        <a href="library/tokenize.html#module-tokenize"><code class="xref">tokenize</code></a></td><td>
        <em>Lexical scanner for Python source code.</em></td></tr>
+     <tr>
+       <td></td>
+       <td>
+       <a href="library/tomllib.html#module-tomllib"><code class="xref">tomllib</code></a></td><td>
+       <em>Parse TOML files.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1731,7 +1643,12 @@ fetchability of other URLs.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/uu.html#module-uu"><code class="xref">uu</code></a></td><td>
+       <a href="library/site.html#module-usercustomize"><code class="xref">usercustomize</code></a></td><td>
+       <em></em></td></tr>
+     <tr>
+       <td></td>
+       <td>
+       <a href="library/uu.html#module-uu"><code class="xref">uu</code></a></td><td><strong>已弃用:</strong>
        <em>Encode and decode files in uuencode format.</em></td></tr>
      <tr>
        <td></td>
@@ -1768,7 +1685,7 @@ fetchability of other URLs.</em></td></tr>
        <td></td>
        <td>
        <a href="library/webbrowser.html#module-webbrowser"><code class="xref">webbrowser</code></a></td><td>
-       <em>Easy-to-use controller for Web browsers.</em></td></tr>
+       <em>Easy-to-use controller for web browsers.</em></td></tr>
      <tr>
        <td></td>
        <td>
@@ -1803,6 +1720,11 @@ fetchability of other URLs.</em></td></tr>
      <tr class="cg-19">
        <td></td>
        <td>&#160;&#160;&#160;
+       <a href="library/wsgiref.html#module-wsgiref.types"><code class="xref">wsgiref.types</code></a></td><td>
+       <em>WSGI types for static type checking</em></td></tr>
+     <tr class="cg-19">
+       <td></td>
+       <td>&#160;&#160;&#160;
        <a href="library/wsgiref.html#module-wsgiref.util"><code class="xref">wsgiref.util</code></a></td><td>
        <em>WSGI environment utilities.</em></td></tr>
      <tr class="cg-19">
@@ -1816,7 +1738,7 @@ fetchability of other URLs.</em></td></tr>
      <tr>
        <td></td>
        <td>
-       <a href="library/xdrlib.html#module-xdrlib"><code class="xref">xdrlib</code></a></td><td>
+       <a href="library/xdrlib.html#module-xdrlib"><code class="xref">xdrlib</code></a></td><td><strong>已弃用:</strong>
        <em>Encoders and decoders for the External Data Representation (XDR).</em></td></tr>
      <tr>
        <td><img src="_static/minus.png" class="toggler"
@@ -1839,6 +1761,11 @@ fetchability of other URLs.</em></td></tr>
        <td>&#160;&#160;&#160;
        <a href="library/xml.dom.pulldom.html#module-xml.dom.pulldom"><code class="xref">xml.dom.pulldom</code></a></td><td>
        <em>Support for building partial DOM trees from SAX events.</em></td></tr>
+     <tr class="cg-20">
+       <td></td>
+       <td>&#160;&#160;&#160;
+       <a href="library/xml.etree.elementtree.html#module-xml.etree.ElementInclude"><code class="xref">xml.etree.ElementInclude</code></a></td><td>
+       <em></em></td></tr>
      <tr class="cg-20">
        <td></td>
        <td>&#160;&#160;&#160;
@@ -1883,8 +1810,8 @@ fetchability of other URLs.</em></td></tr>
        <td><img src="_static/minus.png" class="toggler"
               id="toggle-21" style="display: none" alt="-" /></td>
        <td>
-       <code class="xref">xmlrpc</code></td><td>
-       <em></em></td></tr>
+       <a href="library/xmlrpc.html#module-xmlrpc"><code class="xref">xmlrpc</code></a></td><td>
+       <em>Server and client modules implementing XML-RPC.</em></td></tr>
      <tr class="cg-21">
        <td></td>
        <td>&#160;&#160;&#160;
@@ -1919,29 +1846,39 @@ fetchability of other URLs.</em></td></tr>
        <a href="library/zlib.html#module-zlib"><code class="xref">zlib</code></a></td><td>
        <em>Low-level interface to compression and decompression routines
 compatible with gzip.</em></td></tr>
+     <tr>
+       <td></td>
+       <td>
+       <a href="library/zoneinfo.html#module-zoneinfo"><code class="xref">zoneinfo</code></a></td><td>
+       <em>IANA time zone support</em></td></tr>
    </table>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="总目录"
+          <a href="genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="#" title="Python 模块索引"
              >模块</a> |</li>
 
-          <li><img src="_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -1951,45 +1888,57 @@ compatible with gzip.</em></td></tr>
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="index.html">3.8.20 Documentation</a> &#187;
+      <a href="index.html">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href="">Python 模块索引</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

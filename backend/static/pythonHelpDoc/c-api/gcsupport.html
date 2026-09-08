@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="使对象类型支持循环垃圾回收" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/c-api/gcsupport.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="Python 对循环引用的垃圾检测与回收需要“容器”对象类型的支持，此类型的容器对象中可能包含其它容器对象。不保存其它对象的引用的类型，或者只保存原子类型（如数字或字符串）的引用的类型，不需要显式提供垃圾回收的支持。 要创建一个容器类，类型对象的 tp_flags 字段必须包括 Py_TPFLAGS_HAVE_GC 并提供一个 tp_traverse 处理器的实现。 如果该类型的实例是可变的..." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_c-api_gcsupport_f5da228d.png" />
+<meta property="og:image:alt" content="Python 对循环引用的垃圾检测与回收需要“容器”对象类型的支持，此类型的容器对象中可能包含其它容器对象。不保存其它对象的引用的类型，或者只保存原子类型（如数字或字符串）的引用的类型，不需要显式提供垃圾回收的支持。 要创建一个容器类，类型对象的 tp_flags 字段必须包括 Py_TPFLAGS_HAVE_GC 并提供一个 tp_traverse 处理器的实现。 如果该类型的实例是可变的..." />
+<meta name="description" content="Python 对循环引用的垃圾检测与回收需要“容器”对象类型的支持，此类型的容器对象中可能包含其它容器对象。不保存其它对象的引用的类型，或者只保存原子类型（如数字或字符串）的引用的类型，不需要显式提供垃圾回收的支持。 要创建一个容器类，类型对象的 tp_flags 字段必须包括 Py_TPFLAGS_HAVE_GC 并提供一个 tp_traverse 处理器的实现。 如果该类型的实例是可变的..." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>使对象类型支持循环垃圾回收 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>使对象类型支持循环垃圾回收 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
     <link rel="next" title="API 和 ABI 版本管理" href="apiabiversion.html" />
-    <link rel="prev" title="类型对象" href="typeobj.html" />
-    <link rel="canonical" href="https://docs.python.org/3/c-api/gcsupport.html" />
+    <link rel="prev" title="类型对象结构体" href="typeobj.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/c-api/gcsupport.html">
       
     
 
@@ -41,48 +56,78 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="typeobj.html"
-                        title="上一章">类型对象</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="apiabiversion.html"
-                        title="下一章">API 和 ABI 版本管理</a></p>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h3><a href="../contents.html">目录</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">使对象类型支持循环垃圾回收</a><ul>
+<li><a class="reference internal" href="#controlling-the-garbage-collector-state">控制垃圾回收器状态</a></li>
+<li><a class="reference internal" href="#querying-garbage-collector-state">查询垃圾回收器状态</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="typeobj.html"
+                          title="上一章">类型对象结构体</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="apiabiversion.html"
+                          title="下一章">API 和 ABI 版本管理</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/c-api/gcsupport.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/c-api/gcsupport.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -90,12 +135,13 @@
         </nav>
     </div>
 </div>
+
   
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -104,10 +150,10 @@
           <a href="apiabiversion.html" title="API 和 ABI 版本管理"
              accesskey="N">下一页</a> |</li>
         <li class="right" >
-          <a href="typeobj.html" title="类型对象"
+          <a href="typeobj.html" title="类型对象结构体"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -117,24 +163,32 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python/C API 参考手册</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="objimpl.html" accesskey="U">对象实现支持</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">使对象类型支持循环垃圾回收</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -145,84 +199,132 @@
           <div class="body" role="main">
             
   <section id="supporting-cyclic-garbage-collection">
-<span id="supporting-cycle-detection"></span><h1>使对象类型支持循环垃圾回收<a class="headerlink" href="#supporting-cyclic-garbage-collection" title="永久链接至标题">¶</a></h1>
-<p>Python 对循环引用的垃圾检测与回收需要“容器”对象类型的支持，此类型的容器对象中可能包含其它容器对象。不保存其它对象的引用的类型，或者只保存原子类型（如数字或字符串）的引用的类型，不需要显式提供垃圾回收的支持。</p>
-<p>若要创建一个容器类，类型对象的 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_flags" title="PyTypeObject.tp_flags"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_flags</span></code></a> 字段必须包含 <a class="reference internal" href="typeobj.html#Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref py py-const docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a> 并提供一个 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理的实现。如果该类型的实例是可变的，还需要实现 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_clear" title="PyTypeObject.tp_clear"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_clear</span></code></a> 。</p>
-<dl class="data">
-<dt>
-<code class="sig-name descname">Py_TPFLAGS_HAVE_GC</code></dt>
-<dd><p>设置了此标志位的类型的对象必须符合此处记录的规则。为方便起见，下文把这些对象称为容器对象。</p>
-</dd></dl>
-
-<p>容器类型的构造函数必须符合两个规则：</p>
+<span id="supporting-cycle-detection"></span><h1 class="translated">使对象类型支持循环垃圾回收<a class="headerlink" href="#supporting-cyclic-garbage-collection" title="Link to this heading">¶</a></h1>
+<p class="translated">Python 对循环引用的垃圾检测与回收需要“容器”对象类型的支持，此类型的容器对象中可能包含其它容器对象。不保存其它对象的引用的类型，或者只保存原子类型（如数字或字符串）的引用的类型，不需要显式提供垃圾回收的支持。</p>
+<p class="translated">要创建一个容器类，类型对象的 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_flags" title="PyTypeObject.tp_flags"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_flags</span></code></a> 字段必须包括 <a class="reference internal" href="typeobj.html#c.Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref c c-macro docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a> 并提供一个 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理器的实现。 如果该类型的实例是可变的，则还必须提供 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_clear" title="PyTypeObject.tp_clear"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_clear</span></code></a> 的实现。</p>
+<dl class="simple">
+<dt class="translated"><a class="reference internal" href="typeobj.html#c.Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref c c-macro docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a></dt><dd><p class="translated">设置了此标志位的类型的对象必须符合此处记录的规则。为方便起见，下文把这些对象称为容器对象。</p>
+</dd>
+</dl>
+<p class="translated">容器类型的构造函数必须符合两个规则：</p>
 <ol class="arabic simple">
-<li><p>必须使用 <a class="reference internal" href="#c.PyObject_GC_New" title="PyObject_GC_New"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_New()</span></code></a> 或 <a class="reference internal" href="#c.PyObject_GC_NewVar" title="PyObject_GC_NewVar"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_NewVar()</span></code></a> 为这些对象分配内存。</p></li>
-<li><p>初始化了所有可能包含其他容器的引用的字段后，它必须调用 <a class="reference internal" href="#c.PyObject_GC_Track" title="PyObject_GC_Track"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_Track()</span></code></a> 。</p></li>
+<li><p class="translated">该对象的内在必须使用 <a class="reference internal" href="#c.PyObject_GC_New" title="PyObject_GC_New"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_GC_New</span></code></a> 或 <a class="reference internal" href="#c.PyObject_GC_NewVar" title="PyObject_GC_NewVar"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_GC_NewVar</span></code></a> 来分配。</p></li>
+<li><p class="translated">初始化了所有可能包含其他容器的引用的字段后，它必须调用 <a class="reference internal" href="#c.PyObject_GC_Track" title="PyObject_GC_Track"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_Track()</span></code></a> 。</p></li>
 </ol>
-<dl class="function">
-<dt id="c.PyObject_GC_New">
-TYPE* <code class="sig-name descname">PyObject_GC_New</code><span class="sig-paren">(</span>TYPE, <a class="reference internal" href="type.html#c.PyTypeObject" title="PyTypeObject">PyTypeObject</a><em> *type</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_New" title="永久链接至目标">¶</a></dt>
-<dd><p>类似于 <a class="reference internal" href="allocation.html#c.PyObject_New" title="PyObject_New"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_New()</span></code></a> ，适用于设置了 <a class="reference internal" href="typeobj.html#Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref py py-const docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a> 标签的容器对象。</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="c.PyObject_GC_NewVar">
-TYPE* <code class="sig-name descname">PyObject_GC_NewVar</code><span class="sig-paren">(</span>TYPE, <a class="reference internal" href="type.html#c.PyTypeObject" title="PyTypeObject">PyTypeObject</a><em> *type</em>, Py_ssize_t<em> size</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_NewVar" title="永久链接至目标">¶</a></dt>
-<dd><p>类似于 <a class="reference internal" href="allocation.html#c.PyObject_NewVar" title="PyObject_NewVar"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_NewVar()</span></code></a> ，适用于设置了 <a class="reference internal" href="typeobj.html#Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref py py-const docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a> 标签的容器对象。</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="c.PyObject_GC_Resize">
-TYPE* <code class="sig-name descname">PyObject_GC_Resize</code><span class="sig-paren">(</span>TYPE, <a class="reference internal" href="structures.html#c.PyVarObject" title="PyVarObject">PyVarObject</a><em> *op</em>, Py_ssize_t<em> newsize</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_Resize" title="永久链接至目标">¶</a></dt>
-<dd><p>为 <a class="reference internal" href="allocation.html#c.PyObject_NewVar" title="PyObject_NewVar"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_NewVar()</span></code></a> 所分配对象重新调整大小。 返回调整大小后的对象或在失败时返回 <code class="docutils literal notranslate"><span class="pre">NULL</span></code>。 <em>op</em> 必须尚未被垃圾回收器追踪。</p>
-</dd></dl>
-
-<dl class="function">
-<dt id="c.PyObject_GC_Track">
-void <code class="sig-name descname">PyObject_GC_Track</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *op</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_Track" title="永久链接至目标">¶</a></dt>
-<dd><p>把对象 <em>op</em> 加入到垃圾回收器跟踪的容器对象中。对象在被回收器跟踪时必须保持有效的，因为回收器可能在任何时候开始运行。在 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理前的所有字段变为有效后，必须调用此函数，通常在靠近构造函数末尾的位置。</p>
-</dd></dl>
-
-<p>同样的，对象的释放器必须符合两个类似的规则：</p>
-<ol class="arabic simple">
-<li><p>在引用其它容器的字段失效前，必须调用 <a class="reference internal" href="#c.PyObject_GC_UnTrack" title="PyObject_GC_UnTrack"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_UnTrack()</span></code></a> 。</p></li>
-<li><p>必须使用 <a class="reference internal" href="#c.PyObject_GC_Del" title="PyObject_GC_Del"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_Del()</span></code></a> 释放对象的内存。</p></li>
+<p class="translated">同样的，对象的释放器必须符合两个类似的规则：</p>
+<ol class="arabic">
+<li><p class="translated">在引用其它容器的字段失效前，必须调用 <a class="reference internal" href="#c.PyObject_GC_UnTrack" title="PyObject_GC_UnTrack"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_UnTrack()</span></code></a> 。</p></li>
+<li><p class="translated">必须使用 <a class="reference internal" href="#c.PyObject_GC_Del" title="PyObject_GC_Del"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_Del()</span></code></a> 释放对象的内存。</p>
+<div class="admonition warning">
+<p class="admonition-title">警告</p>
+<p class="translated">如果一个类型添加了 Py_TPFLAGS_HAVE_GC，则它 <em>必须</em> 实现至少一个 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 句柄或显式地使用来自其一个或多个子类的句柄。</p>
+<p class="translated">当调用 <a class="reference internal" href="type.html#c.PyType_Ready" title="PyType_Ready"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyType_Ready()</span></code></a> 或者某些间接调用该函数的 API 如 <a class="reference internal" href="type.html#c.PyType_FromSpecWithBases" title="PyType_FromSpecWithBases"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyType_FromSpecWithBases()</span></code></a> 或 <a class="reference internal" href="type.html#c.PyType_FromSpec" title="PyType_FromSpec"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyType_FromSpec()</span></code></a> 时解释器将自动填充 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_flags" title="PyTypeObject.tp_flags"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_flags</span></code></a>, <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 和 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_clear" title="PyTypeObject.tp_clear"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_clear</span></code></a> 字段，如果该类型是继承自实现了垃圾回收器协议的类并且该子类 <em>没有</em> 包括 <a class="reference internal" href="typeobj.html#c.Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref c c-macro docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a> 旗标的话。</p>
+</div>
+</li>
 </ol>
-<dl class="function">
-<dt id="c.PyObject_GC_Del">
-void <code class="sig-name descname">PyObject_GC_Del</code><span class="sig-paren">(</span>void<em> *op</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_Del" title="永久链接至目标">¶</a></dt>
-<dd><p>释放对象的内存，该对象初始化时由 <a class="reference internal" href="#c.PyObject_GC_New" title="PyObject_GC_New"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_New()</span></code></a> 或 <a class="reference internal" href="#c.PyObject_GC_NewVar" title="PyObject_GC_NewVar"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_NewVar()</span></code></a> 分配内存。</p>
+<dl class="c macro">
+<dt class="sig sig-object c" id="c.PyObject_GC_New">
+<span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_New</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">TYPE</span></span>, <span class="n"><span class="pre">typeobj</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_New" title="Link to this definition">¶</a><br /></dt>
+<dd><p class="translated">类似于 <a class="reference internal" href="allocation.html#c.PyObject_New" title="PyObject_New"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_New</span></code></a> 但专用于设置了 <a class="reference internal" href="typeobj.html#c.Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref c c-macro docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a> 旗标的容器对象。</p>
 </dd></dl>
 
-<dl class="function">
-<dt id="c.PyObject_GC_UnTrack">
-void <code class="sig-name descname">PyObject_GC_UnTrack</code><span class="sig-paren">(</span>void<em> *op</em><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_UnTrack" title="永久链接至目标">¶</a></dt>
-<dd><p>从回收器跟踪的容器对象集合中移除 <em>op</em> 对象。 请注意可以在此对象上再次调用 <a class="reference internal" href="#c.PyObject_GC_Track" title="PyObject_GC_Track"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_Track()</span></code></a> 以将其加回到被跟踪对象集合。 释放器 (<a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_dealloc" title="PyTypeObject.tp_dealloc"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_dealloc</span></code></a> 句柄) 应当在 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 句柄所使用的任何字段失效之前为对象调用此函数。</p>
+<dl class="c macro">
+<dt class="sig sig-object c" id="c.PyObject_GC_NewVar">
+<span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_NewVar</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">TYPE</span></span>, <span class="n"><span class="pre">typeobj</span></span>, <span class="n"><span class="pre">size</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_NewVar" title="Link to this definition">¶</a><br /></dt>
+<dd><p class="translated">与 <a class="reference internal" href="allocation.html#c.PyObject_NewVar" title="PyObject_NewVar"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_NewVar</span></code></a> 类似但专用于设置了 <a class="reference internal" href="typeobj.html#c.Py_TPFLAGS_HAVE_GC" title="Py_TPFLAGS_HAVE_GC"><code class="xref c c-macro docutils literal notranslate"><span class="pre">Py_TPFLAGS_HAVE_GC</span></code></a> 旗标的容器对象。</p>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyUnstable_Object_GC_NewWithExtraData">
+<a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">PyUnstable_Object_GC_NewWithExtraData</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="type.html#c.PyTypeObject" title="PyTypeObject"><span class="n"><span class="pre">PyTypeObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">type</span></span>, <span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n"><span class="pre">extra_size</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyUnstable_Object_GC_NewWithExtraData" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="unstable-c-api warning admonition">
+<em>这是 <a class="reference internal" href="stable.html#unstable-c-api"><span class="std std-ref">不稳定 API</span></a>。它可在次发布版中不经警告地改变。</em></div>
+<p class="translated">与 <a class="reference internal" href="#c.PyObject_GC_New" title="PyObject_GC_New"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_GC_New</span></code></a> 类似但会在对象的末尾分配 <em>extra_size</em> 个字节（在 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_basicsize" title="PyTypeObject.tp_basicsize"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_basicsize</span></code></a> 偏移量处）。 除 <a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><code class="xref c c-type docutils literal notranslate"><span class="pre">Python</span> <span class="pre">对象标头</span></code></a> 外，分配的内存将初始化为零。</p>
+<p class="translated">附加数据将与对象一起被释放，但在其他情况下则不会由 Python 来管理。</p>
+<div class="admonition warning">
+<p class="admonition-title">警告</p>
+<p class="translated">此函数被标记为非稳定的因为在实例之后保留附加数据的机制尚未确定。 要分配可变数量的字段，推荐改用 <a class="reference internal" href="structures.html#c.PyVarObject" title="PyVarObject"><code class="xref c c-type docutils literal notranslate"><span class="pre">PyVarObject</span></code></a> 和 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_itemsize" title="PyTypeObject.tp_itemsize"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_itemsize</span></code></a>。</p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.12.</span></p>
+</div>
+</dd></dl>
+
+<dl class="c macro">
+<dt class="sig sig-object c" id="c.PyObject_GC_Resize">
+<span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_Resize</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">TYPE</span></span>, <span class="n"><span class="pre">op</span></span>, <span class="n"><span class="pre">newsize</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_Resize" title="Link to this definition">¶</a><br /></dt>
+<dd><p class="translated">重新调整 <a class="reference internal" href="allocation.html#c.PyObject_NewVar" title="PyObject_NewVar"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_NewVar</span></code></a> 所分配对象的大小。 返回调整大小后的类型为 <code class="docutils literal notranslate"><span class="pre">TYPE*</span></code> 的对象（指向任意 C 类型）或在失败时返回 <code class="docutils literal notranslate"><span class="pre">NULL</span></code>。</p>
+<p class="translated"><em>op</em> 必须为 <span class="c-expr sig sig-inline c"><a class="reference internal" href="structures.html#c.PyVarObject" title="PyVarObject"><span class="n">PyVarObject</span></a><span class="p">*</span></span> 类型并且不能已被回收器所追踪。 <em>newsize</em> 必须为 <a class="reference internal" href="intro.html#c.Py_ssize_t" title="Py_ssize_t"><code class="xref c c-type docutils literal notranslate"><span class="pre">Py_ssize_t</span></code></a> 类型。</p>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyObject_GC_Track">
+<span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_Track</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">op</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_Track" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a>.</em><p class="translated">把对象 <em>op</em> 加入到垃圾回收器跟踪的容器对象中。对象在被回收器跟踪时必须保持有效的，因为回收器可能在任何时候开始运行。在 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理前的所有字段变为有效后，必须调用此函数，通常在靠近构造函数末尾的位置。</p>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyObject_IS_GC">
+<span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyObject_IS_GC</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">obj</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_IS_GC" title="Link to this definition">¶</a><br /></dt>
+<dd><p class="translated">如果对象实现了垃圾回收器协议则返回非零值，否则返回 0。</p>
+<p class="translated">如果此函数返回 0 则对象无法被垃圾回收器追踪。</p>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyObject_GC_IsTracked">
+<span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_IsTracked</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">op</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_IsTracked" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a> 自 3.9 版起.</em><p class="translated">如果 <em>op</em> 对象的类型实现了 GC 协议且 <em>op</em> 目前正被垃圾回收器追踪则返回 1， 否则返回 0。</p>
+<p class="translated">这类似于 Python 函数 <a class="reference internal" href="../library/gc.html#gc.is_tracked" title="gc.is_tracked"><code class="xref py py-func docutils literal notranslate"><span class="pre">gc.is_tracked()</span></code></a>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.9.</span></p>
+</div>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyObject_GC_IsFinalized">
+<span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_IsFinalized</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">op</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_IsFinalized" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a> 自 3.9 版起.</em><p class="translated">如果 <em>op</em> 对象的类型实现了 GC 协议且 <em>op</em> 已经被垃圾回收器终结则返回 1， 否则返回 0。</p>
+<p class="translated">这类似于 Python 函数 <a class="reference internal" href="../library/gc.html#gc.is_finalized" title="gc.is_finalized"><code class="xref py py-func docutils literal notranslate"><span class="pre">gc.is_finalized()</span></code></a>。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.9.</span></p>
+</div>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyObject_GC_Del">
+<span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_Del</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">op</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_Del" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a>.</em><p class="translated">使用 <a class="reference internal" href="#c.PyObject_GC_New" title="PyObject_GC_New"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_GC_New</span></code></a> 或 <a class="reference internal" href="#c.PyObject_GC_NewVar" title="PyObject_GC_NewVar"><code class="xref c c-macro docutils literal notranslate"><span class="pre">PyObject_GC_NewVar</span></code></a> 释放分配给对象的内存。</p>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyObject_GC_UnTrack">
+<span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyObject_GC_UnTrack</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">op</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyObject_GC_UnTrack" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a>.</em><p class="translated">从回收器跟踪的容器对象集合中移除 <em>op</em> 对象。 请注意可以在此对象上再次调用 <a class="reference internal" href="#c.PyObject_GC_Track" title="PyObject_GC_Track"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyObject_GC_Track()</span></code></a> 以将其加回到被跟踪对象集合。 释放器 (<a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_dealloc" title="PyTypeObject.tp_dealloc"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_dealloc</span></code></a> 句柄) 应当在 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 句柄所使用的任何字段失效之前为对象调用此函数。</p>
 </dd></dl>
 
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.8 版更改: </span><code class="xref c c-func docutils literal notranslate"><span class="pre">_PyObject_GC_TRACK()</span></code> 和 <code class="xref c c-func docutils literal notranslate"><span class="pre">_PyObject_GC_UNTRACK()</span></code> 宏已从公有 C API 中移除。</p>
+<p><span class="versionmodified changed">在 3.8 版本发生变更: </span><code class="xref c c-func docutils literal notranslate"><span class="pre">_PyObject_GC_TRACK()</span></code> 和 <code class="xref c c-func docutils literal notranslate"><span class="pre">_PyObject_GC_UNTRACK()</span></code> 宏已从公有 C API 中删除。</p>
 </div>
-<p><a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理接收以下类型的函数形参。</p>
-<dl class="type">
-<dt id="c.visitproc">
-int <code class="sig-name descname">(*visitproc)</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *object</em>, void<em> *arg</em><span class="sig-paren">)</span><a class="headerlink" href="#c.visitproc" title="永久链接至目标">¶</a></dt>
-<dd><p>传给 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理的访问函数的类型。<em>object</em> 是容器中需要被遍历的一个对象，第三个形参对应于 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理的 <em>arg</em> 。Python核心使用多个访问者函数实现循环引用的垃圾检测，不需要用户自行实现访问者函数。</p>
+<p class="translated"><a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理接收以下类型的函数形参。</p>
+<dl class="c type">
+<dt class="sig sig-object c" id="c.visitproc">
+<span class="k"><span class="pre">typedef</span></span><span class="w"> </span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">visitproc</span></span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">object</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">arg</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#c.visitproc" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a>.</em><p class="translated">传给 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理的访问函数的类型。<em>object</em> 是容器中需要被遍历的一个对象，第三个形参对应于 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理的 <em>arg</em> 。Python核心使用多个访问者函数实现循环引用的垃圾检测，不需要用户自行实现访问者函数。</p>
 </dd></dl>
 
-<p><a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理必须是以下类型：</p>
-<dl class="type">
-<dt id="c.traverseproc">
-int <code class="sig-name descname">(*traverseproc)</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *self</em>, <a class="reference internal" href="#c.visitproc" title="visitproc">visitproc</a><em> visit</em>, void<em> *arg</em><span class="sig-paren">)</span><a class="headerlink" href="#c.traverseproc" title="永久链接至目标">¶</a></dt>
-<dd><p>用于容器对象的遍历函数。 它的实现必须对 <em>self</em> 所直接包含的每个对象调用 <em>visit</em> 函数，<em>visit</em> 的形参为所包含对象和传给处理程序的 <em>arg</em> 值。 <em>visit</em> 函数调用不可附带 <code class="docutils literal notranslate"><span class="pre">NULL</span></code> 对象作为参数。 如果 <em>visit</em> 返回非零值，则该值应当被立即返回。</p>
+<p class="translated"><a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理必须是以下类型：</p>
+<dl class="c type">
+<dt class="sig sig-object c" id="c.traverseproc">
+<span class="k"><span class="pre">typedef</span></span><span class="w"> </span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">traverseproc</span></span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">self</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#c.visitproc" title="visitproc"><span class="n"><span class="pre">visitproc</span></span></a><span class="w"> </span><span class="n"><span class="pre">visit</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">arg</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#c.traverseproc" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a>.</em><p class="translated">用于容器对象的遍历函数。 它的实现必须对 <em>self</em> 所直接包含的每个对象调用 <em>visit</em> 函数，<em>visit</em> 的形参为所包含对象和传给处理程序的 <em>arg</em> 值。 <em>visit</em> 函数调用不可附带 <code class="docutils literal notranslate"><span class="pre">NULL</span></code> 对象作为参数。 如果 <em>visit</em> 返回非零值，则该值应当被立即返回。</p>
 </dd></dl>
 
-<p>为了简化 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理的实现，Python提供了一个 <a class="reference internal" href="#c.Py_VISIT" title="Py_VISIT"><code class="xref c c-func docutils literal notranslate"><span class="pre">Py_VISIT()</span></code></a> 宏。若要使用这个宏，必须把 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 的参数命名为 <em>visit</em> 和 <em>arg</em> 。</p>
-<dl class="function">
-<dt id="c.Py_VISIT">
-void <code class="sig-name descname">Py_VISIT</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *o</em><span class="sig-paren">)</span><a class="headerlink" href="#c.Py_VISIT" title="永久链接至目标">¶</a></dt>
-<dd><p>如果 <em>o</em> 不为 <code class="docutils literal notranslate"><span class="pre">NULL</span></code>，则调用 <em>visit</em> 回调函数，附带参数 <em>o</em> 和 <em>arg</em>。 如果 <em>visit</em> 返回一个非零值，则返回该值。 使用此宏之后，<a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理程序的形式如下:</p>
-<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="k">static</span><span class="w"> </span><span class="kt">int</span>
+<p class="translated">为了简化 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理的实现，Python提供了一个 <a class="reference internal" href="#c.Py_VISIT" title="Py_VISIT"><code class="xref c c-func docutils literal notranslate"><span class="pre">Py_VISIT()</span></code></a> 宏。若要使用这个宏，必须把 <a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 的参数命名为 <em>visit</em> 和 <em>arg</em> 。</p>
+<dl class="c function">
+<dt class="sig sig-object c" id="c.Py_VISIT">
+<span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Py_VISIT</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">o</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.Py_VISIT" title="Link to this definition">¶</a><br /></dt>
+<dd><p class="translated">如果 <em>o</em> 不为 <code class="docutils literal notranslate"><span class="pre">NULL</span></code>，则调用 <em>visit</em> 回调函数，附带参数 <em>o</em> 和 <em>arg</em>。 如果 <em>visit</em> 返回一个非零值，则返回该值。 使用此宏之后，<a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_traverse" title="PyTypeObject.tp_traverse"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_traverse</span></code></a> 处理程序的形式如下:</p>
+<div class="translated highlight-c notranslate"><div class="highlight"><pre><span></span><span class="k">static</span><span class="w"> </span><span class="kt">int</span>
 <span class="nf">my_traverse</span><span class="p">(</span><span class="n">Noddy</span><span class="w"> </span><span class="o">*</span><span class="n">self</span><span class="p">,</span><span class="w"> </span><span class="n">visitproc</span><span class="w"> </span><span class="n">visit</span><span class="p">,</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="o">*</span><span class="n">arg</span><span class="p">)</span>
 <span class="p">{</span>
 <span class="w">    </span><span class="n">Py_VISIT</span><span class="p">(</span><span class="n">self</span><span class="o">-&gt;</span><span class="n">foo</span><span class="p">);</span>
@@ -233,47 +335,134 @@ void <code class="sig-name descname">Py_VISIT</code><span class="sig-paren">(</s
 </div>
 </dd></dl>
 
-<p><a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_clear" title="PyTypeObject.tp_clear"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_clear</span></code></a> 处理程序必须为 <a class="reference internal" href="#c.inquiry" title="inquiry"><code class="xref c c-type docutils literal notranslate"><span class="pre">inquiry</span></code></a> 类型，如果对象不可变则为 <code class="docutils literal notranslate"><span class="pre">NULL</span></code>。</p>
-<dl class="type">
-<dt id="c.inquiry">
-int <code class="sig-name descname">(*inquiry)</code><span class="sig-paren">(</span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject">PyObject</a><em> *self</em><span class="sig-paren">)</span><a class="headerlink" href="#c.inquiry" title="永久链接至目标">¶</a></dt>
-<dd><p>丢弃产生循环引用的引用。不可变对象不需要声明此方法，因为他们不可能直接产生循环引用。需要注意的是，对象在调用此方法后必须仍是有效的（不能对引用只调用 <a class="reference internal" href="refcounting.html#c.Py_DECREF" title="Py_DECREF"><code class="xref c c-func docutils literal notranslate"><span class="pre">Py_DECREF()</span></code></a> 方法）。当垃圾回收器检测到该对象在循环引用中时，此方法会被调用。</p>
+<p class="translated"><a class="reference internal" href="typeobj.html#c.PyTypeObject.tp_clear" title="PyTypeObject.tp_clear"><code class="xref c c-member docutils literal notranslate"><span class="pre">tp_clear</span></code></a> 处理程序必须为 <a class="reference internal" href="#c.inquiry" title="inquiry"><code class="xref c c-type docutils literal notranslate"><span class="pre">inquiry</span></code></a> 类型，如果对象不可变则为 <code class="docutils literal notranslate"><span class="pre">NULL</span></code>。</p>
+<dl class="c type">
+<dt class="sig sig-object c" id="c.inquiry">
+<span class="k"><span class="pre">typedef</span></span><span class="w"> </span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">inquiry</span></span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">self</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#c.inquiry" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a>.</em><p class="translated">丢弃产生循环引用的引用。不可变对象不需要声明此方法，因为他们不可能直接产生循环引用。需要注意的是，对象在调用此方法后必须仍是有效的（不能对引用只调用 <a class="reference internal" href="refcounting.html#c.Py_DECREF" title="Py_DECREF"><code class="xref c c-func docutils literal notranslate"><span class="pre">Py_DECREF()</span></code></a> 方法）。当垃圾回收器检测到该对象在循环引用中时，此方法会被调用。</p>
+</dd></dl>
+
+<section id="controlling-the-garbage-collector-state">
+<h2 class="translated">控制垃圾回收器状态<a class="headerlink" href="#controlling-the-garbage-collector-state" title="Link to this heading">¶</a></h2>
+<p class="translated">这个 C-API 提供了以下函数用于控制垃圾回收的运行。</p>
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyGC_Collect">
+<a class="reference internal" href="intro.html#c.Py_ssize_t" title="Py_ssize_t"><span class="n"><span class="pre">Py_ssize_t</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyGC_Collect</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">void</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyGC_Collect" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a>.</em><p class="translated">执行完全的垃圾回收，如果垃圾回收器已启用的话。 （请注意 <a class="reference internal" href="../library/gc.html#gc.collect" title="gc.collect"><code class="xref py py-func docutils literal notranslate"><span class="pre">gc.collect()</span></code></a> 会无条件地执行它。）</p>
+<p class="translated">返回已回收的 + 无法回收的不可获取对象的数量。 如果垃圾回收器被禁用或已在执行回收，则立即返回 <code class="docutils literal notranslate"><span class="pre">0</span></code>。 在垃圾回收期间发生的错误会被传给 <a class="reference internal" href="../library/sys.html#sys.unraisablehook" title="sys.unraisablehook"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.unraisablehook</span></code></a>。 此函数不会引发异常。</p>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyGC_Enable">
+<span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyGC_Enable</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">void</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyGC_Enable" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a> 自 3.10 版起.</em><p class="translated">启用垃圾回收器：类似于 <a class="reference internal" href="../library/gc.html#gc.enable" title="gc.enable"><code class="xref py py-func docutils literal notranslate"><span class="pre">gc.enable()</span></code></a>。 返回之前的状态，0 为禁用而 1 为启用。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.10.</span></p>
+</div>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyGC_Disable">
+<span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyGC_Disable</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">void</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyGC_Disable" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a> 自 3.10 版起.</em><p class="translated">禁用垃圾回收器：类似于 <a class="reference internal" href="../library/gc.html#gc.disable" title="gc.disable"><code class="xref py py-func docutils literal notranslate"><span class="pre">gc.disable()</span></code></a>。 返回之前的状态，0 为禁用而 1 为启用。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.10.</span></p>
+</div>
+</dd></dl>
+
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyGC_IsEnabled">
+<span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyGC_IsEnabled</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">void</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyGC_IsEnabled" title="Link to this definition">¶</a><br /></dt>
+<dd><em class="stableabi"> 属于 <a class="reference internal" href="stable.html#stable"><span class="std std-ref">稳定 ABI</span></a> 自 3.10 版起.</em><p class="translated">查询垃圾回收器的状态：类似于 <a class="reference internal" href="../library/gc.html#gc.isenabled" title="gc.isenabled"><code class="xref py py-func docutils literal notranslate"><span class="pre">gc.isenabled()</span></code></a>。 返回当前的状态，0 为禁用而 1 为启用。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.10.</span></p>
+</div>
 </dd></dl>
 
 </section>
+<section id="querying-garbage-collector-state">
+<h2 class="translated">查询垃圾回收器状态<a class="headerlink" href="#querying-garbage-collector-state" title="Link to this heading">¶</a></h2>
+<p class="translated">该 C-API 提供了以下接口用于查询有关垃圾回收器的信息。</p>
+<dl class="c function">
+<dt class="sig sig-object c" id="c.PyUnstable_GC_VisitObjects">
+<span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">PyUnstable_GC_VisitObjects</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#c.gcvisitobjects_t" title="gcvisitobjects_t"><span class="n"><span class="pre">gcvisitobjects_t</span></span></a><span class="w"> </span><span class="n"><span class="pre">callback</span></span>, <span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">arg</span></span><span class="sig-paren">)</span><a class="headerlink" href="#c.PyUnstable_GC_VisitObjects" title="Link to this definition">¶</a><br /></dt>
+<dd><div class="unstable-c-api warning admonition">
+<em>这是 <a class="reference internal" href="stable.html#unstable-c-api"><span class="std std-ref">不稳定 API</span></a>。它可在次发布版中不经警告地改变。</em></div>
+<p class="translated">在全部活动的支持 GC 的对象上运行所提供的 <em>callback</em>。 <em>arg</em> 会被传递给所有 <em>callback</em> 的唤起操作。</p>
+<div class="admonition warning">
+<p class="admonition-title">警告</p>
+<p class="translated">如果新对象被回调（取消）分配后再被访问其行为是未定义的。</p>
+<p class="translated">垃圾回收在运行期间被禁用。 在回调中显式地运行回收可能导致未定义的行为，例如多次访问同一对象或完全不访问。</p>
+</div>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.12.</span></p>
+</div>
+</dd></dl>
+
+<dl class="c type">
+<dt class="sig sig-object c" id="c.gcvisitobjects_t">
+<span class="k"><span class="pre">typedef</span></span><span class="w"> </span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">gcvisitobjects_t</span></span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">(</span></span><a class="reference internal" href="structures.html#c.PyObject" title="PyObject"><span class="n"><span class="pre">PyObject</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">object</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n"><span class="pre">arg</span></span><span class="p"><span class="pre">)</span></span><a class="headerlink" href="#c.gcvisitobjects_t" title="Link to this definition">¶</a><br /></dt>
+<dd><p class="translated">要传给 <a class="reference internal" href="#c.PyUnstable_GC_VisitObjects" title="PyUnstable_GC_VisitObjects"><code class="xref c c-func docutils literal notranslate"><span class="pre">PyUnstable_GC_VisitObjects()</span></code></a> 的访问者函数的类型。 <em>arg</em> 与传给 <code class="docutils literal notranslate"><span class="pre">PyUnstable_GC_VisitObjects</span></code> 的 <em>arg</em> 相同。 返回 <code class="docutils literal notranslate"><span class="pre">0</span></code> 以继续迭代，返回 <code class="docutils literal notranslate"><span class="pre">1</span></code> 以停止迭代。 其他返回值目前被保留因此返回任何其他值的行为都是未定义的。</p>
+<div class="versionadded">
+<p><span class="versionmodified added">Added in version 3.12.</span></p>
+</div>
+</dd></dl>
+
+</section>
+</section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="typeobj.html"
-                        title="上一章">类型对象</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="apiabiversion.html"
-                        title="下一章">API 和 ABI 版本管理</a></p>
+  <div>
+    <h3><a href="../contents.html">目录</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">使对象类型支持循环垃圾回收</a><ul>
+<li><a class="reference internal" href="#controlling-the-garbage-collector-state">控制垃圾回收器状态</a></li>
+<li><a class="reference internal" href="#querying-garbage-collector-state">查询垃圾回收器状态</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="typeobj.html"
+                          title="上一章">类型对象结构体</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="apiabiversion.html"
+                          title="下一章">API 和 ABI 版本管理</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/c-api/gcsupport.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/c-api/gcsupport.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -282,10 +471,10 @@ int <code class="sig-name descname">(*inquiry)</code><span class="sig-paren">(</
           <a href="apiabiversion.html" title="API 和 ABI 版本管理"
              >下一页</a> |</li>
         <li class="right" >
-          <a href="typeobj.html" title="类型对象"
+          <a href="typeobj.html" title="类型对象结构体"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -295,47 +484,59 @@ int <code class="sig-name descname">(*inquiry)</code><span class="sig-paren">(</
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python/C API 参考手册</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="objimpl.html" >对象实现支持</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">使对象类型支持循环垃圾回收</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="数据持久化" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/library/persistence.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="本章中描述的模块支持在磁盘上以持久形式存储 Python 数据。 pickle 和 marshal 模块可以将许多 Python 数据类型转换为字节流，然后从字节中重新创建对象。 各种与 DBM 相关的模块支持一系列基于散列的文件格式，这些格式存储字符串到其他字符串的映射。 本章中描述的模块列表是： pickle--- Python 对象序列化- 与其他 Python 模块间的关系- 与 m..." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_library_persistence_2c9a708b.png" />
+<meta property="og:image:alt" content="本章中描述的模块支持在磁盘上以持久形式存储 Python 数据。 pickle 和 marshal 模块可以将许多 Python 数据类型转换为字节流，然后从字节中重新创建对象。 各种与 DBM 相关的模块支持一系列基于散列的文件格式，这些格式存储字符串到其他字符串的映射。 本章中描述的模块列表是： pickle--- Python 对象序列化- 与其他 Python 模块间的关系- 与 m..." />
+<meta name="description" content="本章中描述的模块支持在磁盘上以持久形式存储 Python 数据。 pickle 和 marshal 模块可以将许多 Python 数据类型转换为字节流，然后从字节中重新创建对象。 各种与 DBM 相关的模块支持一系列基于散列的文件格式，这些格式存储字符串到其他字符串的映射。 本章中描述的模块列表是： pickle--- Python 对象序列化- 与其他 Python 模块间的关系- 与 m..." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>数据持久化 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据持久化 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
     <link rel="next" title="pickle --- Python 对象序列化" href="pickle.html" />
-    <link rel="prev" title="shutil --- 高阶文件操作" href="shutil.html" />
-    <link rel="canonical" href="https://docs.python.org/3/library/persistence.html" />
+    <link rel="prev" title="shutil --- 高层级文件操作" href="shutil.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/library/persistence.html">
       
     
 
@@ -41,48 +56,67 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="shutil.html"
-                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">shutil</span></code> --- 高阶文件操作</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="pickle.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code> --- Python 对象序列化</a></p>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="shutil.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">shutil</span></code> --- 高层级文件操作</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="pickle.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code> --- Python 对象序列化</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/persistence.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/persistence.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -91,11 +125,12 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -104,10 +139,10 @@
           <a href="pickle.html" title="pickle --- Python 对象序列化"
              accesskey="N">下一页</a> |</li>
         <li class="right" >
-          <a href="shutil.html" title="shutil --- 高阶文件操作"
+          <a href="shutil.html" title="shutil --- 高层级文件操作"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -117,23 +152,31 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">Python 标准库</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">数据持久化</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -144,9 +187,9 @@
           <div class="body" role="main">
             
   <section id="data-persistence">
-<span id="persistence"></span><h1>数据持久化<a class="headerlink" href="#data-persistence" title="永久链接至标题">¶</a></h1>
-<p>本章中描述的模块支持在磁盘上以持久形式存储 Python 数据。 <a class="reference internal" href="pickle.html#module-pickle" title="pickle: Convert Python objects to streams of bytes and back."><code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code></a> 和 <a class="reference internal" href="marshal.html#module-marshal" title="marshal: Convert Python objects to streams of bytes and back (with different constraints)."><code class="xref py py-mod docutils literal notranslate"><span class="pre">marshal</span></code></a> 模块可以将许多 Python 数据类型转换为字节流，然后从字节中重新创建对象。 各种与 DBM 相关的模块支持一系列基于散列的文件格式，这些格式存储字符串到其他字符串的映射。</p>
-<p>本章中描述的模块列表是：</p>
+<span id="persistence"></span><h1 class="translated">数据持久化<a class="headerlink" href="#data-persistence" title="Link to this heading">¶</a></h1>
+<p class="translated">本章中描述的模块支持在磁盘上以持久形式存储 Python 数据。 <a class="reference internal" href="pickle.html#module-pickle" title="pickle: Convert Python objects to streams of bytes and back."><code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code></a> 和 <a class="reference internal" href="marshal.html#module-marshal" title="marshal: Convert Python objects to streams of bytes and back (with different constraints)."><code class="xref py py-mod docutils literal notranslate"><span class="pre">marshal</span></code></a> 模块可以将许多 Python 数据类型转换为字节流，然后从字节中重新创建对象。 各种与 DBM 相关的模块支持一系列基于散列的文件格式，这些格式存储字符串到其他字符串的映射。</p>
+<p class="translated">本章中描述的模块列表是：</p>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="pickle.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code> --- Python 对象序列化</a><ul>
@@ -176,7 +219,7 @@
 <li class="toctree-l2"><a class="reference internal" href="pickle.html#examples">例子</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="copyreg.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">copyreg</span></code> --- 注册配合 <code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code> 模块使用的函数</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="copyreg.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">copyreg</span></code> --- 注册 <code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code> 支持函数</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="copyreg.html#example">示例</a></li>
 </ul>
 </li>
@@ -187,33 +230,49 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="marshal.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">marshal</span></code> --- 内部 Python 对象序列化</a></li>
 <li class="toctree-l1"><a class="reference internal" href="dbm.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">dbm</span></code> --- Unix &quot;数据库&quot; 接口</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="dbm.html#module-dbm.gnu"><code class="xref py py-mod docutils literal notranslate"><span class="pre">dbm.gnu</span></code> --- GNU 对 dbm 的重解析</a></li>
-<li class="toctree-l2"><a class="reference internal" href="dbm.html#module-dbm.ndbm"><code class="xref py py-mod docutils literal notranslate"><span class="pre">dbm.ndbm</span></code> --- 基于 ndbm 的接口</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dbm.html#module-dbm.gnu"><code class="xref py py-mod docutils literal notranslate"><span class="pre">dbm.gnu</span></code> --- GNU 数据库管理器</a></li>
+<li class="toctree-l2"><a class="reference internal" href="dbm.html#module-dbm.ndbm"><code class="xref py py-mod docutils literal notranslate"><span class="pre">dbm.ndbm</span></code> --- 新数据库管理器</a></li>
 <li class="toctree-l2"><a class="reference internal" href="dbm.html#module-dbm.dumb"><code class="xref py py-mod docutils literal notranslate"><span class="pre">dbm.dumb</span></code> --- 便携式 DBM 实现</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="sqlite3.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">sqlite3</span></code> --- SQLite 数据库 DB-API 2.0 接口模块</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#module-functions-and-constants">模块函数和常量</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#connection-objects">连接对象（Connection）</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#cursor-objects">Cursor 对象</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#row-objects">行对象</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#exceptions">异常</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#sqlite-and-python-types">SQLite 与 Python 类型</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#introduction">概述</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#using-adapters-to-store-additional-python-types-in-sqlite-databases">使用适配器将额外的 Python 类型保存在 SQLite 数据库中。</a><ul>
-<li class="toctree-l4"><a class="reference internal" href="sqlite3.html#letting-your-object-adapt-itself">让对象自行适配</a></li>
-<li class="toctree-l4"><a class="reference internal" href="sqlite3.html#registering-an-adapter-callable">注册可调用的适配器</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sqlite3.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">sqlite3</span></code> --- SQLite 数据库的 DB-API 2.0 接口</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#tutorial">教程</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#reference">参考</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#module-functions">模块函数</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#module-constants">模块常量</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#connection-objects">连接对象</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#cursor-objects">游标对象</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#row-objects">Row 对象</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#blob-objects">Blob 对象</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#prepareprotocol-objects">PrepareProtocol 对象</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#exceptions">异常</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#sqlite-and-python-types">SQLite 与 Python 类型</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#default-adapters-and-converters-deprecated">默认适配器和转换器（已弃用）</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#command-line-interface">命令行接口</a></li>
 </ul>
 </li>
-<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#converting-sqlite-values-to-custom-python-types">将SQLite 值转换为自定义Python 类型</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#default-adapters-and-converters">默认适配器和转换器</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#how-to-guides">常用方案指引</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-use-placeholders-to-bind-values-in-sql-queries">如何在 SQL 查询中使用占位符来绑定值</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-adapt-custom-python-types-to-sqlite-values">如何将自定义 Python 类型适配到 SQLite 值</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="sqlite3.html#how-to-write-adaptable-objects">如何编写可适配对象</a></li>
+<li class="toctree-l4"><a class="reference internal" href="sqlite3.html#how-to-register-adapter-callables">如何注册适配器可调用对象</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#controlling-transactions">控制事务</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#using-sqlite3-efficiently">有效使用 <code class="xref py py-mod docutils literal notranslate"><span class="pre">sqlite3</span></code></a><ul>
-<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#using-shortcut-methods">使用快捷方式</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#accessing-columns-by-name-instead-of-by-index">通过名称而不是索引访问索引</a></li>
-<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#using-the-connection-as-a-context-manager">使用连接作为上下文管理器</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-convert-sqlite-values-to-custom-python-types">如何将 SQLite 值转换为自定义 Python 类型</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#adapter-and-converter-recipes">适配器和转换器范例程序</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-use-connection-shortcut-methods">如何使用连接快捷方法</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-use-the-connection-context-manager">如何使用连接上下文管理器</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-work-with-sqlite-uris">如何使用 SQLite URI</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-create-and-use-row-factories">如何创建并使用行工厂对象</a></li>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#how-to-handle-non-utf-8-text-encodings">如何处理非 UTF-8 文本编码格式</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="sqlite3.html#explanation">说明</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="sqlite3.html#transaction-control">事务控制</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="sqlite3.html#transaction-control-via-the-autocommit-attribute">通过 <code class="docutils literal notranslate"><span class="pre">autocommit</span></code> 属性进行事务控制</a></li>
+<li class="toctree-l4"><a class="reference internal" href="sqlite3.html#transaction-control-via-the-isolation-level-attribute">通过 <code class="docutils literal notranslate"><span class="pre">isolation_level</span></code> 属性进行事务控制</a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -223,37 +282,46 @@
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="shutil.html"
-                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">shutil</span></code> --- 高阶文件操作</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="pickle.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code> --- Python 对象序列化</a></p>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="shutil.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">shutil</span></code> --- 高层级文件操作</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="pickle.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pickle</span></code> --- Python 对象序列化</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/persistence.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/persistence.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -262,10 +330,10 @@
           <a href="pickle.html" title="pickle --- Python 对象序列化"
              >下一页</a> |</li>
         <li class="right" >
-          <a href="shutil.html" title="shutil --- 高阶文件操作"
+          <a href="shutil.html" title="shutil --- 高层级文件操作"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -275,46 +343,58 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">数据持久化</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

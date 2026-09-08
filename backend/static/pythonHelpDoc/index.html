@@ -1,31 +1,34 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="./">
   <head>
-    <meta charset="utf-8" /><title>3.8.20 Documentation</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>3.12.13 Documentation</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script src="_static/jquery.js"></script>
-    <script src="_static/underscore.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
-    <script src="_static/translations.js"></script>
+    <script src="_static/documentation_options.js?v=b90486a5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/translations.js?v=beaddf03"></script>
     
     <script src="_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="about.html" />
+    <link rel="author" title="关于此文档" href="about.html" />
     <link rel="index" title="索引" href="genindex.html" />
     <link rel="search" title="搜索" href="search.html" />
-    <link rel="copyright" title="版权所有" href="copyright.html" />
-    <link rel="canonical" href="https://docs.python.org/3/index.html" />
+    <link rel="copyright" title="版权" href="copyright.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/index.html">
       
     
 
@@ -37,46 +40,88 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="_static/py.svg" />
+<link rel="stylesheet" href="_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="_static/py.svg">
             <script type="text/javascript" src="_static/copybutton.js"></script>
-            <script type="text/javascript" src="_static/menu.js"></script> 
+            <script type="text/javascript" src="_static/menu.js"></script>
+            <script type="text/javascript" src="_static/search-focus.js"></script>
+            <script type="text/javascript" src="_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
+    <meta property="og:title" content="Python 3.12 documentation">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://docs.python.org/3/">
+    <meta property="og:site_name" content="Python documentation">
+    <meta property="og:description" content="The official Python documentation.">
+    <meta property="og:image" content="https://docs.python.org/3/_static/og-image.png">
+    <meta name="description" content="The official Python documentation.">
+    <meta property="og:image:width" content="200">
+    <meta property="og:image:height" content="200">
+    <meta name="theme-color" content="#3776ab">
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-
-
-<h3>下载</h3>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label><h3>下载</h3>
 <p><a href="download.html">下载这些文档</a></p>
-
-
-
+<h3>各版文档</h3>
+<ul>
+  
+  <li><a href="https://docs.python.org/3.15/">Python 3.15 (in development)</a></li>
+<li><a href="https://docs.python.org/3.14/">Python 3.14 (stable)</a></li>
+<li><a href="https://docs.python.org/3.13/">Python 3.13 (stable)</a></li>
+<li><a href="https://docs.python.org/3.12/">Python 3.12 (security-fixes)</a></li>
+<li><a href="https://docs.python.org/3.11/">Python 3.11 (security-fixes)</a></li>
+<li><a href="https://docs.python.org/3.10/">Python 3.10 (security-fixes)</a></li>
+<li><a href="https://docs.python.org/3.9/">Python 3.9 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.8/">Python 3.8 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.7/">Python 3.7 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.6/">Python 3.6 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.5/">Python 3.5 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.4/">Python 3.4 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.3/">Python 3.3 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.2/">Python 3.2 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.1/">Python 3.1 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.0/">Python 3.0 (EOL)</a></li>
+<li><a href="https://docs.python.org/2.7/">Python 2.7 (EOL)</a></li>
+<li><a href="https://docs.python.org/2.6/">Python 2.6 (EOL)</a></li>
+  <li><a href="https://www.python.org/doc/versions/">全部版本</a></li>
+</ul>
 <h3>其它资源</h3>
 <ul>
   
-  <li><a href="https://peps.python.org">PEP 索引</a></li>
+  <li><a href="https://peps.python.org/">PEP 索引</a></li>
   <li><a href="https://wiki.python.org/moin/BeginnersGuide">初学者指南</a></li>
   <li><a href="https://wiki.python.org/moin/PythonBooks">推荐书籍</a></li>
   <li><a href="https://www.python.org/doc/av/">音视频小讲座</a></li>
@@ -86,17 +131,18 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="总目录"
+          <a href="genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
 
-          <li><img src="_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -106,22 +152,30 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="#">3.8.20 Documentation</a> &#187;
+      <a href="#">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href=""></a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -131,104 +185,129 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <h1>Python 3.8.20 文档</h1>
+  <h1>Python 3.12.13 文档</h1>
   <p>
-  欢迎！这里是 Python 3.8.20 的中文文档。
+  欢迎！这里是 Python 3.12.13 的官方文档。
   </p>
-  <p><strong>按章节浏览文档：</strong></p>
+  <p><strong>文档章节：</strong></p>
   <table class="contentstable" align="center"><tr>
     <td width="50%">
-      <p class="biglink"><a class="biglink" href="whatsnew/3.8.html">Python 3.8 有什么新变化？</a><br/>
-        <span class="linkdescr"> 或显示自 2.0 以来的<a href="whatsnew/index.html">全部新变化</a></span></p>
-      <p class="biglink"><a class="biglink" href="tutorial/index.html">教程</a><br/>
-         <span class="linkdescr">从这里看起</span></p>
-      <p class="biglink"><a class="biglink" href="library/index.html">标准库参考</a><br/>
-         <span class="linkdescr">放在枕边作为参考</span></p>
-      <p class="biglink"><a class="biglink" href="reference/index.html">语言参考</a><br/>
-         <span class="linkdescr">讲解基础内容和基本语法</span></p>
-      <p class="biglink"><a class="biglink" href="using/index.html">Python安装和使用</a><br/>
+      <p class="biglink"><a class="biglink" href="whatsnew/3.12.html">Python 3.12 有什么新变化？</a><br>
+         <span class="linkdescr"> 或 <a href="whatsnew/index.html">自 Python 2.0 以来的全部“新变化”文档</a></span></p>
+      <p class="biglink"><a class="biglink" href="tutorial/index.html">教程</a><br>
+         <span class="linkdescr">开始 Python 的语法和特性之旅</span></p>
+      <p class="biglink"><a class="biglink" href="library/index.html">库参考</a><br>
+         <span class="linkdescr">标准库与内置对象</span></p>
+      <p class="biglink"><a class="biglink" href="reference/index.html">语言参考</a><br>
+         <span class="linkdescr">语法与语言元素</span></p>
+      <p class="biglink"><a class="biglink" href="using/index.html">Python 安装与使用</a><br>
          <span class="linkdescr">各种操作系统的介绍都有</span></p>
-      <p class="biglink"><a class="biglink" href="howto/index.html">Python 指南</a><br/>
-         <span class="linkdescr">深入了解特定主题</span></p>
+      <p class="biglink"><a class="biglink" href="howto/index.html">Python 指南</a><br>
+         <span class="linkdescr">深入学习特定主题</span></p>
     </td><td width="50%">
-      <p class="biglink"><a class="biglink" href="installing/index.html">安装 Python 模块</a><br/>
-         <span class="linkdescr">从官方的 PyPI 或者其他来源安装模块</span></p>
-      <p class="biglink"><a class="biglink" href="distributing/index.html">分发 Python 模块</a><br/>
-         <span class="linkdescr">发布模块，供其他人安装</span></p>
-      <p class="biglink"><a class="biglink" href="extending/index.html">扩展和嵌入</a><br/>
-         <span class="linkdescr">给 C/C++ 程序员的教程</span></p>
-      <p class="biglink"><a class="biglink" href="c-api/index.html">Python/C API 接口</a><br/>
-         <span class="linkdescr">给 C/C++ 程序员的参考手册</span></p>
-      <p class="biglink"><a class="biglink" href="faq/index.html">常见问题</a><br/>
+      <p class="biglink"><a class="biglink" href="installing/index.html">安装 Python 模块</a><br>
+         <span class="linkdescr">第三方模块与 PyPI.org</span></p>
+      <p class="biglink"><a class="biglink" href="distributing/index.html">发布 Python 模块</a><br>
+         <span class="linkdescr">发布模块供大家使用</span></p>
+      <p class="biglink"><a class="biglink" href="extending/index.html">扩展与嵌入</a><br>
+         <span class="linkdescr">面向 C/C++ 的程序员</span></p>
+      <p class="biglink"><a class="biglink" href="c-api/index.html">Python 的 C API</a><br>
+         <span class="linkdescr">C API 参考</span></p>
+      <p class="biglink"><a class="biglink" href="faq/index.html">常见问题</a><br>
          <span class="linkdescr">经常被问到的问题（答案也有！）</span></p>
+      <p class="biglink"><a class="biglink" href="deprecations/index.html">弃用</a><br>
+         <span class="linkdescr">弃用的功能</span></p>
     </td></tr>
   </table>
 
-  <p><strong>索引和表格：</strong></p>
+  <p><strong>索引、术语与搜索：</strong></p>
   <table class="contentstable" align="center"><tr>
     <td width="50%">
-      <p class="biglink"><a class="biglink" href="py-modindex.html">全局模块索引</a><br/>
-         <span class="linkdescr">快速查看所有的模块</span></p>
-      <p class="biglink"><a class="biglink" href="genindex.html">总目录</a><br/>
-         <span class="linkdescr">所的函数，类，术语</span></p>
-      <p class="biglink"><a class="biglink" href="glossary.html">术语对照表</a><br/>
-         <span class="linkdescr">解释最重要的术语</span></p>
+      <p class="biglink"><a class="biglink" href="py-modindex.html">全局模块索引</a><br>
+         <span class="linkdescr">所有的模块与库</span></p>
+      <p class="biglink"><a class="biglink" href="genindex.html">主索引</a><br>
+         <span class="linkdescr">所有的函数、类和术语</span></p>
+      <p class="biglink"><a class="biglink" href="glossary.html">术语对照表</a><br>
+         <span class="linkdescr">术语的解释</span></p>
     </td><td width="50%">
-      <p class="biglink"><a class="biglink" href="search.html">搜索页</a><br/>
-         <span class="linkdescr">搜索文档</span></p>
-      <p class="biglink"><a class="biglink" href="contents.html">完整的内容表</a><br/>
-         <span class="linkdescr">列出所有的章节和部分</span></p>
+      <p class="biglink"><a class="biglink" href="search.html">搜索页</a><br>
+         <span class="linkdescr">在文档内搜索</span></p>
+      <p class="biglink"><a class="biglink" href="contents.html">完整目录</a><br>
+         <span class="linkdescr">列出了所有的章节和子章节</span></p>
     </td></tr>
   </table>
 
-  <p><strong>元信息：</strong></p>
+  <p><strong>项目信息：</strong></p>
   <table class="contentstable" align="center"><tr>
     <td width="50%">
-      <p class="biglink"><a class="biglink" href="bugs.html">报告 Bug</a></p>
-      <p class="biglink"><a class="biglink" href="https://devguide.python.org/docquality/#helping-with-documentation">向文档提交贡献</a></p>
+      <p class="biglink"><a class="biglink" href="bugs.html">报告问题</a></p>
+      <p class="biglink"><a class="biglink" href="https://devguide.python.org/documentation/help-documenting/">向文档提交贡献</a></p>
+      <p class="biglink"><a class="biglink" href="download.html">下载本文档</a></p>
+    </td><td width="50%">
+      <p class="biglink"><a class="biglink" href="license.html">Python 的历史与许可证</a></p>
+      <p class="biglink"><a class="biglink" href="copyright.html">版权</a></p>
       <p class="biglink"><a class="biglink" href="about.html">关于本文档</a></p>
-    </td><td width="50%">
-      <p class="biglink"><a class="biglink" href="license.html">Python 的历史和许可证</a></p>
-      <p class="biglink"><a class="biglink" href="copyright.html">版权所有</a></p>
     </td></tr>
   </table>
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
-        <div class="sphinxsidebarwrapper">
-
-
-<h3>下载</h3>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper"><h3>下载</h3>
 <p><a href="download.html">下载这些文档</a></p>
-
-
-
+<h3>各版文档</h3>
+<ul>
+  
+  <li><a href="https://docs.python.org/3.15/">Python 3.15 (in development)</a></li>
+<li><a href="https://docs.python.org/3.14/">Python 3.14 (stable)</a></li>
+<li><a href="https://docs.python.org/3.13/">Python 3.13 (stable)</a></li>
+<li><a href="https://docs.python.org/3.12/">Python 3.12 (security-fixes)</a></li>
+<li><a href="https://docs.python.org/3.11/">Python 3.11 (security-fixes)</a></li>
+<li><a href="https://docs.python.org/3.10/">Python 3.10 (security-fixes)</a></li>
+<li><a href="https://docs.python.org/3.9/">Python 3.9 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.8/">Python 3.8 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.7/">Python 3.7 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.6/">Python 3.6 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.5/">Python 3.5 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.4/">Python 3.4 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.3/">Python 3.3 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.2/">Python 3.2 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.1/">Python 3.1 (EOL)</a></li>
+<li><a href="https://docs.python.org/3.0/">Python 3.0 (EOL)</a></li>
+<li><a href="https://docs.python.org/2.7/">Python 2.7 (EOL)</a></li>
+<li><a href="https://docs.python.org/2.6/">Python 2.6 (EOL)</a></li>
+  <li><a href="https://www.python.org/doc/versions/">全部版本</a></li>
+</ul>
 <h3>其它资源</h3>
 <ul>
   
-  <li><a href="https://peps.python.org">PEP 索引</a></li>
+  <li><a href="https://peps.python.org/">PEP 索引</a></li>
   <li><a href="https://wiki.python.org/moin/BeginnersGuide">初学者指南</a></li>
   <li><a href="https://wiki.python.org/moin/PythonBooks">推荐书籍</a></li>
   <li><a href="https://www.python.org/doc/av/">音视频小讲座</a></li>
   <li><a href="https://devguide.python.org/">Python 开发者指南</a></li>
 </ul>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="总目录"
+          <a href="genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
 
-          <li><img src="_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -238,45 +317,57 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="#">3.8.20 Documentation</a> &#187;
+      <a href="#">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href=""></a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

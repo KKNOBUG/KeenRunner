@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="numbers --- 数字抽象基类" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/library/numbers.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="源代码： Lib/numbers.py numbers 模块 ( PEP 3141) 定义了数字 抽象基类 的层级结构，其中逐级定义了更多的操作。 此模块中定义的类型都不可被实例化。 数字的层次: 有关类型实现的注释: 实现方应当注意让相等的数值保证相等并使它们哈希运算的结果值相同。 当相互比较的实数属于两个不同的扩展模块时可能会有微妙的差异。 举例来说， fractions.Fractio..." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_library_numbers_2b972bd6.png" />
+<meta property="og:image:alt" content="源代码： Lib/numbers.py numbers 模块 ( PEP 3141) 定义了数字 抽象基类 的层级结构，其中逐级定义了更多的操作。 此模块中定义的类型都不可被实例化。 数字的层次: 有关类型实现的注释: 实现方应当注意让相等的数值保证相等并使它们哈希运算的结果值相同。 当相互比较的实数属于两个不同的扩展模块时可能会有微妙的差异。 举例来说， fractions.Fractio..." />
+<meta name="description" content="源代码： Lib/numbers.py numbers 模块 ( PEP 3141) 定义了数字 抽象基类 的层级结构，其中逐级定义了更多的操作。 此模块中定义的类型都不可被实例化。 数字的层次: 有关类型实现的注释: 实现方应当注意让相等的数值保证相等并使它们哈希运算的结果值相同。 当相互比较的实数属于两个不同的扩展模块时可能会有微妙的差异。 举例来说， fractions.Fractio..." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>numbers --- 数字的抽象基类 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>numbers --- 数字抽象基类 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
     <link rel="next" title="math --- 数学函数" href="math.html" />
     <link rel="prev" title="数字和数学模块" href="numeric.html" />
-    <link rel="canonical" href="https://docs.python.org/3/library/numbers.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/library/numbers.html">
       
     
 
@@ -41,40 +56,56 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h3><a href="../contents.html">目录</a></h3>
-  <ul>
-<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> --- 数字的抽象基类</a><ul>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h3><a href="../contents.html">目录</a></h3>
+    <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> --- 数字抽象基类</a><ul>
 <li><a class="reference internal" href="#the-numeric-tower">数字的层次</a></li>
-<li><a class="reference internal" href="#notes-for-type-implementors">类型接口注释。</a><ul>
+<li><a class="reference internal" href="#notes-for-type-implementers">有关类型实现的注释</a><ul>
 <li><a class="reference internal" href="#adding-more-numeric-abcs">加入更多数字的ABC</a></li>
 <li><a class="reference internal" href="#implementing-the-arithmetic-operations">实现算术运算</a></li>
 </ul>
@@ -83,19 +114,24 @@
 </li>
 </ul>
 
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="numeric.html"
-                        title="上一章">数字和数学模块</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="math.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">math</span></code> --- 数学函数</a></p>
+  </div>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="numeric.html"
+                          title="上一章">数字和数学模块</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="math.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">math</span></code> --- 数学函数</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/numbers.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/numbers.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -104,11 +140,12 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -120,7 +157,7 @@
           <a href="numeric.html" title="数字和数学模块"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -130,24 +167,32 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="numeric.html" accesskey="U">数字和数学模块</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> --- 数字抽象基类</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -158,105 +203,106 @@
           <div class="body" role="main">
             
   <section id="module-numbers">
-<span id="numbers-numeric-abstract-base-classes"></span><h1><a class="reference internal" href="#module-numbers" title="numbers: Numeric abstract base classes (Complex, Real, Integral, etc.)."><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code></a> --- 数字的抽象基类<a class="headerlink" href="#module-numbers" title="永久链接至标题">¶</a></h1>
-<p><strong>源代码：</strong> <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/numbers.py">Lib/numbers.py</a></p>
+<span id="numbers-numeric-abstract-base-classes"></span><h1 class="translated"><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> --- 数字抽象基类<a class="headerlink" href="#module-numbers" title="Link to this heading">¶</a></h1>
+<p class="translated"><strong>源代码：</strong> <a class="extlink-source reference external" href="https://github.com/python/cpython/tree/3.12/Lib/numbers.py">Lib/numbers.py</a></p>
 <hr class="docutils" />
-<p><a class="reference internal" href="#module-numbers" title="numbers: Numeric abstract base classes (Complex, Real, Integral, etc.)."><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code></a> 模块 (<span class="target" id="index-2"></span><a class="pep reference external" href="https://www.python.org/dev/peps/pep-3141"><strong>PEP 3141</strong></a>) 定义了数字 <a class="reference internal" href="../glossary.html#term-abstract-base-class"><span class="xref std std-term">抽象基类</span></a> 的层次结构，其中逐级定义了更多操作。 此模块中所定义的类型都不可被实例化。</p>
-<dl class="class">
-<dt id="numbers.Number">
-<em class="property">class </em><code class="sig-prename descclassname">numbers.</code><code class="sig-name descname">Number</code><a class="headerlink" href="#numbers.Number" title="永久链接至目标">¶</a></dt>
-<dd><p>数字的层次结构的基础。 如果你只想确认参数 <em>x</em> 是不是数字而不关心其类型，则使用 <code class="docutils literal notranslate"><span class="pre">isinstance(x,</span> <span class="pre">Number)</span></code>。</p>
+<p class="translated"><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> 模块 (<span class="target" id="index-2"></span><a class="pep reference external" href="https://peps.python.org/pep-3141/"><strong>PEP 3141</strong></a>) 定义了数字 <a class="reference internal" href="../glossary.html#term-abstract-base-class"><span class="xref std std-term">抽象基类</span></a> 的层级结构，其中逐级定义了更多的操作。 此模块中定义的类型都不可被实例化。</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="numbers.Number">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">numbers.</span></span><span class="sig-name descname"><span class="pre">Number</span></span><a class="headerlink" href="#numbers.Number" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">数字的层次结构的基础。 如果你只想确认参数 <em>x</em> 是不是数字而不关心其类型，则使用 <code class="docutils literal notranslate"><span class="pre">isinstance(x,</span> <span class="pre">Number)</span></code>。</p>
 </dd></dl>
 
 <section id="the-numeric-tower">
-<h2>数字的层次<a class="headerlink" href="#the-numeric-tower" title="永久链接至标题">¶</a></h2>
-<dl class="class">
-<dt id="numbers.Complex">
-<em class="property">class </em><code class="sig-prename descclassname">numbers.</code><code class="sig-name descname">Complex</code><a class="headerlink" href="#numbers.Complex" title="永久链接至目标">¶</a></dt>
-<dd><p>内置在类型 <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></a> 里的子类描述了复数和它的运算操作。这些操作有：转化至  <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></a> 和 <a class="reference internal" href="functions.html#bool" title="bool"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></a>， <a class="reference internal" href="#numbers.Complex.real" title="numbers.Complex.real"><code class="xref py py-attr docutils literal notranslate"><span class="pre">real</span></code></a>、 <a class="reference internal" href="#numbers.Complex.imag" title="numbers.Complex.imag"><code class="xref py py-attr docutils literal notranslate"><span class="pre">imag</span></code></a>、<code class="docutils literal notranslate"><span class="pre">+</span></code>、<code class="docutils literal notranslate"><span class="pre">-</span></code>、<code class="docutils literal notranslate"><span class="pre">*</span></code>、<code class="docutils literal notranslate"><span class="pre">/</span></code>、 <a class="reference internal" href="functions.html#abs" title="abs"><code class="xref py py-func docutils literal notranslate"><span class="pre">abs()</span></code></a>、 <a class="reference internal" href="#numbers.Complex.conjugate" title="numbers.Complex.conjugate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">conjugate()</span></code></a>、 <code class="docutils literal notranslate"><span class="pre">==</span></code> 和 <code class="docutils literal notranslate"><span class="pre">!=</span></code>。 所有的异常，<code class="docutils literal notranslate"><span class="pre">-</span></code> 和 <code class="docutils literal notranslate"><span class="pre">!=</span></code> ，都是抽象的。</p>
-<dl class="attribute">
-<dt id="numbers.Complex.real">
-<code class="sig-name descname">real</code><a class="headerlink" href="#numbers.Complex.real" title="永久链接至目标">¶</a></dt>
-<dd><p>抽象的。得到该数字的实数部分。</p>
+<h2 class="translated">数字的层次<a class="headerlink" href="#the-numeric-tower" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="numbers.Complex">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">numbers.</span></span><span class="sig-name descname"><span class="pre">Complex</span></span><a class="headerlink" href="#numbers.Complex" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">这个类型的子类描述了复数并包括了适用于内置 <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></a> 类型的操作。 这些操作有: 转换为 <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></a> 和 <a class="reference internal" href="functions.html#bool" title="bool"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></a>, <a class="reference internal" href="#numbers.Complex.real" title="numbers.Complex.real"><code class="xref py py-attr docutils literal notranslate"><span class="pre">real</span></code></a>, <a class="reference internal" href="#numbers.Complex.imag" title="numbers.Complex.imag"><code class="xref py py-attr docutils literal notranslate"><span class="pre">imag</span></code></a>, <code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">*</span></code>, <code class="docutils literal notranslate"><span class="pre">/</span></code>, <code class="docutils literal notranslate"><span class="pre">**</span></code>, <a class="reference internal" href="functions.html#abs" title="abs"><code class="xref py py-func docutils literal notranslate"><span class="pre">abs()</span></code></a>, <a class="reference internal" href="#numbers.Complex.conjugate" title="numbers.Complex.conjugate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">conjugate()</span></code></a>, <code class="docutils literal notranslate"><span class="pre">==</span></code> 以及 <code class="docutils literal notranslate"><span class="pre">!=</span></code>。 除 <code class="docutils literal notranslate"><span class="pre">-</span></code> 和 <code class="docutils literal notranslate"><span class="pre">!=</span></code> 之外所有操作都是抽象的。</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="numbers.Complex.real">
+<span class="sig-name descname"><span class="pre">real</span></span><a class="headerlink" href="#numbers.Complex.real" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">抽象的。得到该数字的实数部分。</p>
 </dd></dl>
 
-<dl class="attribute">
-<dt id="numbers.Complex.imag">
-<code class="sig-name descname">imag</code><a class="headerlink" href="#numbers.Complex.imag" title="永久链接至目标">¶</a></dt>
-<dd><p>抽象的。得到该数字的虚数部分。</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="numbers.Complex.imag">
+<span class="sig-name descname"><span class="pre">imag</span></span><a class="headerlink" href="#numbers.Complex.imag" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">抽象的。得到该数字的虚数部分。</p>
 </dd></dl>
 
-<dl class="method">
-<dt id="numbers.Complex.conjugate">
-<em class="property">abstractmethod </em><code class="sig-name descname">conjugate</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#numbers.Complex.conjugate" title="永久链接至目标">¶</a></dt>
-<dd><p>抽象的。返回共轭复数。例如 <code class="docutils literal notranslate"><span class="pre">(1+3j).conjugate()</span> <span class="pre">==</span> <span class="pre">(1-3j)</span></code>。</p>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="class">
-<dt id="numbers.Real">
-<em class="property">class </em><code class="sig-prename descclassname">numbers.</code><code class="sig-name descname">Real</code><a class="headerlink" href="#numbers.Real" title="永久链接至目标">¶</a></dt>
-<dd><p>相对于 <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a>，<a class="reference internal" href="#numbers.Real" title="numbers.Real"><code class="xref py py-class docutils literal notranslate"><span class="pre">Real</span></code></a> 加入了只有实数才能进行的操作。</p>
-<p>简单的说，它们是：转化至 <a class="reference internal" href="functions.html#float" title="float"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a>，<a class="reference internal" href="math.html#math.trunc" title="math.trunc"><code class="xref py py-func docutils literal notranslate"><span class="pre">math.trunc()</span></code></a>、 <a class="reference internal" href="functions.html#round" title="round"><code class="xref py py-func docutils literal notranslate"><span class="pre">round()</span></code></a>、 <a class="reference internal" href="math.html#math.floor" title="math.floor"><code class="xref py py-func docutils literal notranslate"><span class="pre">math.floor()</span></code></a>、 <a class="reference internal" href="math.html#math.ceil" title="math.ceil"><code class="xref py py-func docutils literal notranslate"><span class="pre">math.ceil()</span></code></a>、 <a class="reference internal" href="functions.html#divmod" title="divmod"><code class="xref py py-func docutils literal notranslate"><span class="pre">divmod()</span></code></a>、 <code class="docutils literal notranslate"><span class="pre">//</span></code>、 <code class="docutils literal notranslate"><span class="pre">%</span></code>、 <code class="docutils literal notranslate"><span class="pre">&lt;</span></code>、 <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code>、 <code class="docutils literal notranslate"><span class="pre">&gt;</span></code>、 和 <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code>。</p>
-<p>实数同样默认支持 <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-func docutils literal notranslate"><span class="pre">complex()</span></code></a>、 <a class="reference internal" href="#numbers.Complex.real" title="numbers.Complex.real"><code class="xref py py-attr docutils literal notranslate"><span class="pre">real</span></code></a>、 <a class="reference internal" href="#numbers.Complex.imag" title="numbers.Complex.imag"><code class="xref py py-attr docutils literal notranslate"><span class="pre">imag</span></code></a> 和 <a class="reference internal" href="#numbers.Complex.conjugate" title="numbers.Complex.conjugate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">conjugate()</span></code></a>。</p>
-</dd></dl>
-
-<dl class="class">
-<dt id="numbers.Rational">
-<em class="property">class </em><code class="sig-prename descclassname">numbers.</code><code class="sig-name descname">Rational</code><a class="headerlink" href="#numbers.Rational" title="永久链接至目标">¶</a></dt>
-<dd><p>子类型 <a class="reference internal" href="#numbers.Real" title="numbers.Real"><code class="xref py py-class docutils literal notranslate"><span class="pre">Real</span></code></a> 并加入 <a class="reference internal" href="#numbers.Rational.numerator" title="numbers.Rational.numerator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">numerator</span></code></a> 和 <a class="reference internal" href="#numbers.Rational.denominator" title="numbers.Rational.denominator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">denominator</span></code></a> 两种属性，这两种属性应该属于最低的级别。加入后，这默认支持 <a class="reference internal" href="functions.html#float" title="float"><code class="xref py py-func docutils literal notranslate"><span class="pre">float()</span></code></a>。</p>
-<dl class="attribute">
-<dt id="numbers.Rational.numerator">
-<code class="sig-name descname">numerator</code><a class="headerlink" href="#numbers.Rational.numerator" title="永久链接至目标">¶</a></dt>
-<dd><p>抽象的。</p>
-</dd></dl>
-
-<dl class="attribute">
-<dt id="numbers.Rational.denominator">
-<code class="sig-name descname">denominator</code><a class="headerlink" href="#numbers.Rational.denominator" title="永久链接至目标">¶</a></dt>
-<dd><p>抽象的。</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="numbers.Complex.conjugate">
+<em class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">conjugate</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#numbers.Complex.conjugate" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">抽象的。返回共轭复数。例如 <code class="docutils literal notranslate"><span class="pre">(1+3j).conjugate()</span> <span class="pre">==</span> <span class="pre">(1-3j)</span></code>。</p>
 </dd></dl>
 
 </dd></dl>
 
-<dl class="class">
-<dt id="numbers.Integral">
-<em class="property">class </em><code class="sig-prename descclassname">numbers.</code><code class="sig-name descname">Integral</code><a class="headerlink" href="#numbers.Integral" title="永久链接至目标">¶</a></dt>
-<dd><p>子类型 <a class="reference internal" href="#numbers.Rational" title="numbers.Rational"><code class="xref py py-class docutils literal notranslate"><span class="pre">Rational</span></code></a> 加上转化至 <a class="reference internal" href="functions.html#int" title="int"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a>。 默认支持 <a class="reference internal" href="functions.html#float" title="float"><code class="xref py py-func docutils literal notranslate"><span class="pre">float()</span></code></a>、 <a class="reference internal" href="#numbers.Rational.numerator" title="numbers.Rational.numerator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">numerator</span></code></a> 和 <a class="reference internal" href="#numbers.Rational.denominator" title="numbers.Rational.denominator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">denominator</span></code></a>。 在 <code class="docutils literal notranslate"><span class="pre">**</span></code> 中加入抽象方法和比特字符串的操作： <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code>、 <code class="docutils literal notranslate"><span class="pre">&gt;&gt;</span></code>、 <code class="docutils literal notranslate"><span class="pre">&amp;</span></code>、 <code class="docutils literal notranslate"><span class="pre">^</span></code>、 <code class="docutils literal notranslate"><span class="pre">|</span></code>、 <code class="docutils literal notranslate"><span class="pre">~</span></code>。</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="numbers.Real">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">numbers.</span></span><span class="sig-name descname"><span class="pre">Real</span></span><a class="headerlink" href="#numbers.Real" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">相对于 <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a>，<code class="xref py py-class docutils literal notranslate"><span class="pre">Real</span></code> 加入了只适用于实数的操作。</p>
+<p class="translated">简单的说，它们是：转化至 <a class="reference internal" href="functions.html#float" title="float"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></a>，<a class="reference internal" href="math.html#math.trunc" title="math.trunc"><code class="xref py py-func docutils literal notranslate"><span class="pre">math.trunc()</span></code></a>、 <a class="reference internal" href="functions.html#round" title="round"><code class="xref py py-func docutils literal notranslate"><span class="pre">round()</span></code></a>、 <a class="reference internal" href="math.html#math.floor" title="math.floor"><code class="xref py py-func docutils literal notranslate"><span class="pre">math.floor()</span></code></a>、 <a class="reference internal" href="math.html#math.ceil" title="math.ceil"><code class="xref py py-func docutils literal notranslate"><span class="pre">math.ceil()</span></code></a>、 <a class="reference internal" href="functions.html#divmod" title="divmod"><code class="xref py py-func docutils literal notranslate"><span class="pre">divmod()</span></code></a>、 <code class="docutils literal notranslate"><span class="pre">//</span></code>、 <code class="docutils literal notranslate"><span class="pre">%</span></code>、 <code class="docutils literal notranslate"><span class="pre">&lt;</span></code>、 <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code>、 <code class="docutils literal notranslate"><span class="pre">&gt;</span></code>、 和 <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code>。</p>
+<p class="translated">实数同样默认支持 <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-func docutils literal notranslate"><span class="pre">complex()</span></code></a>、 <a class="reference internal" href="#numbers.Complex.real" title="numbers.Complex.real"><code class="xref py py-attr docutils literal notranslate"><span class="pre">real</span></code></a>、 <a class="reference internal" href="#numbers.Complex.imag" title="numbers.Complex.imag"><code class="xref py py-attr docutils literal notranslate"><span class="pre">imag</span></code></a> 和 <a class="reference internal" href="#numbers.Complex.conjugate" title="numbers.Complex.conjugate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">conjugate()</span></code></a>。</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="numbers.Rational">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">numbers.</span></span><span class="sig-name descname"><span class="pre">Rational</span></span><a class="headerlink" href="#numbers.Rational" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">子类型 <a class="reference internal" href="#numbers.Real" title="numbers.Real"><code class="xref py py-class docutils literal notranslate"><span class="pre">Real</span></code></a> 并加入 <a class="reference internal" href="#numbers.Rational.numerator" title="numbers.Rational.numerator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">numerator</span></code></a> 和 <a class="reference internal" href="#numbers.Rational.denominator" title="numbers.Rational.denominator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">denominator</span></code></a> 两种特征属性。 它还为 <a class="reference internal" href="functions.html#float" title="float"><code class="xref py py-func docutils literal notranslate"><span class="pre">float()</span></code></a> 提供了默认值。</p>
+<p class="translated"><a class="reference internal" href="#numbers.Rational.numerator" title="numbers.Rational.numerator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">numerator</span></code></a> 和 <a class="reference internal" href="#numbers.Rational.denominator" title="numbers.Rational.denominator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">denominator</span></code></a> 值应为 <a class="reference internal" href="#numbers.Integral" title="numbers.Integral"><code class="xref py py-class docutils literal notranslate"><span class="pre">Integral</span></code></a> 的实例并且应当是具有 <a class="reference internal" href="#numbers.Rational.denominator" title="numbers.Rational.denominator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">denominator</span></code></a> 正值的最低项。</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="numbers.Rational.numerator">
+<span class="sig-name descname"><span class="pre">numerator</span></span><a class="headerlink" href="#numbers.Rational.numerator" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">抽象的。</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="numbers.Rational.denominator">
+<span class="sig-name descname"><span class="pre">denominator</span></span><a class="headerlink" href="#numbers.Rational.denominator" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">抽象的。</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="numbers.Integral">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">numbers.</span></span><span class="sig-name descname"><span class="pre">Integral</span></span><a class="headerlink" href="#numbers.Integral" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">子类型 <a class="reference internal" href="#numbers.Rational" title="numbers.Rational"><code class="xref py py-class docutils literal notranslate"><span class="pre">Rational</span></code></a> 还增加了到 <a class="reference internal" href="functions.html#int" title="int"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></a> 的转换操作。 为 <a class="reference internal" href="functions.html#float" title="float"><code class="xref py py-func docutils literal notranslate"><span class="pre">float()</span></code></a>, <a class="reference internal" href="#numbers.Rational.numerator" title="numbers.Rational.numerator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">numerator</span></code></a> 和 <a class="reference internal" href="#numbers.Rational.denominator" title="numbers.Rational.denominator"><code class="xref py py-attr docutils literal notranslate"><span class="pre">denominator</span></code></a> 提供了默认支持。 为 <a class="reference internal" href="functions.html#pow" title="pow"><code class="xref py py-func docutils literal notranslate"><span class="pre">pow()</span></code></a> 方法增加了求余和按位字符串运算的抽象方法: <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&amp;</span></code>, <code class="docutils literal notranslate"><span class="pre">^</span></code>, <code class="docutils literal notranslate"><span class="pre">|</span></code>, <code class="docutils literal notranslate"><span class="pre">~</span></code>。</p>
 </dd></dl>
 
 </section>
-<section id="notes-for-type-implementors">
-<h2>类型接口注释。<a class="headerlink" href="#notes-for-type-implementors" title="永久链接至标题">¶</a></h2>
-<p>实现者需要注意使相等的数字相等并拥有同样的值。当这两个数使用不同的扩展模块时，这其中的差异是很微妙的。例如，用 <a class="reference internal" href="fractions.html#fractions.Fraction" title="fractions.Fraction"><code class="xref py py-class docutils literal notranslate"><span class="pre">fractions.Fraction</span></code></a> 实现 <a class="reference internal" href="functions.html#hash" title="hash"><code class="xref py py-func docutils literal notranslate"><span class="pre">hash()</span></code></a> 如下:</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<section id="notes-for-type-implementers">
+<h2 class="translated">有关类型实现的注释<a class="headerlink" href="#notes-for-type-implementers" title="Link to this heading">¶</a></h2>
+<p class="translated">实现方应当注意让相等的数值保证相等并使它们哈希运算的结果值相同。  当相互比较的实数属于两个不同的扩展模块时可能会有微妙的差异。 举例来说，<a class="reference internal" href="fractions.html#fractions.Fraction" title="fractions.Fraction"><code class="xref py py-class docutils literal notranslate"><span class="pre">fractions.Fraction</span></code></a> 是这样实现 <a class="reference internal" href="functions.html#hash" title="hash"><code class="xref py py-func docutils literal notranslate"><span class="pre">hash()</span></code></a> 的:</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">denominator</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-        <span class="c1"># Get integers right.</span>
+        <span class="c1"># 正确获取整数。</span>
         <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">numerator</span><span class="p">)</span>
-    <span class="c1"># Expensive check, but definitely correct.</span>
+    <span class="c1"># 高开销的检查，但肯定正确。</span>
     <span class="k">if</span> <span class="bp">self</span> <span class="o">==</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="nb">hash</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="c1"># Use tuple&#39;s hash to avoid a high collision rate on</span>
-        <span class="c1"># simple fractions.</span>
+        <span class="c1"># 使用元组的哈希值来避免简单分数的</span>
+        <span class="c1"># 高碰撞率。</span>
         <span class="k">return</span> <span class="nb">hash</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">numerator</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">denominator</span><span class="p">))</span>
 </pre></div>
 </div>
 <section id="adding-more-numeric-abcs">
-<h3>加入更多数字的ABC<a class="headerlink" href="#adding-more-numeric-abcs" title="永久链接至标题">¶</a></h3>
-<p>当然，这里有更多支持数字的ABC，如果不加入这些，就将缺少层次感。你可以用如下方法在 <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 和 <a class="reference internal" href="#numbers.Real" title="numbers.Real"><code class="xref py py-class docutils literal notranslate"><span class="pre">Real</span></code></a> 中加入 <code class="docutils literal notranslate"><span class="pre">MyFoo</span></code>:</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyFoo</span><span class="p">(</span><span class="n">Complex</span><span class="p">):</span> <span class="o">...</span>
+<h3 class="translated">加入更多数字的ABC<a class="headerlink" href="#adding-more-numeric-abcs" title="Link to this heading">¶</a></h3>
+<p class="translated">当然，这里有更多支持数字的ABC，如果不加入这些，就将缺少层次感。你可以用如下方法在 <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 和 <a class="reference internal" href="#numbers.Real" title="numbers.Real"><code class="xref py py-class docutils literal notranslate"><span class="pre">Real</span></code></a> 中加入 <code class="docutils literal notranslate"><span class="pre">MyFoo</span></code>:</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">MyFoo</span><span class="p">(</span><span class="n">Complex</span><span class="p">):</span> <span class="o">...</span>
 <span class="n">MyFoo</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">Real</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
 <section id="implementing-the-arithmetic-operations">
-<span id="id1"></span><h3>实现算术运算<a class="headerlink" href="#implementing-the-arithmetic-operations" title="永久链接至标题">¶</a></h3>
-<p>我们希望实现计算，因此，混合模式操作要么调用一个作者知道参数类型的实现，要么转变成为最接近的内置类型并对这个执行操作。对于子类 <a class="reference internal" href="#numbers.Integral" title="numbers.Integral"><code class="xref py py-class docutils literal notranslate"><span class="pre">Integral</span></code></a>，这意味着 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a> 和 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a> 必须用如下方式定义：</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">MyIntegral</span><span class="p">(</span><span class="n">Integral</span><span class="p">):</span>
+<span id="id1"></span><h3 class="translated">实现算术运算<a class="headerlink" href="#implementing-the-arithmetic-operations" title="Link to this heading">¶</a></h3>
+<p class="translated">我们想要实现算术运算，因此混合模式运算要么调用一个开发者知道两个参数类型的实现，要么将两个参数转换为最接近的内置类型再执行运算。 对于 <a class="reference internal" href="#numbers.Integral" title="numbers.Integral"><code class="xref py py-class docutils literal notranslate"><span class="pre">Integral</span></code></a> 的子类，这意味着 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a> 和 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a> 应当被定义为:</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">MyIntegral</span><span class="p">(</span><span class="n">Integral</span><span class="p">):</span>
 
-    <span class="k">def</span> <span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__add__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">MyIntegral</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">do_my_adding_stuff</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">OtherTypeIKnowAbout</span><span class="p">):</span>
@@ -264,7 +310,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">NotImplemented</span>
 
-    <span class="k">def</span> <span class="fm">__radd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__radd__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">MyIntegral</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">do_my_adding_stuff</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">OtherTypeIKnowAbout</span><span class="p">):</span>
@@ -279,20 +325,18 @@
             <span class="k">return</span> <span class="bp">NotImplemented</span>
 </pre></div>
 </div>
-<p><a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 有 5 种不同的混合类型的操作。 我将上面提到的所有代码作为“模板”称作 <code class="docutils literal notranslate"><span class="pre">MyIntegral</span></code> 和 <code class="docutils literal notranslate"><span class="pre">OtherTypeIKnowAbout</span></code>。 <code class="docutils literal notranslate"><span class="pre">a</span></code> 是  <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 的子类型 <code class="docutils literal notranslate"><span class="pre">A</span></code> 的实例 (<code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">:</span> <span class="pre">A</span> <span class="pre">&lt;:</span> <span class="pre">Complex</span></code>)，同时 <code class="docutils literal notranslate"><span class="pre">b</span> <span class="pre">:</span> <span class="pre">B</span> <span class="pre">&lt;:</span> <span class="pre">Complex</span></code>。 我将要计算 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b</span></code>:</p>
-<blockquote>
-<div><ol class="arabic simple">
-<li><p>如果 <code class="docutils literal notranslate"><span class="pre">A</span></code> 被定义成一个承认 <code class="docutils literal notranslate"><span class="pre">b</span></code> 的 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a>，一切都没有问题。</p></li>
-<li><p>如果 <code class="docutils literal notranslate"><span class="pre">A</span></code> 转回成“模板”失败，它将返回一个属于 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a> 的值，我们需要避免 <code class="docutils literal notranslate"><span class="pre">B</span></code> 定义了一个更加智能的 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a>，因此模板需要返回一个属于 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a> 的 <a class="reference internal" href="constants.html#NotImplemented" title="NotImplemented"><code class="xref py py-const docutils literal notranslate"><span class="pre">NotImplemented</span></code></a> 。（或者 <code class="docutils literal notranslate"><span class="pre">A</span></code> 可能完全不实现 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a> 。）</p></li>
-<li><p>接着看 <code class="docutils literal notranslate"><span class="pre">B</span></code> 的 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a> 。如果它承认 <code class="docutils literal notranslate"><span class="pre">a</span></code> ，一切都没有问题。</p></li>
-<li><p>如果没有成功回退到模板，就没有更多的方法可以去尝试，因此这里将使用默认的实现。</p></li>
-<li><p>如果 <code class="docutils literal notranslate"><span class="pre">B</span> <span class="pre">&lt;:</span> <span class="pre">A</span></code> ， Python 在 <code class="docutils literal notranslate"><span class="pre">A.__add__</span></code> 之前尝试 <code class="docutils literal notranslate"><span class="pre">B.__radd__</span></code> 。 这是可行的，是通过对 <code class="docutils literal notranslate"><span class="pre">A</span></code> 的认识实现的，因此这可以在交给 <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 处理之前处理这些实例。</p></li>
+<p class="translated"><a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 有 5 种不同的混合类型的操作。 我将上面提到的所有代码作为“模板”称作 <code class="docutils literal notranslate"><span class="pre">MyIntegral</span></code> 和 <code class="docutils literal notranslate"><span class="pre">OtherTypeIKnowAbout</span></code>。 <code class="docutils literal notranslate"><span class="pre">a</span></code> 是  <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 的子类型 <code class="docutils literal notranslate"><span class="pre">A</span></code> 的实例 (<code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">:</span> <span class="pre">A</span> <span class="pre">&lt;:</span> <span class="pre">Complex</span></code>)，同时 <code class="docutils literal notranslate"><span class="pre">b</span> <span class="pre">:</span> <span class="pre">B</span> <span class="pre">&lt;:</span> <span class="pre">Complex</span></code>。 我将要计算 <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b</span></code>:</p>
+<ol class="arabic simple">
+<li><p class="translated">如果 <code class="docutils literal notranslate"><span class="pre">A</span></code> 定义了接受 <code class="docutils literal notranslate"><span class="pre">b</span></code> 的 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a>，一切都没有问题。</p></li>
+<li><p class="translated">如果 <code class="docutils literal notranslate"><span class="pre">A</span></code> 回退至基础代码，它将返回一个来自 <a class="reference internal" href="../reference/datamodel.html#object.__add__" title="object.__add__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code></a> 的值，我们就没有机会为 <code class="docutils literal notranslate"><span class="pre">B</span></code> 定义更加智能的 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a>，因此基础代码应当从 <code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code> 返回 <a class="reference internal" href="constants.html#NotImplemented" title="NotImplemented"><code class="xref py py-data docutils literal notranslate"><span class="pre">NotImplemented</span></code></a>。 （或者 <code class="docutils literal notranslate"><span class="pre">A</span></code> 可能完全不实现 <code class="xref py py-meth docutils literal notranslate"><span class="pre">__add__()</span></code>。）</p></li>
+<li><p class="translated">那么 <code class="docutils literal notranslate"><span class="pre">B</span></code> 的 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a> 将有机会发挥作用。 如果它接受 <code class="docutils literal notranslate"><span class="pre">a</span></code>，一切都没有问题。</p></li>
+<li><p class="translated">如果没有成功回退到模板，就没有更多的方法可以去尝试，因此这里将使用默认的实现。</p></li>
+<li><p class="translated">如果 <code class="docutils literal notranslate"><span class="pre">B</span> <span class="pre">&lt;:</span> <span class="pre">A</span></code> ， Python 在 <code class="docutils literal notranslate"><span class="pre">A.__add__</span></code> 之前尝试 <code class="docutils literal notranslate"><span class="pre">B.__radd__</span></code> 。 这是可行的，是通过对 <code class="docutils literal notranslate"><span class="pre">A</span></code> 的认识实现的，因此这可以在交给 <a class="reference internal" href="#numbers.Complex" title="numbers.Complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">Complex</span></code></a> 处理之前处理这些实例。</p></li>
 </ol>
-</div></blockquote>
-<p>如果 <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">&lt;:</span> <span class="pre">Complex</span></code> 和 <code class="docutils literal notranslate"><span class="pre">B</span> <span class="pre">&lt;:</span> <span class="pre">Real</span></code> 没有共享任何资源，那么适当的共享操作涉及内置的 <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></a> ，并且分别获得 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a> ，因此 <code class="docutils literal notranslate"><span class="pre">a+b</span> <span class="pre">==</span> <span class="pre">b+a</span></code>。</p>
-<p>由于对任何一直类型的大部分操作是十分相似的，可以定义一个帮助函数，即一个生成后续或相反的实例的生成器。例如，使用 <a class="reference internal" href="fractions.html#fractions.Fraction" title="fractions.Fraction"><code class="xref py py-class docutils literal notranslate"><span class="pre">fractions.Fraction</span></code></a> 如下：</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">_operator_fallbacks</span><span class="p">(</span><span class="n">monomorphic_operator</span><span class="p">,</span> <span class="n">fallback_operator</span><span class="p">):</span>
-    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<p class="translated">如果 <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">&lt;:</span> <span class="pre">Complex</span></code> 和 <code class="docutils literal notranslate"><span class="pre">B</span> <span class="pre">&lt;:</span> <span class="pre">Real</span></code> 没有共享任何其他信息，那么内置 <a class="reference internal" href="functions.html#complex" title="complex"><code class="xref py py-class docutils literal notranslate"><span class="pre">complex</span></code></a> 的共享操作就是最适当的，两个 <a class="reference internal" href="../reference/datamodel.html#object.__radd__" title="object.__radd__"><code class="xref py py-meth docutils literal notranslate"><span class="pre">__radd__()</span></code></a> 都将应用该操作，因此 <code class="docutils literal notranslate"><span class="pre">a+b</span> <span class="pre">==</span> <span class="pre">b+a</span></code>。</p>
+<p class="translated">由于对任何一直类型的大部分操作是十分相似的，可以定义一个帮助函数，即一个生成后续或相反的实例的生成器。例如，使用 <a class="reference internal" href="fractions.html#fractions.Fraction" title="fractions.Fraction"><code class="xref py py-class docutils literal notranslate"><span class="pre">fractions.Fraction</span></code></a> 如下：</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">_operator_fallbacks</span><span class="p">(</span><span class="n">monomorphic_operator</span><span class="p">,</span> <span class="n">fallback_operator</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">Fraction</span><span class="p">)):</span>
             <span class="k">return</span> <span class="n">monomorphic_operator</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="nb">float</span><span class="p">):</span>
@@ -304,13 +348,13 @@
     <span class="n">forward</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="s1">&#39;__&#39;</span> <span class="o">+</span> <span class="n">fallback_operator</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;__&#39;</span>
     <span class="n">forward</span><span class="o">.</span><span class="vm">__doc__</span> <span class="o">=</span> <span class="n">monomorphic_operator</span><span class="o">.</span><span class="vm">__doc__</span>
 
-    <span class="k">def</span> <span class="nf">reverse</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reverse</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Rational</span><span class="p">):</span>
             <span class="c1"># Includes ints.</span>
             <span class="k">return</span> <span class="n">monomorphic_operator</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Real</span><span class="p">):</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Real</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">fallback_operator</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">b</span><span class="p">))</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Complex</span><span class="p">):</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">Complex</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">fallback_operator</span><span class="p">(</span><span class="nb">complex</span><span class="p">(</span><span class="n">a</span><span class="p">),</span> <span class="nb">complex</span><span class="p">(</span><span class="n">b</span><span class="p">))</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">NotImplemented</span>
@@ -319,7 +363,7 @@
 
     <span class="k">return</span> <span class="n">forward</span><span class="p">,</span> <span class="n">reverse</span>
 
-<span class="k">def</span> <span class="nf">_add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;a + b&quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">Fraction</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">numerator</span> <span class="o">*</span> <span class="n">b</span><span class="o">.</span><span class="n">denominator</span> <span class="o">+</span>
                     <span class="n">b</span><span class="o">.</span><span class="n">numerator</span> <span class="o">*</span> <span class="n">a</span><span class="o">.</span><span class="n">denominator</span><span class="p">,</span>
@@ -335,16 +379,18 @@
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="../contents.html">目录</a></h3>
-  <ul>
-<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> --- 数字的抽象基类</a><ul>
+  <div>
+    <h3><a href="../contents.html">目录</a></h3>
+    <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> --- 数字抽象基类</a><ul>
 <li><a class="reference internal" href="#the-numeric-tower">数字的层次</a></li>
-<li><a class="reference internal" href="#notes-for-type-implementors">类型接口注释。</a><ul>
+<li><a class="reference internal" href="#notes-for-type-implementers">有关类型实现的注释</a><ul>
 <li><a class="reference internal" href="#adding-more-numeric-abcs">加入更多数字的ABC</a></li>
 <li><a class="reference internal" href="#implementing-the-arithmetic-operations">实现算术运算</a></li>
 </ul>
@@ -353,32 +399,41 @@
 </li>
 </ul>
 
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="numeric.html"
-                        title="上一章">数字和数学模块</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="math.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">math</span></code> --- 数学函数</a></p>
+  </div>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="numeric.html"
+                          title="上一章">数字和数学模块</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="math.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">math</span></code> --- 数学函数</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/numbers.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/numbers.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -390,7 +445,7 @@
           <a href="numeric.html" title="数字和数学模块"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -400,47 +455,59 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="numeric.html" >数字和数学模块</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><code class="xref py py-mod docutils literal notranslate"><span class="pre">numbers</span></code> --- 数字抽象基类</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

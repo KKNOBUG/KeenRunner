@@ -1,64 +1,90 @@
-$(document).ready(function() {
-    /* Add a [>>>] button on the top-right corner of code samples to hide
-     * the >>> and ... prompts and the output and thus make the code
-     * copyable. */
-    var div = $('.highlight-python .highlight,' +
-                '.highlight-python3 .highlight,' +
-                '.highlight-pycon .highlight,' +
-                '.highlight-pycon3 .highlight,' +
-                '.highlight-default .highlight');
-    var pre = div.find('pre');
+// Extract copyable text from the code block ignoring the
+// prompts and output.
+function getCopyableText(rootElement) {
+    rootElement = rootElement.cloneNode(true)
+    // tracebacks (.gt) contain bare text elements that
+    // need to be removed
+    const tracebacks = rootElement.querySelectorAll(".gt")
+    for (const el of tracebacks) {
+        while (
+            el.nextSibling &&
+            (el.nextSibling.nodeType !== Node.ELEMENT_NODE ||
+                !el.nextSibling.matches(".gp, .go"))
+        ) {
+            el.nextSibling.remove()
+        }
+    }
+    // Remove all elements with the "go" (Generic.Output),
+    // "gp" (Generic.Prompt), or "gt" (Generic.Traceback) CSS class
+    const elements = rootElement.querySelectorAll(".gp, .go, .gt, .linenos")
+    for (const el of elements) {
+        el.remove()
+    }
+    return rootElement.innerText.trim()
+}
 
-    // get the styles from the current theme
-    pre.parent().parent().css('position', 'relative');
-    var hide_text = 'Hide the prompts and output';
-    var show_text = 'Show the prompts and output';
-    var border_width = pre.css('border-top-width');
-    var border_style = pre.css('border-top-style');
-    var border_color = pre.css('border-top-color');
-    var button_styles = {
-        'cursor':'pointer', 'position': 'absolute', 'top': '0', 'right': '0',
-        'border-color': border_color, 'border-style': border_style,
-        'border-width': border_width, 'color': border_color, 'text-size': '75%',
-        'font-family': 'monospace', 'padding-left': '0.2em', 'padding-right': '0.2em',
-        'border-radius': '0 3px 0 0'
+const loadCopyButton = () => {
+    const button = document.createElement("button")
+    button.classList.add("copybutton")
+    button.type = "button"
+    button.innerText = _("Copy")
+    button.title = _("Copy to clipboard")
+
+    const makeOnButtonClick = () => {
+        let timeout = null
+        // define the behavior of the button when it's clicked
+        return async event => {
+            // check if the clipboard is available
+            if (!navigator.clipboard || !navigator.clipboard.writeText) {
+                return;
+            }
+
+            clearTimeout(timeout)
+            const buttonEl = event.currentTarget
+            const codeEl = buttonEl.nextElementSibling
+
+            try {
+                await navigator.clipboard.writeText(getCopyableText(codeEl))
+            } catch (e) {
+                console.error(e.message)
+                return
+            }
+
+            buttonEl.innerText = _("Copied!")
+            timeout = setTimeout(() => {
+                buttonEl.innerText = _("Copy")
+            }, 1500)
+        }
     }
 
-    // create and add the button to all the code blocks that contain >>>
-    div.each(function(index) {
-        var jthis = $(this);
-        if (jthis.find('.gp').length > 0) {
-            var button = $('<span class="copybutton">&gt;&gt;&gt;</span>');
-            button.css(button_styles)
-            button.attr('title', hide_text);
-            button.data('hidden', 'false');
-            jthis.prepend(button);
-        }
-        // tracebacks (.gt) contain bare text elements that need to be
-        // wrapped in a span to work with .nextUntil() (see later)
-        jthis.find('pre:has(.gt)').contents().filter(function() {
-            return ((this.nodeType == 3) && (this.data.trim().length > 0));
-        }).wrap('<span>');
-    });
+    const highlightedElements = document.querySelectorAll(
+        ".highlight-python .highlight,"
+        + ".highlight-python3 .highlight,"
+        + ".highlight-pycon .highlight,"
+        + ".highlight-pycon3 .highlight,"
+        + ".highlight-bash .highlight,"
+        + ".highlight-console .highlight,"
+        + ".highlight-doscon .highlight,"
+        + ".highlight-ps1con .highlight,"
+        + ".highlight-sh .highlight,"
+        + ".highlight-shell-session .highlight,"
+        + ".highlight-default .highlight"
+    )
 
-    // define the behavior of the button when it's clicked
-    $('.copybutton').click(function(e){
-        e.preventDefault();
-        var button = $(this);
-        if (button.data('hidden') === 'false') {
-            // hide the code output
-            button.parent().find('.go, .gp, .gt').hide();
-            button.next('pre').find('.gt').nextUntil('.gp, .go').css('visibility', 'hidden');
-            button.css('text-decoration', 'line-through');
-            button.attr('title', show_text);
-            button.data('hidden', 'true');
-        } else {
-            // show the code output
-            button.parent().find('.go, .gp, .gt').show();
-            button.next('pre').find('.gt').nextUntil('.gp, .go').css('visibility', 'visible');
-            button.css('text-decoration', 'none');
-            button.attr('title', hide_text);
-            button.data('hidden', 'false');
-        }
-    });
-});
+    // create and add the button to all the code blocks that contain >>>
+    highlightedElements.forEach(el => {
+        el.style.position = "relative"
+
+        // if we find a console prompt (.gp), prepend the (deeply cloned) button
+        const clonedButton = button.cloneNode(true)
+        // the onclick attribute is not cloned, set it on the new element
+        clonedButton.onclick = makeOnButtonClick()
+        el.prepend(clonedButton)
+    })
+}
+
+if (document.readyState !== "loading") {
+    loadCopyButton()
+} else {
+    document.addEventListener("DOMContentLoaded", loadCopyButton)
+}

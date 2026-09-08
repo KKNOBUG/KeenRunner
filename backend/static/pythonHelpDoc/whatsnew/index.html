@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="Python的新变化" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/whatsnew/index.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="这个“Python 有什么新变化？”系列内容会带您浏览 Python 大版本之间重要的变化。在新版发布后，如果您希望掌握最新变化，请务必阅读这些内容。 Python 3.12 有什么新变化- 摘要 -- 发布重点, 新的特性, 有关类型提示的新增特性, 其他语言特性修改, 新增模块, 改进的模块, 性能优化, CPython 字节码的改变, 演示和工具, 弃用, 移除, 移植到 Python..." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_whatsnew_index_8b275751.png" />
+<meta property="og:image:alt" content="这个“Python 有什么新变化？”系列内容会带您浏览 Python 大版本之间重要的变化。在新版发布后，如果您希望掌握最新变化，请务必阅读这些内容。 Python 3.12 有什么新变化- 摘要 -- 发布重点, 新的特性, 有关类型提示的新增特性, 其他语言特性修改, 新增模块, 改进的模块, 性能优化, CPython 字节码的改变, 演示和工具, 弃用, 移除, 移植到 Python..." />
+<meta name="description" content="这个“Python 有什么新变化？”系列内容会带您浏览 Python 大版本之间重要的变化。在新版发布后，如果您希望掌握最新变化，请务必阅读这些内容。 Python 3.12 有什么新变化- 摘要 -- 发布重点, 新的特性, 有关类型提示的新增特性, 其他语言特性修改, 新增模块, 改进的模块, 性能优化, CPython 字节码的改变, 演示和工具, 弃用, 移除, 移植到 Python..." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>Python的新变化 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python的新变化 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
-    <link rel="next" title="Python 3.8 有什么新变化" href="3.8.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
+    <link rel="next" title="Python 3.12 有什么新变化" href="3.12.html" />
     <link rel="prev" title="Python 文档目录" href="../contents.html" />
-    <link rel="canonical" href="https://docs.python.org/3/whatsnew/index.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/whatsnew/index.html">
       
     
 
@@ -41,48 +56,67 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="../contents.html"
-                        title="上一章">Python 文档目录</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="3.8.html"
-                        title="下一章">Python 3.8 有什么新变化</a></p>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="../contents.html"
+                          title="上一章">Python 文档目录</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="3.12.html"
+                          title="下一章">Python 3.12 有什么新变化</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/whatsnew/index.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/whatsnew/index.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -90,24 +124,25 @@
         </nav>
     </div>
 </div>
+
   
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
         <li class="right" >
-          <a href="3.8.html" title="Python 3.8 有什么新变化"
+          <a href="3.12.html" title="Python 3.12 有什么新变化"
              accesskey="N">下一页</a> |</li>
         <li class="right" >
           <a href="../contents.html" title="Python 文档目录"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -117,22 +152,30 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href="">Python的新变化</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -143,10 +186,93 @@
           <div class="body" role="main">
             
   <section id="what-s-new-in-python">
-<span id="whatsnew-index"></span><h1>Python的新变化<a class="headerlink" href="#what-s-new-in-python" title="永久链接至标题">¶</a></h1>
-<p>这个“Python 有什么新变化？”系列内容会带您浏览 Python 大版本之间重要的变化。在新版发布后，如果您希望掌握最新变化，请务必阅读这些内容。</p>
+<span id="whatsnew-index"></span><h1 class="translated">Python的新变化<a class="headerlink" href="#what-s-new-in-python" title="Link to this heading">¶</a></h1>
+<p class="translated">这个“Python 有什么新变化？”系列内容会带您浏览 Python 大版本之间重要的变化。在新版发布后，如果您希望掌握最新变化，请务必阅读这些内容。</p>
 <div class="toctree-wrapper compound">
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="3.12.html">Python 3.12 有什么新变化</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#summary-release-highlights">摘要 -- 发布重点</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#new-features">新的特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#new-features-related-to-type-hints">有关类型提示的新增特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#other-language-changes">其他语言特性修改</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#new-modules">新增模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#improved-modules">改进的模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#optimizations">性能优化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#cpython-bytecode-changes">CPython 字节码的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#demos-and-tools">演示和工具</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#deprecated">弃用</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#removed">移除</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#porting-to-python-3-12">移植到 Python 3.12</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#build-changes">构建的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#c-api-changes">C API 的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#notable-changes-in-3-12-4">3.12.4 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#notable-changes-in-3-12-5">Notable changes in 3.12.5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#notable-changes-in-3-12-6">Notable changes in 3.12.6</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#notable-changes-in-3-12-8">Notable changes in 3.12.8</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.12.html#notable-changes-in-3-12-10">Notable changes in 3.12.10</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="3.11.html">Python 3.11 有什么新变化</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#summary-release-highlights">摘要 -- 发布重点</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#new-features">新的特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#new-features-related-to-type-hints">有关类型提示的新增特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#other-language-changes">其他语言特性修改</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#other-cpython-implementation-changes">其他 CPython 实现的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#new-modules">新增模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#improved-modules">改进的模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#optimizations">性能优化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#faster-cpython">更快的 CPython</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#cpython-bytecode-changes">CPython 字节码的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#deprecated">弃用</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#pending-removal-in-python-3-12">计划在 Python 3.12 中移除</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#removed">移除</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#porting-to-python-3-11">移植到 Python 3.11</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#build-changes">构建的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#c-api-changes">C API 的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#notable-changes-in-3-11-4">3.11.4 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.11.html#notable-changes-in-3-11-5">3.11.5 中的重要变化</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="3.10.html">Python 3.10 有什么新变化</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#summary-release-highlights">摘要 -- 发布重点</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#new-features">新的特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#new-features-related-to-type-hints">有关类型提示的新增特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#other-language-changes">其他语言特性修改</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#new-modules">新增模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#improved-modules">改进的模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#optimizations">性能优化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#deprecated">弃用</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#removed">移除</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#porting-to-python-3-10">移植到 Python 3.10</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#cpython-bytecode-changes">CPython 字节码的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#build-changes">构建的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#c-api-changes">C API 的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#notable-security-feature-in-3-10-7">3.10.7 中的重要安全特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#notable-security-feature-in-3-10-8">3.10.8 中的重要安全特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.10.html#notable-changes-in-3-10-12">3.10.12 中的重要变化</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="3.9.html">Python 3.9 有什么新变化</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#summary-release-highlights">摘要 -- 发布重点</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#you-should-check-for-deprecationwarning-in-your-code">请检查代码中的 DeprecationWarning。</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#new-features">新的特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#other-language-changes">其他语言特性修改</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#new-modules">新增模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#improved-modules">改进的模块</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#optimizations">性能优化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#deprecated">弃用</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#removed">移除</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#porting-to-python-3-9">移植到 Python 3.9</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#build-changes">构建的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#c-api-changes">C API 的改变</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#notable-changes-in-python-3-9-1">Python 3.9.1 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#notable-changes-in-python-3-9-2">Python 3.9.2 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#notable-changes-in-python-3-9-3">Python 3.9.3 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#notable-changes-in-python-3-9-5">Python 3.9.5 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#notable-security-feature-in-3-9-14">3.9.14 中的重要安全特性</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.9.html#notable-changes-in-3-9-17">3.9.17 中的重要变化</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="3.8.html">Python 3.8 有什么新变化</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="3.8.html#summary-release-highlights">摘要 -- 发布重点</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.8.html#new-features">新的特性</a></li>
@@ -167,8 +293,7 @@
 <li class="toctree-l2"><a class="reference internal" href="3.8.html#id1">Python 3.8.10 中的重要变化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.8.html#notable-changes-in-python-3-8-12">Python 3.8.12 中的重要变化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.8.html#notable-security-feature-in-3-8-14">3.8.14 中的重要安全特性</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.8.html#notable-changes-in-3-8-17">Notable Changes in 3.8.17</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.8.html#notable-changes-in-3-8-20">Notable changes in 3.8.20</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.8.html#notable-changes-in-3-8-17">3.8.17 中的重要变化</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="3.7.html">Python 3.7 有什么新变化</a><ul>
@@ -193,6 +318,8 @@
 <li class="toctree-l2"><a class="reference internal" href="3.7.html#notable-changes-in-python-3-7-2">Python 3.7.2 中的重要变化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.7.html#notable-changes-in-python-3-7-6">Python 3.7.6 中的重要变化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.7.html#notable-changes-in-python-3-7-10">Python 3.7.10 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.7.html#notable-changes-in-python-3-7-11">Python 3.7.11 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.7.html#notable-security-feature-in-3-7-14">3.7.14 中的重要安全特性</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="3.6.html">Python 3.6 有什么新变化</a><ul>
@@ -213,6 +340,7 @@
 <li class="toctree-l2"><a class="reference internal" href="3.6.html#notable-changes-in-python-3-6-7">Python 3.6.7 中的重要变化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.6.html#notable-changes-in-python-3-6-10">Python 3.6.10 中的重要变化</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.6.html#notable-changes-in-python-3-6-13">Python 3.6.13 中的重要变化</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.6.html#notable-changes-in-python-3-6-14">Python 3.6.14 中的重要变化</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="3.5.html">Python 3.5 有什么新变化</a><ul>
@@ -259,8 +387,8 @@
 <li class="toctree-l2"><a class="reference internal" href="3.3.html#pep-421-adding-sys-implementation">PEP 421: 添加 sys.implementation</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.3.html#using-importlib-as-the-implementation-of-import">使用 importlib 作为导入的实现</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.3.html#other-language-changes">其他语言特性修改</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.3.html#a-finer-grained-import-lock">A Finer-Grained Import Lock</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.3.html#builtin-functions-and-types">Builtin functions and types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.3.html#a-finer-grained-import-lock">更细粒度的导入锁</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.3.html#builtin-functions-and-types">内置函数和类型</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.3.html#new-modules">新增模块</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.3.html#improved-modules">改进的模块</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.3.html#optimizations">性能优化</a></li>
@@ -304,11 +432,11 @@
 <li class="toctree-l1"><a class="reference internal" href="3.0.html">Python 3.0 有什么新变化</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="3.0.html#common-stumbling-blocks">常见的绊脚石</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.0.html#overview-of-syntax-changes">语法变化概述</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.0.html#changes-already-present-in-python-2-6">Changes Already Present In Python 2.6</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.0.html#changes-already-present-in-python-2-6">已存在于 Python 2.6 中的改变</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.0.html#library-changes">库的修改</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.0.html#pep-3101-a-new-approach-to-string-formatting"><strong>PEP 3101</strong>: A New Approach To String Formatting</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.0.html#changes-to-exceptions">Changes To Exceptions</a></li>
-<li class="toctree-l2"><a class="reference internal" href="3.0.html#miscellaneous-other-changes">Miscellaneous Other Changes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.0.html#pep-3101-a-new-approach-to-string-formatting"><strong>PEP 3101</strong>: 字符串格式化的新方式</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.0.html#changes-to-exceptions">对异常的修改</a></li>
+<li class="toctree-l2"><a class="reference internal" href="3.0.html#miscellaneous-other-changes">其他杂项修改</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.0.html#build-and-c-api-changes">构建和 C API 的改变</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.0.html#performance">性能</a></li>
 <li class="toctree-l2"><a class="reference internal" href="3.0.html#porting-to-python-3-0">移植到 Python 3.0</a></li>
@@ -329,7 +457,7 @@
 <li class="toctree-l2"><a class="reference internal" href="2.7.html#build-and-c-api-changes">构建和 C API 的改变</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.7.html#other-changes-and-fixes">其他的改变和修正</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.7.html#porting-to-python-2-7">移植到 Python 2.7</a></li>
-<li class="toctree-l2"><a class="reference internal" href="2.7.html#new-features-added-to-python-2-7-maintenance-releases">New Features Added to Python 2.7 Maintenance Releases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="2.7.html#new-features-added-to-python-2-7-maintenance-releases">Python 2.7 维护版本中添加的新特性</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.7.html#acknowledgements">致谢</a></li>
 </ul>
 </li>
@@ -387,7 +515,7 @@
 <li class="toctree-l2"><a class="reference internal" href="2.4.html#pep-324-new-subprocess-module">PEP 324: 新的子进程模块</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.4.html#pep-327-decimal-data-type">PEP 327: 十进制数据类型</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.4.html#pep-328-multi-line-imports">PEP 328: 多行导入</a></li>
-<li class="toctree-l2"><a class="reference internal" href="2.4.html#pep-331-locale-independent-float-string-conversions">PEP 331: Locale-Independent Float/String Conversions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="2.4.html#pep-331-locale-independent-float-string-conversions">PEP 331: 与区域设置无关的浮点数/字符串转换</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.4.html#other-language-changes">其他语言特性修改</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.4.html#new-improved-and-deprecated-modules">新增，改进和弃用的模块</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.4.html#build-and-c-api-changes">构建和 C API 的改变</a></li>
@@ -413,7 +541,7 @@
 <li class="toctree-l2"><a class="reference internal" href="2.3.html#extended-slices">扩展切片</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.3.html#other-language-changes">其他语言特性修改</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.3.html#new-improved-and-deprecated-modules">新增，改进和弃用的模块</a></li>
-<li class="toctree-l2"><a class="reference internal" href="2.3.html#pymalloc-a-specialized-object-allocator">Pymalloc: A Specialized Object Allocator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="2.3.html#pymalloc-a-specialized-object-allocator">Pymalloc：一种专用对象分配器</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.3.html#build-and-c-api-changes">构建和 C API 的改变</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.3.html#other-changes-and-fixes">其他的改变和修正</a></li>
 <li class="toctree-l2"><a class="reference internal" href="2.3.html#porting-to-python-2-3">移植到 Python 2.3</a></li>
@@ -476,43 +604,62 @@
 </li>
 </ul>
 </div>
-<p>这个“更新日志”是 <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Misc/NEWS.d">Misc/NEWS.d</a> 目录下文件 <a class="reference external" href="https://pypi.org/project/blurb">构建</a> 的 HTML 版本，它包含了对当前 Python 版本进行的 <em>所有</em> 重要的更改。</p>
+<p class="translated">这个“更新日志”是基于 <a class="extlink-source reference external" href="https://github.com/python/cpython/tree/3.12/Misc/NEWS.d">Misc/NEWS.d</a> 目录树内容的 <a class="extlink-pypi reference external" href="https://pypi.org/project/blurb/">file built</a> 的 HTML 版本，它包含了对于当前 Python 版本的 <em>全部</em> 较重要更改。</p>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="changelog.html">更新日志</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-20-final">Python 3.8.20 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-19-final">Python 3.8.19 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-18-final">Python 3.8.18 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-17-final">Python 3.8.17 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-16-final">Python 3.8.16 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-15-final">Python 3.8.15 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-14-final">Python 3.8.14 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-13-final">Python 3.8.13 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-12-final">Python 3.8.12 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-11-final">最终版本Python 3.8.11</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-10-final">Python 3.8.10 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-9-final">Python 3.8.9 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-8-final">Python 3.8.8 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-8-release-candidate-1">Python 3.8.8 rc1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-7-final">Python 3.8.7 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-7-release-candidate-1">Python 3.8.7 release candidate 1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-6-final">Python 3.8.6 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-6-release-candidate-1">Python 3.8.6 release candidate 1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-5-final">Python 3.8.5 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-4-final">Python 3.8.4 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-4-release-candidate-1">Python 3.8.4 release candidate 1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-3-final">Python 3.8.3 final</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-3-release-candidate-1">Python 3.8.3 release candidate 1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-2-final">Python 3.8.2 正式版</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-2-release-candidate-2">Python 3.8.2 rc2</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-2-release-candidate-1">Python 3.8.2 rc1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-1-final">Python 3.8.1 正式版</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-1-release-candidate-1">Python 3.8.1 rc1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-final">Python 3.8.0 正式版</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-release-candidate-1">Python 3.8.0 rc1</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-beta-4">Python 3.8.0 beta 4</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-beta-3">Python 3.8.0 beta 3</a></li>
-<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-beta-2">Python 3.8.0 beta 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-next">Python 下一版</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-13-final">Python 3.12.13 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-12-final">Python 3.12.12 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-11-final">Python 3.12.11 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-10-final">Python 3.12.10 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-9-final">Python 3.12.9 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-8-final">Python 3.12.8 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-7-final">Python 3.12.7 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-6-final">Python 3.12.6 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-5-final">Python 3.12.5 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-4-final">Python 3.12.4 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-3-final">Python 3.12.3 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-2-final">Python 3.12.2 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-1-final">Python 3.12.1 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-final">Python 3.12.0 final</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-release-candidate-3">Python 3.12.0 release candidate 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-release-candidate-2">Python 3.12.0 release candidate 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-release-candidate-1">Python 3.12.0 release candidate 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-beta-4">Python 3.12.0 beta 4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-beta-3">Python 3.12.0 beta 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-beta-2">Python 3.12.0 beta 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-beta-1">Python 3.12.0 beta 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-alpha-7">Python 3.12.0 alpha 7</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-alpha-6">Python 3.12.0 alpha 6</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-alpha-5">Python 3.12.0 alpha 5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-alpha-4">Python 3.12.0 alpha 4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-alpha-3">Python 3.12.0 alpha 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-alpha-2">Python 3.12.0 alpha 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-12-0-alpha-1">Python 3.12.0 alpha 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-beta-1">Python 3.11.0 beta 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-alpha-7">Python 3.11.0 alpha 7</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-alpha-6">Python 3.11.0 alpha 6</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-alpha-5">Python 3.11.0 第 5 个 alpha 版本</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-alpha-4">Python 3.11.0 alpha 4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-alpha-3">Python 3.11.0 alpha 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-alpha-2">Python 3.11.0 alpha 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-11-0-alpha-1">Python 3.11.0 alpha 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-beta-1">Python 3.10.0 beta 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-alpha-7">Python 3.10.0 alpha 7</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-alpha-6">Python 3.10.0 alpha 6</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-alpha-5">Python 3.10.0 alpha 5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-alpha-4">Python 3.10.0 alpha 4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-alpha-3">Python 3.10.0 alpha 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-alpha-2">Python 3.10.0 alpha 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-10-0-alpha-1">Python 3.10.0 alpha 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-9-0-beta-1">Python 3.9.0 beta 1</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-9-0-alpha-6">Python 3.9.0 alpha 6</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-9-0-alpha-5">Python 3.9.0 alpha 5</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-9-0-alpha-4">Python 3.9.0 alpha 4</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-9-0-alpha-3">Python 3.9.0 alpha 3</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-9-0-alpha-2">Python 3.9.0 alpha 2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-9-0-alpha-1">Python 3.9.0 alpha 1</a></li>
 <li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-beta-1">Python 3.8.0 beta 1</a></li>
 <li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-alpha-4">Python 3.8.0 alpha 4</a></li>
 <li class="toctree-l2"><a class="reference internal" href="changelog.html#python-3-8-0-alpha-3">Python 3.8.0 alpha 3</a></li>
@@ -583,49 +730,58 @@
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="../contents.html"
-                        title="上一章">Python 文档目录</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="3.8.html"
-                        title="下一章">Python 3.8 有什么新变化</a></p>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="../contents.html"
+                          title="上一章">Python 文档目录</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="3.12.html"
+                          title="下一章">Python 3.12 有什么新变化</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/whatsnew/index.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/whatsnew/index.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
         <li class="right" >
-          <a href="3.8.html" title="Python 3.8 有什么新变化"
+          <a href="3.12.html" title="Python 3.12 有什么新变化"
              >下一页</a> |</li>
         <li class="right" >
           <a href="../contents.html" title="Python 文档目录"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -635,45 +791,57 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href="">Python的新变化</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

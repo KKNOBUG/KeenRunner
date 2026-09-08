@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="gzip --- 对 gzip 文件的支持" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/library/gzip.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="源代码： Lib/gzip.py 此模块提供的简单接口帮助用户压缩和解压缩文件，功能类似于 GNU 应用程序 gzip 和 gunzip 。 数据压缩由 zlib 模块提供。 gzip 模块提供 GzipFile 类和 open() 、 compress() 、 decompress() 几个便利的函数。 GzipFile 类可以读写 gzip 格式的文件，还能自动压缩和解压缩数据，这让操作..." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_library_gzip_65a5a986.png" />
+<meta property="og:image:alt" content="源代码： Lib/gzip.py 此模块提供的简单接口帮助用户压缩和解压缩文件，功能类似于 GNU 应用程序 gzip 和 gunzip 。 数据压缩由 zlib 模块提供。 gzip 模块提供 GzipFile 类和 open() 、 compress() 、 decompress() 几个便利的函数。 GzipFile 类可以读写 gzip 格式的文件，还能自动压缩和解压缩数据，这让操作..." />
+<meta name="description" content="源代码： Lib/gzip.py 此模块提供的简单接口帮助用户压缩和解压缩文件，功能类似于 GNU 应用程序 gzip 和 gunzip 。 数据压缩由 zlib 模块提供。 gzip 模块提供 GzipFile 类和 open() 、 compress() 、 decompress() 几个便利的函数。 GzipFile 类可以读写 gzip 格式的文件，还能自动压缩和解压缩数据，这让操作..." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>gzip --- 对 gzip 格式的支持 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gzip --- 对 gzip 文件的支持 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
     <link rel="next" title="bz2 --- 对 bzip2 压缩算法的支持" href="bz2.html" />
     <link rel="prev" title="zlib --- 与 gzip 兼容的压缩" href="zlib.html" />
-    <link rel="canonical" href="https://docs.python.org/3/library/gzip.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/library/gzip.html">
       
     
 
@@ -41,38 +56,54 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h3><a href="../contents.html">目录</a></h3>
-  <ul>
-<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code> --- 对 <strong class="program">gzip</strong> 格式的支持</a><ul>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h3><a href="../contents.html">目录</a></h3>
+    <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code> --- 对 <strong class="program">gzip</strong> 文件的支持</a><ul>
 <li><a class="reference internal" href="#examples-of-usage">用法示例</a></li>
 <li><a class="reference internal" href="#command-line-interface">命令行界面</a><ul>
 <li><a class="reference internal" href="#command-line-options">命令行选项</a></li>
@@ -82,19 +113,24 @@
 </li>
 </ul>
 
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="zlib.html"
-                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code> --- 与 <strong class="program">gzip</strong> 兼容的压缩</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="bz2.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bz2</span></code> --- 对 <strong class="program">bzip2</strong> 压缩算法的支持</a></p>
+  </div>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="zlib.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code> --- 与 <strong class="program">gzip</strong> 兼容的压缩</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="bz2.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bz2</span></code> --- 对 <strong class="program">bzip2</strong> 压缩算法的支持</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/gzip.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/gzip.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -103,11 +139,12 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -119,7 +156,7 @@
           <a href="zlib.html" title="zlib --- 与 gzip 兼容的压缩"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -129,24 +166,32 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="archiving.html" accesskey="U">数据压缩和存档</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code> --- 对 <strong class="program">gzip</strong> 文件的支持</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -157,143 +202,161 @@
           <div class="body" role="main">
             
   <section id="module-gzip">
-<span id="gzip-support-for-gzip-files"></span><h1><a class="reference internal" href="#module-gzip" title="gzip: Interfaces for gzip compression and decompression using file objects."><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code></a> --- 对 <strong class="program">gzip</strong> 格式的支持<a class="headerlink" href="#module-gzip" title="永久链接至标题">¶</a></h1>
-<p><strong>源代码：</strong> <a class="reference external" href="https://github.com/python/cpython/tree/3.8/Lib/gzip.py">Lib/gzip.py</a></p>
+<span id="gzip-support-for-gzip-files"></span><h1 class="translated"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code> --- 对 <strong class="program">gzip</strong> 文件的支持<a class="headerlink" href="#module-gzip" title="Link to this heading">¶</a></h1>
+<p class="translated"><strong>源代码：</strong> <a class="extlink-source reference external" href="https://github.com/python/cpython/tree/3.12/Lib/gzip.py">Lib/gzip.py</a></p>
 <hr class="docutils" />
-<p>此模块提供的简单接口帮助用户压缩和解压缩文件，功能类似于 GNU 应用程序 <strong class="program">gzip</strong> 和 <strong class="program">gunzip</strong>。</p>
-<p>数据压缩由 <a class="reference internal" href="zlib.html#module-zlib" title="zlib: Low-level interface to compression and decompression routines compatible with gzip."><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code></a> 模块提供。</p>
-<p><a class="reference internal" href="#module-gzip" title="gzip: Interfaces for gzip compression and decompression using file objects."><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code></a> 模块提供 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 类和 <a class="reference internal" href="#gzip.open" title="gzip.open"><code class="xref py py-func docutils literal notranslate"><span class="pre">open()</span></code></a>、<a class="reference internal" href="#gzip.compress" title="gzip.compress"><code class="xref py py-func docutils literal notranslate"><span class="pre">compress()</span></code></a>、<a class="reference internal" href="#gzip.decompress" title="gzip.decompress"><code class="xref py py-func docutils literal notranslate"><span class="pre">decompress()</span></code></a> 几个便利的函数。<a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 类可以读写 <strong class="program">gzip</strong> 格式的文件，还能自动压缩和解压缩数据，这让操作压缩文件如同操作普通的 <a class="reference internal" href="../glossary.html#term-file-object"><span class="xref std std-term">file object</span></a> 一样方便。</p>
-<p>注意，此模块不支持部分可以被 <strong class="program">gzip</strong> 和 <strong class="program">gunzip</strong> 解压的格式，如利用 <strong class="program">compress</strong> 或 <strong class="program">pack</strong> 压缩所得的文件。</p>
-<p>这个模块定义了以下内容：</p>
-<dl class="function">
-<dt id="gzip.open">
-<code class="sig-prename descclassname">gzip.</code><code class="sig-name descname">open</code><span class="sig-paren">(</span><em class="sig-param">filename</em>, <em class="sig-param">mode='rb'</em>, <em class="sig-param">compresslevel=9</em>, <em class="sig-param">encoding=None</em>, <em class="sig-param">errors=None</em>, <em class="sig-param">newline=None</em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.open" title="永久链接至目标">¶</a></dt>
-<dd><p>以二进制方式或者文本方式打开一个 gzip 格式的压缩文件，返回一个 <a class="reference internal" href="../glossary.html#term-file-object"><span class="xref std std-term">file object</span></a>。</p>
-<p><em>filename</em> 参数可以是一个实际的文件名（一个 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a> 对象或者 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 对象），或者是一个用来读写的已存在的文件对象。</p>
-<p><em>mode</em> 参数可以是二进制模式： <code class="docutils literal notranslate"><span class="pre">'r'</span></code>, <code class="docutils literal notranslate"><span class="pre">'rb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'a'</span></code>, <code class="docutils literal notranslate"><span class="pre">'ab'</span></code>, <code class="docutils literal notranslate"><span class="pre">'w'</span></code>, <code class="docutils literal notranslate"><span class="pre">'wb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'x'</span></code> or <code class="docutils literal notranslate"><span class="pre">'xb'</span></code> , 或者是文本模式 <code class="docutils literal notranslate"><span class="pre">'rt'</span></code>, <code class="docutils literal notranslate"><span class="pre">'at'</span></code>, <code class="docutils literal notranslate"><span class="pre">'wt'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'xt'</span></code>。默认值是 <code class="docutils literal notranslate"><span class="pre">'rb'</span></code>。</p>
-<p>The <em>compresslevel</em> argument is an integer from 0 to 9, as for the
+<p class="translated">此模块提供的简单接口帮助用户压缩和解压缩文件，功能类似于 GNU 应用程序 <strong class="program">gzip</strong> 和 <strong class="program">gunzip</strong>。</p>
+<p class="translated">数据压缩由 <a class="reference internal" href="zlib.html#module-zlib" title="zlib: Low-level interface to compression and decompression routines compatible with gzip."><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code></a> 模块提供。</p>
+<p class="translated"><a class="reference internal" href="#module-gzip" title="gzip: Interfaces for gzip compression and decompression using file objects."><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code></a> 模块提供 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 类和 <a class="reference internal" href="#gzip.open" title="gzip.open"><code class="xref py py-func docutils literal notranslate"><span class="pre">open()</span></code></a>、<a class="reference internal" href="#gzip.compress" title="gzip.compress"><code class="xref py py-func docutils literal notranslate"><span class="pre">compress()</span></code></a>、<a class="reference internal" href="#gzip.decompress" title="gzip.decompress"><code class="xref py py-func docutils literal notranslate"><span class="pre">decompress()</span></code></a> 几个便利的函数。<a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 类可以读写 <strong class="program">gzip</strong> 格式的文件，还能自动压缩和解压缩数据，这让操作压缩文件如同操作普通的 <a class="reference internal" href="../glossary.html#term-file-object"><span class="xref std std-term">file object</span></a> 一样方便。</p>
+<p class="translated">注意，此模块不支持部分可以被 <strong class="program">gzip</strong> 和 <strong class="program">gunzip</strong> 解压的格式，如利用 <strong class="program">compress</strong> 或 <strong class="program">pack</strong> 压缩所得的文件。</p>
+<p class="translated">这个模块定义了以下内容：</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="gzip.open">
+<span class="sig-prename descclassname"><span class="pre">gzip.</span></span><span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'rb'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compresslevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">encoding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">errors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">newline</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.open" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">以二进制方式或者文本方式打开一个 gzip 格式的压缩文件，返回一个 <a class="reference internal" href="../glossary.html#term-file-object"><span class="xref std std-term">file object</span></a>。</p>
+<p class="translated"><em>filename</em> 参数可以是一个实际的文件名（一个 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a> 对象或者 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 对象），或者是一个用来读写的已存在的文件对象。</p>
+<p class="translated"><em>mode</em> 参数可以是二进制模式： <code class="docutils literal notranslate"><span class="pre">'r'</span></code>, <code class="docutils literal notranslate"><span class="pre">'rb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'a'</span></code>, <code class="docutils literal notranslate"><span class="pre">'ab'</span></code>, <code class="docutils literal notranslate"><span class="pre">'w'</span></code>, <code class="docutils literal notranslate"><span class="pre">'wb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'x'</span></code> or <code class="docutils literal notranslate"><span class="pre">'xb'</span></code> , 或者是文本模式 <code class="docutils literal notranslate"><span class="pre">'rt'</span></code>, <code class="docutils literal notranslate"><span class="pre">'at'</span></code>, <code class="docutils literal notranslate"><span class="pre">'wt'</span></code>, or <code class="docutils literal notranslate"><span class="pre">'xt'</span></code>。默认值是 <code class="docutils literal notranslate"><span class="pre">'rb'</span></code>。</p>
+<p class="untranslated">The <em>compresslevel</em> argument is an integer from 0 to 9, as for the
 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> constructor.</p>
-<p>对于二进制模式，这个函数等价于 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 构造器：<code class="docutils literal notranslate"><span class="pre">GzipFile(filename,</span> <span class="pre">mode,</span> <span class="pre">compresslevel)</span></code>。在这个例子中，<em>encoding</em>, <em>errors</em> 和 <em>newline</em> 三个参数一定不要设置。</p>
-<p>对于文本模式，将会创建一个 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 对象，并将它封装到一个 <a class="reference internal" href="io.html#io.TextIOWrapper" title="io.TextIOWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.TextIOWrapper</span></code></a> 实例中， 这个实例默认了指定编码，错误抓获行为和行。</p>
+<p class="translated">对于二进制模式，这个函数等价于 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 构造器：<code class="docutils literal notranslate"><span class="pre">GzipFile(filename,</span> <span class="pre">mode,</span> <span class="pre">compresslevel)</span></code>。在这个例子中，<em>encoding</em>, <em>errors</em> 和 <em>newline</em> 三个参数一定不要设置。</p>
+<p class="translated">对于文本模式，将会创建一个 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 对象，并将它封装到一个 <a class="reference internal" href="io.html#io.TextIOWrapper" title="io.TextIOWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.TextIOWrapper</span></code></a> 实例中， 这个实例默认了指定编码，错误抓获行为和行。</p>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.3 版更改: </span>支持 <em>filename</em> 为一个文件对象，支持文本模式和 <em>encoding</em>, <em>errors</em> 和 <em>newline</em> 参数。</p>
+<p><span class="versionmodified changed">在 3.3 版本发生变更: </span>支持 <em>filename</em> 为一个文件对象，支持文本模式和 <em>encoding</em>, <em>errors</em> 和 <em>newline</em> 参数。</p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.4 版更改: </span>支持 <code class="docutils literal notranslate"><span class="pre">'x'</span></code>, <code class="docutils literal notranslate"><span class="pre">'xb'</span></code> 和``'xt'`` 三种模式。</p>
+<p><span class="versionmodified changed">在 3.4 版本发生变更: </span>支持 <code class="docutils literal notranslate"><span class="pre">'x'</span></code>, <code class="docutils literal notranslate"><span class="pre">'xb'</span></code> 和 <code class="docutils literal notranslate"><span class="pre">'xt'</span></code> 三种模式。</p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.6 版更改: </span>接受一个 <a class="reference internal" href="../glossary.html#term-path-like-object"><span class="xref std std-term">path-like object</span></a>。</p>
+<p><span class="versionmodified changed">在 3.6 版本发生变更: </span>接受一个 <a class="reference internal" href="../glossary.html#term-path-like-object"><span class="xref std std-term">path-like object</span></a>。</p>
 </div>
 </dd></dl>
 
-<dl class="exception">
-<dt id="gzip.BadGzipFile">
-<em class="property">exception </em><code class="sig-prename descclassname">gzip.</code><code class="sig-name descname">BadGzipFile</code><a class="headerlink" href="#gzip.BadGzipFile" title="永久链接至目标">¶</a></dt>
-<dd><p>针对无效 gzip 文件引发的异常。 它继承自 <a class="reference internal" href="exceptions.html#OSError" title="OSError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">OSError</span></code></a>。 针对无效 gzip 文件也可能引发 <a class="reference internal" href="exceptions.html#EOFError" title="EOFError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">EOFError</span></code></a> 和 <a class="reference internal" href="zlib.html#zlib.error" title="zlib.error"><code class="xref py py-exc docutils literal notranslate"><span class="pre">zlib.error</span></code></a>。</p>
+<dl class="py exception">
+<dt class="sig sig-object py" id="gzip.BadGzipFile">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gzip.</span></span><span class="sig-name descname"><span class="pre">BadGzipFile</span></span><a class="headerlink" href="#gzip.BadGzipFile" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">针对无效 gzip 文件引发的异常。 它继承自 <a class="reference internal" href="exceptions.html#OSError" title="OSError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">OSError</span></code></a>。 针对无效 gzip 文件也可能引发 <a class="reference internal" href="exceptions.html#EOFError" title="EOFError"><code class="xref py py-exc docutils literal notranslate"><span class="pre">EOFError</span></code></a> 和 <a class="reference internal" href="zlib.html#zlib.error" title="zlib.error"><code class="xref py py-exc docutils literal notranslate"><span class="pre">zlib.error</span></code></a>。</p>
 <div class="versionadded">
-<p><span class="versionmodified added">3.8 新版功能.</span></p>
+<p><span class="versionmodified added">Added in version 3.8.</span></p>
 </div>
 </dd></dl>
 
-<dl class="class">
-<dt id="gzip.GzipFile">
-<em class="property">class </em><code class="sig-prename descclassname">gzip.</code><code class="sig-name descname">GzipFile</code><span class="sig-paren">(</span><em class="sig-param">filename=None</em>, <em class="sig-param">mode=None</em>, <em class="sig-param">compresslevel=9</em>, <em class="sig-param">fileobj=None</em>, <em class="sig-param">mtime=None</em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.GzipFile" title="永久链接至目标">¶</a></dt>
-<dd><p><a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 类的构造器支持 <code class="xref py py-meth docutils literal notranslate"><span class="pre">truncate()</span></code> 的异常，与 <a class="reference internal" href="../glossary.html#term-file-object"><span class="xref std std-term">file object</span></a> 的大多数方法非常相似。<em>fileobj</em> 和 <em>filename</em> 至少有一个不为空。</p>
-<p>新的实例基于  <em>fileobj</em>，它可以是一个普通文件，一个 <a class="reference internal" href="io.html#io.BytesIO" title="io.BytesIO"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BytesIO</span></code></a> 对象，或者任何一个与文件相似的对象。当 <em>filename</em> 是一个文件对象时，它的默认值是 <code class="docutils literal notranslate"><span class="pre">None</span></code>。</p>
-<p>当  <em>fileobj</em> 为 <code class="docutils literal notranslate"><span class="pre">None</span></code> 时， <em>filename</em> 参数只用于  <strong class="program">gzip</strong> 文件头中，这个文件有可能包含未压缩文件的源文件名。如果文件可以被识别，默认 <em>fileobj</em> 的文件名；否则默认为空字符串，在这种情况下文件头将不包含源文件名。</p>
-<p><em>mode</em> 可以是``'r'<code class="docutils literal notranslate"><span class="pre">,</span> <span class="pre">``'rb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'a'</span></code>, <code class="docutils literal notranslate"><span class="pre">'ab'</span></code>, <code class="docutils literal notranslate"><span class="pre">'w'</span></code>, <code class="docutils literal notranslate"><span class="pre">'wb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'x'</span></code>, 或者 <code class="docutils literal notranslate"><span class="pre">'xb'</span></code>，选择哪个取决于是读文件还是写文件。如果可以分辨是，默认的模式是 <em>fileobj</em>，否则为 <code class="docutils literal notranslate"><span class="pre">'rb'</span></code>。</p>
-<p>需要注意的是，文件默认使用二进制模式打开。 如果要以文本模式打开一个压缩文件，请使用 <a class="reference internal" href="#gzip.open" title="gzip.open"><code class="xref py py-func docutils literal notranslate"><span class="pre">open()</span></code></a> 方法 (或者使用 <a class="reference internal" href="io.html#io.TextIOWrapper" title="io.TextIOWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.TextIOWrapper</span></code></a> 包装 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a>)。</p>
-<p><em>compresslevel</em> 参数是一个从 <code class="docutils literal notranslate"><span class="pre">0</span></code> 到 <code class="docutils literal notranslate"><span class="pre">9</span></code> 的整数，用于控制压缩等级；<code class="docutils literal notranslate"><span class="pre">1</span></code> 最快但压缩比例最小，<code class="docutils literal notranslate"><span class="pre">9</span></code> 最慢但压缩比例最大。 <code class="docutils literal notranslate"><span class="pre">0</span></code> 不压缩。默认为 <code class="docutils literal notranslate"><span class="pre">9</span></code>。</p>
-<p><em>mtime</em> 参数是一个可选的数字时间戳用于写入流的最后修改字段，。<em>mtime</em> 只在压缩模式中使用。如果省略或者值为 <code class="docutils literal notranslate"><span class="pre">None</span></code>，则使用当前时间。更多细节，详见 <a class="reference internal" href="#gzip.GzipFile.mtime" title="gzip.GzipFile.mtime"><code class="xref py py-attr docutils literal notranslate"><span class="pre">mtime</span></code></a> 属性。</p>
-<p>调用 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">close()</span></code> 方法不会关闭 <em>fileobj</em>，因为你可以希望增加其它内容到已经压缩的数中。你可以将一个 <a class="reference internal" href="io.html#io.BytesIO" title="io.BytesIO"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BytesIO</span></code></a> 对象作为 <em>fileobj</em>，也可以使用 <a class="reference internal" href="io.html#io.BytesIO" title="io.BytesIO"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BytesIO</span></code></a> 的 <a class="reference internal" href="io.html#io.BytesIO.getvalue" title="io.BytesIO.getvalue"><code class="xref py py-meth docutils literal notranslate"><span class="pre">getvalue()</span></code></a> 方法从内存缓存中恢复数据。</p>
-<p><a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 支持 <a class="reference internal" href="io.html#io.BufferedIOBase" title="io.BufferedIOBase"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BufferedIOBase</span></code></a> 类的接口, 包括迭代和 <a class="reference internal" href="../reference/compound_stmts.html#with"><code class="xref std std-keyword docutils literal notranslate"><span class="pre">with</span></code></a> 语句。只有 <code class="xref py py-meth docutils literal notranslate"><span class="pre">truncate()</span></code> 方法没有实现。</p>
-<p><a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 还提供了以下的方法和属性:</p>
-<dl class="method">
-<dt id="gzip.GzipFile.peek">
-<code class="sig-name descname">peek</code><span class="sig-paren">(</span><em class="sig-param">n</em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.GzipFile.peek" title="永久链接至目标">¶</a></dt>
-<dd><p>在不移动文件指针的情况下读取  <em>n</em> 个未压缩字节。最多只有一个单独的读取流来服务这个方法调用。返回的字节数不一定刚好等于要求的数量。</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="gzip.GzipFile">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">gzip.</span></span><span class="sig-name descname"><span class="pre">GzipFile</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filename</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compresslevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">9</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fileobj</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mtime</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.GzipFile" title="Link to this definition">¶</a></dt>
+<dd><p class="translated"><a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 类的构造器，它模拟了 <a class="reference internal" href="../glossary.html#term-file-object"><span class="xref std std-term">file object</span></a> 的大部分方法，但 <a class="reference internal" href="io.html#io.IOBase.truncate" title="io.IOBase.truncate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">truncate()</span></code></a> 方法除外。 <em>fileobj</em> 和 <em>filename</em> 中至少有一个必须为非空值。</p>
+<p class="translated">新的实例基于  <em>fileobj</em>，它可以是一个普通文件，一个 <a class="reference internal" href="io.html#io.BytesIO" title="io.BytesIO"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BytesIO</span></code></a> 对象，或者任何一个与文件相似的对象。当 <em>filename</em> 是一个文件对象时，它的默认值是 <code class="docutils literal notranslate"><span class="pre">None</span></code>。</p>
+<p class="translated">当  <em>fileobj</em> 为 <code class="docutils literal notranslate"><span class="pre">None</span></code> 时， <em>filename</em> 参数只用于  <strong class="program">gzip</strong> 文件头中，这个文件有可能包含未压缩文件的源文件名。如果文件可以被识别，默认 <em>fileobj</em> 的文件名；否则默认为空字符串，在这种情况下文件头将不包含源文件名。</p>
+<p class="translated"><em>mode</em> 参数可以是 <code class="docutils literal notranslate"><span class="pre">'r'</span></code>, <code class="docutils literal notranslate"><span class="pre">'rb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'a'</span></code>, <code class="docutils literal notranslate"><span class="pre">'ab'</span></code>, <code class="docutils literal notranslate"><span class="pre">'w'</span></code>, <code class="docutils literal notranslate"><span class="pre">'wb'</span></code>, <code class="docutils literal notranslate"><span class="pre">'x'</span></code> 或 <code class="docutils literal notranslate"><span class="pre">'xb'</span></code> 中的一个，具体取决于文件将被读取还是被写入。 如果可识别则默认为 <em>fileobj</em> 的模式；否则默认为 <code class="docutils literal notranslate"><span class="pre">'rb'</span></code>。 在未来的 Python 发布版中将不再使用 <em>fileobj</em> 的模式。 最好总是指定 <em>mode</em> 为写入模式。</p>
+<p class="translated">需要注意的是，文件默认使用二进制模式打开。 如果要以文本模式打开一个压缩文件，请使用 <a class="reference internal" href="#gzip.open" title="gzip.open"><code class="xref py py-func docutils literal notranslate"><span class="pre">open()</span></code></a> 方法 (或者使用 <a class="reference internal" href="io.html#io.TextIOWrapper" title="io.TextIOWrapper"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.TextIOWrapper</span></code></a> 包装 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a>)。</p>
+<p class="translated"><em>compresslevel</em> 参数是一个从 <code class="docutils literal notranslate"><span class="pre">0</span></code> 到 <code class="docutils literal notranslate"><span class="pre">9</span></code> 的整数，用于控制压缩等级；<code class="docutils literal notranslate"><span class="pre">1</span></code> 最快但压缩比例最小，<code class="docutils literal notranslate"><span class="pre">9</span></code> 最慢但压缩比例最大。 <code class="docutils literal notranslate"><span class="pre">0</span></code> 不压缩。默认为 <code class="docutils literal notranslate"><span class="pre">9</span></code>。</p>
+<p class="translated"><em>mtime</em> 参数是一个可选的数字时间戳用于写入流的最后修改字段，。<em>mtime</em> 只在压缩模式中使用。如果省略或者值为 <code class="docutils literal notranslate"><span class="pre">None</span></code>，则使用当前时间。更多细节，详见 <a class="reference internal" href="#gzip.GzipFile.mtime" title="gzip.GzipFile.mtime"><code class="xref py py-attr docutils literal notranslate"><span class="pre">mtime</span></code></a> 属性。</p>
+<p class="translated">调用 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 对象的 <code class="xref py py-meth docutils literal notranslate"><span class="pre">close()</span></code> 方法不会关闭 <em>fileobj</em>，因为你可能希望增加其它内容到已经缩的数据中。 你还可以传入一个 <a class="reference internal" href="io.html#io.BytesIO" title="io.BytesIO"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BytesIO</span></code></a> 对象作为 <em>fileobj</em> 打开，并使用 <a class="reference internal" href="io.html#io.BytesIO" title="io.BytesIO"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BytesIO</span></code></a> 对象的 <a class="reference internal" href="io.html#io.BytesIO.getvalue" title="io.BytesIO.getvalue"><code class="xref py py-meth docutils literal notranslate"><span class="pre">getvalue()</span></code></a> 方法提取所得到的内存缓冲区数据。</p>
+<p class="translated"><a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 支持 <a class="reference internal" href="io.html#io.BufferedIOBase" title="io.BufferedIOBase"><code class="xref py py-class docutils literal notranslate"><span class="pre">io.BufferedIOBase</span></code></a> 接口，包括迭代和 <a class="reference internal" href="../reference/compound_stmts.html#with"><code class="xref std std-keyword docutils literal notranslate"><span class="pre">with</span></code></a> 语句。 只有 <a class="reference internal" href="io.html#io.IOBase.truncate" title="io.IOBase.truncate"><code class="xref py py-meth docutils literal notranslate"><span class="pre">truncate()</span></code></a> 方法未被实现。</p>
+<p class="translated"><a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 还提供了以下的方法和属性:</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="gzip.GzipFile.peek">
+<span class="sig-name descname"><span class="pre">peek</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.GzipFile.peek" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">在不移动文件指针的情况下读取  <em>n</em> 个未压缩字节。最多只有一个单独的读取流来服务这个方法调用。返回的字节数不一定刚好等于要求的数量。</p>
 <div class="admonition note">
-<p class="admonition-title">注解</p>
-<p>调用 <a class="reference internal" href="#gzip.GzipFile.peek" title="gzip.GzipFile.peek"><code class="xref py py-meth docutils literal notranslate"><span class="pre">peek()</span></code></a> 并没有改变 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 的文件指针，它可能改变潜在文件对象(例如： <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 使用 <em>fileobj</em> 参数进行初始化)。</p>
+<p class="admonition-title">备注</p>
+<p class="translated">调用 <a class="reference internal" href="#gzip.GzipFile.peek" title="gzip.GzipFile.peek"><code class="xref py py-meth docutils literal notranslate"><span class="pre">peek()</span></code></a> 并没有改变 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 的文件指针，它可能改变潜在文件对象(例如： <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 使用 <em>fileobj</em> 参数进行初始化)。</p>
 </div>
 <div class="versionadded">
-<p><span class="versionmodified added">3.2 新版功能.</span></p>
+<p><span class="versionmodified added">Added in version 3.2.</span></p>
 </div>
 </dd></dl>
 
-<dl class="attribute">
-<dt id="gzip.GzipFile.mtime">
-<code class="sig-name descname">mtime</code><a class="headerlink" href="#gzip.GzipFile.mtime" title="永久链接至目标">¶</a></dt>
-<dd><p>在解压的过程中，最后修改时间字段的值可能来自于这个属性，以整数的形式出现。在读取任何文件头信息前，初始值为 <code class="docutils literal notranslate"><span class="pre">None</span></code>。</p>
-<p>所有 <strong class="program">gzip</strong> 东方压缩流中必须包含时间戳这个字段。以便于像 <strong class="program">gunzip</strong>这样的程序可以使用时间戳。格式与 <a class="reference internal" href="time.html#time.time" title="time.time"><code class="xref py py-func docutils literal notranslate"><span class="pre">time.time()</span></code></a> 的返回值和  <a class="reference internal" href="os.html#os.stat" title="os.stat"><code class="xref py py-func docutils literal notranslate"><span class="pre">os.stat()</span></code></a> 对象的 <a class="reference internal" href="os.html#os.stat_result.st_mtime" title="os.stat_result.st_mtime"><code class="xref py py-attr docutils literal notranslate"><span class="pre">st_mtime</span></code></a> 属性值一样。</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gzip.GzipFile.mtime">
+<span class="sig-name descname"><span class="pre">mtime</span></span><a class="headerlink" href="#gzip.GzipFile.mtime" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">在解压的过程中，最后修改时间字段的值可能来自于这个属性，以整数的形式出现。在读取任何文件头信息前，初始值为 <code class="docutils literal notranslate"><span class="pre">None</span></code>。</p>
+<p class="translated">所有 <strong class="program">gzip</strong> 东方压缩流中必须包含时间戳这个字段。以便于像 <strong class="program">gunzip</strong>这样的程序可以使用时间戳。格式与 <a class="reference internal" href="time.html#time.time" title="time.time"><code class="xref py py-func docutils literal notranslate"><span class="pre">time.time()</span></code></a> 的返回值和  <a class="reference internal" href="os.html#os.stat" title="os.stat"><code class="xref py py-func docutils literal notranslate"><span class="pre">os.stat()</span></code></a> 对象的 <a class="reference internal" href="os.html#os.stat_result.st_mtime" title="os.stat_result.st_mtime"><code class="xref py py-attr docutils literal notranslate"><span class="pre">st_mtime</span></code></a> 属性值一样。</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="gzip.GzipFile.name">
+<span class="sig-name descname"><span class="pre">name</span></span><a class="headerlink" href="#gzip.GzipFile.name" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">指向磁盘上 gzip 文件的路径，为 <a class="reference internal" href="stdtypes.html#str" title="str"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a> 或 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 对象。 等价于原始输入路径上 <a class="reference internal" href="os.html#os.fspath" title="os.fspath"><code class="xref py py-func docutils literal notranslate"><span class="pre">os.fspath()</span></code></a> 的输出，不带其他标准化、解析或扩展。</p>
 </dd></dl>
 
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.1 版更改: </span>支持 <a class="reference internal" href="../reference/compound_stmts.html#with"><code class="xref std std-keyword docutils literal notranslate"><span class="pre">with</span></code></a> 语句，构造器参数 <em>mtime</em> 和  <a class="reference internal" href="#gzip.GzipFile.mtime" title="gzip.GzipFile.mtime"><code class="xref py py-attr docutils literal notranslate"><span class="pre">mtime</span></code></a> 属性。</p>
+<p><span class="versionmodified changed">在 3.1 版本发生变更: </span>支持 <a class="reference internal" href="../reference/compound_stmts.html#with"><code class="xref std std-keyword docutils literal notranslate"><span class="pre">with</span></code></a> 语句，构造器参数 <em>mtime</em> 和  <a class="reference internal" href="#gzip.GzipFile.mtime" title="gzip.GzipFile.mtime"><code class="xref py py-attr docutils literal notranslate"><span class="pre">mtime</span></code></a> 属性。</p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.2 版更改: </span>添加了对零填充和不可搜索文件的支持。</p>
+<p><span class="versionmodified changed">在 3.2 版本发生变更: </span>添加了对零填充和不可搜索文件的支持。</p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.3 版更改: </span>实现 <a class="reference internal" href="io.html#io.BufferedIOBase.read1" title="io.BufferedIOBase.read1"><code class="xref py py-meth docutils literal notranslate"><span class="pre">io.BufferedIOBase.read1()</span></code></a>  方法。</p>
+<p><span class="versionmodified changed">在 3.3 版本发生变更: </span>实现 <a class="reference internal" href="io.html#io.BufferedIOBase.read1" title="io.BufferedIOBase.read1"><code class="xref py py-meth docutils literal notranslate"><span class="pre">io.BufferedIOBase.read1()</span></code></a>  方法。</p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.4 版更改: </span>支持 <code class="docutils literal notranslate"><span class="pre">'x'</span></code> and <code class="docutils literal notranslate"><span class="pre">'xb'</span></code> 两种模式。</p>
+<p><span class="versionmodified changed">在 3.4 版本发生变更: </span>支持 <code class="docutils literal notranslate"><span class="pre">'x'</span></code> and <code class="docutils literal notranslate"><span class="pre">'xb'</span></code> 两种模式。</p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.5 版更改: </span>支持写入任意 <a class="reference internal" href="../glossary.html#term-bytes-like-object"><span class="xref std std-term">bytes-like objects</span></a>。<a class="reference internal" href="io.html#io.BufferedIOBase.read" title="io.BufferedIOBase.read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">read()</span></code></a> 方法可以接受``None``为参数。</p>
+<p><span class="versionmodified changed">在 3.5 版本发生变更: </span>支持写入任意 <a class="reference internal" href="../glossary.html#term-bytes-like-object"><span class="xref std std-term">bytes-like objects</span></a>。<a class="reference internal" href="io.html#io.BufferedIOBase.read" title="io.BufferedIOBase.read"><code class="xref py py-meth docutils literal notranslate"><span class="pre">read()</span></code></a> 方法可以接受 <code class="docutils literal notranslate"><span class="pre">None</span></code> 为参数。</p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.6 版更改: </span>接受一个 <a class="reference internal" href="../glossary.html#term-path-like-object"><span class="xref std std-term">path-like object</span></a>。</p>
+<p><span class="versionmodified changed">在 3.6 版本发生变更: </span>接受一个 <a class="reference internal" href="../glossary.html#term-path-like-object"><span class="xref std std-term">path-like object</span></a>。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.12 版本发生变更: </span>移除 <code class="docutils literal notranslate"><span class="pre">filename</span></code> 属性，改用 <a class="reference internal" href="#gzip.GzipFile.name" title="gzip.GzipFile.name"><code class="xref py py-attr docutils literal notranslate"><span class="pre">name</span></code></a> 属性。</p>
+</div>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">自 3.9 版本弃用: </span>打开 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 用于写入而不指定 <em>mode</em> 参数的做法已被弃用。</p>
 </div>
 </dd></dl>
 
-<dl class="function">
-<dt id="gzip.compress">
-<code class="sig-prename descclassname">gzip.</code><code class="sig-name descname">compress</code><span class="sig-paren">(</span><em class="sig-param">data</em>, <em class="sig-param">compresslevel=9</em>, <em class="sig-param">*</em>, <em class="sig-param">mtime=None</em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.compress" title="永久链接至目标">¶</a></dt>
-<dd><p>压缩 <em>data</em>，返回一个包含压缩数据的 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 对象。 <em>compresslevel</em> 和 <em>mtime</em> 的含义与上文中 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 构造器的相同。</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="gzip.compress">
+<span class="sig-prename descclassname"><span class="pre">gzip.</span></span><span class="sig-name descname"><span class="pre">compress</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">compresslevel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">9</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">mtime</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.compress" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">压缩 <em>data</em>，返回一个包含已压缩数据的 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 对象。 <em>compresslevel</em> 和 <em>mtime</em> 与上述 <a class="reference internal" href="#gzip.GzipFile" title="gzip.GzipFile"><code class="xref py py-class docutils literal notranslate"><span class="pre">GzipFile</span></code></a> 构造器的对应参数含义相同。 当 <em>mtime</em> 设为 <code class="docutils literal notranslate"><span class="pre">0</span></code> 时，此函数将等价于 <a class="reference internal" href="zlib.html#zlib.compress" title="zlib.compress"><code class="xref py py-func docutils literal notranslate"><span class="pre">zlib.compress()</span></code></a> 的 <em>wbits</em> 设为 <code class="docutils literal notranslate"><span class="pre">31</span></code>。 zlib 函数速度更快一些。</p>
 <div class="versionadded">
-<p><span class="versionmodified added">3.2 新版功能.</span></p>
+<p><span class="versionmodified added">Added in version 3.2.</span></p>
 </div>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.8 版更改: </span>添加了 <em>mtime</em> 形参用于可重复的输出。</p>
+<p><span class="versionmodified changed">在 3.8 版本发生变更: </span>添加了 <em>mtime</em> 形参用于可重复的输出。</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.11 版本发生变更: </span>速度的提升是通过一次性压缩所有数据代替流的方式来达成的。 将 <em>mtime</em> 设为 <code class="docutils literal notranslate"><span class="pre">0</span></code> 的调用被委托给 <a class="reference internal" href="zlib.html#zlib.compress" title="zlib.compress"><code class="xref py py-func docutils literal notranslate"><span class="pre">zlib.compress()</span></code></a> 以加快速度。 在此情况下输出可能包含一个 gzip 标头 &quot;OS&quot; 字节值而不是下层 zlib 实现所提供的 255 &quot;unknown&quot;。</p>
 </div>
 </dd></dl>
 
-<dl class="function">
-<dt id="gzip.decompress">
-<code class="sig-prename descclassname">gzip.</code><code class="sig-name descname">decompress</code><span class="sig-paren">(</span><em class="sig-param">data</em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.decompress" title="永久链接至目标">¶</a></dt>
-<dd><p>解压缩 <em>data</em>，返回一个包含未压缩数据的 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 对象。</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="gzip.decompress">
+<span class="sig-prename descclassname"><span class="pre">gzip.</span></span><span class="sig-name descname"><span class="pre">decompress</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#gzip.decompress" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">解压缩 <em>data</em>，返回一个包含已解压数据的 <a class="reference internal" href="stdtypes.html#bytes" title="bytes"><code class="xref py py-class docutils literal notranslate"><span class="pre">bytes</span></code></a> 对象。 此函数可以解压缩多成员的 gzip 数据（即多个 gzip 块拼接在一起）。 当数据确定只包含一个成员时则 <em>wbits</em> 设为 31 的 <a class="reference internal" href="zlib.html#zlib.decompress" title="zlib.decompress"><code class="xref py py-func docutils literal notranslate"><span class="pre">zlib.decompress()</span></code></a> 函数更快一些。</p>
 <div class="versionadded">
-<p><span class="versionmodified added">3.2 新版功能.</span></p>
+<p><span class="versionmodified added">Added in version 3.2.</span></p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">在 3.11 版本发生变更: </span>通过一次性解压缩全部数据而不是通过流方式提高了速度。</p>
 </div>
 </dd></dl>
 
 <section id="examples-of-usage">
-<span id="gzip-usage-examples"></span><h2>用法示例<a class="headerlink" href="#examples-of-usage" title="永久链接至标题">¶</a></h2>
-<p>读取压缩文件示例：</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">gzip</span>
+<span id="gzip-usage-examples"></span><h2 class="translated">用法示例<a class="headerlink" href="#examples-of-usage" title="Link to this heading">¶</a></h2>
+<p class="translated">读取压缩文件示例：</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
 <span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;/home/joe/file.txt.gz&#39;</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
     <span class="n">file_content</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
 </pre></div>
 </div>
-<p>创建GZIP 文件示例：</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">gzip</span>
+<p class="translated">创建GZIP 文件示例：</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
 <span class="n">content</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;Lots of content here&quot;</span>
 <span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;/home/joe/file.txt.gz&#39;</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
     <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>使用 GZIP 压缩已有的文件示例：</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">gzip</span>
-<span class="kn">import</span> <span class="nn">shutil</span>
+<p class="translated">使用 GZIP 压缩已有的文件示例：</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">shutil</span>
 <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;/home/joe/file.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f_in</span><span class="p">:</span>
     <span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s1">&#39;/home/joe/file.txt.gz&#39;</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f_out</span><span class="p">:</span>
         <span class="n">shutil</span><span class="o">.</span><span class="n">copyfileobj</span><span class="p">(</span><span class="n">f_in</span><span class="p">,</span> <span class="n">f_out</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>使用 GZIP 压缩二进制字符串示例：</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">gzip</span>
+<p class="translated">使用 GZIP 压缩二进制字符串示例：</p>
+<div class="translated highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">gzip</span>
 <span class="n">s_in</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;Lots of content here&quot;</span>
 <span class="n">s_out</span> <span class="o">=</span> <span class="n">gzip</span><span class="o">.</span><span class="n">compress</span><span class="p">(</span><span class="n">s_in</span><span class="p">)</span>
 </pre></div>
@@ -301,48 +364,48 @@
 <div class="admonition seealso">
 <p class="admonition-title">参见</p>
 <dl class="simple">
-<dt>模块 <a class="reference internal" href="zlib.html#module-zlib" title="zlib: Low-level interface to compression and decompression routines compatible with gzip."><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code></a></dt><dd><p>支持 <strong class="program">gzip</strong> 格式所需要的基本压缩模块。</p>
+<dt class="translated">模块 <a class="reference internal" href="zlib.html#module-zlib" title="zlib: Low-level interface to compression and decompression routines compatible with gzip."><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code></a></dt><dd><p class="translated">支持 <strong class="program">gzip</strong> 格式所需要的基本压缩模块。</p>
 </dd>
 </dl>
 </div>
 </section>
 <section id="command-line-interface">
-<h2>命令行界面<a class="headerlink" href="#command-line-interface" title="永久链接至标题">¶</a></h2>
-<p><a class="reference internal" href="#module-gzip" title="gzip: Interfaces for gzip compression and decompression using file objects."><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code></a> 模块提供了简单的命令行界面用于压缩和解压缩文件。</p>
-<p>在执行后 <a class="reference internal" href="#module-gzip" title="gzip: Interfaces for gzip compression and decompression using file objects."><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code></a> 模块会保留输入文件。</p>
+<span id="gzip-cli"></span><h2 class="translated">命令行界面<a class="headerlink" href="#command-line-interface" title="Link to this heading">¶</a></h2>
+<p class="translated"><a class="reference internal" href="#module-gzip" title="gzip: Interfaces for gzip compression and decompression using file objects."><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code></a> 模块提供了简单的命令行界面用于压缩和解压缩文件。</p>
+<p class="translated">在执行后 <a class="reference internal" href="#module-gzip" title="gzip: Interfaces for gzip compression and decompression using file objects."><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code></a> 模块会保留输入文件。</p>
 <div class="versionchanged">
-<p><span class="versionmodified changed">在 3.8 版更改: </span>添加一个带有用法说明的新命令行界面命令。 默认情况下，当你要执行 CLI 时，默认压缩等级为 6。</p>
+<p><span class="versionmodified changed">在 3.8 版本发生变更: </span>添加一个带有用法说明的新命令行界面命令。 默认情况下，当你要执行 CLI 时，默认压缩等级为 6。</p>
 </div>
 <section id="command-line-options">
-<h3>命令行选项<a class="headerlink" href="#command-line-options" title="永久链接至标题">¶</a></h3>
-<dl class="cmdoption">
-<dt id="cmdoption-gzip-arg-file">
-<code class="sig-name descname">file</code><code class="sig-prename descclassname"></code><a class="headerlink" href="#cmdoption-gzip-arg-file" title="永久链接至目标">¶</a></dt>
-<dd><p>如果 <em>file</em> 未指定，则从 <a class="reference internal" href="sys.html#sys.stdin" title="sys.stdin"><code class="xref py py-attr docutils literal notranslate"><span class="pre">sys.stdin</span></code></a> 读取。</p>
+<h3 class="translated">命令行选项<a class="headerlink" href="#command-line-options" title="Link to this heading">¶</a></h3>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-gzip-arg-file">
+<span class="sig-name descname"><span class="pre">file</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-gzip-arg-file" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">如果未指定 <em>file</em>，则从 <a class="reference internal" href="sys.html#sys.stdin" title="sys.stdin"><code class="xref py py-data docutils literal notranslate"><span class="pre">sys.stdin</span></code></a> 读取。</p>
 </dd></dl>
 
-<dl class="cmdoption">
-<dt id="cmdoption-gzip-fast">
-<code class="sig-name descname">--fast</code><code class="sig-prename descclassname"></code><a class="headerlink" href="#cmdoption-gzip-fast" title="永久链接至目标">¶</a></dt>
-<dd><p>指明最快速的压缩方法（较低压缩率）。</p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-gzip-fast">
+<span class="sig-name descname"><span class="pre">--fast</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-gzip-fast" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">指明最快速的压缩方法（较低压缩率）。</p>
 </dd></dl>
 
-<dl class="cmdoption">
-<dt id="cmdoption-gzip-best">
-<code class="sig-name descname">--best</code><code class="sig-prename descclassname"></code><a class="headerlink" href="#cmdoption-gzip-best" title="永久链接至目标">¶</a></dt>
-<dd><p>指明最慢速的压缩方法（最高压缩率）。</p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-gzip-best">
+<span class="sig-name descname"><span class="pre">--best</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-gzip-best" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">指明最慢速的压缩方法（最高压缩率）。</p>
 </dd></dl>
 
-<dl class="cmdoption">
-<dt id="cmdoption-gzip-d">
-<code class="sig-name descname">-d</code><code class="sig-prename descclassname"></code><code class="sig-prename descclassname">, </code><code class="sig-name descname">--decompress</code><code class="sig-prename descclassname"></code><a class="headerlink" href="#cmdoption-gzip-d" title="永久链接至目标">¶</a></dt>
-<dd><p>解压缩给定的文件。</p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-gzip-d">
+<span id="cmdoption-gzip-decompress"></span><span class="sig-name descname"><span class="pre">-d</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--decompress</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-gzip-d" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">解压缩给定的文件。</p>
 </dd></dl>
 
-<dl class="cmdoption">
-<dt id="cmdoption-gzip-h">
-<code class="sig-name descname">-h</code><code class="sig-prename descclassname"></code><code class="sig-prename descclassname">, </code><code class="sig-name descname">--help</code><code class="sig-prename descclassname"></code><a class="headerlink" href="#cmdoption-gzip-h" title="永久链接至目标">¶</a></dt>
-<dd><p>显示帮助消息。</p>
+<dl class="std option">
+<dt class="sig sig-object std" id="cmdoption-gzip-h">
+<span id="cmdoption-gzip-help"></span><span class="sig-name descname"><span class="pre">-h</span></span><span class="sig-prename descclassname"></span><span class="sig-prename descclassname"><span class="pre">,</span> </span><span class="sig-name descname"><span class="pre">--help</span></span><span class="sig-prename descclassname"></span><a class="headerlink" href="#cmdoption-gzip-h" title="Link to this definition">¶</a></dt>
+<dd><p class="translated">显示帮助消息。</p>
 </dd></dl>
 
 </section>
@@ -350,14 +413,16 @@
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h3><a href="../contents.html">目录</a></h3>
-  <ul>
-<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code> --- 对 <strong class="program">gzip</strong> 格式的支持</a><ul>
+  <div>
+    <h3><a href="../contents.html">目录</a></h3>
+    <ul>
+<li><a class="reference internal" href="#"><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code> --- 对 <strong class="program">gzip</strong> 文件的支持</a><ul>
 <li><a class="reference internal" href="#examples-of-usage">用法示例</a></li>
 <li><a class="reference internal" href="#command-line-interface">命令行界面</a><ul>
 <li><a class="reference internal" href="#command-line-options">命令行选项</a></li>
@@ -367,32 +432,41 @@
 </li>
 </ul>
 
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="zlib.html"
-                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code> --- 与 <strong class="program">gzip</strong> 兼容的压缩</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="bz2.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bz2</span></code> --- 对 <strong class="program">bzip2</strong> 压缩算法的支持</a></p>
+  </div>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="zlib.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">zlib</span></code> --- 与 <strong class="program">gzip</strong> 兼容的压缩</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="bz2.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bz2</span></code> --- 对 <strong class="program">bzip2</strong> 压缩算法的支持</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/gzip.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/gzip.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -404,7 +478,7 @@
           <a href="zlib.html" title="zlib --- 与 gzip 兼容的压缩"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -414,47 +488,59 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="archiving.html" >数据压缩和存档</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><code class="xref py py-mod docutils literal notranslate"><span class="pre">gzip</span></code> --- 对 <strong class="program">gzip</strong> 文件的支持</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

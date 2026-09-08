@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="10. 完整的语法规范" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/reference/grammar.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="这是完整的 Python 语法规范，直接提取自用于生成 CPython 解析器的语法 (参见 Grammar/python.gram)。 这里显示的版本省略了有关代码生成和错误恢复的细节。 该标记法是 EBNF 和 PEG 的混合体。 特别地，&amp; 后跟一个符号、形符或带括号的分组来表示肯定型前视（即要求匹配但不消耗字符）。而! 表示否定型前视（即要求 不 匹配）。 我们使用| 分隔符..." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_reference_grammar_6dfce2d1.png" />
+<meta property="og:image:alt" content="这是完整的 Python 语法规范，直接提取自用于生成 CPython 解析器的语法 (参见 Grammar/python.gram)。 这里显示的版本省略了有关代码生成和错误恢复的细节。 该标记法是 EBNF 和 PEG 的混合体。 特别地，&amp; 后跟一个符号、形符或带括号的分组来表示肯定型前视（即要求匹配但不消耗字符）。而! 表示否定型前视（即要求 不 匹配）。 我们使用| 分隔符..." />
+<meta name="description" content="这是完整的 Python 语法规范，直接提取自用于生成 CPython 解析器的语法 (参见 Grammar/python.gram)。 这里显示的版本省略了有关代码生成和错误恢复的细节。 该标记法是 EBNF 和 PEG 的混合体。 特别地，&amp; 后跟一个符号、形符或带括号的分组来表示肯定型前视（即要求匹配但不消耗字符）。而! 表示否定型前视（即要求 不 匹配）。 我们使用| 分隔符..." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>10. 完整的语法规范 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10. 完整的语法规范 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
     <link rel="next" title="Python 标准库" href="../library/index.html" />
-    <link rel="prev" title="9. 最高层级组件" href="toplevel_components.html" />
-    <link rel="canonical" href="https://docs.python.org/3/reference/grammar.html" />
+    <link rel="prev" title="9. 顶级组件" href="toplevel_components.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/reference/grammar.html">
       
     
 
@@ -41,48 +56,67 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="toplevel_components.html"
-                        title="上一章"><span class="section-number">9. </span>最高层级组件</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="../library/index.html"
-                        title="下一章">Python 标准库</a></p>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="toplevel_components.html"
+                          title="上一章"><span class="section-number">9. </span>顶级组件</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="../library/index.html"
+                          title="下一章">Python 标准库</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/reference/grammar.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/reference/grammar.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -91,11 +125,12 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -104,10 +139,10 @@
           <a href="../library/index.html" title="Python 标准库"
              accesskey="N">下一页</a> |</li>
         <li class="right" >
-          <a href="toplevel_components.html" title="9. 最高层级组件"
+          <a href="toplevel_components.html" title="9. 顶级组件"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -117,23 +152,31 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
-          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">Python语言参考</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">Python 语言参考手册</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><span class="section-number">10. </span>完整的语法规范</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -144,251 +187,953 @@
           <div class="body" role="main">
             
   <section id="full-grammar-specification">
-<h1><span class="section-number">10. </span>完整的语法规范<a class="headerlink" href="#full-grammar-specification" title="永久链接至标题">¶</a></h1>
-<p>这是完整的Python语法，它被送入解析器生成器，以生成解析Python源文件的解析器：</p>
-<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Grammar for Python</span>
+<span id="id1"></span><h1 class="translated"><span class="section-number">10. </span>完整的语法规范<a class="headerlink" href="#full-grammar-specification" title="Link to this heading">¶</a></h1>
+<p class="translated">这是完整的 Python 语法规范，直接提取自用于生成 CPython 解析器的语法 (参见 <a class="extlink-source reference external" href="https://github.com/python/cpython/tree/3.12/Grammar/python.gram">Grammar/python.gram</a>)。 这里显示的版本省略了有关代码生成和错误恢复的细节。</p>
+<p class="translated">该标记法是 <a class="reference external" href="https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form">EBNF</a> 和 <a class="reference external" href="https://en.wikipedia.org/wiki/Parsing_expression_grammar">PEG</a> 的混合体。 特别地，<code class="docutils literal notranslate"><span class="pre">&amp;</span></code> 后跟一个符号、形符或带括号的分组来表示肯定型前视（即要求匹配但不消耗字符）。而 <code class="docutils literal notranslate"><span class="pre">!</span></code> 表示否定型前视（即要求 <em>不</em> 匹配）。 我们使用 <code class="docutils literal notranslate"><span class="pre">|</span></code> 分隔符来表示 PEG 的“有序选择”（在传统 PEG 语法中为 <code class="docutils literal notranslate"><span class="pre">/</span></code> 写法）。 请参阅 <span class="target" id="index-2"></span><a class="pep reference external" href="https://peps.python.org/pep-0617/"><strong>PEP 617</strong></a> 了解有关该语法规则的更多细节。</p>
+<div class="untranslated highlight-peg notranslate"><div class="highlight"><pre><span></span><span class="c c-Singleline"># PEG grammar for Python</span>
 
-<span class="c1"># NOTE WELL: You should also follow all the steps listed at</span>
-<span class="c1"># https://devguide.python.org/grammar/</span>
 
-<span class="c1"># Start symbols for the grammar:</span>
-<span class="c1">#       single_input is a single interactive statement;</span>
-<span class="c1">#       file_input is a module or sequence of commands read from an input file;</span>
-<span class="c1">#       eval_input is the input for the eval() functions.</span>
-<span class="c1">#       func_type_input is a PEP 484 Python 2 function type comment</span>
-<span class="c1"># NB: compound_stmt in single_input is followed by extra NEWLINE!</span>
-<span class="c1"># NB: due to the way TYPE_COMMENT is tokenized it will always be followed by a NEWLINE</span>
-<span class="n">single_input</span><span class="p">:</span> <span class="n">NEWLINE</span> <span class="o">|</span> <span class="n">simple_stmt</span> <span class="o">|</span> <span class="n">compound_stmt</span> <span class="n">NEWLINE</span>
-<span class="n">file_input</span><span class="p">:</span> <span class="p">(</span><span class="n">NEWLINE</span> <span class="o">|</span> <span class="n">stmt</span><span class="p">)</span><span class="o">*</span> <span class="n">ENDMARKER</span>
-<span class="n">eval_input</span><span class="p">:</span> <span class="n">testlist</span> <span class="n">NEWLINE</span><span class="o">*</span> <span class="n">ENDMARKER</span>
 
-<span class="n">decorator</span><span class="p">:</span> <span class="s1">&#39;@&#39;</span> <span class="n">dotted_name</span> <span class="p">[</span> <span class="s1">&#39;(&#39;</span> <span class="p">[</span><span class="n">arglist</span><span class="p">]</span> <span class="s1">&#39;)&#39;</span> <span class="p">]</span> <span class="n">NEWLINE</span>
-<span class="n">decorators</span><span class="p">:</span> <span class="n">decorator</span><span class="o">+</span>
-<span class="n">decorated</span><span class="p">:</span> <span class="n">decorators</span> <span class="p">(</span><span class="n">classdef</span> <span class="o">|</span> <span class="n">funcdef</span> <span class="o">|</span> <span class="n">async_funcdef</span><span class="p">)</span>
+<span class="c c-Singleline"># ========================= START OF THE GRAMMAR =========================</span>
 
-<span class="n">async_funcdef</span><span class="p">:</span> <span class="n">ASYNC</span> <span class="n">funcdef</span>
-<span class="n">funcdef</span><span class="p">:</span> <span class="s1">&#39;def&#39;</span> <span class="n">NAME</span> <span class="n">parameters</span> <span class="p">[</span><span class="s1">&#39;-&gt;&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="s1">&#39;:&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">func_body_suite</span>
+<span class="c c-Singleline"># General grammatical elements and rules:</span>
+<span class="c c-Singleline">#</span>
+<span class="c c-Singleline"># * Strings with double quotes (&quot;) denote SOFT KEYWORDS</span>
+<span class="c c-Singleline"># * Strings with single quotes (&#39;) denote KEYWORDS</span>
+<span class="c c-Singleline"># * Upper case names (NAME) denote tokens in the Grammar/Tokens file</span>
+<span class="c c-Singleline"># * Rule names starting with &quot;invalid_&quot; are used for specialized syntax errors</span>
+<span class="c c-Singleline">#     - These rules are NOT used in the first pass of the parser.</span>
+<span class="c c-Singleline">#     - Only if the first pass fails to parse, a second pass including the invalid</span>
+<span class="c c-Singleline">#       rules will be executed.</span>
+<span class="c c-Singleline">#     - If the parser fails in the second phase with a generic syntax error, the</span>
+<span class="c c-Singleline">#       location of the generic failure of the first pass will be used (this avoids</span>
+<span class="c c-Singleline">#       reporting incorrect locations due to the invalid rules).</span>
+<span class="c c-Singleline">#     - The order of the alternatives involving invalid rules matter</span>
+<span class="c c-Singleline">#       (like any rule in PEG).</span>
+<span class="c c-Singleline">#</span>
+<span class="c c-Singleline"># Grammar Syntax (see PEP 617 for more information):</span>
+<span class="c c-Singleline">#</span>
+<span class="c c-Singleline"># rule_name: expression</span>
+<span class="c c-Singleline">#   Optionally, a type can be included right after the rule name, which</span>
+<span class="c c-Singleline">#   specifies the return type of the C or Python function corresponding to the</span>
+<span class="c c-Singleline">#   rule:</span>
+<span class="c c-Singleline"># rule_name[return_type]: expression</span>
+<span class="c c-Singleline">#   If the return type is omitted, then a void * is returned in C and an Any in</span>
+<span class="c c-Singleline">#   Python.</span>
+<span class="c c-Singleline"># e1 e2</span>
+<span class="c c-Singleline">#   Match e1, then match e2.</span>
+<span class="c c-Singleline"># e1 | e2</span>
+<span class="c c-Singleline">#   Match e1 or e2.</span>
+<span class="c c-Singleline">#   The first alternative can also appear on the line after the rule name for</span>
+<span class="c c-Singleline">#   formatting purposes. In that case, a | must be used before the first</span>
+<span class="c c-Singleline">#   alternative, like so:</span>
+<span class="c c-Singleline">#       rule_name[return_type]:</span>
+<span class="c c-Singleline">#            | first_alt</span>
+<span class="c c-Singleline">#            | second_alt</span>
+<span class="c c-Singleline"># ( e )</span>
+<span class="c c-Singleline">#   Match e (allows also to use other operators in the group like &#39;(e)*&#39;)</span>
+<span class="c c-Singleline"># [ e ] or e?</span>
+<span class="c c-Singleline">#   Optionally match e.</span>
+<span class="c c-Singleline"># e*</span>
+<span class="c c-Singleline">#   Match zero or more occurrences of e.</span>
+<span class="c c-Singleline"># e+</span>
+<span class="c c-Singleline">#   Match one or more occurrences of e.</span>
+<span class="c c-Singleline"># s.e+</span>
+<span class="c c-Singleline">#   Match one or more occurrences of e, separated by s. The generated parse tree</span>
+<span class="c c-Singleline">#   does not include the separator. This is otherwise identical to (e (s e)*).</span>
+<span class="c c-Singleline"># &amp;e</span>
+<span class="c c-Singleline">#   Succeed if e can be parsed, without consuming any input.</span>
+<span class="c c-Singleline"># !e</span>
+<span class="c c-Singleline">#   Fail if e can be parsed, without consuming any input.</span>
+<span class="c c-Singleline"># ~</span>
+<span class="c c-Singleline">#   Commit to the current alternative, even if it fails to parse.</span>
+<span class="c c-Singleline">#</span>
 
-<span class="n">parameters</span><span class="p">:</span> <span class="s1">&#39;(&#39;</span> <span class="p">[</span><span class="n">typedargslist</span><span class="p">]</span> <span class="s1">&#39;)&#39;</span>
+<span class="c c-Singleline"># STARTING RULES</span>
+<span class="c c-Singleline"># ==============</span>
 
-<span class="c1"># The following definition for typedarglist is equivalent to this set of rules:</span>
-<span class="c1">#</span>
-<span class="c1">#     arguments = argument (&#39;,&#39; [TYPE_COMMENT] argument)*</span>
-<span class="c1">#     argument = tfpdef [&#39;=&#39; test]</span>
-<span class="c1">#     kwargs = &#39;**&#39; tfpdef [&#39;,&#39;] [TYPE_COMMENT]</span>
-<span class="c1">#     args = &#39;*&#39; [tfpdef]</span>
-<span class="c1">#     kwonly_kwargs = (&#39;,&#39; [TYPE_COMMENT] argument)* (TYPE_COMMENT | [&#39;,&#39; [TYPE_COMMENT] [kwargs]])</span>
-<span class="c1">#     args_kwonly_kwargs = args kwonly_kwargs | kwargs</span>
-<span class="c1">#     poskeyword_args_kwonly_kwargs = arguments ( TYPE_COMMENT | [&#39;,&#39; [TYPE_COMMENT] [args_kwonly_kwargs]])</span>
-<span class="c1">#     typedargslist_no_posonly  = poskeyword_args_kwonly_kwargs | args_kwonly_kwargs</span>
-<span class="c1">#     typedarglist = (arguments &#39;,&#39; [TYPE_COMMENT] &#39;/&#39; [&#39;,&#39; [[TYPE_COMMENT] typedargslist_no_posonly]])|(typedargslist_no_posonly)&quot;</span>
-<span class="c1">#</span>
-<span class="c1"># It needs to be fully expanded to allow our LL(1) parser to work on it.</span>
+<span class="nf">file</span><span class="p">:</span> <span class="p">[</span><span class="nf">statements</span><span class="p">]</span> ENDMARKER 
+<span class="nf">interactive</span><span class="p">:</span> <span class="nf">statement_newline</span> 
+<span class="nf">eval</span><span class="p">:</span> <span class="nf">expressions</span> NEWLINE<span class="o">*</span> ENDMARKER 
+<span class="nf">func_type</span><span class="p">:</span> &#39;(&#39; <span class="p">[</span><span class="nf">type_expressions</span><span class="p">]</span> &#39;)&#39; &#39;-&gt;&#39; <span class="nf">expression</span> NEWLINE<span class="o">*</span> ENDMARKER 
 
-<span class="n">typedargslist</span><span class="p">:</span> <span class="p">(</span>
-  <span class="p">(</span><span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="s1">&#39;/&#39;</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="p">(</span>
-        <span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">(</span><span class="n">TYPE_COMMENT</span> <span class="o">|</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="p">[</span>
-        <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">tfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">(</span><span class="n">TYPE_COMMENT</span> <span class="o">|</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]])</span>
-      <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]])</span>
-  <span class="o">|</span> <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">tfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">(</span><span class="n">TYPE_COMMENT</span> <span class="o">|</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]])</span>
-  <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]]</span> <span class="p">)</span>
-<span class="o">|</span>  <span class="p">(</span><span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">(</span><span class="n">TYPE_COMMENT</span> <span class="o">|</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="p">[</span>
-   <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">tfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">(</span><span class="n">TYPE_COMMENT</span> <span class="o">|</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]])</span>
-  <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]])</span>
-  <span class="o">|</span> <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">tfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">(</span><span class="n">TYPE_COMMENT</span> <span class="o">|</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]])</span>
-  <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">tfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">])</span>
-<span class="p">)</span>
-<span class="n">tfpdef</span><span class="p">:</span> <span class="n">NAME</span> <span class="p">[</span><span class="s1">&#39;:&#39;</span> <span class="n">test</span><span class="p">]</span>
+<span class="c c-Singleline"># GENERAL STATEMENTS</span>
+<span class="c c-Singleline"># ==================</span>
 
-<span class="c1"># The following definition for varargslist is equivalent to this set of rules:</span>
-<span class="c1">#</span>
-<span class="c1">#     arguments = argument (&#39;,&#39; argument )*</span>
-<span class="c1">#     argument = vfpdef [&#39;=&#39; test]</span>
-<span class="c1">#     kwargs = &#39;**&#39; vfpdef [&#39;,&#39;]</span>
-<span class="c1">#     args = &#39;*&#39; [vfpdef]</span>
-<span class="c1">#     kwonly_kwargs = (&#39;,&#39; argument )* [&#39;,&#39; [kwargs]]</span>
-<span class="c1">#     args_kwonly_kwargs = args kwonly_kwargs | kwargs</span>
-<span class="c1">#     poskeyword_args_kwonly_kwargs = arguments [&#39;,&#39; [args_kwonly_kwargs]]</span>
-<span class="c1">#     vararglist_no_posonly = poskeyword_args_kwonly_kwargs | args_kwonly_kwargs</span>
-<span class="c1">#     varargslist = arguments &#39;,&#39; &#39;/&#39; [&#39;,&#39;[(vararglist_no_posonly)]] | (vararglist_no_posonly)</span>
-<span class="c1">#</span>
-<span class="c1"># It needs to be fully expanded to allow our LL(1) parser to work on it.</span>
+<span class="nf">statements</span><span class="p">:</span> <span class="nf">statement</span><span class="o">+</span> 
 
-<span class="n">varargslist</span><span class="p">:</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span> <span class="p">](</span><span class="s1">&#39;,&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="s1">&#39;,&#39;</span> <span class="s1">&#39;/&#39;</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span> <span class="p">(</span><span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span>
-        <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">vfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]]]</span>
-      <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]]]</span>
-  <span class="o">|</span> <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">vfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]]]</span>
-  <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">])</span> <span class="p">]]</span> <span class="o">|</span> <span class="p">(</span><span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span>
-        <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">vfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]]]</span>
-      <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]]]</span>
-  <span class="o">|</span> <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">vfpdef</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="n">test</span><span class="p">])</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]]]</span>
-  <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">vfpdef</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span>
-<span class="p">)</span>
-<span class="n">vfpdef</span><span class="p">:</span> <span class="n">NAME</span>
+<span class="nf">statement</span><span class="p">:</span> <span class="nf">compound_stmt</span>  <span class="o">|</span> <span class="nf">simple_stmts</span> 
 
-<span class="n">stmt</span><span class="p">:</span> <span class="n">simple_stmt</span> <span class="o">|</span> <span class="n">compound_stmt</span>
-<span class="n">simple_stmt</span><span class="p">:</span> <span class="n">small_stmt</span> <span class="p">(</span><span class="s1">&#39;;&#39;</span> <span class="n">small_stmt</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;;&#39;</span><span class="p">]</span> <span class="n">NEWLINE</span>
-<span class="n">small_stmt</span><span class="p">:</span> <span class="p">(</span><span class="n">expr_stmt</span> <span class="o">|</span> <span class="n">del_stmt</span> <span class="o">|</span> <span class="n">pass_stmt</span> <span class="o">|</span> <span class="n">flow_stmt</span> <span class="o">|</span>
-             <span class="n">import_stmt</span> <span class="o">|</span> <span class="n">global_stmt</span> <span class="o">|</span> <span class="n">nonlocal_stmt</span> <span class="o">|</span> <span class="n">assert_stmt</span><span class="p">)</span>
-<span class="n">expr_stmt</span><span class="p">:</span> <span class="n">testlist_star_expr</span> <span class="p">(</span><span class="n">annassign</span> <span class="o">|</span> <span class="n">augassign</span> <span class="p">(</span><span class="n">yield_expr</span><span class="o">|</span><span class="n">testlist</span><span class="p">)</span> <span class="o">|</span>
-                     <span class="p">[(</span><span class="s1">&#39;=&#39;</span> <span class="p">(</span><span class="n">yield_expr</span><span class="o">|</span><span class="n">testlist_star_expr</span><span class="p">))</span><span class="o">+</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]]</span> <span class="p">)</span>
-<span class="n">annassign</span><span class="p">:</span> <span class="s1">&#39;:&#39;</span> <span class="n">test</span> <span class="p">[</span><span class="s1">&#39;=&#39;</span> <span class="p">(</span><span class="n">yield_expr</span><span class="o">|</span><span class="n">testlist_star_expr</span><span class="p">)]</span>
-<span class="n">testlist_star_expr</span><span class="p">:</span> <span class="p">(</span><span class="n">test</span><span class="o">|</span><span class="n">star_expr</span><span class="p">)</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">(</span><span class="n">test</span><span class="o">|</span><span class="n">star_expr</span><span class="p">))</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span>
-<span class="n">augassign</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;+=&#39;</span> <span class="o">|</span> <span class="s1">&#39;-=&#39;</span> <span class="o">|</span> <span class="s1">&#39;*=&#39;</span> <span class="o">|</span> <span class="s1">&#39;@=&#39;</span> <span class="o">|</span> <span class="s1">&#39;/=&#39;</span> <span class="o">|</span> <span class="s1">&#39;%=&#39;</span> <span class="o">|</span> <span class="s1">&#39;&amp;=&#39;</span> <span class="o">|</span> <span class="s1">&#39;|=&#39;</span> <span class="o">|</span> <span class="s1">&#39;^=&#39;</span> <span class="o">|</span>
-            <span class="s1">&#39;&lt;&lt;=&#39;</span> <span class="o">|</span> <span class="s1">&#39;&gt;&gt;=&#39;</span> <span class="o">|</span> <span class="s1">&#39;**=&#39;</span> <span class="o">|</span> <span class="s1">&#39;//=&#39;</span><span class="p">)</span>
-<span class="c1"># For normal and annotated assignments, additional restrictions enforced by the interpreter</span>
-<span class="n">del_stmt</span><span class="p">:</span> <span class="s1">&#39;del&#39;</span> <span class="n">exprlist</span>
-<span class="n">pass_stmt</span><span class="p">:</span> <span class="s1">&#39;pass&#39;</span>
-<span class="n">flow_stmt</span><span class="p">:</span> <span class="n">break_stmt</span> <span class="o">|</span> <span class="n">continue_stmt</span> <span class="o">|</span> <span class="n">return_stmt</span> <span class="o">|</span> <span class="n">raise_stmt</span> <span class="o">|</span> <span class="n">yield_stmt</span>
-<span class="n">break_stmt</span><span class="p">:</span> <span class="s1">&#39;break&#39;</span>
-<span class="n">continue_stmt</span><span class="p">:</span> <span class="s1">&#39;continue&#39;</span>
-<span class="n">return_stmt</span><span class="p">:</span> <span class="s1">&#39;return&#39;</span> <span class="p">[</span><span class="n">testlist_star_expr</span><span class="p">]</span>
-<span class="n">yield_stmt</span><span class="p">:</span> <span class="n">yield_expr</span>
-<span class="n">raise_stmt</span><span class="p">:</span> <span class="s1">&#39;raise&#39;</span> <span class="p">[</span><span class="n">test</span> <span class="p">[</span><span class="s1">&#39;from&#39;</span> <span class="n">test</span><span class="p">]]</span>
-<span class="n">import_stmt</span><span class="p">:</span> <span class="n">import_name</span> <span class="o">|</span> <span class="n">import_from</span>
-<span class="n">import_name</span><span class="p">:</span> <span class="s1">&#39;import&#39;</span> <span class="n">dotted_as_names</span>
-<span class="c1"># note below: the (&#39;.&#39; | &#39;...&#39;) is necessary because &#39;...&#39; is tokenized as ELLIPSIS</span>
-<span class="n">import_from</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;from&#39;</span> <span class="p">((</span><span class="s1">&#39;.&#39;</span> <span class="o">|</span> <span class="s1">&#39;...&#39;</span><span class="p">)</span><span class="o">*</span> <span class="n">dotted_name</span> <span class="o">|</span> <span class="p">(</span><span class="s1">&#39;.&#39;</span> <span class="o">|</span> <span class="s1">&#39;...&#39;</span><span class="p">)</span><span class="o">+</span><span class="p">)</span>
-              <span class="s1">&#39;import&#39;</span> <span class="p">(</span><span class="s1">&#39;*&#39;</span> <span class="o">|</span> <span class="s1">&#39;(&#39;</span> <span class="n">import_as_names</span> <span class="s1">&#39;)&#39;</span> <span class="o">|</span> <span class="n">import_as_names</span><span class="p">))</span>
-<span class="n">import_as_name</span><span class="p">:</span> <span class="n">NAME</span> <span class="p">[</span><span class="s1">&#39;as&#39;</span> <span class="n">NAME</span><span class="p">]</span>
-<span class="n">dotted_as_name</span><span class="p">:</span> <span class="n">dotted_name</span> <span class="p">[</span><span class="s1">&#39;as&#39;</span> <span class="n">NAME</span><span class="p">]</span>
-<span class="n">import_as_names</span><span class="p">:</span> <span class="n">import_as_name</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">import_as_name</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span>
-<span class="n">dotted_as_names</span><span class="p">:</span> <span class="n">dotted_as_name</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">dotted_as_name</span><span class="p">)</span><span class="o">*</span>
-<span class="n">dotted_name</span><span class="p">:</span> <span class="n">NAME</span> <span class="p">(</span><span class="s1">&#39;.&#39;</span> <span class="n">NAME</span><span class="p">)</span><span class="o">*</span>
-<span class="n">global_stmt</span><span class="p">:</span> <span class="s1">&#39;global&#39;</span> <span class="n">NAME</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">NAME</span><span class="p">)</span><span class="o">*</span>
-<span class="n">nonlocal_stmt</span><span class="p">:</span> <span class="s1">&#39;nonlocal&#39;</span> <span class="n">NAME</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">NAME</span><span class="p">)</span><span class="o">*</span>
-<span class="n">assert_stmt</span><span class="p">:</span> <span class="s1">&#39;assert&#39;</span> <span class="n">test</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="n">test</span><span class="p">]</span>
+<span class="nf">statement_newline</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">compound_stmt</span> NEWLINE 
+    <span class="o">|</span> <span class="nf">simple_stmts</span>
+    <span class="o">|</span> NEWLINE 
+    <span class="o">|</span> ENDMARKER 
 
-<span class="n">compound_stmt</span><span class="p">:</span> <span class="n">if_stmt</span> <span class="o">|</span> <span class="n">while_stmt</span> <span class="o">|</span> <span class="n">for_stmt</span> <span class="o">|</span> <span class="n">try_stmt</span> <span class="o">|</span> <span class="n">with_stmt</span> <span class="o">|</span> <span class="n">funcdef</span> <span class="o">|</span> <span class="n">classdef</span> <span class="o">|</span> <span class="n">decorated</span> <span class="o">|</span> <span class="n">async_stmt</span>
-<span class="n">async_stmt</span><span class="p">:</span> <span class="n">ASYNC</span> <span class="p">(</span><span class="n">funcdef</span> <span class="o">|</span> <span class="n">with_stmt</span> <span class="o">|</span> <span class="n">for_stmt</span><span class="p">)</span>
-<span class="n">if_stmt</span><span class="p">:</span> <span class="s1">&#39;if&#39;</span> <span class="n">namedexpr_test</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span> <span class="p">(</span><span class="s1">&#39;elif&#39;</span> <span class="n">namedexpr_test</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;else&#39;</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">]</span>
-<span class="n">while_stmt</span><span class="p">:</span> <span class="s1">&#39;while&#39;</span> <span class="n">namedexpr_test</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span> <span class="p">[</span><span class="s1">&#39;else&#39;</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">]</span>
-<span class="n">for_stmt</span><span class="p">:</span> <span class="s1">&#39;for&#39;</span> <span class="n">exprlist</span> <span class="s1">&#39;in&#39;</span> <span class="n">testlist</span> <span class="s1">&#39;:&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">suite</span> <span class="p">[</span><span class="s1">&#39;else&#39;</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">]</span>
-<span class="n">try_stmt</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;try&#39;</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span>
-           <span class="p">((</span><span class="n">except_clause</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">)</span><span class="o">+</span>
-            <span class="p">[</span><span class="s1">&#39;else&#39;</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">]</span>
-            <span class="p">[</span><span class="s1">&#39;finally&#39;</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">]</span> <span class="o">|</span>
-           <span class="s1">&#39;finally&#39;</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span><span class="p">))</span>
-<span class="n">with_stmt</span><span class="p">:</span> <span class="s1">&#39;with&#39;</span> <span class="n">with_item</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">with_item</span><span class="p">)</span><span class="o">*</span>  <span class="s1">&#39;:&#39;</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span><span class="p">]</span> <span class="n">suite</span>
-<span class="n">with_item</span><span class="p">:</span> <span class="n">test</span> <span class="p">[</span><span class="s1">&#39;as&#39;</span> <span class="n">expr</span><span class="p">]</span>
-<span class="c1"># NB compile.c makes sure that the default except clause is last</span>
-<span class="n">except_clause</span><span class="p">:</span> <span class="s1">&#39;except&#39;</span> <span class="p">[</span><span class="n">test</span> <span class="p">[</span><span class="s1">&#39;as&#39;</span> <span class="n">NAME</span><span class="p">]]</span>
-<span class="n">suite</span><span class="p">:</span> <span class="n">simple_stmt</span> <span class="o">|</span> <span class="n">NEWLINE</span> <span class="n">INDENT</span> <span class="n">stmt</span><span class="o">+</span> <span class="n">DEDENT</span>
+<span class="nf">simple_stmts</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">simple_stmt</span> !&#39;;&#39; NEWLINE  <span class="c c-Singleline"># Not needed, there for speedup</span>
+    <span class="o">|</span> &#39;;&#39;<span class="o">.</span><span class="nf">simple_stmt</span><span class="o">+</span> <span class="p">[</span>&#39;;&#39;<span class="p">]</span> NEWLINE 
 
-<span class="n">namedexpr_test</span><span class="p">:</span> <span class="n">test</span> <span class="p">[</span><span class="s1">&#39;:=&#39;</span> <span class="n">test</span><span class="p">]</span>
-<span class="n">test</span><span class="p">:</span> <span class="n">or_test</span> <span class="p">[</span><span class="s1">&#39;if&#39;</span> <span class="n">or_test</span> <span class="s1">&#39;else&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="o">|</span> <span class="n">lambdef</span>
-<span class="n">test_nocond</span><span class="p">:</span> <span class="n">or_test</span> <span class="o">|</span> <span class="n">lambdef_nocond</span>
-<span class="n">lambdef</span><span class="p">:</span> <span class="s1">&#39;lambda&#39;</span> <span class="p">[</span><span class="n">varargslist</span><span class="p">]</span> <span class="s1">&#39;:&#39;</span> <span class="n">test</span>
-<span class="n">lambdef_nocond</span><span class="p">:</span> <span class="s1">&#39;lambda&#39;</span> <span class="p">[</span><span class="n">varargslist</span><span class="p">]</span> <span class="s1">&#39;:&#39;</span> <span class="n">test_nocond</span>
-<span class="n">or_test</span><span class="p">:</span> <span class="n">and_test</span> <span class="p">(</span><span class="s1">&#39;or&#39;</span> <span class="n">and_test</span><span class="p">)</span><span class="o">*</span>
-<span class="n">and_test</span><span class="p">:</span> <span class="n">not_test</span> <span class="p">(</span><span class="s1">&#39;and&#39;</span> <span class="n">not_test</span><span class="p">)</span><span class="o">*</span>
-<span class="n">not_test</span><span class="p">:</span> <span class="s1">&#39;not&#39;</span> <span class="n">not_test</span> <span class="o">|</span> <span class="n">comparison</span>
-<span class="n">comparison</span><span class="p">:</span> <span class="n">expr</span> <span class="p">(</span><span class="n">comp_op</span> <span class="n">expr</span><span class="p">)</span><span class="o">*</span>
-<span class="c1"># &lt;&gt; isn&#39;t actually a valid comparison operator in Python. It&#39;s here for the</span>
-<span class="c1"># sake of a __future__ import described in PEP 401 (which really works :-)</span>
-<span class="n">comp_op</span><span class="p">:</span> <span class="s1">&#39;&lt;&#39;</span><span class="o">|</span><span class="s1">&#39;&gt;&#39;</span><span class="o">|</span><span class="s1">&#39;==&#39;</span><span class="o">|</span><span class="s1">&#39;&gt;=&#39;</span><span class="o">|</span><span class="s1">&#39;&lt;=&#39;</span><span class="o">|</span><span class="s1">&#39;&lt;&gt;&#39;</span><span class="o">|</span><span class="s1">&#39;!=&#39;</span><span class="o">|</span><span class="s1">&#39;in&#39;</span><span class="o">|</span><span class="s1">&#39;not&#39;</span> <span class="s1">&#39;in&#39;</span><span class="o">|</span><span class="s1">&#39;is&#39;</span><span class="o">|</span><span class="s1">&#39;is&#39;</span> <span class="s1">&#39;not&#39;</span>
-<span class="n">star_expr</span><span class="p">:</span> <span class="s1">&#39;*&#39;</span> <span class="n">expr</span>
-<span class="n">expr</span><span class="p">:</span> <span class="n">xor_expr</span> <span class="p">(</span><span class="s1">&#39;|&#39;</span> <span class="n">xor_expr</span><span class="p">)</span><span class="o">*</span>
-<span class="n">xor_expr</span><span class="p">:</span> <span class="n">and_expr</span> <span class="p">(</span><span class="s1">&#39;^&#39;</span> <span class="n">and_expr</span><span class="p">)</span><span class="o">*</span>
-<span class="n">and_expr</span><span class="p">:</span> <span class="n">shift_expr</span> <span class="p">(</span><span class="s1">&#39;&amp;&#39;</span> <span class="n">shift_expr</span><span class="p">)</span><span class="o">*</span>
-<span class="n">shift_expr</span><span class="p">:</span> <span class="n">arith_expr</span> <span class="p">((</span><span class="s1">&#39;&lt;&lt;&#39;</span><span class="o">|</span><span class="s1">&#39;&gt;&gt;&#39;</span><span class="p">)</span> <span class="n">arith_expr</span><span class="p">)</span><span class="o">*</span>
-<span class="n">arith_expr</span><span class="p">:</span> <span class="n">term</span> <span class="p">((</span><span class="s1">&#39;+&#39;</span><span class="o">|</span><span class="s1">&#39;-&#39;</span><span class="p">)</span> <span class="n">term</span><span class="p">)</span><span class="o">*</span>
-<span class="n">term</span><span class="p">:</span> <span class="n">factor</span> <span class="p">((</span><span class="s1">&#39;*&#39;</span><span class="o">|</span><span class="s1">&#39;@&#39;</span><span class="o">|</span><span class="s1">&#39;/&#39;</span><span class="o">|</span><span class="s1">&#39;%&#39;</span><span class="o">|</span><span class="s1">&#39;//&#39;</span><span class="p">)</span> <span class="n">factor</span><span class="p">)</span><span class="o">*</span>
-<span class="n">factor</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;+&#39;</span><span class="o">|</span><span class="s1">&#39;-&#39;</span><span class="o">|</span><span class="s1">&#39;~&#39;</span><span class="p">)</span> <span class="n">factor</span> <span class="o">|</span> <span class="n">power</span>
-<span class="n">power</span><span class="p">:</span> <span class="n">atom_expr</span> <span class="p">[</span><span class="s1">&#39;**&#39;</span> <span class="n">factor</span><span class="p">]</span>
-<span class="n">atom_expr</span><span class="p">:</span> <span class="p">[</span><span class="n">AWAIT</span><span class="p">]</span> <span class="n">atom</span> <span class="n">trailer</span><span class="o">*</span>
-<span class="n">atom</span><span class="p">:</span> <span class="p">(</span><span class="s1">&#39;(&#39;</span> <span class="p">[</span><span class="n">yield_expr</span><span class="o">|</span><span class="n">testlist_comp</span><span class="p">]</span> <span class="s1">&#39;)&#39;</span> <span class="o">|</span>
-       <span class="s1">&#39;[&#39;</span> <span class="p">[</span><span class="n">testlist_comp</span><span class="p">]</span> <span class="s1">&#39;]&#39;</span> <span class="o">|</span>
-       <span class="s1">&#39;{&#39;</span> <span class="p">[</span><span class="n">dictorsetmaker</span><span class="p">]</span> <span class="s1">&#39;}&#39;</span> <span class="o">|</span>
-       <span class="n">NAME</span> <span class="o">|</span> <span class="n">NUMBER</span> <span class="o">|</span> <span class="n">STRING</span><span class="o">+</span> <span class="o">|</span> <span class="s1">&#39;...&#39;</span> <span class="o">|</span> <span class="s1">&#39;None&#39;</span> <span class="o">|</span> <span class="s1">&#39;True&#39;</span> <span class="o">|</span> <span class="s1">&#39;False&#39;</span><span class="p">)</span>
-<span class="n">testlist_comp</span><span class="p">:</span> <span class="p">(</span><span class="n">namedexpr_test</span><span class="o">|</span><span class="n">star_expr</span><span class="p">)</span> <span class="p">(</span> <span class="n">comp_for</span> <span class="o">|</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">(</span><span class="n">namedexpr_test</span><span class="o">|</span><span class="n">star_expr</span><span class="p">))</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span> <span class="p">)</span>
-<span class="n">trailer</span><span class="p">:</span> <span class="s1">&#39;(&#39;</span> <span class="p">[</span><span class="n">arglist</span><span class="p">]</span> <span class="s1">&#39;)&#39;</span> <span class="o">|</span> <span class="s1">&#39;[&#39;</span> <span class="n">subscriptlist</span> <span class="s1">&#39;]&#39;</span> <span class="o">|</span> <span class="s1">&#39;.&#39;</span> <span class="n">NAME</span>
-<span class="n">subscriptlist</span><span class="p">:</span> <span class="n">subscript</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">subscript</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span>
-<span class="n">subscript</span><span class="p">:</span> <span class="n">test</span> <span class="o">|</span> <span class="p">[</span><span class="n">test</span><span class="p">]</span> <span class="s1">&#39;:&#39;</span> <span class="p">[</span><span class="n">test</span><span class="p">]</span> <span class="p">[</span><span class="n">sliceop</span><span class="p">]</span>
-<span class="n">sliceop</span><span class="p">:</span> <span class="s1">&#39;:&#39;</span> <span class="p">[</span><span class="n">test</span><span class="p">]</span>
-<span class="n">exprlist</span><span class="p">:</span> <span class="p">(</span><span class="n">expr</span><span class="o">|</span><span class="n">star_expr</span><span class="p">)</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">(</span><span class="n">expr</span><span class="o">|</span><span class="n">star_expr</span><span class="p">))</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span>
-<span class="n">testlist</span><span class="p">:</span> <span class="n">test</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">test</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span>
-<span class="n">dictorsetmaker</span><span class="p">:</span> <span class="p">(</span> <span class="p">((</span><span class="n">test</span> <span class="s1">&#39;:&#39;</span> <span class="n">test</span> <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">expr</span><span class="p">)</span>
-                   <span class="p">(</span><span class="n">comp_for</span> <span class="o">|</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">(</span><span class="n">test</span> <span class="s1">&#39;:&#39;</span> <span class="n">test</span> <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">expr</span><span class="p">))</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]))</span> <span class="o">|</span>
-                  <span class="p">((</span><span class="n">test</span> <span class="o">|</span> <span class="n">star_expr</span><span class="p">)</span>
-                   <span class="p">(</span><span class="n">comp_for</span> <span class="o">|</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="p">(</span><span class="n">test</span> <span class="o">|</span> <span class="n">star_expr</span><span class="p">))</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]))</span> <span class="p">)</span>
+<span class="c c-Singleline"># NOTE: assignment MUST precede expression, else parsing a simple assignment</span>
+<span class="c c-Singleline"># will throw a SyntaxError.</span>
+<span class="nf">simple_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">assignment</span>
+    <span class="o">|</span> <span class="nf">type_alias</span>
+    <span class="o">|</span> <span class="nf">star_expressions</span> 
+    <span class="o">|</span> <span class="nf">return_stmt</span>
+    <span class="o">|</span> <span class="nf">import_stmt</span>
+    <span class="o">|</span> <span class="nf">raise_stmt</span>
+    <span class="o">|</span> <span class="k">&#39;pass&#39;</span> 
+    <span class="o">|</span> <span class="nf">del_stmt</span>
+    <span class="o">|</span> <span class="nf">yield_stmt</span>
+    <span class="o">|</span> <span class="nf">assert_stmt</span>
+    <span class="o">|</span> <span class="k">&#39;break&#39;</span> 
+    <span class="o">|</span> <span class="k">&#39;continue&#39;</span> 
+    <span class="o">|</span> <span class="nf">global_stmt</span>
+    <span class="o">|</span> <span class="nf">nonlocal_stmt</span>
 
-<span class="n">classdef</span><span class="p">:</span> <span class="s1">&#39;class&#39;</span> <span class="n">NAME</span> <span class="p">[</span><span class="s1">&#39;(&#39;</span> <span class="p">[</span><span class="n">arglist</span><span class="p">]</span> <span class="s1">&#39;)&#39;</span><span class="p">]</span> <span class="s1">&#39;:&#39;</span> <span class="n">suite</span>
+<span class="nf">compound_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">function_def</span>
+    <span class="o">|</span> <span class="nf">if_stmt</span>
+    <span class="o">|</span> <span class="nf">class_def</span>
+    <span class="o">|</span> <span class="nf">with_stmt</span>
+    <span class="o">|</span> <span class="nf">for_stmt</span>
+    <span class="o">|</span> <span class="nf">try_stmt</span>
+    <span class="o">|</span> <span class="nf">while_stmt</span>
+    <span class="o">|</span> <span class="nf">match_stmt</span>
 
-<span class="n">arglist</span><span class="p">:</span> <span class="n">argument</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">argument</span><span class="p">)</span><span class="o">*</span>  <span class="p">[</span><span class="s1">&#39;,&#39;</span><span class="p">]</span>
+<span class="c c-Singleline"># SIMPLE STATEMENTS</span>
+<span class="c c-Singleline"># =================</span>
 
-<span class="c1"># The reason that keywords are test nodes instead of NAME is that using NAME</span>
-<span class="c1"># results in an ambiguity. ast.c makes sure it&#39;s a NAME.</span>
-<span class="c1"># &quot;test &#39;=&#39; test&quot; is really &quot;keyword &#39;=&#39; test&quot;, but we have no such token.</span>
-<span class="c1"># These need to be in a single rule to avoid grammar that is ambiguous</span>
-<span class="c1"># to our LL(1) parser. Even though &#39;test&#39; includes &#39;*expr&#39; in star_expr,</span>
-<span class="c1"># we explicitly match &#39;*&#39; here, too, to give it proper precedence.</span>
-<span class="c1"># Illegal combinations and orderings are blocked in ast.c:</span>
-<span class="c1"># multiple (test comp_for) arguments are blocked; keyword unpackings</span>
-<span class="c1"># that precede iterable unpackings are blocked; etc.</span>
-<span class="n">argument</span><span class="p">:</span> <span class="p">(</span> <span class="n">test</span> <span class="p">[</span><span class="n">comp_for</span><span class="p">]</span> <span class="o">|</span>
-            <span class="n">test</span> <span class="s1">&#39;:=&#39;</span> <span class="n">test</span> <span class="o">|</span>
-            <span class="n">test</span> <span class="s1">&#39;=&#39;</span> <span class="n">test</span> <span class="o">|</span>
-            <span class="s1">&#39;**&#39;</span> <span class="n">test</span> <span class="o">|</span>
-            <span class="s1">&#39;*&#39;</span> <span class="n">test</span> <span class="p">)</span>
+<span class="c c-Singleline"># NOTE: annotated_rhs may start with &#39;yield&#39;; yield_expr must start with &#39;yield&#39;</span>
+<span class="nf">assignment</span><span class="p">:</span>
+    <span class="o">|</span> NAME &#39;:&#39; <span class="nf">expression</span> <span class="p">[</span>&#39;=&#39; <span class="nf">annotated_rhs</span> <span class="p">]</span> 
+    <span class="o">|</span> <span class="p">(</span>&#39;(&#39; <span class="nf">single_target</span> &#39;)&#39; 
+         <span class="o">|</span> <span class="nf">single_subscript_attribute_target</span><span class="p">)</span> &#39;:&#39; <span class="nf">expression</span> <span class="p">[</span>&#39;=&#39; <span class="nf">annotated_rhs</span> <span class="p">]</span> 
+    <span class="o">|</span> <span class="p">(</span><span class="nf">star_targets</span> &#39;=&#39; <span class="p">)</span><span class="o">+</span> <span class="p">(</span><span class="nf">yield_expr</span> <span class="o">|</span> <span class="nf">star_expressions</span><span class="p">)</span> !&#39;=&#39; <span class="p">[</span>TYPE_COMMENT<span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">single_target</span> <span class="nf">augassign</span> ~ <span class="p">(</span><span class="nf">yield_expr</span> <span class="o">|</span> <span class="nf">star_expressions</span><span class="p">)</span> 
 
-<span class="n">comp_iter</span><span class="p">:</span> <span class="n">comp_for</span> <span class="o">|</span> <span class="n">comp_if</span>
-<span class="n">sync_comp_for</span><span class="p">:</span> <span class="s1">&#39;for&#39;</span> <span class="n">exprlist</span> <span class="s1">&#39;in&#39;</span> <span class="n">or_test</span> <span class="p">[</span><span class="n">comp_iter</span><span class="p">]</span>
-<span class="n">comp_for</span><span class="p">:</span> <span class="p">[</span><span class="n">ASYNC</span><span class="p">]</span> <span class="n">sync_comp_for</span>
-<span class="n">comp_if</span><span class="p">:</span> <span class="s1">&#39;if&#39;</span> <span class="n">test_nocond</span> <span class="p">[</span><span class="n">comp_iter</span><span class="p">]</span>
+<span class="nf">annotated_rhs</span><span class="p">:</span> <span class="nf">yield_expr</span> <span class="o">|</span> <span class="nf">star_expressions</span>
 
-<span class="c1"># not used in grammar, but may appear in &quot;node&quot; passed from Parser to Compiler</span>
-<span class="n">encoding_decl</span><span class="p">:</span> <span class="n">NAME</span>
+<span class="nf">augassign</span><span class="p">:</span>
+    <span class="o">|</span> &#39;+=&#39; 
+    <span class="o">|</span> &#39;-=&#39; 
+    <span class="o">|</span> &#39;*=&#39; 
+    <span class="o">|</span> &#39;@=&#39; 
+    <span class="o">|</span> &#39;/=&#39; 
+    <span class="o">|</span> &#39;%=&#39; 
+    <span class="o">|</span> &#39;&amp;=&#39; 
+    <span class="o">|</span> &#39;|=&#39; 
+    <span class="o">|</span> &#39;^=&#39; 
+    <span class="o">|</span> &#39;&lt;&lt;=&#39; 
+    <span class="o">|</span> &#39;&gt;&gt;=&#39; 
+    <span class="o">|</span> &#39;**=&#39; 
+    <span class="o">|</span> &#39;//=&#39; 
 
-<span class="n">yield_expr</span><span class="p">:</span> <span class="s1">&#39;yield&#39;</span> <span class="p">[</span><span class="n">yield_arg</span><span class="p">]</span>
-<span class="n">yield_arg</span><span class="p">:</span> <span class="s1">&#39;from&#39;</span> <span class="n">test</span> <span class="o">|</span> <span class="n">testlist_star_expr</span>
+<span class="nf">return_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;return&#39;</span> <span class="p">[</span><span class="nf">star_expressions</span><span class="p">]</span> 
 
-<span class="c1"># the TYPE_COMMENT in suites is only parsed for funcdefs,</span>
-<span class="c1"># but can&#39;t go elsewhere due to ambiguity</span>
-<span class="n">func_body_suite</span><span class="p">:</span> <span class="n">simple_stmt</span> <span class="o">|</span> <span class="n">NEWLINE</span> <span class="p">[</span><span class="n">TYPE_COMMENT</span> <span class="n">NEWLINE</span><span class="p">]</span> <span class="n">INDENT</span> <span class="n">stmt</span><span class="o">+</span> <span class="n">DEDENT</span>
+<span class="nf">raise_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;raise&#39;</span> <span class="nf">expression</span> <span class="p">[</span><span class="k">&#39;from&#39;</span> <span class="nf">expression</span> <span class="p">]</span> 
+    <span class="o">|</span> <span class="k">&#39;raise&#39;</span> 
 
-<span class="n">func_type_input</span><span class="p">:</span> <span class="n">func_type</span> <span class="n">NEWLINE</span><span class="o">*</span> <span class="n">ENDMARKER</span>
-<span class="n">func_type</span><span class="p">:</span> <span class="s1">&#39;(&#39;</span> <span class="p">[</span><span class="n">typelist</span><span class="p">]</span> <span class="s1">&#39;)&#39;</span> <span class="s1">&#39;-&gt;&#39;</span> <span class="n">test</span>
-<span class="c1"># typelist is a modified typedargslist (see above)</span>
-<span class="n">typelist</span><span class="p">:</span> <span class="p">(</span><span class="n">test</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">test</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span>
-       <span class="p">[</span><span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">test</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">test</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="s1">&#39;**&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">test</span><span class="p">]]</span>
-     <span class="o">|</span>  <span class="s1">&#39;*&#39;</span> <span class="p">[</span><span class="n">test</span><span class="p">]</span> <span class="p">(</span><span class="s1">&#39;,&#39;</span> <span class="n">test</span><span class="p">)</span><span class="o">*</span> <span class="p">[</span><span class="s1">&#39;,&#39;</span> <span class="s1">&#39;**&#39;</span> <span class="n">test</span><span class="p">]</span> <span class="o">|</span> <span class="s1">&#39;**&#39;</span> <span class="n">test</span><span class="p">)</span>
+<span class="nf">global_stmt</span><span class="p">:</span> <span class="k">&#39;global&#39;</span> &#39;,&#39;<span class="o">.</span>NAME<span class="o">+</span> 
+
+<span class="nf">nonlocal_stmt</span><span class="p">:</span> <span class="k">&#39;nonlocal&#39;</span> &#39;,&#39;<span class="o">.</span>NAME<span class="o">+</span> 
+
+<span class="nf">del_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;del&#39;</span> <span class="nf">del_targets</span> &amp;<span class="p">(</span>&#39;;&#39; <span class="o">|</span> NEWLINE<span class="p">)</span> 
+
+<span class="nf">yield_stmt</span><span class="p">:</span> <span class="nf">yield_expr</span> 
+
+<span class="nf">assert_stmt</span><span class="p">:</span> <span class="k">&#39;assert&#39;</span> <span class="nf">expression</span> <span class="p">[</span>&#39;,&#39; <span class="nf">expression</span> <span class="p">]</span> 
+
+<span class="nf">import_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">import_name</span>
+    <span class="o">|</span> <span class="nf">import_from</span>
+
+<span class="c c-Singleline"># Import statements</span>
+<span class="c c-Singleline"># -----------------</span>
+
+<span class="nf">import_name</span><span class="p">:</span> <span class="k">&#39;import&#39;</span> <span class="nf">dotted_as_names</span> 
+<span class="c c-Singleline"># note below: the (&#39;.&#39; | &#39;...&#39;) is necessary because &#39;...&#39; is tokenized as ELLIPSIS</span>
+<span class="nf">import_from</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;from&#39;</span> <span class="p">(</span>&#39;.&#39; <span class="o">|</span> &#39;...&#39;<span class="p">)</span><span class="o">*</span> <span class="nf">dotted_name</span> <span class="k">&#39;import&#39;</span> <span class="nf">import_from_targets</span> 
+    <span class="o">|</span> <span class="k">&#39;from&#39;</span> <span class="p">(</span>&#39;.&#39; <span class="o">|</span> &#39;...&#39;<span class="p">)</span><span class="o">+</span> <span class="k">&#39;import&#39;</span> <span class="nf">import_from_targets</span> 
+<span class="nf">import_from_targets</span><span class="p">:</span>
+    <span class="o">|</span> &#39;(&#39; <span class="nf">import_from_as_names</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> &#39;)&#39; 
+    <span class="o">|</span> <span class="nf">import_from_as_names</span> !&#39;,&#39;
+    <span class="o">|</span> &#39;*&#39; 
+<span class="nf">import_from_as_names</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">import_from_as_name</span><span class="o">+</span> 
+<span class="nf">import_from_as_name</span><span class="p">:</span>
+    <span class="o">|</span> NAME <span class="p">[</span><span class="k">&#39;as&#39;</span> NAME <span class="p">]</span> 
+<span class="nf">dotted_as_names</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">dotted_as_name</span><span class="o">+</span> 
+<span class="nf">dotted_as_name</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">dotted_name</span> <span class="p">[</span><span class="k">&#39;as&#39;</span> NAME <span class="p">]</span> 
+<span class="nf">dotted_name</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">dotted_name</span> &#39;.&#39; NAME 
+    <span class="o">|</span> NAME
+
+<span class="c c-Singleline"># COMPOUND STATEMENTS</span>
+<span class="c c-Singleline"># ===================</span>
+
+<span class="c c-Singleline"># Common elements</span>
+<span class="c c-Singleline"># ---------------</span>
+
+<span class="nf">block</span><span class="p">:</span>
+    <span class="o">|</span> NEWLINE INDENT <span class="nf">statements</span> DEDENT 
+    <span class="o">|</span> <span class="nf">simple_stmts</span>
+
+<span class="nf">decorators</span><span class="p">:</span> <span class="p">(</span>&#39;@&#39; <span class="nf">named_expression</span> NEWLINE <span class="p">)</span><span class="o">+</span> 
+
+<span class="c c-Singleline"># Class definitions</span>
+<span class="c c-Singleline"># -----------------</span>
+
+<span class="nf">class_def</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">decorators</span> <span class="nf">class_def_raw</span> 
+    <span class="o">|</span> <span class="nf">class_def_raw</span>
+
+<span class="nf">class_def_raw</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;class&#39;</span> NAME <span class="p">[</span><span class="nf">type_params</span><span class="p">]</span> <span class="p">[</span>&#39;(&#39; <span class="p">[</span><span class="nf">arguments</span><span class="p">]</span> &#39;)&#39; <span class="p">]</span> &#39;:&#39; <span class="nf">block</span> 
+
+<span class="c c-Singleline"># Function definitions</span>
+<span class="c c-Singleline"># --------------------</span>
+
+<span class="nf">function_def</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">decorators</span> <span class="nf">function_def_raw</span> 
+    <span class="o">|</span> <span class="nf">function_def_raw</span>
+
+<span class="nf">function_def_raw</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;def&#39;</span> NAME <span class="p">[</span><span class="nf">type_params</span><span class="p">]</span> &#39;(&#39; <span class="p">[</span><span class="nf">params</span><span class="p">]</span> &#39;)&#39; <span class="p">[</span>&#39;-&gt;&#39; <span class="nf">expression</span> <span class="p">]</span> &#39;:&#39; <span class="p">[</span><span class="nf">func_type_comment</span><span class="p">]</span> <span class="nf">block</span> 
+    <span class="o">|</span> ASYNC <span class="k">&#39;def&#39;</span> NAME <span class="p">[</span><span class="nf">type_params</span><span class="p">]</span> &#39;(&#39; <span class="p">[</span><span class="nf">params</span><span class="p">]</span> &#39;)&#39; <span class="p">[</span>&#39;-&gt;&#39; <span class="nf">expression</span> <span class="p">]</span> &#39;:&#39; <span class="p">[</span><span class="nf">func_type_comment</span><span class="p">]</span> <span class="nf">block</span> 
+
+<span class="c c-Singleline"># Function parameters</span>
+<span class="c c-Singleline"># -------------------</span>
+
+<span class="nf">params</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">parameters</span>
+
+<span class="nf">parameters</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">slash_no_default</span> <span class="nf">param_no_default</span><span class="o">*</span> <span class="nf">param_with_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">slash_with_default</span> <span class="nf">param_with_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">param_no_default</span><span class="o">+</span> <span class="nf">param_with_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">param_with_default</span><span class="o">+</span> <span class="p">[</span><span class="nf">star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">star_etc</span> 
+
+<span class="c c-Singleline"># Some duplication here because we can&#39;t write (&#39;,&#39; | &amp;&#39;)&#39;),</span>
+<span class="c c-Singleline"># which is because we don&#39;t support empty alternatives (yet).</span>
+
+<span class="nf">slash_no_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">param_no_default</span><span class="o">+</span> &#39;/&#39; &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">param_no_default</span><span class="o">+</span> &#39;/&#39; &amp;&#39;)&#39; 
+<span class="nf">slash_with_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">param_no_default</span><span class="o">*</span> <span class="nf">param_with_default</span><span class="o">+</span> &#39;/&#39; &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">param_no_default</span><span class="o">*</span> <span class="nf">param_with_default</span><span class="o">+</span> &#39;/&#39; &amp;&#39;)&#39; 
+
+<span class="nf">star_etc</span><span class="p">:</span>
+    <span class="o">|</span> &#39;*&#39; <span class="nf">param_no_default</span> <span class="nf">param_maybe_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">kwds</span><span class="p">]</span> 
+    <span class="o">|</span> &#39;*&#39; <span class="nf">param_no_default_star_annotation</span> <span class="nf">param_maybe_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">kwds</span><span class="p">]</span> 
+    <span class="o">|</span> &#39;*&#39; &#39;,&#39; <span class="nf">param_maybe_default</span><span class="o">+</span> <span class="p">[</span><span class="nf">kwds</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">kwds</span> 
+
+<span class="nf">kwds</span><span class="p">:</span>
+    <span class="o">|</span> &#39;**&#39; <span class="nf">param_no_default</span> 
+
+<span class="c c-Singleline"># One parameter.  This *includes* a following comma and type comment.</span>
+<span class="c c-Singleline">#</span>
+<span class="c c-Singleline"># There are three styles:</span>
+<span class="c c-Singleline"># - No default</span>
+<span class="c c-Singleline"># - With default</span>
+<span class="c c-Singleline"># - Maybe with default</span>
+<span class="c c-Singleline">#</span>
+<span class="c c-Singleline"># There are two alternative forms of each, to deal with type comments:</span>
+<span class="c c-Singleline"># - Ends in a comma followed by an optional type comment</span>
+<span class="c c-Singleline"># - No comma, optional type comment, must be followed by close paren</span>
+<span class="c c-Singleline"># The latter form is for a final parameter without trailing comma.</span>
+<span class="c c-Singleline">#</span>
+
+<span class="nf">param_no_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">param</span> &#39;,&#39; TYPE_COMMENT<span class="o">?</span> 
+    <span class="o">|</span> <span class="nf">param</span> TYPE_COMMENT<span class="o">?</span> &amp;&#39;)&#39; 
+<span class="nf">param_no_default_star_annotation</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">param_star_annotation</span> &#39;,&#39; TYPE_COMMENT<span class="o">?</span> 
+    <span class="o">|</span> <span class="nf">param_star_annotation</span> TYPE_COMMENT<span class="o">?</span> &amp;&#39;)&#39; 
+<span class="nf">param_with_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">param</span> <span class="nf">default</span> &#39;,&#39; TYPE_COMMENT<span class="o">?</span> 
+    <span class="o">|</span> <span class="nf">param</span> <span class="nf">default</span> TYPE_COMMENT<span class="o">?</span> &amp;&#39;)&#39; 
+<span class="nf">param_maybe_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">param</span> <span class="nf">default</span><span class="o">?</span> &#39;,&#39; TYPE_COMMENT<span class="o">?</span> 
+    <span class="o">|</span> <span class="nf">param</span> <span class="nf">default</span><span class="o">?</span> TYPE_COMMENT<span class="o">?</span> &amp;&#39;)&#39; 
+<span class="nf">param</span><span class="p">:</span> NAME <span class="nf">annotation</span><span class="o">?</span> 
+<span class="nf">param_star_annotation</span><span class="p">:</span> NAME <span class="nf">star_annotation</span> 
+<span class="nf">annotation</span><span class="p">:</span> &#39;:&#39; <span class="nf">expression</span> 
+<span class="nf">star_annotation</span><span class="p">:</span> &#39;:&#39; <span class="nf">star_expression</span> 
+<span class="nf">default</span><span class="p">:</span> &#39;=&#39; <span class="nf">expression</span>  <span class="o">|</span> <span class="nf">invalid_default</span>
+
+<span class="c c-Singleline"># If statement</span>
+<span class="c c-Singleline"># ------------</span>
+
+<span class="nf">if_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;if&#39;</span> <span class="nf">named_expression</span> &#39;:&#39; <span class="nf">block</span> <span class="nf">elif_stmt</span> 
+    <span class="o">|</span> <span class="k">&#39;if&#39;</span> <span class="nf">named_expression</span> &#39;:&#39; <span class="nf">block</span> <span class="p">[</span><span class="nf">else_block</span><span class="p">]</span> 
+<span class="nf">elif_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;elif&#39;</span> <span class="nf">named_expression</span> &#39;:&#39; <span class="nf">block</span> <span class="nf">elif_stmt</span> 
+    <span class="o">|</span> <span class="k">&#39;elif&#39;</span> <span class="nf">named_expression</span> &#39;:&#39; <span class="nf">block</span> <span class="p">[</span><span class="nf">else_block</span><span class="p">]</span> 
+<span class="nf">else_block</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;else&#39;</span> &#39;:&#39; <span class="nf">block</span> 
+
+<span class="c c-Singleline"># While statement</span>
+<span class="c c-Singleline"># ---------------</span>
+
+<span class="nf">while_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;while&#39;</span> <span class="nf">named_expression</span> &#39;:&#39; <span class="nf">block</span> <span class="p">[</span><span class="nf">else_block</span><span class="p">]</span> 
+
+<span class="c c-Singleline"># For statement</span>
+<span class="c c-Singleline"># -------------</span>
+
+<span class="nf">for_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;for&#39;</span> <span class="nf">star_targets</span> <span class="k">&#39;in&#39;</span> ~ <span class="nf">star_expressions</span> &#39;:&#39; <span class="p">[</span>TYPE_COMMENT<span class="p">]</span> <span class="nf">block</span> <span class="p">[</span><span class="nf">else_block</span><span class="p">]</span> 
+    <span class="o">|</span> ASYNC <span class="k">&#39;for&#39;</span> <span class="nf">star_targets</span> <span class="k">&#39;in&#39;</span> ~ <span class="nf">star_expressions</span> &#39;:&#39; <span class="p">[</span>TYPE_COMMENT<span class="p">]</span> <span class="nf">block</span> <span class="p">[</span><span class="nf">else_block</span><span class="p">]</span> 
+
+<span class="c c-Singleline"># With statement</span>
+<span class="c c-Singleline"># --------------</span>
+
+<span class="nf">with_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;with&#39;</span> &#39;(&#39; &#39;,&#39;<span class="o">.</span><span class="nf">with_item</span><span class="o">+</span> &#39;,&#39;<span class="o">?</span> &#39;)&#39; &#39;:&#39; <span class="nf">block</span> 
+    <span class="o">|</span> <span class="k">&#39;with&#39;</span> &#39;,&#39;<span class="o">.</span><span class="nf">with_item</span><span class="o">+</span> &#39;:&#39; <span class="p">[</span>TYPE_COMMENT<span class="p">]</span> <span class="nf">block</span> 
+    <span class="o">|</span> ASYNC <span class="k">&#39;with&#39;</span> &#39;(&#39; &#39;,&#39;<span class="o">.</span><span class="nf">with_item</span><span class="o">+</span> &#39;,&#39;<span class="o">?</span> &#39;)&#39; &#39;:&#39; <span class="nf">block</span> 
+    <span class="o">|</span> ASYNC <span class="k">&#39;with&#39;</span> &#39;,&#39;<span class="o">.</span><span class="nf">with_item</span><span class="o">+</span> &#39;:&#39; <span class="p">[</span>TYPE_COMMENT<span class="p">]</span> <span class="nf">block</span> 
+
+<span class="nf">with_item</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">expression</span> <span class="k">&#39;as&#39;</span> <span class="nf">star_target</span> &amp;<span class="p">(</span>&#39;,&#39; <span class="o">|</span> &#39;)&#39; <span class="o">|</span> &#39;:&#39;<span class="p">)</span> 
+    <span class="o">|</span> <span class="nf">expression</span> 
+
+<span class="c c-Singleline"># Try statement</span>
+<span class="c c-Singleline"># -------------</span>
+
+<span class="nf">try_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;try&#39;</span> &#39;:&#39; <span class="nf">block</span> <span class="nf">finally_block</span> 
+    <span class="o">|</span> <span class="k">&#39;try&#39;</span> &#39;:&#39; <span class="nf">block</span> <span class="nf">except_block</span><span class="o">+</span> <span class="p">[</span><span class="nf">else_block</span><span class="p">]</span> <span class="p">[</span><span class="nf">finally_block</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="k">&#39;try&#39;</span> &#39;:&#39; <span class="nf">block</span> <span class="nf">except_star_block</span><span class="o">+</span> <span class="p">[</span><span class="nf">else_block</span><span class="p">]</span> <span class="p">[</span><span class="nf">finally_block</span><span class="p">]</span> 
+
+
+<span class="c c-Singleline"># Except statement</span>
+<span class="c c-Singleline"># ----------------</span>
+
+<span class="nf">except_block</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;except&#39;</span> <span class="nf">expression</span> <span class="p">[</span><span class="k">&#39;as&#39;</span> NAME <span class="p">]</span> &#39;:&#39; <span class="nf">block</span> 
+    <span class="o">|</span> <span class="k">&#39;except&#39;</span> &#39;:&#39; <span class="nf">block</span> 
+<span class="nf">except_star_block</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;except&#39;</span> &#39;*&#39; <span class="nf">expression</span> <span class="p">[</span><span class="k">&#39;as&#39;</span> NAME <span class="p">]</span> &#39;:&#39; <span class="nf">block</span> 
+<span class="nf">finally_block</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;finally&#39;</span> &#39;:&#39; <span class="nf">block</span> 
+
+<span class="c c-Singleline"># Match statement</span>
+<span class="c c-Singleline"># ---------------</span>
+
+<span class="nf">match_stmt</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&quot;match&quot;</span> <span class="nf">subject_expr</span> &#39;:&#39; NEWLINE INDENT <span class="nf">case_block</span><span class="o">+</span> DEDENT 
+
+<span class="nf">subject_expr</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">star_named_expression</span> &#39;,&#39; <span class="nf">star_named_expressions</span><span class="o">?</span> 
+    <span class="o">|</span> <span class="nf">named_expression</span>
+
+<span class="nf">case_block</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&quot;case&quot;</span> <span class="nf">patterns</span> <span class="nf">guard</span><span class="o">?</span> &#39;:&#39; <span class="nf">block</span> 
+
+<span class="nf">guard</span><span class="p">:</span> <span class="k">&#39;if&#39;</span> <span class="nf">named_expression</span> 
+
+<span class="nf">patterns</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">open_sequence_pattern</span> 
+    <span class="o">|</span> <span class="nf">pattern</span>
+
+<span class="nf">pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">as_pattern</span>
+    <span class="o">|</span> <span class="nf">or_pattern</span>
+
+<span class="nf">as_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">or_pattern</span> <span class="k">&#39;as&#39;</span> <span class="nf">pattern_capture_target</span> 
+
+<span class="nf">or_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;|&#39;<span class="o">.</span><span class="nf">closed_pattern</span><span class="o">+</span> 
+
+<span class="nf">closed_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">literal_pattern</span>
+    <span class="o">|</span> <span class="nf">capture_pattern</span>
+    <span class="o">|</span> <span class="nf">wildcard_pattern</span>
+    <span class="o">|</span> <span class="nf">value_pattern</span>
+    <span class="o">|</span> <span class="nf">group_pattern</span>
+    <span class="o">|</span> <span class="nf">sequence_pattern</span>
+    <span class="o">|</span> <span class="nf">mapping_pattern</span>
+    <span class="o">|</span> <span class="nf">class_pattern</span>
+
+<span class="c c-Singleline"># Literal patterns are used for equality and identity constraints</span>
+<span class="nf">literal_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">signed_number</span> !<span class="p">(</span>&#39;+&#39; <span class="o">|</span> &#39;-&#39;<span class="p">)</span> 
+    <span class="o">|</span> <span class="nf">complex_number</span> 
+    <span class="o">|</span> <span class="nf">strings</span> 
+    <span class="o">|</span> <span class="k">&#39;None&#39;</span> 
+    <span class="o">|</span> <span class="k">&#39;True&#39;</span> 
+    <span class="o">|</span> <span class="k">&#39;False&#39;</span> 
+
+<span class="c c-Singleline"># Literal expressions are used to restrict permitted mapping pattern keys</span>
+<span class="nf">literal_expr</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">signed_number</span> !<span class="p">(</span>&#39;+&#39; <span class="o">|</span> &#39;-&#39;<span class="p">)</span>
+    <span class="o">|</span> <span class="nf">complex_number</span>
+    <span class="o">|</span> <span class="nf">strings</span>
+    <span class="o">|</span> <span class="k">&#39;None&#39;</span> 
+    <span class="o">|</span> <span class="k">&#39;True&#39;</span> 
+    <span class="o">|</span> <span class="k">&#39;False&#39;</span> 
+
+<span class="nf">complex_number</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">signed_real_number</span> &#39;+&#39; <span class="nf">imaginary_number</span> 
+    <span class="o">|</span> <span class="nf">signed_real_number</span> &#39;-&#39; <span class="nf">imaginary_number</span>  
+
+<span class="nf">signed_number</span><span class="p">:</span>
+    <span class="o">|</span> NUMBER
+    <span class="o">|</span> &#39;-&#39; NUMBER 
+
+<span class="nf">signed_real_number</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">real_number</span>
+    <span class="o">|</span> &#39;-&#39; <span class="nf">real_number</span> 
+
+<span class="nf">real_number</span><span class="p">:</span>
+    <span class="o">|</span> NUMBER 
+
+<span class="nf">imaginary_number</span><span class="p">:</span>
+    <span class="o">|</span> NUMBER 
+
+<span class="nf">capture_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">pattern_capture_target</span> 
+
+<span class="nf">pattern_capture_target</span><span class="p">:</span>
+    <span class="o">|</span> !<span class="k">&quot;_&quot;</span> NAME !<span class="p">(</span>&#39;.&#39; <span class="o">|</span> &#39;(&#39; <span class="o">|</span> &#39;=&#39;<span class="p">)</span> 
+
+<span class="nf">wildcard_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&quot;_&quot;</span> 
+
+<span class="nf">value_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">attr</span> !<span class="p">(</span>&#39;.&#39; <span class="o">|</span> &#39;(&#39; <span class="o">|</span> &#39;=&#39;<span class="p">)</span> 
+
+<span class="nf">attr</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">name_or_attr</span> &#39;.&#39; NAME 
+
+<span class="nf">name_or_attr</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">attr</span>
+    <span class="o">|</span> NAME
+
+<span class="nf">group_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;(&#39; <span class="nf">pattern</span> &#39;)&#39; 
+
+<span class="nf">sequence_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;[&#39; <span class="nf">maybe_sequence_pattern</span><span class="o">?</span> &#39;]&#39; 
+    <span class="o">|</span> &#39;(&#39; <span class="nf">open_sequence_pattern</span><span class="o">?</span> &#39;)&#39; 
+
+<span class="nf">open_sequence_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">maybe_star_pattern</span> &#39;,&#39; <span class="nf">maybe_sequence_pattern</span><span class="o">?</span> 
+
+<span class="nf">maybe_sequence_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">maybe_star_pattern</span><span class="o">+</span> &#39;,&#39;<span class="o">?</span> 
+
+<span class="nf">maybe_star_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">star_pattern</span>
+    <span class="o">|</span> <span class="nf">pattern</span>
+
+<span class="nf">star_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;*&#39; <span class="nf">pattern_capture_target</span> 
+    <span class="o">|</span> &#39;*&#39; <span class="nf">wildcard_pattern</span> 
+
+<span class="nf">mapping_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;{&#39; &#39;}&#39; 
+    <span class="o">|</span> &#39;{&#39; <span class="nf">double_star_pattern</span> &#39;,&#39;<span class="o">?</span> &#39;}&#39; 
+    <span class="o">|</span> &#39;{&#39; <span class="nf">items_pattern</span> &#39;,&#39; <span class="nf">double_star_pattern</span> &#39;,&#39;<span class="o">?</span> &#39;}&#39; 
+    <span class="o">|</span> &#39;{&#39; <span class="nf">items_pattern</span> &#39;,&#39;<span class="o">?</span> &#39;}&#39; 
+
+<span class="nf">items_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">key_value_pattern</span><span class="o">+</span>
+
+<span class="nf">key_value_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="p">(</span><span class="nf">literal_expr</span> <span class="o">|</span> <span class="nf">attr</span><span class="p">)</span> &#39;:&#39; <span class="nf">pattern</span> 
+
+<span class="nf">double_star_pattern</span><span class="p">:</span>
+    <span class="o">|</span> &#39;**&#39; <span class="nf">pattern_capture_target</span> 
+
+<span class="nf">class_pattern</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">name_or_attr</span> &#39;(&#39; &#39;)&#39; 
+    <span class="o">|</span> <span class="nf">name_or_attr</span> &#39;(&#39; <span class="nf">positional_patterns</span> &#39;,&#39;<span class="o">?</span> &#39;)&#39; 
+    <span class="o">|</span> <span class="nf">name_or_attr</span> &#39;(&#39; <span class="nf">keyword_patterns</span> &#39;,&#39;<span class="o">?</span> &#39;)&#39; 
+    <span class="o">|</span> <span class="nf">name_or_attr</span> &#39;(&#39; <span class="nf">positional_patterns</span> &#39;,&#39; <span class="nf">keyword_patterns</span> &#39;,&#39;<span class="o">?</span> &#39;)&#39; 
+
+<span class="nf">positional_patterns</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">pattern</span><span class="o">+</span> 
+
+<span class="nf">keyword_patterns</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">keyword_pattern</span><span class="o">+</span>
+
+<span class="nf">keyword_pattern</span><span class="p">:</span>
+    <span class="o">|</span> NAME &#39;=&#39; <span class="nf">pattern</span> 
+
+<span class="c c-Singleline"># Type statement</span>
+<span class="c c-Singleline"># ---------------</span>
+
+<span class="nf">type_alias</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&quot;type&quot;</span> NAME <span class="p">[</span><span class="nf">type_params</span><span class="p">]</span> &#39;=&#39; <span class="nf">expression</span> 
+
+<span class="c c-Singleline"># Type parameter declaration</span>
+<span class="c c-Singleline"># --------------------------</span>
+
+<span class="nf">type_params</span><span class="p">:</span> &#39;[&#39; <span class="nf">type_param_seq</span>  &#39;]&#39; 
+
+<span class="nf">type_param_seq</span><span class="p">:</span> &#39;,&#39;<span class="o">.</span><span class="nf">type_param</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+
+<span class="nf">type_param</span><span class="p">:</span>
+    <span class="o">|</span> NAME <span class="p">[</span><span class="nf">type_param_bound</span><span class="p">]</span> 
+    <span class="o">|</span> &#39;*&#39; NAME 
+    <span class="o">|</span> &#39;**&#39; NAME 
+
+<span class="nf">type_param_bound</span><span class="p">:</span> &#39;:&#39; <span class="nf">expression</span> 
+
+<span class="c c-Singleline"># EXPRESSIONS</span>
+<span class="c c-Singleline"># -----------</span>
+
+<span class="nf">expressions</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">expression</span> <span class="p">(</span>&#39;,&#39; <span class="nf">expression</span> <span class="p">)</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">expression</span> &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">expression</span>
+
+<span class="nf">expression</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">disjunction</span> <span class="k">&#39;if&#39;</span> <span class="nf">disjunction</span> <span class="k">&#39;else&#39;</span> <span class="nf">expression</span> 
+    <span class="o">|</span> <span class="nf">disjunction</span>
+    <span class="o">|</span> <span class="nf">lambdef</span>
+
+<span class="nf">yield_expr</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;yield&#39;</span> <span class="k">&#39;from&#39;</span> <span class="nf">expression</span> 
+    <span class="o">|</span> <span class="k">&#39;yield&#39;</span> <span class="p">[</span><span class="nf">star_expressions</span><span class="p">]</span> 
+
+<span class="nf">star_expressions</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">star_expression</span> <span class="p">(</span>&#39;,&#39; <span class="nf">star_expression</span> <span class="p">)</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">star_expression</span> &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">star_expression</span>
+
+<span class="nf">star_expression</span><span class="p">:</span>
+    <span class="o">|</span> &#39;*&#39; <span class="nf">bitwise_or</span> 
+    <span class="o">|</span> <span class="nf">expression</span>
+
+<span class="nf">star_named_expressions</span><span class="p">:</span> &#39;,&#39;<span class="o">.</span><span class="nf">star_named_expression</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+
+<span class="nf">star_named_expression</span><span class="p">:</span>
+    <span class="o">|</span> &#39;*&#39; <span class="nf">bitwise_or</span> 
+    <span class="o">|</span> <span class="nf">named_expression</span>
+
+<span class="nf">assignment_expression</span><span class="p">:</span>
+    <span class="o">|</span> NAME &#39;:=&#39; ~ <span class="nf">expression</span> 
+
+<span class="nf">named_expression</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">assignment_expression</span>
+    <span class="o">|</span> <span class="nf">expression</span> !&#39;:=&#39;
+
+<span class="nf">disjunction</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">conjunction</span> <span class="p">(</span><span class="k">&#39;or&#39;</span> <span class="nf">conjunction</span> <span class="p">)</span><span class="o">+</span> 
+    <span class="o">|</span> <span class="nf">conjunction</span>
+
+<span class="nf">conjunction</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">inversion</span> <span class="p">(</span><span class="k">&#39;and&#39;</span> <span class="nf">inversion</span> <span class="p">)</span><span class="o">+</span> 
+    <span class="o">|</span> <span class="nf">inversion</span>
+
+<span class="nf">inversion</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;not&#39;</span> <span class="nf">inversion</span> 
+    <span class="o">|</span> <span class="nf">comparison</span>
+
+<span class="c c-Singleline"># Comparison operators</span>
+<span class="c c-Singleline"># --------------------</span>
+
+<span class="nf">comparison</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">bitwise_or</span> <span class="nf">compare_op_bitwise_or_pair</span><span class="o">+</span> 
+    <span class="o">|</span> <span class="nf">bitwise_or</span>
+
+<span class="nf">compare_op_bitwise_or_pair</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">eq_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">noteq_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">lte_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">lt_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">gte_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">gt_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">notin_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">in_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">isnot_bitwise_or</span>
+    <span class="o">|</span> <span class="nf">is_bitwise_or</span>
+
+<span class="nf">eq_bitwise_or</span><span class="p">:</span> &#39;==&#39; <span class="nf">bitwise_or</span> 
+<span class="nf">noteq_bitwise_or</span><span class="p">:</span>
+    <span class="o">|</span> <span class="p">(</span>&#39;!=&#39; <span class="p">)</span> <span class="nf">bitwise_or</span> 
+<span class="nf">lte_bitwise_or</span><span class="p">:</span> &#39;&lt;=&#39; <span class="nf">bitwise_or</span> 
+<span class="nf">lt_bitwise_or</span><span class="p">:</span> &#39;&lt;&#39; <span class="nf">bitwise_or</span> 
+<span class="nf">gte_bitwise_or</span><span class="p">:</span> &#39;&gt;=&#39; <span class="nf">bitwise_or</span> 
+<span class="nf">gt_bitwise_or</span><span class="p">:</span> &#39;&gt;&#39; <span class="nf">bitwise_or</span> 
+<span class="nf">notin_bitwise_or</span><span class="p">:</span> <span class="k">&#39;not&#39;</span> <span class="k">&#39;in&#39;</span> <span class="nf">bitwise_or</span> 
+<span class="nf">in_bitwise_or</span><span class="p">:</span> <span class="k">&#39;in&#39;</span> <span class="nf">bitwise_or</span> 
+<span class="nf">isnot_bitwise_or</span><span class="p">:</span> <span class="k">&#39;is&#39;</span> <span class="k">&#39;not&#39;</span> <span class="nf">bitwise_or</span> 
+<span class="nf">is_bitwise_or</span><span class="p">:</span> <span class="k">&#39;is&#39;</span> <span class="nf">bitwise_or</span> 
+
+<span class="c c-Singleline"># Bitwise operators</span>
+<span class="c c-Singleline"># -----------------</span>
+
+<span class="nf">bitwise_or</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">bitwise_or</span> &#39;|&#39; <span class="nf">bitwise_xor</span> 
+    <span class="o">|</span> <span class="nf">bitwise_xor</span>
+
+<span class="nf">bitwise_xor</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">bitwise_xor</span> &#39;^&#39; <span class="nf">bitwise_and</span> 
+    <span class="o">|</span> <span class="nf">bitwise_and</span>
+
+<span class="nf">bitwise_and</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">bitwise_and</span> &#39;&amp;&#39; <span class="nf">shift_expr</span> 
+    <span class="o">|</span> <span class="nf">shift_expr</span>
+
+<span class="nf">shift_expr</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">shift_expr</span> &#39;&lt;&lt;&#39; <span class="nf">sum</span> 
+    <span class="o">|</span> <span class="nf">shift_expr</span> &#39;&gt;&gt;&#39; <span class="nf">sum</span> 
+    <span class="o">|</span> <span class="nf">sum</span>
+
+<span class="c c-Singleline"># Arithmetic operators</span>
+<span class="c c-Singleline"># --------------------</span>
+
+<span class="nf">sum</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">sum</span> &#39;+&#39; <span class="nf">term</span> 
+    <span class="o">|</span> <span class="nf">sum</span> &#39;-&#39; <span class="nf">term</span> 
+    <span class="o">|</span> <span class="nf">term</span>
+
+<span class="nf">term</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">term</span> &#39;*&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> <span class="nf">term</span> &#39;/&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> <span class="nf">term</span> &#39;//&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> <span class="nf">term</span> &#39;%&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> <span class="nf">term</span> &#39;@&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> <span class="nf">factor</span>
+
+<span class="nf">factor</span><span class="p">:</span>
+    <span class="o">|</span> &#39;+&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> &#39;-&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> &#39;~&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> <span class="nf">power</span>
+
+<span class="nf">power</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">await_primary</span> &#39;**&#39; <span class="nf">factor</span> 
+    <span class="o">|</span> <span class="nf">await_primary</span>
+
+<span class="c c-Singleline"># Primary elements</span>
+<span class="c c-Singleline"># ----------------</span>
+
+<span class="c c-Singleline"># Primary elements are things like &quot;obj.something.something&quot;, &quot;obj[something]&quot;, &quot;obj(something)&quot;, &quot;obj&quot; ...</span>
+
+<span class="nf">await_primary</span><span class="p">:</span>
+    <span class="o">|</span> AWAIT <span class="nf">primary</span> 
+    <span class="o">|</span> <span class="nf">primary</span>
+
+<span class="nf">primary</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">primary</span> &#39;.&#39; NAME 
+    <span class="o">|</span> <span class="nf">primary</span> <span class="nf">genexp</span> 
+    <span class="o">|</span> <span class="nf">primary</span> &#39;(&#39; <span class="p">[</span><span class="nf">arguments</span><span class="p">]</span> &#39;)&#39; 
+    <span class="o">|</span> <span class="nf">primary</span> &#39;[&#39; <span class="nf">slices</span> &#39;]&#39; 
+    <span class="o">|</span> <span class="nf">atom</span>
+
+<span class="nf">slices</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">slice</span> !&#39;,&#39; 
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="p">(</span><span class="nf">slice</span> <span class="o">|</span> <span class="nf">starred_expression</span><span class="p">)</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+
+<span class="nf">slice</span><span class="p">:</span>
+    <span class="o">|</span> <span class="p">[</span><span class="nf">expression</span><span class="p">]</span> &#39;:&#39; <span class="p">[</span><span class="nf">expression</span><span class="p">]</span> <span class="p">[</span>&#39;:&#39; <span class="p">[</span><span class="nf">expression</span><span class="p">]</span> <span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">named_expression</span> 
+
+<span class="nf">atom</span><span class="p">:</span>
+    <span class="o">|</span> NAME
+    <span class="o">|</span> <span class="k">&#39;True&#39;</span> 
+    <span class="o">|</span> <span class="k">&#39;False&#39;</span> 
+    <span class="o">|</span> <span class="k">&#39;None&#39;</span> 
+    <span class="o">|</span> <span class="nf">strings</span>
+    <span class="o">|</span> NUMBER
+    <span class="o">|</span> <span class="p">(</span><span class="nf">tuple</span> <span class="o">|</span> <span class="nf">group</span> <span class="o">|</span> <span class="nf">genexp</span><span class="p">)</span>
+    <span class="o">|</span> <span class="p">(</span><span class="nf">list</span> <span class="o">|</span> <span class="nf">listcomp</span><span class="p">)</span>
+    <span class="o">|</span> <span class="p">(</span><span class="nf">dict</span> <span class="o">|</span> <span class="nf">set</span> <span class="o">|</span> <span class="nf">dictcomp</span> <span class="o">|</span> <span class="nf">setcomp</span><span class="p">)</span>
+    <span class="o">|</span> &#39;...&#39; 
+
+<span class="nf">group</span><span class="p">:</span>
+    <span class="o">|</span> &#39;(&#39; <span class="p">(</span><span class="nf">yield_expr</span> <span class="o">|</span> <span class="nf">named_expression</span><span class="p">)</span> &#39;)&#39; 
+
+<span class="c c-Singleline"># Lambda functions</span>
+<span class="c c-Singleline"># ----------------</span>
+
+<span class="nf">lambdef</span><span class="p">:</span>
+    <span class="o">|</span> <span class="k">&#39;lambda&#39;</span> <span class="p">[</span><span class="nf">lambda_params</span><span class="p">]</span> &#39;:&#39; <span class="nf">expression</span> 
+
+<span class="nf">lambda_params</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">lambda_parameters</span>
+
+<span class="c c-Singleline"># lambda_parameters etc. duplicates parameters but without annotations</span>
+<span class="c c-Singleline"># or type comments, and if there&#39;s no comma after a parameter, we expect</span>
+<span class="c c-Singleline"># a colon, not a close parenthesis.  (For more, see parameters above.)</span>
+<span class="c c-Singleline">#</span>
+<span class="nf">lambda_parameters</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">lambda_slash_no_default</span> <span class="nf">lambda_param_no_default</span><span class="o">*</span> <span class="nf">lambda_param_with_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">lambda_star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">lambda_slash_with_default</span> <span class="nf">lambda_param_with_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">lambda_star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">lambda_param_no_default</span><span class="o">+</span> <span class="nf">lambda_param_with_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">lambda_star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">lambda_param_with_default</span><span class="o">+</span> <span class="p">[</span><span class="nf">lambda_star_etc</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">lambda_star_etc</span> 
+
+<span class="nf">lambda_slash_no_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">lambda_param_no_default</span><span class="o">+</span> &#39;/&#39; &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">lambda_param_no_default</span><span class="o">+</span> &#39;/&#39; &amp;&#39;:&#39; 
+
+<span class="nf">lambda_slash_with_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">lambda_param_no_default</span><span class="o">*</span> <span class="nf">lambda_param_with_default</span><span class="o">+</span> &#39;/&#39; &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">lambda_param_no_default</span><span class="o">*</span> <span class="nf">lambda_param_with_default</span><span class="o">+</span> &#39;/&#39; &amp;&#39;:&#39; 
+
+<span class="nf">lambda_star_etc</span><span class="p">:</span>
+    <span class="o">|</span> &#39;*&#39; <span class="nf">lambda_param_no_default</span> <span class="nf">lambda_param_maybe_default</span><span class="o">*</span> <span class="p">[</span><span class="nf">lambda_kwds</span><span class="p">]</span> 
+    <span class="o">|</span> &#39;*&#39; &#39;,&#39; <span class="nf">lambda_param_maybe_default</span><span class="o">+</span> <span class="p">[</span><span class="nf">lambda_kwds</span><span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">lambda_kwds</span> 
+
+<span class="nf">lambda_kwds</span><span class="p">:</span>
+    <span class="o">|</span> &#39;**&#39; <span class="nf">lambda_param_no_default</span> 
+
+<span class="nf">lambda_param_no_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">lambda_param</span> &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">lambda_param</span> &amp;&#39;:&#39; 
+<span class="nf">lambda_param_with_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">lambda_param</span> <span class="nf">default</span> &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">lambda_param</span> <span class="nf">default</span> &amp;&#39;:&#39; 
+<span class="nf">lambda_param_maybe_default</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">lambda_param</span> <span class="nf">default</span><span class="o">?</span> &#39;,&#39; 
+    <span class="o">|</span> <span class="nf">lambda_param</span> <span class="nf">default</span><span class="o">?</span> &amp;&#39;:&#39; 
+<span class="nf">lambda_param</span><span class="p">:</span> NAME 
+
+<span class="c c-Singleline"># LITERALS</span>
+<span class="c c-Singleline"># ========</span>
+
+<span class="nf">fstring_middle</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">fstring_replacement_field</span>
+    <span class="o">|</span> FSTRING_MIDDLE 
+<span class="nf">fstring_replacement_field</span><span class="p">:</span>
+    <span class="o">|</span> &#39;{&#39; <span class="p">(</span><span class="nf">yield_expr</span> <span class="o">|</span> <span class="nf">star_expressions</span><span class="p">)</span> &#39;=&#39;<span class="o">?</span> <span class="p">[</span><span class="nf">fstring_conversion</span><span class="p">]</span> <span class="p">[</span><span class="nf">fstring_full_format_spec</span><span class="p">]</span> &#39;}&#39; 
+<span class="nf">fstring_conversion</span><span class="p">:</span>
+    <span class="o">|</span> &quot;!&quot; NAME 
+<span class="nf">fstring_full_format_spec</span><span class="p">:</span>
+    <span class="o">|</span> &#39;:&#39; <span class="nf">fstring_format_spec</span><span class="o">*</span> 
+<span class="nf">fstring_format_spec</span><span class="p">:</span>
+    <span class="o">|</span> FSTRING_MIDDLE 
+    <span class="o">|</span> <span class="nf">fstring_replacement_field</span>
+<span class="nf">fstring</span><span class="p">:</span>
+    <span class="o">|</span> FSTRING_START <span class="nf">fstring_middle</span><span class="o">*</span> FSTRING_END 
+
+<span class="nf">string</span><span class="p">:</span> STRING 
+<span class="nf">strings</span><span class="p">:</span> <span class="p">(</span><span class="nf">fstring</span><span class="o">|</span><span class="nf">string</span><span class="p">)</span><span class="o">+</span> 
+
+<span class="nf">list</span><span class="p">:</span>
+    <span class="o">|</span> &#39;[&#39; <span class="p">[</span><span class="nf">star_named_expressions</span><span class="p">]</span> &#39;]&#39; 
+
+<span class="nf">tuple</span><span class="p">:</span>
+    <span class="o">|</span> &#39;(&#39; <span class="p">[</span><span class="nf">star_named_expression</span> &#39;,&#39; <span class="p">[</span><span class="nf">star_named_expressions</span><span class="p">]</span>  <span class="p">]</span> &#39;)&#39; 
+
+<span class="nf">set</span><span class="p">:</span> &#39;{&#39; <span class="nf">star_named_expressions</span> &#39;}&#39; 
+
+<span class="c c-Singleline"># Dicts</span>
+<span class="c c-Singleline"># -----</span>
+
+<span class="nf">dict</span><span class="p">:</span>
+    <span class="o">|</span> &#39;{&#39; <span class="p">[</span><span class="nf">double_starred_kvpairs</span><span class="p">]</span> &#39;}&#39; 
+
+<span class="nf">double_starred_kvpairs</span><span class="p">:</span> &#39;,&#39;<span class="o">.</span><span class="nf">double_starred_kvpair</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+
+<span class="nf">double_starred_kvpair</span><span class="p">:</span>
+    <span class="o">|</span> &#39;**&#39; <span class="nf">bitwise_or</span> 
+    <span class="o">|</span> <span class="nf">kvpair</span>
+
+<span class="nf">kvpair</span><span class="p">:</span> <span class="nf">expression</span> &#39;:&#39; <span class="nf">expression</span> 
+
+<span class="c c-Singleline"># Comprehensions &amp; Generators</span>
+<span class="c c-Singleline"># ---------------------------</span>
+
+<span class="nf">for_if_clauses</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">for_if_clause</span><span class="o">+</span> 
+
+<span class="nf">for_if_clause</span><span class="p">:</span>
+    <span class="o">|</span> ASYNC <span class="k">&#39;for&#39;</span> <span class="nf">star_targets</span> <span class="k">&#39;in&#39;</span> ~ <span class="nf">disjunction</span> <span class="p">(</span><span class="k">&#39;if&#39;</span> <span class="nf">disjunction</span> <span class="p">)</span><span class="o">*</span> 
+    <span class="o">|</span> <span class="k">&#39;for&#39;</span> <span class="nf">star_targets</span> <span class="k">&#39;in&#39;</span> ~ <span class="nf">disjunction</span> <span class="p">(</span><span class="k">&#39;if&#39;</span> <span class="nf">disjunction</span> <span class="p">)</span><span class="o">*</span> 
+
+<span class="nf">listcomp</span><span class="p">:</span>
+    <span class="o">|</span> &#39;[&#39; <span class="nf">named_expression</span> <span class="nf">for_if_clauses</span> &#39;]&#39; 
+
+<span class="nf">setcomp</span><span class="p">:</span>
+    <span class="o">|</span> &#39;{&#39; <span class="nf">named_expression</span> <span class="nf">for_if_clauses</span> &#39;}&#39; 
+
+<span class="nf">genexp</span><span class="p">:</span>
+    <span class="o">|</span> &#39;(&#39; <span class="p">(</span> <span class="nf">assignment_expression</span> <span class="o">|</span> <span class="nf">expression</span> !&#39;:=&#39;<span class="p">)</span> <span class="nf">for_if_clauses</span> &#39;)&#39; 
+
+<span class="nf">dictcomp</span><span class="p">:</span>
+    <span class="o">|</span> &#39;{&#39; <span class="nf">kvpair</span> <span class="nf">for_if_clauses</span> &#39;}&#39; 
+
+<span class="c c-Singleline"># FUNCTION CALL ARGUMENTS</span>
+<span class="c c-Singleline"># =======================</span>
+
+<span class="nf">arguments</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">args</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> &amp;&#39;)&#39; 
+
+<span class="nf">args</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="p">(</span><span class="nf">starred_expression</span> <span class="o">|</span> <span class="p">(</span> <span class="nf">assignment_expression</span> <span class="o">|</span> <span class="nf">expression</span> !&#39;:=&#39;<span class="p">)</span> !&#39;=&#39;<span class="p">)</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39; <span class="nf">kwargs</span> <span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">kwargs</span> 
+
+<span class="nf">kwargs</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">kwarg_or_starred</span><span class="o">+</span> &#39;,&#39; &#39;,&#39;<span class="o">.</span><span class="nf">kwarg_or_double_starred</span><span class="o">+</span> 
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">kwarg_or_starred</span><span class="o">+</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">kwarg_or_double_starred</span><span class="o">+</span>
+
+<span class="nf">starred_expression</span><span class="p">:</span>
+    <span class="o">|</span> &#39;*&#39; <span class="nf">expression</span> 
+
+<span class="nf">kwarg_or_starred</span><span class="p">:</span>
+    <span class="o">|</span> NAME &#39;=&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> <span class="nf">starred_expression</span> 
+
+<span class="nf">kwarg_or_double_starred</span><span class="p">:</span>
+    <span class="o">|</span> NAME &#39;=&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> &#39;**&#39; <span class="nf">expression</span> 
+
+<span class="c c-Singleline"># ASSIGNMENT TARGETS</span>
+<span class="c c-Singleline"># ==================</span>
+
+<span class="c c-Singleline"># Generic targets</span>
+<span class="c c-Singleline"># ---------------</span>
+
+<span class="c c-Singleline"># NOTE: star_targets may contain *bitwise_or, targets may not.</span>
+<span class="nf">star_targets</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">star_target</span> !&#39;,&#39; 
+    <span class="o">|</span> <span class="nf">star_target</span> <span class="p">(</span>&#39;,&#39; <span class="nf">star_target</span> <span class="p">)</span><span class="o">*</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+
+<span class="nf">star_targets_list_seq</span><span class="p">:</span> &#39;,&#39;<span class="o">.</span><span class="nf">star_target</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+
+<span class="nf">star_targets_tuple_seq</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">star_target</span> <span class="p">(</span>&#39;,&#39; <span class="nf">star_target</span> <span class="p">)</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+    <span class="o">|</span> <span class="nf">star_target</span> &#39;,&#39; 
+
+<span class="nf">star_target</span><span class="p">:</span>
+    <span class="o">|</span> &#39;*&#39; <span class="p">(</span>!&#39;*&#39; <span class="nf">star_target</span><span class="p">)</span> 
+    <span class="o">|</span> <span class="nf">target_with_star_atom</span>
+
+<span class="nf">target_with_star_atom</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;.&#39; NAME !<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;[&#39; <span class="nf">slices</span> &#39;]&#39; !<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">star_atom</span>
+
+<span class="nf">star_atom</span><span class="p">:</span>
+    <span class="o">|</span> NAME 
+    <span class="o">|</span> &#39;(&#39; <span class="nf">target_with_star_atom</span> &#39;)&#39; 
+    <span class="o">|</span> &#39;(&#39; <span class="p">[</span><span class="nf">star_targets_tuple_seq</span><span class="p">]</span> &#39;)&#39; 
+    <span class="o">|</span> &#39;[&#39; <span class="p">[</span><span class="nf">star_targets_list_seq</span><span class="p">]</span> &#39;]&#39; 
+
+<span class="nf">single_target</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">single_subscript_attribute_target</span>
+    <span class="o">|</span> NAME 
+    <span class="o">|</span> &#39;(&#39; <span class="nf">single_target</span> &#39;)&#39; 
+
+<span class="nf">single_subscript_attribute_target</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;.&#39; NAME !<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;[&#39; <span class="nf">slices</span> &#39;]&#39; !<span class="nf">t_lookahead</span> 
+
+<span class="nf">t_primary</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;.&#39; NAME &amp;<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;[&#39; <span class="nf">slices</span> &#39;]&#39; &amp;<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">t_primary</span> <span class="nf">genexp</span> &amp;<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;(&#39; <span class="p">[</span><span class="nf">arguments</span><span class="p">]</span> &#39;)&#39; &amp;<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">atom</span> &amp;<span class="nf">t_lookahead</span> 
+
+<span class="nf">t_lookahead</span><span class="p">:</span> &#39;(&#39; <span class="o">|</span> &#39;[&#39; <span class="o">|</span> &#39;.&#39;
+
+<span class="c c-Singleline"># Targets for del statements</span>
+<span class="c c-Singleline"># --------------------------</span>
+
+<span class="nf">del_targets</span><span class="p">:</span> &#39;,&#39;<span class="o">.</span><span class="nf">del_target</span><span class="o">+</span> <span class="p">[</span>&#39;,&#39;<span class="p">]</span> 
+
+<span class="nf">del_target</span><span class="p">:</span>
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;.&#39; NAME !<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">t_primary</span> &#39;[&#39; <span class="nf">slices</span> &#39;]&#39; !<span class="nf">t_lookahead</span> 
+    <span class="o">|</span> <span class="nf">del_t_atom</span>
+
+<span class="nf">del_t_atom</span><span class="p">:</span>
+    <span class="o">|</span> NAME 
+    <span class="o">|</span> &#39;(&#39; <span class="nf">del_target</span> &#39;)&#39; 
+    <span class="o">|</span> &#39;(&#39; <span class="p">[</span><span class="nf">del_targets</span><span class="p">]</span> &#39;)&#39; 
+    <span class="o">|</span> &#39;[&#39; <span class="p">[</span><span class="nf">del_targets</span><span class="p">]</span> &#39;]&#39; 
+
+<span class="c c-Singleline"># TYPING ELEMENTS</span>
+<span class="c c-Singleline"># ---------------</span>
+
+<span class="c c-Singleline"># type_expressions allow */** but ignore them</span>
+<span class="nf">type_expressions</span><span class="p">:</span>
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">expression</span><span class="o">+</span> &#39;,&#39; &#39;*&#39; <span class="nf">expression</span> &#39;,&#39; &#39;**&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">expression</span><span class="o">+</span> &#39;,&#39; &#39;*&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">expression</span><span class="o">+</span> &#39;,&#39; &#39;**&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> &#39;*&#39; <span class="nf">expression</span> &#39;,&#39; &#39;**&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> &#39;*&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> &#39;**&#39; <span class="nf">expression</span> 
+    <span class="o">|</span> &#39;,&#39;<span class="o">.</span><span class="nf">expression</span><span class="o">+</span> 
+
+<span class="nf">func_type_comment</span><span class="p">:</span>
+    <span class="o">|</span> NEWLINE TYPE_COMMENT &amp;<span class="p">(</span>NEWLINE INDENT<span class="p">)</span>   <span class="c c-Singleline"># Must be followed by indented block</span>
+    <span class="o">|</span> TYPE_COMMENT
+
+<span class="c c-Singleline"># ========================= END OF THE GRAMMAR ===========================</span>
+
+
+
+<span class="c c-Singleline"># ========================= START OF INVALID RULES =======================</span>
+
 </pre></div>
 </div>
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="toplevel_components.html"
-                        title="上一章"><span class="section-number">9. </span>最高层级组件</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="../library/index.html"
-                        title="下一章">Python 标准库</a></p>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="toplevel_components.html"
+                          title="上一章"><span class="section-number">9. </span>顶级组件</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="../library/index.html"
+                          title="下一章">Python 标准库</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/reference/grammar.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/reference/grammar.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -397,10 +1142,10 @@
           <a href="../library/index.html" title="Python 标准库"
              >下一页</a> |</li>
         <li class="right" >
-          <a href="toplevel_components.html" title="9. 最高层级组件"
+          <a href="toplevel_components.html" title="9. 顶级组件"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -410,46 +1155,58 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
-          <li class="nav-item nav-item-1"><a href="index.html" >Python语言参考</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="index.html" >Python 语言参考手册</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><span class="section-number">10. </span>完整的语法规范</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="通用操作系统服务" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/library/allos.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="本章中描述的各模块提供了在（几乎）所有的操作系统上可用的操作系统特性的接口，例如文件和时钟。这些接口通常以 Unix 或 C 接口为参考对象，不过在大多数其他系统上也可用。这里有一个概述： os--- 多种操作系统接口- 文件名，命令行参数，以及环境变量。, Python UTF-8 模式, 进程参数, 创建文件对象, 文件描述符操作- 查询终端的尺寸, 文件描述符的继承., 文件和目录- ..." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_library_allos_3460b24a.png" />
+<meta property="og:image:alt" content="本章中描述的各模块提供了在（几乎）所有的操作系统上可用的操作系统特性的接口，例如文件和时钟。这些接口通常以 Unix 或 C 接口为参考对象，不过在大多数其他系统上也可用。这里有一个概述： os--- 多种操作系统接口- 文件名，命令行参数，以及环境变量。, Python UTF-8 模式, 进程参数, 创建文件对象, 文件描述符操作- 查询终端的尺寸, 文件描述符的继承., 文件和目录- ..." />
+<meta name="description" content="本章中描述的各模块提供了在（几乎）所有的操作系统上可用的操作系统特性的接口，例如文件和时钟。这些接口通常以 Unix 或 C 接口为参考对象，不过在大多数其他系统上也可用。这里有一个概述： os--- 多种操作系统接口- 文件名，命令行参数，以及环境变量。, Python UTF-8 模式, 进程参数, 创建文件对象, 文件描述符操作- 查询终端的尺寸, 文件描述符的继承., 文件和目录- ..." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>通用操作系统服务 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>通用操作系统服务 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
     <link rel="next" title="os --- 多种操作系统接口" href="os.html" />
     <link rel="prev" title="secrets --- 生成管理密码的安全随机数" href="secrets.html" />
-    <link rel="canonical" href="https://docs.python.org/3/library/allos.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/library/allos.html">
       
     
 
@@ -41,48 +56,67 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="secrets.html"
-                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">secrets</span></code> --- 生成管理密码的安全随机数</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="os.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">os</span></code> --- 多种操作系统接口</a></p>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="secrets.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">secrets</span></code> --- 生成管理密码的安全随机数</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="os.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">os</span></code> --- 多种操作系统接口</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/allos.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/allos.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -91,11 +125,12 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -107,7 +142,7 @@
           <a href="secrets.html" title="secrets --- 生成管理密码的安全随机数"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -117,23 +152,31 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" accesskey="U">Python 标准库</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">通用操作系统服务</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -144,12 +187,13 @@
           <div class="body" role="main">
             
   <section id="generic-operating-system-services">
-<span id="allos"></span><h1>通用操作系统服务<a class="headerlink" href="#generic-operating-system-services" title="永久链接至标题">¶</a></h1>
-<p>本章中描述的各模块提供了在（几乎）所有的操作系统上可用的操作系统特性的接口，例如文件和时钟。这些接口通常以 Unix 或 C 接口为参考对象，不过在大多数其他系统上也可用。这里有一个概述：</p>
+<span id="allos"></span><h1 class="translated">通用操作系统服务<a class="headerlink" href="#generic-operating-system-services" title="Link to this heading">¶</a></h1>
+<p class="translated">本章中描述的各模块提供了在（几乎）所有的操作系统上可用的操作系统特性的接口，例如文件和时钟。这些接口通常以 Unix 或 C 接口为参考对象，不过在大多数其他系统上也可用。这里有一个概述：</p>
 <div class="toctree-wrapper compound">
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="os.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">os</span></code> --- 多种操作系统接口</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="os.html#file-names-command-line-arguments-and-environment-variables">文件名，命令行参数，以及环境变量。</a></li>
+<li class="toctree-l2"><a class="reference internal" href="os.html#python-utf-8-mode">Python UTF-8 模式</a></li>
 <li class="toctree-l2"><a class="reference internal" href="os.html#process-parameters">进程参数</a></li>
 <li class="toctree-l2"><a class="reference internal" href="os.html#file-object-creation">创建文件对象</a></li>
 <li class="toctree-l2"><a class="reference internal" href="os.html#file-descriptor-operations">文件描述符操作</a><ul>
@@ -172,6 +216,10 @@
 <li class="toctree-l3"><a class="reference internal" href="io.html#text-i-o">文本 I/O</a></li>
 <li class="toctree-l3"><a class="reference internal" href="io.html#binary-i-o">二进制 I/O</a></li>
 <li class="toctree-l3"><a class="reference internal" href="io.html#raw-i-o">原始 I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="io.html#text-encoding">文本编码格式</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="io.html#opt-in-encodingwarning">选择性的 EncodingWarning</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="io.html#high-level-module-interface">高阶模块接口</a></li>
@@ -197,16 +245,10 @@
 <li class="toctree-l2"><a class="reference internal" href="time.html#timezone-constants">时区常量</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="argparse.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">argparse</span></code> --- 命令行选项、参数和子命令解析器</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="argparse.html#example">示例</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="argparse.html#creating-a-parser">创建一个解析器</a></li>
-<li class="toctree-l3"><a class="reference internal" href="argparse.html#adding-arguments">添加参数</a></li>
-<li class="toctree-l3"><a class="reference internal" href="argparse.html#parsing-arguments">解析参数</a></li>
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="argparse.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">argparse</span></code> --- 用于命令行选项、参数和子命令的解析器</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="argparse.html#argumentparser-objects">ArgumentParser 对象</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#prog">prog</a></li>
-<li class="toctree-l3"><a class="reference internal" href="argparse.html#usage">usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="argparse.html#usage">usage（用法）</a></li>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#description">description</a></li>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#epilog">epilog</a></li>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#parents">parents</a></li>
@@ -217,6 +259,7 @@
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#allow-abbrev">allow_abbrev</a></li>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#conflict-handler">conflict_handler</a></li>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#add-help">add_help</a></li>
+<li class="toctree-l3"><a class="reference internal" href="argparse.html#exit-on-error">exit_on_error</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="argparse.html#the-add-argument-method">add_argument() 方法</a><ul>
@@ -254,9 +297,32 @@
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#customizing-file-parsing">自定义文件解析</a></li>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#exiting-methods">退出方法</a></li>
 <li class="toctree-l3"><a class="reference internal" href="argparse.html#intermixed-parsing">混合解析</a></li>
+<li class="toctree-l3"><a class="reference internal" href="argparse.html#registering-custom-types-or-actions">注册自定义的类型或动作</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="argparse.html#upgrading-optparse-code">升级 optparse 代码</a></li>
+<li class="toctree-l2"><a class="reference internal" href="argparse.html#exceptions">异常</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../howto/argparse.html">argparse 教程</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#concepts">概念</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#the-basics">基础</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#introducing-positional-arguments">位置参数介绍</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#introducing-optional-arguments">可选参数介绍</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="../howto/argparse.html#short-options">短选项</a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#combining-positional-and-optional-arguments">结合位置参数和可选参数</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#getting-a-little-more-advanced">进行一些小小的改进</a><ul>
+<li class="toctree-l5"><a class="reference internal" href="../howto/argparse.html#specifying-ambiguous-arguments">指定有歧义的参数</a></li>
+<li class="toctree-l5"><a class="reference internal" href="../howto/argparse.html#conflicting-options">矛盾的选项</a></li>
+</ul>
+</li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#how-to-translate-the-argparse-output">如何翻译 argparse 的输出</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#custom-type-converters">自定义类型转换器</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../howto/argparse.html#conclusion">后记</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../howto/argparse-optparse.html">升级 optparse 代码</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="getopt.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">getopt</span></code> --- C 风格的命令行选项解析器</a></li>
@@ -277,20 +343,23 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="logging.config.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">logging.config</span></code> --- 日志记录配置</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="logging.config.html#configuration-functions">配置函数</a></li>
+<li class="toctree-l2"><a class="reference internal" href="logging.config.html#security-considerations">安全考量</a></li>
 <li class="toctree-l2"><a class="reference internal" href="logging.config.html#configuration-dictionary-schema">配置字典架构</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="logging.config.html#dictionary-schema-details">字典架构细节</a></li>
 <li class="toctree-l3"><a class="reference internal" href="logging.config.html#incremental-configuration">增量配置</a></li>
 <li class="toctree-l3"><a class="reference internal" href="logging.config.html#object-connections">对象连接</a></li>
 <li class="toctree-l3"><a class="reference internal" href="logging.config.html#user-defined-objects">用户定义对象</a></li>
+<li class="toctree-l3"><a class="reference internal" href="logging.config.html#handler-configuration-order">处理器配置顺序</a></li>
 <li class="toctree-l3"><a class="reference internal" href="logging.config.html#access-to-external-objects">访问外部对象</a></li>
 <li class="toctree-l3"><a class="reference internal" href="logging.config.html#access-to-internal-objects">访问内部对象</a></li>
 <li class="toctree-l3"><a class="reference internal" href="logging.config.html#import-resolution-and-custom-importers">导入解析与定制导入器</a></li>
+<li class="toctree-l3"><a class="reference internal" href="logging.config.html#configuring-queuehandler-and-queuelistener">配置 QueueHandler 和 QueueListener</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="logging.config.html#configuration-file-format">配置文件格式</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="logging.handlers.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">logging.handlers</span></code> --- 日志处理程序</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="logging.handlers.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">logging.handlers</span></code> --- 日志处理器</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="logging.handlers.html#streamhandler">StreamHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="logging.handlers.html#filehandler">FileHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="logging.handlers.html#nullhandler">NullHandler</a></li>
@@ -309,8 +378,8 @@
 <li class="toctree-l2"><a class="reference internal" href="logging.handlers.html#queuelistener">QueueListener</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="getpass.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">getpass</span></code> --- 便携式密码输入工具</a></li>
-<li class="toctree-l1"><a class="reference internal" href="curses.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">curses</span></code> --- 终端字符单元显示的处理</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="getpass.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">getpass</span></code> --- 可移植的密码输入</a></li>
+<li class="toctree-l1"><a class="reference internal" href="curses.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">curses</span></code> --- 字符单元显示的终端处理</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="curses.html#functions">函数</a></li>
 <li class="toctree-l2"><a class="reference internal" href="curses.html#window-objects">Window 对象</a></li>
 <li class="toctree-l2"><a class="reference internal" href="curses.html#constants">常量</a></li>
@@ -321,17 +390,18 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="curses.ascii.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">curses.ascii</span></code> --- 用于 ASCII 字符的工具</a></li>
-<li class="toctree-l1"><a class="reference internal" href="curses.panel.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">curses.panel</span></code> --- curses 的 panel 栈扩展</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="curses.panel.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">curses.panel</span></code> --- 针对 curses 的面板栈扩展</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="curses.panel.html#functions">函数</a></li>
 <li class="toctree-l2"><a class="reference internal" href="curses.panel.html#panel-objects">Panel 对象</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="platform.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">platform</span></code> ---  获取底层平台的标识数据</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="platform.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">platform</span></code> ---  访问底层平台的标识数据</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="platform.html#cross-platform">跨平台</a></li>
 <li class="toctree-l2"><a class="reference internal" href="platform.html#java-platform">Java平台</a></li>
 <li class="toctree-l2"><a class="reference internal" href="platform.html#windows-platform">Windows平台</a></li>
-<li class="toctree-l2"><a class="reference internal" href="platform.html#mac-os-platform">Mac OS平台</a></li>
+<li class="toctree-l2"><a class="reference internal" href="platform.html#macos-platform">macOS 平台</a></li>
 <li class="toctree-l2"><a class="reference internal" href="platform.html#unix-platforms">Unix 平台</a></li>
+<li class="toctree-l2"><a class="reference internal" href="platform.html#linux-platforms">Linux 平台</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="errno.html"><code class="xref py py-mod docutils literal notranslate"><span class="pre">errno</span></code> --- 标准 errno 系统符号</a></li>
@@ -342,6 +412,7 @@
 <li class="toctree-l3"><a class="reference internal" href="ctypes.html#calling-functions">调用函数</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ctypes.html#fundamental-data-types">基础数据类型</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ctypes.html#calling-functions-continued">调用函数，继续</a></li>
+<li class="toctree-l3"><a class="reference internal" href="ctypes.html#calling-variadic-functions">调用可变函数</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ctypes.html#calling-functions-with-your-own-custom-data-types">使用自定义的数据类型调用函数</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ctypes.html#specifying-the-required-argument-types-function-prototypes">指定必选参数的类型(函数原型)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="ctypes.html#return-types">返回类型</a></li>
@@ -378,37 +449,46 @@
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="secrets.html"
-                        title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">secrets</span></code> --- 生成管理密码的安全随机数</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="os.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">os</span></code> --- 多种操作系统接口</a></p>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="secrets.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">secrets</span></code> --- 生成管理密码的安全随机数</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="os.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">os</span></code> --- 多种操作系统接口</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/allos.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/allos.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
@@ -420,7 +500,7 @@
           <a href="secrets.html" title="secrets --- 生成管理密码的安全随机数"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -430,46 +510,58 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">通用操作系统服务</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

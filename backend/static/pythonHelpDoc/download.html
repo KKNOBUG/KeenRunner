@@ -1,32 +1,35 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="./">
   <head>
     <meta charset="utf-8" />
-    <title>Download &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>下载 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
-    <script src="_static/jquery.js"></script>
-    <script src="_static/underscore.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/language_data.js"></script>
-    <script src="_static/translations.js"></script>
+    <script src="_static/documentation_options.js?v=b90486a5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/translations.js?v=beaddf03"></script>
     
     <script src="_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="about.html" />
+    <link rel="author" title="关于此文档" href="about.html" />
     <link rel="index" title="索引" href="genindex.html" />
     <link rel="search" title="搜索" href="search.html" />
-    <link rel="copyright" title="版权所有" href="copyright.html" />
-    <link rel="canonical" href="https://docs.python.org/3/download.html" />
+    <link rel="copyright" title="版权" href="copyright.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/download.html">
       
     
 
@@ -38,50 +41,76 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="_static/py.svg" />
+<link rel="stylesheet" href="_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="_static/py.svg">
             <script type="text/javascript" src="_static/copybutton.js"></script>
-            <script type="text/javascript" src="_static/menu.js"></script> 
+            <script type="text/javascript" src="_static/menu.js"></script>
+            <script type="text/javascript" src="_static/search-focus.js"></script>
+            <script type="text/javascript" src="_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
+    <meta property="og:title" content="Download — Python 3.12 documentation">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://docs.python.org/3/download.html">
+    <meta property="og:site_name" content="Python documentation">
+    <meta property="og:description" content="Download Python documentation.">
+    <meta property="og:image" content="https://docs.python.org/3/_static/og-image.png">
+    <meta name="description" content="Download Python documentation.">
+    <meta property="og:image:width" content="200">
+    <meta property="og:image:height" content="200">
+    <meta name="theme-color" content="#3776ab">
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
         </nav>
     </div>
 </div>
+
   
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="总目录"
+          <a href="genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
 
-          <li><img src="_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -91,22 +120,30 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="index.html">3.8.20 Documentation</a> &#187;
+      <a href="index.html">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href="">下载</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -116,81 +153,96 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-<h1>Download Python 3.8.20 Documentation</h1>
+<h1>下载 Python 3.12 文档</h1>
 
-<p><b>Last updated on: 12月 09, 2024.</b></p>
+<p><b>上次更新：3月 07, 2026 (18:57 UTC)。</b></p>
 
-<p>To download an archive containing all the documents for this version of
-Python in one of various formats, follow one of links in this table.</p>
+<p>要下载包含此 Python 版本的所有文档的特定格式的归档文件，
+请点击下表中相应的链接。</p>
 
 <table class="docutils">
-  <tr><th>Format</th><th>Packed as .zip</th><th>Packed as .tar.bz2</th></tr>
-  <tr><td>PDF (US-Letter paper size)</td>
-    <td><a href="archives/python-3.8.20-docs-pdf-letter.zip">Download</a> (ca. 13 MiB)</td>
-    <td><a href="archives/python-3.8.20-docs-pdf-letter.tar.bz2">Download</a> (ca. 13 MiB)</td>
+  <tr>
+    <th>格式</th>
+    <th>压缩为.zip</th>
+    <th>压缩为.tar.bz2</th>
   </tr>
-  <tr><td>PDF (A4 paper size)</td>
-    <td><a href="archives/python-3.8.20-docs-pdf-a4.zip">Download</a> (ca. 13 MiB)</td>
-    <td><a href="archives/python-3.8.20-docs-pdf-a4.tar.bz2">Download</a> (ca. 13 MiB)</td>
+  <tr>
+    <td>HTML</td>
+    <td><a href="archives/python-3.12-docs-html.zip">下载</a> (约 13 MiB)</td>
+    <td><a href="archives/python-3.12-docs-html.tar.bz2">下载</a> (约 8 MiB)</td>
   </tr>
-  <tr><td>HTML</td>
-    <td><a href="archives/python-3.8.20-docs-html.zip">Download</a> (ca. 9 MiB)</td>
-    <td><a href="archives/python-3.8.20-docs-html.tar.bz2">Download</a> (ca. 6 MiB)</td>
+  <tr>
+    <td>纯文本</td>
+    <td><a href="archives/python-3.12-docs-text.zip">下载</a> (约 4 MiB)</td>
+    <td><a href="archives/python-3.12-docs-text.tar.bz2">下载</a> (约 3 MiB)</td>
   </tr>
-  <tr><td>Plain Text</td>
-    <td><a href="archives/python-3.8.20-docs-text.zip">Download</a> (ca. 3 MiB)</td>
-    <td><a href="archives/python-3.8.20-docs-text.tar.bz2">Download</a> (ca. 2 MiB)</td>
-  </tr>
- <tr><td>EPUB</td>
-    <td><a href="archives/python-3.8.20-docs.epub">Download</a> (ca. 5 MiB)</td>
+  <tr>
+    <td>Texinfo</td>
+    <td><a href="archives/python-3.12-docs-texinfo.zip">下载</a> (约 9 MiB)</td>
+    <td><a href="archives/python-3.12-docs-texinfo.tar.bz2">下载</a> (约 7 MiB)</td>
+ </tr>
+ <tr>
+    <td>EPUB</td>
+    <td><a href="archives/python-3.12-docs.epub">下载</a> (约 6 MiB)</td>
     <td></td>
   </tr>
 </table>
 
-<p>These archives contain all the content in the documentation.</p>
+<p>这些归档文件包含文档中的全部内容。</p>
 
-<p>HTML Help (<code>.chm</code>) files are made available in the "Windows" section
-on the <a href="https://www.python.org/downloads/release/python-3820/">Python
-download page</a>.</p>
-
-
-<h2>Unpacking</h2>
-
-<p>Unix users should download the .tar.bz2 archives; these are bzipped tar
-archives and can be handled in the usual way using tar and the bzip2
-program. The <a href="http://www.info-zip.org">InfoZIP</a> unzip program can be
-used to handle the ZIP archives if desired. The .tar.bz2 archives provide the
-best compression and fastest download times.</p>
-
-<p>Windows users can use the ZIP archives since those are customary on that
-platform. These are created on Unix using the InfoZIP zip program.</p>
+<p>
+我们不再提供文档的预构建 PDF 的更新版本。
+之前已构建的归档仍可被继续使用：
+<a href="archives/python-3.12-docs-pdf-a4.zip">PDF (.zip 归档)</a>；
+<a href="archives/python-3.12-docs-pdf-a4.tar.bz2">PDF (.tar.bz2 归档)</a>。
+要构建 PDF 归档，请参考
+<a href="https://devguide.python.org/documentation/start-documenting/#building-the-documentation">开发者指南</a> 中的说明
+并在 CPython 代码仓库副本的 <code>Doc/</code> 目录中运行运行 <code>make dist-pdf</code>。
+</p>
 
 
-<h2>Problems</h2>
+<h2>解压缩</h2>
 
-<p>If you have comments or suggestions for the Python documentation, please send
-email to <a href="mailto:docs@python.org">docs@python.org</a>.</p>
+<p>Unix 用户应当下载 .tar.bz2 归档文件；这些文件是使用了 bzip 的
+tar 归档并可以使用 tar 和 bzip2 程序通过正常的方式来处理。
+在需要时可以使用 <a href="https://infozip.sourceforge.net">Info-ZIP</a> 解压缩程序
+来处理 ZIP 归档文件。 .tar.bz2 归档文件提供了最佳压缩率
+和最快的下载速度。</p>
 
+<p>Windows 用户可以使用 ZIP 归档文件因为它是该平台上惯常使用的。
+这种文件在 Unix 可使用 Info-ZIP 压缩程序来创建。</p>
+
+
+<h2>遇到问题</h2>
+
+<p>如果你对 Python 有任何评论或建议，请发送邮件到
+<a href="mailto:docs@python.org">docs@python.org</a>。</p>
+
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="genindex.html" title="总目录"
+          <a href="genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
 
-          <li><img src="_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -200,45 +252,57 @@ email to <a href="mailto:docs@python.org">docs@python.org</a>.</p>
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="index.html">3.8.20 Documentation</a> &#187;
+      <a href="index.html">3.12.13 Documentation</a> &#187;
     </li>
 
+        <li class="nav-item nav-item-this"><a href="">下载</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>

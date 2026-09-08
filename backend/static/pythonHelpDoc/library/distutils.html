@@ -1,35 +1,50 @@
-
 <!DOCTYPE html>
 
-<html xmlns="http://www.w3.org/1999/xhtml" lang="zh_CN">
+<html lang="zh-CN" data-content_root="../">
   <head>
-    <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="distutils --- 构建和安装 Python 模块" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/library/distutils.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="此模块已不再是 Python 标准库的一部分。 它在 Python 3.10 中被弃用后又在 Python 3.12 中被移除 。 移除是在 PEP 632 中决定的，并提供 迁移建议 。 提供 distutils 模块的最后一个 Python 版本是 Python 3.11 。" />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_library_distutils_9ef17247.png" />
+<meta property="og:image:alt" content="此模块已不再是 Python 标准库的一部分。 它在 Python 3.10 中被弃用后又在 Python 3.12 中被移除 。 移除是在 PEP 632 中决定的，并提供 迁移建议 。 提供 distutils 模块的最后一个 Python 版本是 Python 3.11 。" />
+<meta name="description" content="此模块已不再是 Python 标准库的一部分。 它在 Python 3.10 中被弃用后又在 Python 3.12 中被移除 。 移除是在 PEP 632 中决定的，并提供 迁移建议 。 提供 distutils 模块的最后一个 Python 版本是 Python 3.11 。" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
 
-    <title>distutils 构建和安装 Python 模块 &#8212; Python 3.8.20 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>distutils --- 构建和安装 Python 模块 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <link rel="stylesheet" href="../_static/pydoctheme.css" type="text/css" />
-    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
     
-    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/language_data.js"></script>
-    <script src="../_static/translations.js"></script>
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
     
     <script src="../_static/sidebar.js"></script>
     
     <link rel="search" type="application/opensearchdescription+xml"
-          title="在 Python 3.8.20 文档 中搜索"
+          title="在 Python 3.12.13 文档 中搜索"
           href="../_static/opensearch.xml"/>
-    <link rel="author" title="关于这些文档" href="../about.html" />
+    <link rel="author" title="关于此文档" href="../about.html" />
     <link rel="index" title="索引" href="../genindex.html" />
     <link rel="search" title="搜索" href="../search.html" />
-    <link rel="copyright" title="版权所有" href="../copyright.html" />
-    <link rel="next" title="ensurepip --- 引导 pip 安装器" href="ensurepip.html" />
-    <link rel="prev" title="软件打包和分发" href="distribution.html" />
-    <link rel="canonical" href="https://docs.python.org/3/library/distutils.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
+    <link rel="next" title="imp --- 访问 import 的内部对象" href="imp.html" />
+    <link rel="prev" title="asyncore --- 异步套接字处理器" href="asyncore.html" />
     
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/library/distutils.html">
       
     
 
@@ -41,48 +56,67 @@
         }
       }
     </style>
-<link rel="shortcut icon" type="image/png" href="../_static/py.svg" />
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
             <script type="text/javascript" src="../_static/copybutton.js"></script>
-            <script type="text/javascript" src="../_static/menu.js"></script> 
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
 
   </head>
 <body>
 <div class="mobile-nav">
     <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
-           aria-pressed="false" aria-expanded="false" role="button" aria-label="Menu" />
-    <label for="menuToggler" class="toggler__label">
-        <span></span>
-    </label>
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
     <nav class="nav-content" role="navigation">
-         <a href="https://www.python.org/" class="nav-logo">
-             <img src="../_static/py.svg" alt="Logo"/>
-         </a>
-        <div class="version_switcher_placeholder"></div>
-        <form role="search" class="search" action="../search.html" method="get">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
-                <path fill-rule="nonzero"
-                        d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="#444"></path>
-            </svg>
-            <input type="text" name="q" aria-label="快速搜索"/>
-            <input type="submit" value="转向"/>
-        </form>
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
     </nav>
     <div class="menu-wrapper">
         <nav class="menu" role="navigation" aria-label="main navigation">
             <div class="language_switcher_placeholder"></div>
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="distribution.html"
-                        title="上一章">软件打包和分发</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="ensurepip.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ensurepip</span></code> --- 引导 <code class="docutils literal notranslate"><span class="pre">pip</span></code> 安装器</a></p>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="asyncore.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">asyncore</span></code> --- 异步套接字处理器</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="imp.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">imp</span></code> --- 访问 import 的内部对象</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/distutils.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/distutils.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
@@ -91,23 +125,24 @@
     </div>
 </div>
 
-    <div class="related" role="navigation" aria-label="related navigation">
+  
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              accesskey="I">索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
         <li class="right" >
-          <a href="ensurepip.html" title="ensurepip --- 引导 pip 安装器"
+          <a href="imp.html" title="imp --- 访问 import 的内部对象"
              accesskey="N">下一页</a> |</li>
         <li class="right" >
-          <a href="distribution.html" title="软件打包和分发"
+          <a href="asyncore.html" title="asyncore --- 异步套接字处理器"
              accesskey="P">上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -117,24 +152,32 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
-          <li class="nav-item nav-item-2"><a href="distribution.html" accesskey="U">软件打包和分发</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="removed.html" accesskey="U">移除的模块</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code> --- 构建和安装 Python 模块</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>    
@@ -145,69 +188,67 @@
           <div class="body" role="main">
             
   <section id="module-distutils">
-<span id="distutils-building-and-installing-python-modules"></span><h1><a class="reference internal" href="#module-distutils" title="distutils: Support for building and installing Python modules into an existing Python installation."><code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code></a> 构建和安装 Python 模块<a class="headerlink" href="#module-distutils" title="永久链接至标题">¶</a></h1>
-<hr class="docutils" />
-<p><a class="reference internal" href="#module-distutils" title="distutils: Support for building and installing Python modules into an existing Python installation."><code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code></a> 提供了对于构建和安装 Python 包的支持。新模块可以是由 100%-纯 Python 代码写成的，也可以是用 C 写成的扩展模块，甚至可以同时包括 Python 和 C。</p>
-<p>大多数 Python 用户 <em>不会</em> 想要直接使用这个包，而是使用 Python 包官方维护的跨版本工具。特别地， <a class="reference external" href="https://setuptools.readthedocs.io/en/latest/">setuptools</a> 是一个对于 <a class="reference internal" href="#module-distutils" title="distutils: Support for building and installing Python modules into an existing Python installation."><code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code></a> 的增强选项，它能提供：</p>
-<ul class="simple">
-<li><p>对声明项目依赖的支持</p></li>
-<li><p>额外的用于配置哪些文件包含在源代码发布中的机制（包括与版本控制系统集成需要的插件）</p></li>
-<li><p>生成项目“进入点”的能力，进入点可用作应用插件系统的基础</p></li>
-<li><p>自动在安装时间生成 Windows 命令行可执行文件的能力，而不是需要预编译它们</p></li>
-<li><p>跨所有受支持的 Python 版本上的一致的表现</p></li>
-</ul>
-<p>推荐的  <a class="reference external" href="https://pip.pypa.io/">pip</a> 安装器用 <code class="docutils literal notranslate"><span class="pre">setuptools</span></code> 运行所有的 <code class="docutils literal notranslate"><span class="pre">setup.py</span></code> 脚本，即使脚本本身只引了 <code class="docutils literal notranslate"><span class="pre">distutils</span></code> 包。参考 <a class="reference external" href="https://packaging.python.org">Python Packaging User Guide</a>  获得更多信息。</p>
-<p>为了打包工具的作者和用户能更好理解当前的打包和分发系统，遗留的基于 <a class="reference internal" href="#module-distutils" title="distutils: Support for building and installing Python modules into an existing Python installation."><code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code></a> 的用户文档和 API 参考保持可用：</p>
-<ul class="simple">
-<li><p><a class="reference internal" href="../install/index.html#install-index"><span class="std std-ref">安装Python模块（旧版）</span></a></p></li>
-<li><p><a class="reference internal" href="../distutils/index.html#distutils-index"><span class="std std-ref">分发 Python 模块（遗留版本）</span></a></p></li>
-</ul>
+<span id="distutils-building-and-installing-python-modules"></span><h1 class="translated"><code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code> --- 构建和安装 Python 模块<a class="headerlink" href="#module-distutils" title="Link to this heading">¶</a></h1>
+<div class="deprecated-removed">
+<p><span class="versionmodified removed">Deprecated since version 3.10, removed in version 3.12.</span></p>
+</div>
+<p class="translated">此模块已不再是 Python 标准库的一部分。 它在 Python 3.10 中被弃用后又在 <a class="reference internal" href="../whatsnew/3.12.html#whatsnew312-removed-distutils"><span class="std std-ref">Python 3.12 中被移除</span></a>。 移除是在 <span class="target" id="index-2"></span><a class="pep reference external" href="https://peps.python.org/pep-0632/"><strong>PEP 632</strong></a> 中决定的，并提供 <a class="reference external" href="https://peps.python.org/pep-0632/#migration-advice">迁移建议</a>。</p>
+<p class="translated">提供 <code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code> 模块的最后一个 Python 版本是 <a class="reference external" href="https://docs.python.org/3.11/library/distutils.html">Python 3.11</a>。</p>
 </section>
 
 
+            <div class="clearer"></div>
           </div>
         </div>
       </div>
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
-  <h4>上一个主题</h4>
-  <p class="topless"><a href="distribution.html"
-                        title="上一章">软件打包和分发</a></p>
-  <h4>下一个主题</h4>
-  <p class="topless"><a href="ensurepip.html"
-                        title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ensurepip</span></code> --- 引导 <code class="docutils literal notranslate"><span class="pre">pip</span></code> 安装器</a></p>
+  <div>
+    <h4>上一主题</h4>
+    <p class="topless"><a href="asyncore.html"
+                          title="上一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">asyncore</span></code> --- 异步套接字处理器</a></p>
+  </div>
+  <div>
+    <h4>下一主题</h4>
+    <p class="topless"><a href="imp.html"
+                          title="下一章"><code class="xref py py-mod docutils literal notranslate"><span class="pre">imp</span></code> --- 访问 import 的内部对象</a></p>
+  </div>
   <div role="note" aria-label="source link">
-    <h3>本页</h3>
+    <h3>当前页</h3>
     <ul class="this-page-menu">
       <li><a href="../bugs.html">报告 Bug</a></li>
       <li>
-        <a href="https://github.com/python/cpython/blob/3.8/Doc/library/distutils.rst"
-            rel="nofollow">显示源代码
+        <a href="https://github.com/python/cpython/blob/main/Doc/library/distutils.rst"
+            rel="nofollow">显示源码
         </a>
       </li>
     </ul>
   </div>
         </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
       </div>
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>导航</h3>
       <ul>
         <li class="right" style="margin-right: 10px">
-          <a href="../genindex.html" title="总目录"
+          <a href="../genindex.html" title="总索引"
              >索引</a></li>
         <li class="right" >
           <a href="../py-modindex.html" title="Python 模块索引"
              >模块</a> |</li>
         <li class="right" >
-          <a href="ensurepip.html" title="ensurepip --- 引导 pip 安装器"
+          <a href="imp.html" title="imp --- 访问 import 的内部对象"
              >下一页</a> |</li>
         <li class="right" >
-          <a href="distribution.html" title="软件打包和分发"
+          <a href="asyncore.html" title="asyncore --- 异步套接字处理器"
              >上一页</a> |</li>
 
-          <li><img src="../_static/py.svg" alt="python logo" style="vertical-align: middle; margin-top: -1px"/></li>
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
           <li><a href="https://www.python.org/">Python</a> &#187;</li>
           <li class="switchers">
             <div class="language_switcher_placeholder"></div>
@@ -217,47 +258,59 @@
               
           </li>
     <li id="cpython-language-and-version">
-      <a href="../index.html">3.8.20 Documentation</a> &#187;
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
     </li>
 
           <li class="nav-item nav-item-1"><a href="index.html" >Python 标准库</a> &#187;</li>
-          <li class="nav-item nav-item-2"><a href="distribution.html" >软件打包和分发</a> &#187;</li>
+          <li class="nav-item nav-item-2"><a href="removed.html" >移除的模块</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href=""><code class="xref py py-mod docutils literal notranslate"><span class="pre">distutils</span></code> --- 构建和安装 Python 模块</a></li>
                 <li class="right">
                     
 
     <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
-          <input placeholder="快速搜索" aria-label="快速搜索" type="text" name="q" />
-          <input type="submit" value="转向" />
-          <input type="hidden" name="check_keywords" value="yes" />
-          <input type="hidden" name="area" value="default" />
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
         </form>
     </div>
                      |
                 </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
             
       </ul>
     </div>  
     <div class="footer">
-    &copy; <a href="../copyright.html">版权所有</a> 2001-2024, Python Software Foundation.
-    <br />
-    This page is licensed under the Python Software Foundation License Version 2.
-    <br />
-    Examples, recipes, and other code in the documentation are additionally licensed under the Zero Clause BSD License.
-    <br />
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
     
-    <br />
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
 
-    The Python Software Foundation is a non-profit corporation.
-<a href="https://www.python.org/psf/donations/">Please donate.</a>
-<br />
-    <br />
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
 
-    最后更新于 12月 09, 2024.
-    <a href="https://docs.python.org/3/bugs.html">Found a bug</a>?
-    <br />
-
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 2.4.4.
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
     </div>
 
   </body>
