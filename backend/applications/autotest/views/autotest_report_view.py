@@ -263,10 +263,11 @@ async def search_batch_reports(
     try:
         state = 0 if batch_detail_in.state is None else batch_detail_in.state
         total, data = await services.report_curd.search_batch_reports(
-            batch_code=batch_detail_in.batch_code,
-            state=state,
             page=batch_detail_in.page,
             page_size=batch_detail_in.page_size,
+            order=batch_detail_in.order,
+            batch_code=batch_detail_in.batch_code,
+            state=state,
         )
         return SuccessResponse(message="批次报告列表查询成功", data=data, total=total)
     except NotFoundException as e:

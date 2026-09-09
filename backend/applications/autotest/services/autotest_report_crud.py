@@ -408,19 +408,23 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
                 report_item["step_pass_ratio"] = f"{round(float(row['rep_pass_ratio'] or 0), 2)}%"
         return total, data
 
-    async def search_batch_reports(self, batch_code: str, state: int, page: int, page_size: int) -> Tuple[int, List[Dict[str, Any]]]:
+    async def search_batch_reports(self, page: int, page_size: int, order: List[str], batch_code: str, state: int) -> Tuple[int, List[Dict]]:
         """
         报告维度下钻查询：按批次标识精确分页返回同批次全部报告(一行=一条报告, 不做批次唯一化), 供/search_batch_reports接口渲染“执行报告”抽屉。
 
-        :param batch_code: 批次标识代码(精确等值, 命中batch_code索引)
-        :param state: 状态(0:启用, 1:禁用)
         :param page: 页码
         :param page_size: 每页数量
+        :param order: 排序字段列表
+        :param batch_code: 批次标识代码(精确等值, 命中batch_code索引)
+        :param state: 状态(0:启用, 1:禁用)
         :return: (报告总数, 当前页报告行列表)
         """
         q: Q = Q(batch_code=batch_code) & Q(state=state)
         select_result: Tuple[int, List[AutoTestReportModel]] = await self.select_reports(
-            search=q, page=page, page_size=page_size, order=["case_st_time", "id"]
+            search=q,
+            page=page,
+            page_size=page_size,
+            order=order
         )
         total: int = select_result[0]
         instances: List[AutoTestReportModel] = select_result[1]

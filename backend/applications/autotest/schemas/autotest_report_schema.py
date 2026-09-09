@@ -87,16 +87,18 @@ class AutoTestApiReportBatchSelect(BaseModel):
 
     page: int = Field(default=1, ge=1, description="页码（按批次）")
     page_size: int = Field(default=10, ge=1, le=200, description="每页批次数")
-    task_code: str = Field(..., min_length=1, max_length=64, description="任务标识代码（必填）")
+    task_code: str = Field(..., min_length=1, max_length=64, description="任务标识代码")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
 class AutoTestApiReportBatchDetailSelect(BaseModel):
     """按批次标识分页查询同批次执行报告入参（报告维度，分页粒度=报告）。"""
 
-    batch_code: str = Field(..., min_length=1, max_length=64, description="批次标识代码（必填）")
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=200, description="每页数量")
+    order: List[str] = Field(default_factory=lambda: ["case_st_time", "id"], description="排序字段")
+
+    batch_code: str = Field(..., min_length=1, max_length=64, description="批次标识代码")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
