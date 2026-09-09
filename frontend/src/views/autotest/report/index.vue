@@ -317,6 +317,16 @@ const batchColumns = computed(() => [
     },
   },
   {
+    title: '通过率',
+    key: 'step_pass_ratio',
+    width: 100,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return dashText(row.step_pass_ratio)
+    },
+  },
+  {
     title: '执行人员',
     key: 'created_user',
     width: 100,
@@ -468,6 +478,16 @@ const datasetColumns = [
         return renderResultTag(isCaseSuccess(row.case_state))
       }
       return h('span', '-')
+    },
+  },
+  {
+    title: '通过率',
+    key: 'step_pass_ratio',
+    width: 100,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return dashText(row.step_pass_ratio)
     },
   },
   {

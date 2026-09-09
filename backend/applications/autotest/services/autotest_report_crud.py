@@ -13,7 +13,7 @@ from typing import Optional, List, Tuple, Dict, Any, Set
 
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
-from tortoise.functions import Count, Max
+from tortoise.functions import Count, Max, Sum
 from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.models.autotest_report_model import AutoTestReportModel
@@ -334,8 +334,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
 
     async def search_reports(self, search: Q, report_in: AutoTestApiReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        执行维度主查询：将多数据源执行(同batch_code)唯一化为一行代表行, 批次行携带has_multiple_dataset与dataset_count标识,
-        供/search接口渲染执行历史列表; 批次明细由search_batch_reports按批次标识下钻。
+        执行维度主查询：将多数据源执行(同batch_code)唯一化为一行代表行, 批次行携带has_multiple_dataset与dataset_count,
+        多数据源批次行的step_pass_ratio为批内累积通过率; 批次明细由search_batch_reports按批次标识下钻。
 
         三段式查询控制资源: 段1a/1b并发聚合执行维度轻量行 → 内存合并排序分页 →
         段2代表行按主键回查全字段。
@@ -353,17 +353,24 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
                 rep_id=Max("id"),
                 rep_time=Max("case_st_time"),
                 rep_count=Count("id"),
-            ).group_by("batch_code").values("batch_code", "rep_id", "rep_time", "rep_count"),
-            self.model.filter(search & (Q(batch_code__isnull=True) | Q(batch_code=""))).values("id", "case_st_time"),
+                # 批内步骤通过数/步骤总数合计, 供批次行计算累积通过率
+                rep_pass_sum=Sum("step_pass_count"),
+                rep_total_sum=Sum("step_total"),
+            ).group_by("batch_code").values("batch_code", "rep_id", "rep_time", "rep_count", "rep_pass_sum", "rep_total_sum"),
+            self.model.filter(search & (Q(batch_code__isnull=True) | Q(batch_code=""))).values("id", "case_st_time", "step_pass_ratio"),
         )
         exec_rows: List[Dict[str, Any]] = [{
             "rep_id": row["rep_id"],
             "rep_time": row["rep_time"],
-            "dataset_count": row["rep_count"]
+            "dataset_count": row["rep_count"],
+            # 批次累积通过率 = 批内步骤通过数合计 / 步骤总数合计
+            "rep_pass_ratio": round(row["rep_pass_sum"] / row["rep_total_sum"] * 100, 2) if row["rep_total_sum"] else None
         } for row in batch_rep_rows] + [{
             "rep_id": row["id"],
             "rep_time": row["case_st_time"],
-            "dataset_count": 1
+            "dataset_count": 1,
+            # 单报告行累积通过率 = 自身步骤通过率
+            "rep_pass_ratio": round(float(row["step_pass_ratio"] or 0), 2)
         } for row in single_rows]
         exec_rows.sort(key=lambda row: (row["rep_time"] or "", row["rep_id"]), reverse=True)
         total: int = len(exec_rows)
@@ -396,6 +403,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
         for row, report_item in zip(exec_rows, data):
             report_item["has_multiple_dataset"] = bool(report_item.get("batch_code")) and row["dataset_count"] > 1
             report_item["dataset_count"] = row["dataset_count"]
+            if report_item["has_multiple_dataset"]:
+                # 多数据源批次行: step_pass_ratio覆盖为批内累积通过率(步骤通过数合计/步骤总数合计)
+                report_item["step_pass_ratio"] = f"{round(float(row['rep_pass_ratio'] or 0), 2)}%"
         return total, data
 
     async def search_batch_reports(self, batch_code: str, state: int, page: int, page_size: int) -> Tuple[int, List[Dict[str, Any]]]:
