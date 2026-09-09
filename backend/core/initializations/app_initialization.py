@@ -218,7 +218,10 @@ async def enhancer_swagger_docs_html(request: Request) -> HTMLResponse:
         title=f"{PROJECT_CONFIG.APP_TITLE} - Swagger UI",
     )
     html = response.body.decode("utf-8")
-    enhancer_tag = f'<script src="{PROJECT_CONFIG.APP_OPENAPI_ENHANCER_URL}"></script>'
+    enhancer_tag = (
+        f'<script src="{PROJECT_CONFIG.APP_OPENAPI_ENHANCER_URL}'
+        f'?v={PROJECT_CONFIG.APP_VERSION}"></script>'
+    )
     if "</body>" not in html:
         return response
     return HTMLResponse(html.replace("</body>", f"{enhancer_tag}</body>", 1))
@@ -229,13 +232,13 @@ def register_routers(app: FastAPI) -> None:
     app.mount("/static", StaticFiles(directory=PROJECT_CONFIG.STATIC_DIR), name="static")
     app.openapi_version = PROJECT_CONFIG.APP_OPENAPI_VERSION
     swagger_modules = sys.modules["fastapi.openapi.docs"].get_swagger_ui_html.__kwdefaults__
-    swagger_modules["swagger_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL
-    swagger_modules["swagger_css_url"] = PROJECT_CONFIG.APP_OPENAPI_CSS_URL
+    swagger_modules["swagger_js_url"] = f"{PROJECT_CONFIG.APP_OPENAPI_JS_URL}?v={PROJECT_CONFIG.APP_VERSION}"
+    swagger_modules["swagger_css_url"] = f"{PROJECT_CONFIG.APP_OPENAPI_CSS_URL}?v={PROJECT_CONFIG.APP_VERSION}"
     swagger_modules["swagger_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL
     redoc_modules = sys.modules["fastapi.openapi.docs"].get_redoc_html.__kwdefaults__
     redoc_modules["redoc_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL_REDOC
     redoc_modules["redoc_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL_REDOC
-    app.add_route(PROJECT_CONFIG.APP_DOCS_URL, enhancer_swagger_docs_html, name="swagger_docs_html")
+    app.add_route(PROJECT_CONFIG.APP_DOCS_URL, enhancer_swagger_docs_html, name="enhancer_swagger_docs_html")
 
     # 导入路由蓝图
     from backend.applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
