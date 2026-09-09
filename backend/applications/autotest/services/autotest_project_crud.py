@@ -365,7 +365,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         """
         查询全部启用应用。
 
-        :return: ([{env_id, project_name, project_mark}], total)；env_id为应用主键id，project_mark取project_code
+        :return: ([{project_id, project_name, project_mark}], total)；project_id为应用主键id，project_mark取project_code
         """
         query = self.model.filter(state=0)
         total = await query.count()
@@ -374,7 +374,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
         )
         data = [
             {
-                "env_id": row["id"],
+                "project_id": row["id"],
                 "project_name": row["project_name"],
                 "project_mark": row["project_code"],
             }
