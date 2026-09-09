@@ -70,7 +70,7 @@ class ProjectConfig(BaseSettings):
 ## 认证与权限
 
 - JWT 无状态认证（argon2 密码加密），Token 可吊销
-- 按 summary 前缀识别接口行为，为管理员 / 标准用户 / 宾客用户三类内置角色自动绑定路由与菜单
+- 按 summary 前缀识别接口行为，为管理员/标准用户/宾客用户三类内置角色自动绑定路由与菜单
 
 ## 接口规范
 
