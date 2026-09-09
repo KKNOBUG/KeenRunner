@@ -6,7 +6,7 @@
   // 工具栏收纳态类名: 收起后仅保留把手按钮, 避免窄视口下遮挡内容区点击
   var TOOLBAR_COLLAPSED_CLASS = "collapsed";
   // 上跳/下跳的固定像素步长; 超出页首/页尾可滚动范围时由浏览器自动截断, 天然形成边界无操作
-  var JUMP_DISTANCE = 600;
+  var JUMP_DISTANCE = 800;
 
   var TOOLBAR_BUTTONS = [
     { key: "expand", label: "展开分类", title: "一键展开所有分类(显示全部接口列表)" },
