@@ -1,8 +1,8 @@
 <script setup>
 /**
  * 用例历史记录（仅用例页手动/定时执行产生的报告，不含任务调度 task_code）：
- * 1) 左抽屉「历史记录」：一行 = 点一次「执行」（按 batch_code）
- * 2) 同次多条报告（多数据源）→ 再开左抽屉「执行报告」
+ * 1) 左抽屉「历史记录」：一行 = 一次执行（后端回填 has_multiple_dataset 标识是否多数据源执行）
+ * 2) 多数据源报告 → 按批次标识再查同批次报告列表（左抽屉「执行报告」）
  * 3) 右抽屉 ReportDetailDrawer：步骤执行明细
  */
 import { computed, h, reactive, ref, watch } from 'vue'
@@ -19,11 +19,7 @@ import {
 import ReportDetailDrawer from '@/components/autotest/ReportDetailDrawer.vue'
 import { formatDateTime, renderIcon } from '@/utils'
 import api from '@/api'
-import {
-  buildBatchRows,
-  filterCaseOnlyReports,
-  isCaseSuccess,
-} from '@/views/autotest/utils/reportBatchRows'
+import { isCaseSuccess } from '@/views/autotest/utils/reportBatchRows'
 
 const HISTORY_TIP =
   '- 无数据源：执行一次（一个批次标识对应一个报告标识）可以直接查看步骤执行详情\n- 多数据源：执行多次（一个批次标识对应多个报告标识）通过报告查看步骤执行详情'
@@ -52,7 +48,7 @@ const drawerVisible = computed({
 const caseId = computed(() => props.caseRow?.case_id ?? null)
 
 const loading = ref(false)
-const batchRows = ref([])
+const reportRows = ref([])
 
 const pagination = reactive({
   page: 1,
@@ -60,17 +56,23 @@ const pagination = reactive({
   pageSizes: [10, 20, 50, 100],
   itemCount: 0,
   prefix({ itemCount }) {
-    return `共 ${itemCount} 次执行`
+    return `共 ${itemCount} 条记录`
   },
 })
 
-const pagedBatchRows = computed(() => {
-  const start = (pagination.page - 1) * pagination.pageSize
-  return batchRows.value.slice(start, start + pagination.pageSize)
-})
-
 const datasetDrawerVisible = ref(false)
-const activeBatch = ref(null)
+const activeBatchCode = ref(null)
+const batchReports = ref([])
+const batchLoading = ref(false)
+const batchPagination = reactive({
+  page: 1,
+  pageSize: 10,
+  pageSizes: [10, 20, 50, 100],
+  itemCount: 0,
+  prefix({ itemCount }) {
+    return `共 ${itemCount} 条记录`
+  },
+})
 const detailDrawerVisible = ref(false)
 const detailReportRow = ref(null)
 
@@ -81,47 +83,26 @@ function dashText(val) {
   return h('span', String(val))
 }
 
-async function fetchAllReportsByCaseId(id) {
-  if (id == null || id === '') return []
-  const pageSize = 200
-  let page = 1
-  let total = Infinity
-  const collected = []
-  while (collected.length < total) {
-    const res = await api.getApiReportList({
-      case_id: Number(id),
-      page,
-      page_size: pageSize,
-      order: ['-case_st_time'],
-      exclude_task_code: true,
-    })
-    const chunk = Array.isArray(res?.data) ? res.data : []
-    total = Number(res?.total) || chunk.length
-    collected.push(...chunk)
-    if (!chunk.length || chunk.length < pageSize) break
-    page += 1
-    if (page > 50) break
-  }
-  // 兜底：客户端再过滤一次任务调度报告
-  return filterCaseOnlyReports(collected)
-}
-
+/** 行级查询报告列表（后端固定排除任务调度报告，每行自带 has_multiple_dataset 标识） */
 async function loadHistory() {
   const id = caseId.value
   if (id == null || id === '') {
-    batchRows.value = []
+    reportRows.value = []
     pagination.itemCount = 0
     return
   }
   loading.value = true
   try {
-    const reports = await fetchAllReportsByCaseId(id)
-    batchRows.value = buildBatchRows(reports)
-    pagination.itemCount = batchRows.value.length
-    pagination.page = 1
+    const res = await api.getApiReportList({
+      case_id: Number(id),
+      page: pagination.page,
+      page_size: pagination.pageSize,
+    })
+    reportRows.value = Array.isArray(res?.data) ? res.data : []
+    pagination.itemCount = Number(res?.total) || reportRows.value.length
   } catch (e) {
     window.$message?.error?.(e?.message || e?.data?.message || '加载历史记录失败')
-    batchRows.value = []
+    reportRows.value = []
     pagination.itemCount = 0
   } finally {
     loading.value = false
@@ -133,27 +114,36 @@ watch(
   (v) => {
     if (v) {
       datasetDrawerVisible.value = false
-      activeBatch.value = null
+      activeBatchCode.value = null
+      batchReports.value = []
+      batchPagination.page = 1
+      batchPagination.itemCount = 0
       detailDrawerVisible.value = false
       detailReportRow.value = null
+      pagination.page = 1
       loadHistory()
     } else {
       datasetDrawerVisible.value = false
-      activeBatch.value = null
+      activeBatchCode.value = null
+      batchReports.value = []
+      batchPagination.page = 1
+      batchPagination.itemCount = 0
       detailDrawerVisible.value = false
       detailReportRow.value = null
-      batchRows.value = []
+      reportRows.value = []
     }
   },
 )
 
 function onPageChange(page) {
   pagination.page = page
+  loadHistory()
 }
 
 function onPageSizeChange(pageSize) {
   pagination.pageSize = pageSize
   pagination.page = 1
+  loadHistory()
 }
 
 function openDetailDrawer(reportRow) {
@@ -161,17 +151,54 @@ function openDetailDrawer(reportRow) {
   detailDrawerVisible.value = true
 }
 
-/** 仅 1 条报告 → 直接看步骤；多数据源 → 先看执行报告（步骤页 singleDatasetOnly 时始终直达详情） */
-function openBatchDetail(batchRow) {
-  if (!batchRow?.runs?.length) return
-  if (props.singleDatasetOnly || !batchRow.has_multi_dataset) {
-    openDetailDrawer(batchRow.runs[0])
+/** 多数据源报告 → 按批次标识分页查同批次报告列表（左抽屉「执行报告」）；单报告（含步骤页调试场景）→ 直接看步骤明细 */
+async function openBatchDetail(row) {
+  if (!row?.has_multiple_dataset || props.singleDatasetOnly) {
+    openDetailDrawer(row)
     return
   }
-  activeBatch.value = batchRow
+  activeBatchCode.value = row.batch_code
+  batchPagination.page = 1
   datasetDrawerVisible.value = true
   detailDrawerVisible.value = false
   detailReportRow.value = null
+  await loadBatchReports()
+}
+
+/** 行级查询批次报告列表（batch_code 精确匹配，服务端按 case_st_time 升序分页返回） */
+async function loadBatchReports() {
+  if (!activeBatchCode.value) {
+    batchReports.value = []
+    batchPagination.itemCount = 0
+    return
+  }
+  batchLoading.value = true
+  try {
+    const res = await api.getApiReportBatchReports({
+      batch_code: activeBatchCode.value,
+      page: batchPagination.page,
+      page_size: batchPagination.pageSize,
+    })
+    batchReports.value = Array.isArray(res?.data) ? res.data : []
+    batchPagination.itemCount = Number(res?.total) || batchReports.value.length
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '加载执行报告失败')
+    batchReports.value = []
+    batchPagination.itemCount = 0
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+function onBatchPageChange(page) {
+  batchPagination.page = page
+  loadBatchReports()
+}
+
+function onBatchPageSizeChange(pageSize) {
+  batchPagination.pageSize = pageSize
+  batchPagination.page = 1
+  loadBatchReports()
 }
 
 function renderResultTag(ok) {
@@ -192,12 +219,14 @@ const batchColumns = computed(() => [
   },
   {
     title: '执行结果',
-    key: 'execute_result',
+    key: 'case_state',
     width: 100,
     align: 'center',
     render(row) {
-      if (row.report_count <= 0) return h('span', '-')
-      return renderResultTag(!!row.execute_result)
+      if (row.case_state === true || row.case_state === 'true' || row.case_state === false || row.case_state === 'false') {
+        return renderResultTag(isCaseSuccess(row.case_state))
+      }
+      return h('span', '-')
     },
   },
   {
@@ -206,21 +235,42 @@ const batchColumns = computed(() => [
     width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
+    render(row) {
+      return dashText(row.created_user)
+    },
   },
   {
     title: '执行时间',
-    key: 'execute_time',
+    key: 'case_st_time',
     width: 180,
     align: 'center',
     render(row) {
-      return h('span', row.execute_time ? formatDateTime(row.execute_time) : '-')
+      return h('span', row.case_st_time ? formatDateTime(row.case_st_time) : '-')
     },
   },
   {
     title: '执行耗时',
-    key: 'elapsed_display',
+    key: 'case_elapsed',
     width: 100,
     align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '数据源',
+    key: 'dataset_name',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      // 批次代表行: 展示批内数据场景数而非单一场景名
+      if (row.has_multiple_dataset) {
+        return h(NTag, { size: 'small', type: 'success', bordered: false }, { default: () => `${row.dataset_count} 个数据场景` })
+      }
+      if (!row.dataset_name) {
+        return h('span', { style: { color: 'var(--n-text-color-3)' } }, '未使用数据源')
+      }
+      return h(NTag, { size: 'small', type: 'warning', bordered: false }, { default: () => row.dataset_name })
+    },
   },
   {
     title: '批次标识',
@@ -239,9 +289,6 @@ const batchColumns = computed(() => [
     align: 'center',
     ellipsis: { tooltip: true },
     render(row) {
-      if (props.singleDatasetOnly && row.has_multi_dataset && row.runs?.[0]) {
-        return dashText(row.runs[0].report_code)
-      }
       return dashText(row.report_code)
     },
   },
@@ -252,7 +299,7 @@ const batchColumns = computed(() => [
     align: 'center',
     fixed: 'right',
     render(row) {
-      const multi = !props.singleDatasetOnly && row.has_multi_dataset
+      const multi = !props.singleDatasetOnly && row.has_multiple_dataset
       return h(
         NButton,
         {
@@ -278,13 +325,14 @@ const batchColumns = computed(() => [
 const datasetColumns = [
   {
     title: '序号',
-    key: 'run_index',
+    key: '_index',
     width: 50,
     align: 'center',
+    render: (_, index) => index + 1,
   },
   {
     title: '数据源',
-    key: 'dataset_display',
+    key: 'dataset_name',
     width: 200,
     align: 'center',
     ellipsis: { tooltip: true },
@@ -402,12 +450,12 @@ const datasetColumns = [
       </template>
 
       <NSpin :show="loading">
-        <div v-if="pagedBatchRows.length || loading" class="case-history-table-wrap">
+        <div v-if="reportRows.length || loading" class="case-history-table-wrap">
           <NDataTable
             :columns="batchColumns"
-            :data="pagedBatchRows"
-            :row-key="(r) => r._key"
-            :scroll-x="1500"
+            :data="reportRows"
+            :row-key="(r) => r.report_code || r.report_id"
+            :scroll-x="1800"
             :single-line="true"
             size="small"
             striped
@@ -430,7 +478,7 @@ const datasetColumns = [
     </NDrawerContent>
   </NDrawer>
 
-  <!-- ② 执行报告：同一次执行下，每个数据源一条（步骤页 singleDatasetOnly 时不使用） -->
+  <!-- ② 执行报告：多数据源报告按批次标识查出的同批次报告列表（步骤页 singleDatasetOnly 时不使用） -->
   <NDrawer
     v-if="!singleDatasetOnly"
     v-model:show="datasetDrawerVisible"
@@ -439,17 +487,31 @@ const datasetColumns = [
     :trap-focus="false"
   >
     <NDrawerContent title="执行报告" closable :native-scrollbar="false">
-      <NDataTable
-        v-if="activeBatch?.runs?.length"
-        :columns="datasetColumns"
-        :data="activeBatch.runs"
-        :row-key="(r) => r.report_code || r.report_id || r.id"
-        :scroll-x="1800"
-        :single-line="true"
-        size="small"
-        striped
-      />
-      <div v-else class="case-history-empty">该次执行暂无报告</div>
+      <NSpin :show="batchLoading">
+        <NDataTable
+          v-if="batchReports.length"
+          :columns="datasetColumns"
+          :data="batchReports"
+          :row-key="(r) => r.report_code || r.report_id"
+          :scroll-x="1800"
+          :single-line="true"
+          size="small"
+          striped
+        />
+        <div v-else class="case-history-empty">该次执行暂无报告</div>
+        <div v-if="batchPagination.itemCount > 0" class="case-history-pagination">
+          <NPagination
+            v-model:page="batchPagination.page"
+            v-model:page-size="batchPagination.pageSize"
+            :item-count="batchPagination.itemCount"
+            :page-sizes="batchPagination.pageSizes"
+            show-size-picker
+            :prefix="batchPagination.prefix"
+            @update:page="onBatchPageChange"
+            @update:page-size="onBatchPageSizeChange"
+          />
+        </div>
+      </NSpin>
     </NDrawerContent>
   </NDrawer>
 

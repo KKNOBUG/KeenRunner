@@ -139,7 +139,6 @@ async function loadHistory() {
       task_code: code,
       page: pagination.page,
       page_size: pagination.pageSize,
-      include_reports: true,
     })
     const list = Array.isArray(res?.data) ? res.data : []
     batchRows.value = list.map((b, idx) => {

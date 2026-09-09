@@ -394,7 +394,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             row["step_pass_ratio"] = f"{round(float(row.get('step_pass_ratio') or 0), 2)}%"
             row["case_name"] = case_name_map.get(row["case_id"], "")
         for row, report_item in zip(exec_rows, data):
-            report_item["has_multiple_dataset"] = bool(report_item.get("batch_code"))
+            report_item["has_multiple_dataset"] = bool(report_item.get("batch_code")) and row["dataset_count"] > 1
             report_item["dataset_count"] = row["dataset_count"]
         return total, data
 

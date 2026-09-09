@@ -208,6 +208,8 @@ export default {
   getApiReportList: (data = {}) => request.post('/autotest/report/search', data),
   /** 任务执行历史：按 batch_code 聚合，含 execute_result */
   getApiReportBatches: (data = {}) => request.post('/autotest/report/search_batches', data),
+  /** 批次执行报告列表：按 batch_code 精确分页查询同批次全部数据源报告 */
+  getApiReportBatchReports: (data = {}) => request.post('/autotest/report/search_batch_reports', data),
   deleteApiReport: (params = {}) => {
     const queryParams = []
     if (params.report_id) queryParams.push(`report_id=${params.report_id}`)
