@@ -16,12 +16,15 @@ import tortoise.exceptions
 from aerich import Command
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
+from fastapi.openapi.docs import get_swagger_ui_html
 from starlette.exceptions import HTTPException
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
 from starlette.staticfiles import StaticFiles
 from tortoise.contrib.fastapi import register_tortoise
-from tortoise.exceptions import DoesNotExist, OperationalError
+from tortoise.exceptions import DoesNotExist
 
 from backend.configure import PROJECT_CONFIG, LOGGER
 from backend.core.exceptions.http_exceptions import (
@@ -208,6 +211,19 @@ def register_middlewares(app: FastAPI):
     app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
+async def enhancer_swagger_docs_html(request: Request) -> HTMLResponse:
+    """docs 文档页: 复用FastAPI默认模板, 在</body>前注入增强脚本。"""
+    response = get_swagger_ui_html(
+        openapi_url=PROJECT_CONFIG.APP_OPENAPI_URL,
+        title=f"{PROJECT_CONFIG.APP_TITLE} - Swagger UI",
+    )
+    html = response.body.decode("utf-8")
+    enhancer_tag = f'<script src="{PROJECT_CONFIG.APP_OPENAPI_ENHANCER_URL}"></script>'
+    if "</body>" not in html:
+        return response
+    return HTMLResponse(html.replace("</body>", f"{enhancer_tag}</body>", 1))
+
+
 def register_routers(app: FastAPI) -> None:
     # 挂载静态文件
     app.mount("/static", StaticFiles(directory=PROJECT_CONFIG.STATIC_DIR), name="static")
@@ -219,6 +235,7 @@ def register_routers(app: FastAPI) -> None:
     redoc_modules = sys.modules["fastapi.openapi.docs"].get_redoc_html.__kwdefaults__
     redoc_modules["redoc_js_url"] = PROJECT_CONFIG.APP_OPENAPI_JS_URL_REDOC
     redoc_modules["redoc_favicon_url"] = PROJECT_CONFIG.APP_OPENAPI_FAVICON_URL_REDOC
+    app.add_route(PROJECT_CONFIG.APP_DOCS_URL, enhancer_swagger_docs_html, name="swagger_docs_html")
 
     # 导入路由蓝图
     from backend.applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
