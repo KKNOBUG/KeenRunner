@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta property="og:title" content="Python 3.15 中的待移除功能" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://docs.python.org/3/deprecations/pending-removal-in-3.15.html" />
+<meta property="og:site_name" content="Python documentation" />
+<meta property="og:description" content="http.server.CGIHTTPRequestHandler 将同 python -m http.server 中与其相关的--cgi 旗标一起被移除。 它已经过时并且很少被使用。 不存在直接的替代品。 对于建立 Web 服务器与请求处理器的接口的任务来说 任何东西 都比 CGI 要好。, importlib:- load_module() 方法：改用 exec_module() 。...." />
+<meta property="og:image:width" content="1146" />
+<meta property="og:image:height" content="600" />
+<meta property="og:image" content="https://docs.python.org/3.12/zh-cn/_images/social_previews/summary_deprecations_pending-removal-in-3.15_d8121ef0.png" />
+<meta property="og:image:alt" content="http.server.CGIHTTPRequestHandler 将同 python -m http.server 中与其相关的--cgi 旗标一起被移除。 它已经过时并且很少被使用。 不存在直接的替代品。 对于建立 Web 服务器与请求处理器的接口的任务来说 任何东西 都比 CGI 要好。, importlib:- load_module() 方法：改用 exec_module() 。...." />
+<meta name="description" content="http.server.CGIHTTPRequestHandler 将同 python -m http.server 中与其相关的--cgi 旗标一起被移除。 它已经过时并且很少被使用。 不存在直接的替代品。 对于建立 Web 服务器与请求处理器的接口的任务来说 任何东西 都比 CGI 要好。, importlib:- load_module() 方法：改用 exec_module() 。...." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="theme-color" content="#3776ab">
+
+    <title>Python 3.15 中的待移除功能 &#8212; Python 3.12.13 文档</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/classic.css?v=234b1a7c" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=89a2f22a" />
+    <link id="pygments_dark_css" media="(prefers-color-scheme: dark)" rel="stylesheet" type="text/css" href="../_static/pygments_dark.css?v=5349f25f" />
+    
+    <script src="../_static/documentation_options.js?v=b90486a5"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/translations.js?v=beaddf03"></script>
+    
+    <script src="../_static/sidebar.js"></script>
+    
+    <link rel="search" type="application/opensearchdescription+xml"
+          title="在 Python 3.12.13 文档 中搜索"
+          href="../_static/opensearch.xml"/>
+    <link rel="author" title="关于此文档" href="../about.html" />
+    <link rel="index" title="索引" href="../genindex.html" />
+    <link rel="search" title="搜索" href="../search.html" />
+    <link rel="copyright" title="版权" href="../copyright.html" />
+    
+      
+      <script defer data-domain="docs.python.org" src="https://analytics.python.org/js/script.outbound-links.js"></script>
+      
+      <link rel="canonical" href="https://docs.python.org/3/deprecations/pending-removal-in-3.15.html">
+      
+    
+
+    
+    <style>
+      @media only screen {
+        table.full-width-table {
+            width: 100%;
+        }
+      }
+    </style>
+<link rel="stylesheet" href="../_static/pydoctheme_dark.css" media="(prefers-color-scheme: dark)" id="pydoctheme_dark_css">
+    <link rel="shortcut icon" type="image/png" href="../_static/py.svg">
+            <script type="text/javascript" src="../_static/copybutton.js"></script>
+            <script type="text/javascript" src="../_static/menu.js"></script>
+            <script type="text/javascript" src="../_static/search-focus.js"></script>
+            <script type="text/javascript" src="../_static/themetoggle.js"></script> 
+            <script type="text/javascript" src="../_static/rtd_switcher.js"></script>
+            <meta name="readthedocs-addons-api-version" content="1">
+
+  </head>
+<body>
+<div class="mobile-nav">
+    <input type="checkbox" id="menuToggler" class="toggler__input" aria-controls="navigation"
+           aria-pressed="false" aria-expanded="false" role="button" aria-label="菜单">
+    <nav class="nav-content" role="navigation">
+        <label for="menuToggler" class="toggler__label">
+            <span></span>
+        </label>
+        <span class="nav-items-wrapper">
+            <a href="https://www.python.org/" class="nav-logo">
+                <img src="../_static/py.svg" alt="Python logo">
+            </a>
+            <span class="version_switcher_placeholder"></span>
+            <form role="search" class="search" action="../search.html" method="get">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" class="search-icon">
+                    <path fill-rule="nonzero" fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 001.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 00-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 005.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                </svg>
+                <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q">
+                <input type="submit" value="转到">
+            </form>
+        </span>
+    </nav>
+    <div class="menu-wrapper">
+        <nav class="menu" role="navigation" aria-label="main navigation">
+            <div class="language_switcher_placeholder"></div>
+            
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label>
+  <div role="note" aria-label="source link">
+    <h3>当前页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/main/Doc/deprecations/pending-removal-in-3.15.rst"
+            rel="nofollow">显示源码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </nav>
+    </div>
+</div>
+
+  
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总索引"
+             accesskey="I">索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
+    </li>
+
+        <li class="nav-item nav-item-this"><a href="">Python 3.15 中的待移除功能</a></li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
+        </form>
+    </div>
+                     |
+                </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
+            
+      </ul>
+    </div>    
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="pending-removal-in-python-3-15">
+<h1 class="translated">Python 3.15 中的待移除功能<a class="headerlink" href="#pending-removal-in-python-3-15" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p class="translated"><a class="reference internal" href="../library/http.server.html#http.server.CGIHTTPRequestHandler" title="http.server.CGIHTTPRequestHandler"><code class="xref py py-class docutils literal notranslate"><span class="pre">http.server.CGIHTTPRequestHandler</span></code></a> 将同 <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">-m</span> <span class="pre">http.server</span></code> 中与其相关的 <code class="docutils literal notranslate"><span class="pre">--cgi</span></code> 旗标一起被移除。 它已经过时并且很少被使用。 不存在直接的替代品。 对于建立 Web 服务器与请求处理器的接口的任务来说 <em>任何东西</em> 都比 CGI 要好。</p></li>
+<li><p class="translated"><a class="reference internal" href="../library/importlib.html#module-importlib" title="importlib: The implementation of the import machinery."><code class="xref py py-mod docutils literal notranslate"><span class="pre">importlib</span></code></a>:</p>
+<ul>
+<li><p class="translated"><code class="docutils literal notranslate"><span class="pre">load_module()</span></code> 方法：改用 <code class="docutils literal notranslate"><span class="pre">exec_module()</span></code>。</p></li>
+</ul>
+</li>
+<li><p class="translated"><a class="reference internal" href="../library/locale.html#module-locale" title="locale: Internationalization services."><code class="xref py py-class docutils literal notranslate"><span class="pre">locale</span></code></a>: <a class="reference internal" href="../library/locale.html#locale.getdefaultlocale" title="locale.getdefaultlocale"><code class="xref py py-func docutils literal notranslate"><span class="pre">locale.getdefaultlocale()</span></code></a> 在 Python 3.11 中已被弃用并且原计划在 Python 3.13 中移除 (<a class="reference external" href="https://github.com/python/cpython/issues/90817">gh-90817</a>)，但移除时间已被推迟至 Python 3.15。 请改用 <a class="reference internal" href="../library/locale.html#locale.setlocale" title="locale.setlocale"><code class="xref py py-func docutils literal notranslate"><span class="pre">locale.setlocale()</span></code></a>, <a class="reference internal" href="../library/locale.html#locale.getencoding" title="locale.getencoding"><code class="xref py py-func docutils literal notranslate"><span class="pre">locale.getencoding()</span></code></a> 和 <a class="reference internal" href="../library/locale.html#locale.getlocale" title="locale.getlocale"><code class="xref py py-func docutils literal notranslate"><span class="pre">locale.getlocale()</span></code></a>。 （由 Hugo van Kemenade 在 <a class="reference external" href="https://github.com/python/cpython/issues/111187">gh-111187</a> 中贡献。）</p></li>
+<li><p class="translated"><a class="reference internal" href="../library/pathlib.html#module-pathlib" title="pathlib: Object-oriented filesystem paths"><code class="xref py py-mod docutils literal notranslate"><span class="pre">pathlib</span></code></a>：<a class="reference internal" href="../library/pathlib.html#pathlib.PurePath.is_reserved" title="pathlib.PurePath.is_reserved"><code class="xref py py-meth docutils literal notranslate"><span class="pre">pathlib.PurePath.is_reserved()</span></code></a> 已被弃用，并计划在 Python 3.15 中移除。从 Python 3.13 起，请在 Windows 上使用``os.path.isreserved`` 检测保留路径。</p></li>
+<li><p class="translated"><a class="reference internal" href="../library/platform.html#module-platform" title="platform: Retrieves as much platform identifying data as possible."><code class="xref py py-mod docutils literal notranslate"><span class="pre">platform</span></code></a>: <a class="reference internal" href="../library/platform.html#platform.java_ver" title="platform.java_ver"><code class="xref py py-func docutils literal notranslate"><span class="pre">java_ver()</span></code></a> 已被弃用并将在 3.15 中移除。 它几乎未经测试，具有令人困惑的 API，并且仅适用于 Jython 支持。 （由 Nikita Sobolev 在 <a class="reference external" href="https://github.com/python/cpython/issues/116349">gh-116349</a> 中贡献。）</p></li>
+<li><p class="translated"><a class="reference internal" href="../library/sysconfig.html#module-sysconfig" title="sysconfig: Python's configuration information"><code class="xref py py-mod docutils literal notranslate"><span class="pre">sysconfig</span></code></a>:</p>
+<ul>
+<li><p class="translated"><a class="reference internal" href="../library/sysconfig.html#sysconfig.is_python_build" title="sysconfig.is_python_build"><code class="xref py py-func docutils literal notranslate"><span class="pre">sysconfig.is_python_build()</span></code></a> 的 <em>check_home</em> 参数自 Python 3.12 起已被弃用。</p></li>
+</ul>
+</li>
+<li><p class="translated"><a class="reference internal" href="../library/threading.html#module-threading" title="threading: Thread-based parallelism."><code class="xref py py-mod docutils literal notranslate"><span class="pre">threading</span></code></a>: 向 <a class="reference internal" href="../library/threading.html#threading.RLock" title="threading.RLock"><code class="xref py py-func docutils literal notranslate"><span class="pre">threading.RLock()</span></code></a> 传入任意参数的做法现已被弃用。 C 版本允许任意数量的 args 和 kwargs，但它们都会被忽略。 Python 版本不允许任何参数。 在 Python 3.15 中将从 <a class="reference internal" href="../library/threading.html#threading.RLock" title="threading.RLock"><code class="xref py py-func docutils literal notranslate"><span class="pre">threading.RLock()</span></code></a> 移除所有参数。 （由 Nikita Sobolev 在 <a class="reference external" href="https://github.com/python/cpython/issues/102029">gh-102029</a> 中贡献。）</p></li>
+<li><p class="translated"><a class="reference internal" href="../library/typing.html#typing.NamedTuple" title="typing.NamedTuple"><code class="xref py py-class docutils literal notranslate"><span class="pre">typing.NamedTuple</span></code></a>:</p>
+<ul>
+<li><p class="translated">创建 <code class="xref py py-class docutils literal notranslate"><span class="pre">NamedTuple</span></code> 类 (<code class="docutils literal notranslate"><span class="pre">NT</span> <span class="pre">=</span> <span class="pre">NamedTuple(&quot;NT&quot;,</span> <span class="pre">x=int)</span></code>) 的关键字参数语法从未写入文档且已被弃用，并将在 3.15 中被禁止。 请改用基于类的语法或函数语法。</p></li>
+</ul>
+</li>
+<li><p class="translated"><a class="reference internal" href="../library/types.html#module-types" title="types: Names for built-in types."><code class="xref py py-mod docutils literal notranslate"><span class="pre">types</span></code></a>:</p>
+<ul>
+<li><p class="translated"><a class="reference internal" href="../library/types.html#types.CodeType" title="types.CodeType"><code class="xref py py-class docutils literal notranslate"><span class="pre">types.CodeType</span></code></a>: 访问 <a class="reference internal" href="../reference/datamodel.html#codeobject.co_lnotab" title="codeobject.co_lnotab"><code class="xref py py-attr docutils literal notranslate"><span class="pre">co_lnotab</span></code></a> 的做法自 3.10 起已根据 <span class="target" id="index-2"></span><a class="pep reference external" href="https://peps.python.org/pep-0626/"><strong>PEP 626</strong></a> 被弃用并曾计划在 3.12 中移除，但在 3.12 中实际仅设置了 <a class="reference internal" href="../library/exceptions.html#DeprecationWarning" title="DeprecationWarning"><code class="xref py py-exc docutils literal notranslate"><span class="pre">DeprecationWarning</span></code></a>。 可能会在 3.15 中移除。 （由 Nikita Sobolev 在 <a class="reference external" href="https://github.com/python/cpython/issues/101866">gh-101866</a> 中贡献。）</p></li>
+</ul>
+</li>
+<li><p class="translated"><a class="reference internal" href="../library/typing.html#module-typing" title="typing: Support for type hints (see :pep:`484`)."><code class="xref py py-mod docutils literal notranslate"><span class="pre">typing</span></code></a>:</p>
+<ul>
+<li><p class="translated">当使用函数式语法创建 <code class="xref py py-class docutils literal notranslate"><span class="pre">NamedTuple</span></code> 类时，不向 <em>fields</em> 形参传值的做法 (<code class="docutils literal notranslate"><span class="pre">NT</span> <span class="pre">=</span> <span class="pre">NamedTuple(&quot;NT&quot;)</span></code>) 已被弃用。 将 <code class="docutils literal notranslate"><span class="pre">None</span></code> 传给 <em>fields</em> 形参的做法 (<code class="docutils literal notranslate"><span class="pre">NT</span> <span class="pre">=</span> <span class="pre">NamedTuple(&quot;NT&quot;,</span> <span class="pre">None)</span></code>) 也已被弃用。 两者都将在 Python 3.15 中被禁止。 要创建拥有 0 个字段的 <code class="xref py py-class docutils literal notranslate"><span class="pre">NamedTuple</span></code> 类，请使用 <code class="docutils literal notranslate"><span class="pre">class</span> <span class="pre">NT(NamedTuple):</span> <span class="pre">pass</span></code> 或 <code class="docutils literal notranslate"><span class="pre">NT</span> <span class="pre">=</span> <span class="pre">NamedTuple(&quot;NT&quot;,</span> <span class="pre">[])</span></code>。</p></li>
+</ul>
+</li>
+<li><p class="translated"><a class="reference internal" href="../library/typing.html#typing.TypedDict" title="typing.TypedDict"><code class="xref py py-class docutils literal notranslate"><span class="pre">typing.TypedDict</span></code></a>: 当使用函数语法创建 <code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code> 类时，不向 <em>fields</em> 形参传值 (<code class="docutils literal notranslate"><span class="pre">TD</span> <span class="pre">=</span> <span class="pre">TypedDict(&quot;TD&quot;)</span></code>) 的行为已被弃用。 将 <code class="docutils literal notranslate"><span class="pre">None</span></code> 传给 <em>fields</em> 形参 (<code class="docutils literal notranslate"><span class="pre">TD</span> <span class="pre">=</span> <span class="pre">TypedDict(&quot;TD&quot;,</span> <span class="pre">None)</span></code>) 的行为也已被弃用。 两者都将在 Python 3.15 中被禁止。 要创建拥有 0 个字段的 <code class="xref py py-class docutils literal notranslate"><span class="pre">TypedDict</span></code> 类，请使用 <code class="docutils literal notranslate"><span class="pre">class</span> <span class="pre">TD(TypedDict):</span> <span class="pre">pass</span></code> 或 <code class="docutils literal notranslate"><span class="pre">TD</span> <span class="pre">=</span> <span class="pre">TypedDict(&quot;TD&quot;,</span> <span class="pre">{})</span></code>。</p></li>
+<li><p class="translated"><a class="reference internal" href="../library/wave.html#module-wave" title="wave: Provide an interface to the WAV sound format."><code class="xref py py-mod docutils literal notranslate"><span class="pre">wave</span></code></a>: 已弃用 <a class="reference internal" href="../library/wave.html#wave.Wave_read" title="wave.Wave_read"><code class="xref py py-class docutils literal notranslate"><span class="pre">wave.Wave_read</span></code></a> 和 <a class="reference internal" href="../library/wave.html#wave.Wave_write" title="wave.Wave_write"><code class="xref py py-class docutils literal notranslate"><span class="pre">wave.Wave_write</span></code></a> 类的 <code class="docutils literal notranslate"><span class="pre">getmark()</span></code>, <code class="docutils literal notranslate"><span class="pre">setmark()</span></code> 和 <code class="docutils literal notranslate"><span class="pre">getmarkers()</span></code> 方法。 它们将在 Python 3.15 中被移除。 （由 Victor Stinner 在 <a class="reference external" href="https://github.com/python/cpython/issues/105096">gh-105096</a> 中贡献。）</p></li>
+</ul>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div role="note" aria-label="source link">
+    <h3>当前页</h3>
+    <ul class="this-page-menu">
+      <li><a href="../bugs.html">报告 Bug</a></li>
+      <li>
+        <a href="https://github.com/python/cpython/blob/main/Doc/deprecations/pending-removal-in-3.15.rst"
+            rel="nofollow">显示源码
+        </a>
+      </li>
+    </ul>
+  </div>
+        </div>
+<div id="sidebarbutton" title="折叠边栏">
+<span>«</span>
+</div>
+
+      </div>
+      <div class="clearer"></div>
+    </div>  
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>导航</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="总索引"
+             >索引</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python 模块索引"
+             >模块</a> |</li>
+
+          <li><img src="../_static/py.svg" alt="Python logo" style="vertical-align: middle; margin-top: -1px"></li>
+          <li><a href="https://www.python.org/">Python</a> &#187;</li>
+          <li class="switchers">
+            <div class="language_switcher_placeholder"></div>
+            <div class="version_switcher_placeholder"></div>
+          </li>
+          <li>
+              
+          </li>
+    <li id="cpython-language-and-version">
+      <a href="../index.html">3.12.13 Documentation</a> &#187;
+    </li>
+
+        <li class="nav-item nav-item-this"><a href="">Python 3.15 中的待移除功能</a></li>
+                <li class="right">
+                    
+
+    <div class="inline-search" role="search">
+        <form class="inline-search" action="../search.html" method="get">
+          <input placeholder="快速搜索" aria-label="快速搜索" type="search" name="q" id="search-box">
+          <input type="submit" value="转到">
+        </form>
+    </div>
+                     |
+                </li>
+            <li class="right">
+<label class="theme-selector-label">
+    主题
+    <select class="theme-selector" oninput="activateTheme(this.value)">
+        <option value="auto" selected>自动</option>
+        <option value="light">明亮</option>
+        <option value="dark">黑暗</option>
+    </select>
+</label> |</li>
+            
+      </ul>
+    </div>  
+    <div class="footer">
+    &copy; <a href="../copyright.html">版权</a> 2001-2026, Python Software Foundation.
+    <br>
+    本页面采用 Python 软件基金会许可证第 2 版授权。
+    <br>
+    文档中的示例、代码片段及其他代码内容额外采用零条款 BSD 许可证授权。
+    <br>
+    
+      更多信息请参阅《<a href="/license.html"> 历史与许可 </a>》。<br>
+    
+    
+    <br>
+
+    Python 软件基金会是一家非营利性公司。
+<a href="https://www.python.org/psf/donations/">请进行捐赠。</a>
+<br>
+    <br>
+      最后更新于3月 07, 2026 (18:57 UTC) 。
+    
+      <a href="/bugs.html">发现了错误</a>？
+    
+    <br>
+
+    使用<a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3 创建。
+    </div>
+
+  </body>
+</html>

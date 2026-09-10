@@ -11,6 +11,8 @@
           :columns="detailColumns"
           :data="filteredDetailList"
           :loading="loading"
+          :row-key="(row) => row.detail_id"
+          default-expand-all
           :scroll-x="1200"
           :single-line="false"
           striped
@@ -585,9 +587,52 @@ const hasAnyExecutionLogLines = computed(
         executionNormalLines.value.length > 0
 )
 
+// 明细树：接口已按步骤开始时间+id排序（父先于子的前序遍历序），单遍扫描建树；
+// 以 step_id 记录“最近活跃父行”：子行归属时间上最近的同步骤容器行（兼容嵌套容器多圈多行）；
+// 父缺失/NULL 归根（存量报告与孤儿明细兜底），浅拷贝包装不污染原始行；
+// 顺带生成层级路径序号 display_no(1、1.1、2.1)，消除引用链下 step_no 重复的困惑
+const detailTree = computed(() => {
+  const lastNodeByStepId = new Map()
+  const roots = []
+  for (const row of detailList.value) {
+    const node = { ...row, children: [] }
+    const parent = node.parent_step_id != null ? lastNodeByStepId.get(node.parent_step_id) : null
+    if (parent) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
+    lastNodeByStepId.set(row.step_id, node)
+  }
+  const walk = (nodes, prefix) => {
+    nodes.forEach((node, index) => {
+      node.display_no = prefix ? `${prefix}.${index + 1}` : `${index + 1}`
+      if (node.children.length) {
+        walk(node.children, node.display_no)
+      } else {
+        delete node.children
+      }
+    })
+  }
+  walk(roots, '')
+  return roots
+})
+
+// 仅看失败：裁剪树但保留失败节点及其祖先链，避免失败子步骤脱离容器上下文
 const filteredDetailList = computed(() => {
-  if (!onlyShowFailed.value) return detailList.value
-  return detailList.value.filter((item) => item.step_state === false || item.step_state === 'false')
+  if (!onlyShowFailed.value) return detailTree.value
+  const isFailed = (row) => row.step_state === false || row.step_state === 'false'
+  const prune = (nodes) => {
+    const kept = []
+    for (const node of nodes) {
+      const children = node.children ? prune(node.children) : []
+      if (isFailed(node) || children.length) {
+        kept.push(children.length ? { ...node, children } : node)
+      }
+    }
+    return kept
+  }
+  return prune(detailTree.value)
 })
 
 const formatJson = (data) => {
@@ -1092,8 +1137,8 @@ const getMethodTagType = (method) => {
 const detailColumns = [
   {
     title: '步骤序号',
-    key: 'step_no',
-    width: 40,
+    key: 'display_no',
+    width: 60,
     align: 'center',
   },
   {
@@ -1202,13 +1247,23 @@ watch(
       }
       loading.value = true
       try {
-        const res = await api.getApiDetailList({
+        let res = await api.getApiDetailList({
           case_id: row.case_id,
           report_code: row.report_code,
           page: 1,
           page_size: 1000,
           state: 0,
         })
+        // 树形展示需要单报告全量明细：首查页长不足时按总数放大重拉一次
+        if (res?.total > (res?.data?.length ?? 0)) {
+          res = await api.getApiDetailList({
+            case_id: row.case_id,
+            report_code: row.report_code,
+            page: 1,
+            page_size: res.total,
+            state: 0,
+          })
+        }
         detailList.value = res?.data ?? []
       } catch (e) {
         window.$message?.error?.(e?.message || e?.data?.message || '查询明细失败')

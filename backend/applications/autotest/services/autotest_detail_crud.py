@@ -250,7 +250,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
                 await query.count(),
                 await query.offset((page - 1) * page_size).limit(page_size).order_by(*self.normalize_order_fields(order)).values(
                     "id", "case_id",
-                    "step_no", "step_name", "step_type", "step_state", "step_elapsed", "step_exec_except",
+                    "step_id", "parent_step_id", "step_no", "step_name", "step_type", "step_state", "step_elapsed", "step_exec_except",
                     "loop_cycles", "branch_index", "branch_match", "dataset_name", "response_elapsed",
                     "request_config_name", "request_env_name", "database_operates",
                 )

@@ -371,7 +371,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     "data_source_desc": None,
                     "case": case_block,
                     "children": children or None,
-                    "quote_steps": quotes or None,
+                    "quote_steps": quotes or [],
                 }
             )
 
