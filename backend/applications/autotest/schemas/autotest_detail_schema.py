@@ -327,6 +327,7 @@ class AutoTestDetailCreate(AutoTestDetailBase):
     step_code: str = Field(..., max_length=64, description="步骤标识代码")
     step_type: AutoTestStepType = Field(..., description="步骤类型")
     step_state: bool = Field(..., description="步骤执行状态")
+    parent_step_id: Optional[int] = Field(None, ge=1, description="父级步骤ID")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 

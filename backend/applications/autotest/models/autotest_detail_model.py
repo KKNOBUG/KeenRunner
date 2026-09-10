@@ -27,6 +27,7 @@ from backend.enums import (
 class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     # 用例信息相关
     case_id = fields.BigIntField(index=True, description="用例ID")
+    parent_step_id = fields.BigIntField(null=True, description="父级步骤ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
     report_code = fields.CharField(max_length=64, index=True, description="报告标识代码")
     quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本/接口ID")
