@@ -1235,11 +1235,12 @@ const handleSaveAll = async () => {
       return
     }
 
-    // 请求体为 json 时校验 JSON 语法，有错误则提示并阻止保存
+    // 请求体为 json/xml 时校验语法，有错误则按实际格式提示并阻止保存
     const jsonValidation = validateJsonBodyInSteps(steps.value)
     if (!jsonValidation.valid) {
+      const bodyKind = jsonValidation.kind === 'xml' ? 'XML' : 'JSON'
       window.$message?.error?.(
-          `步骤：${jsonValidation.stepName}，请求体JSON格式错误，请修正后再保存`
+          `步骤：${jsonValidation.stepName}，请求体${bodyKind}格式错误，请修正后再保存`
       )
       return
     }

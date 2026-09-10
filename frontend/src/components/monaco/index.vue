@@ -90,8 +90,10 @@ const formatXmlPrettyText = (xml) => {
 const beautifyXmlText = (raw) => {
   const doc = tryParseValidXmlDoc(raw)
   if (!doc) return null
+  // 原样保留用户声明的 XML 声明行：序列化根元素会丢声明，序列化整文档又会把 encoding 强制为 UTF-8
+  const declMatch = String(raw ?? '').match(/^\s*(<\?[\s\S]*?\?>)/)
   const ser = new XMLSerializer().serializeToString(doc.documentElement)
-  return formatXmlPrettyText(ser)
+  return formatXmlPrettyText(declMatch ? `${declMatch[1]}\n${ser}` : ser)
 }
 
 /** 仅注册一次，避免重复 provider */

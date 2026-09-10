@@ -322,7 +322,7 @@ const validateJsonBodyInSteps = (stepList) => {
                     try {
                         JSON.parse(trimmed)
                     } catch (e) {
-                        return { valid: false, message: e.message || 'JSON 格式错误', stepName }
+                        return { valid: false, kind: 'json', message: e.message || 'JSON 格式错误', stepName }
                     }
                 }
             }
@@ -334,7 +334,7 @@ const validateJsonBodyInSteps = (stepList) => {
                     const doc = parser.parseFromString(trimmed, 'application/xml')
                     const parseError = doc.querySelector('parsererror')
                     if (parseError) {
-                        return { valid: false, message: parseError.textContent || 'XML 格式错误', stepName }
+                        return { valid: false, kind: 'xml', message: parseError.textContent || 'XML 格式错误', stepName }
                     }
                 }
             }
@@ -347,7 +347,7 @@ const validateJsonBodyInSteps = (stepList) => {
                 try {
                     JSON.parse(trimmed)
                 } catch (e) {
-                    return { valid: false, message: e.message || 'JSON 格式错误', stepName }
+                    return { valid: false, kind: 'json', message: e.message || 'JSON 格式错误', stepName }
                 }
             }
         }

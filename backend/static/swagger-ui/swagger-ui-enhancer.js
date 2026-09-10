@@ -6,13 +6,15 @@
   // 工具栏收纳态类名: 收起后仅保留把手按钮, 避免窄视口下遮挡内容区点击
   var TOOLBAR_COLLAPSED_CLASS = "collapsed";
   // 上跳/下跳的固定像素步长; 超出页首/页尾可滚动范围时由浏览器自动截断, 天然形成边界无操作
-  var JUMP_DISTANCE = 800;
+  var JUMP_DISTANCE = 600;
 
   var TOOLBAR_BUTTONS = [
     { key: "expand", label: "展开分类", title: "一键展开所有分类(显示全部接口列表)" },
     { key: "collapse", label: "折叠分类", title: "一键折叠所有分类(含已展开的接口详情)" },
     { key: "prev", label: "向上滚动", title: "向上滚动 " + JUMP_DISTANCE + " 像素" },
     { key: "next", label: "向下滚动", title: "向下滚动 " + JUMP_DISTANCE + " 像素" },
+    { key: "top", label: "跳到顶部", title: "跳转到页面顶部" },
+    { key: "bottom", label: "跳到底部", title: "跳转到页面底部" },
   ];
 
   /* 工具函数区 */
@@ -38,7 +40,7 @@
     clickAll(document.querySelectorAll(".opblock-tag-section.is-open > h3.opblock-tag"));
   }
 
-  /* 功能区: 上跳 / 下跳 */
+  /* 功能区: 滚动与跳转 */
 
   // 统一使用瞬时跳转而非平滑滚动: 平滑滚动异步进行期间连续点击时, 基于中途位置的
   // 计算会失真; 瞬时跳转保证每次点击时位置已确定, 连续点击可靠推进
@@ -56,6 +58,14 @@
     scrollToPosition(window.scrollY + JUMP_DISTANCE);
   }
 
+  function jumpToTop() {
+    scrollToPosition(0);
+  }
+
+  function jumpToBottom() {
+    scrollToPosition(document.documentElement.scrollHeight);
+  }
+
   /* 工具栏注入区 */
 
   var ACTION_HANDLERS = {
@@ -63,6 +73,8 @@
     collapse: collapseAllSections,
     prev: jumpToPrev,
     next: jumpToNext,
+    top: jumpToTop,
+    bottom: jumpToBottom,
   };
 
   function handleAction(event) {
