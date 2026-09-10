@@ -17,11 +17,11 @@ from starlette.background import BackgroundTask
 from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.schemas.autotest_case_schema import (
-    AutoTestApiCaseCreate,
-    AutoTestApiCaseSelect,
-    AutoTestApiCaseUpdate
+    AutoTestCaseCreate,
+    AutoTestCaseSelect,
+    AutoTestCaseUpdate
 )
 from backend.applications.autotest.services.autotest_case_excel_service import (
     prepare_export_cases,
@@ -62,8 +62,8 @@ EXPORT_ASYNC_THRESHOLD = 10
 
 @autotest_case.post("/create", summary="新增用例", description="新增用例信息")
 async def create_case(
-        case_in: AutoTestApiCaseCreate = Body(..., description="用例信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        case_in: AutoTestCaseCreate = Body(..., description="用例信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增用例。
@@ -101,7 +101,7 @@ async def create_case(
 async def delete_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code软删除用例及其步骤。
@@ -136,8 +136,8 @@ async def delete_case(
 
 @autotest_case.post("/update", summary="更新用例", description="根据id或code更新用例信息")
 async def update_case(
-        case_in: AutoTestApiCaseUpdate = Body(..., description="用例信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        case_in: AutoTestCaseUpdate = Body(..., description="用例信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code更新用例信息。
@@ -175,7 +175,7 @@ async def update_case(
 async def get_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code查询用例信息。
@@ -237,7 +237,7 @@ async def batch_fetch_related_data(
         project_ids: Set[int],
         tag_ids: Set[int],
         case_ids: List[int],
-        services: AutoTestApiServices
+        services: AutoTestServices
 ) -> Tuple[Dict[int, dict], Dict[int, dict], Dict[int, List[str]]]:
     acquire_project_instance_task = services.project_curd.get_by_ids(
         project_ids=list(project_ids),
@@ -311,8 +311,8 @@ def _protocol_from_step_type(step_type: Any) -> Optional[str]:
 
 @autotest_case.post("/search", summary="查询用例列表", description="根据条件分页查询用例列表信息(Body)")
 async def search_cases(
-        case_in: AutoTestApiCaseSelect = Body(..., description="查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        case_in: AutoTestCaseSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据条件分页查询用例列表信息。
@@ -440,7 +440,7 @@ async def search_cases(
 async def get_request_step_selected_project_ids(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     从步骤树中提取以下步骤类型所选择的应用ID并去重返回。
@@ -475,7 +475,7 @@ async def get_request_step_selected_project_ids(
 @autotest_case.post("/export_case_datagram_sync", summary="导出公共接口报文", description="导出公共接口用例请求头与请求体为xlsx(同步)")
 async def export_case_datagram_sync(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     同步导出公共接口用例的请求头与请求体为xlsx，数量不超过EXPORT_ASYNC_THRESHOLD。
@@ -516,7 +516,7 @@ async def export_case_datagram_sync(
 @autotest_case.post("/export_case_datagram_async", summary="导出公共接口报文(异步)", description="异步导出公共接口用例请求头与请求体为xlsx")
 async def export_case_datagram_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     异步导出公共接口用例，数量超过EXPORT_ASYNC_THRESHOLD。
@@ -558,7 +558,7 @@ async def export_case_datagram_async(
 @autotest_case.post("/export_case_scripts_sync", summary="导出公共接口脚本", description="导出公共接口脚本为模板xlsx(同步)")
 async def export_case_scripts_sync(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     同步导出公共接口脚本，数量不超过EXPORT_ASYNC_THRESHOLD。
@@ -601,7 +601,7 @@ async def export_case_scripts_sync(
 @autotest_case.post("/export_case_scripts_async", summary="导出公共接口脚本(异步)", description="异步导出公共接口脚本为模板xlsx")
 async def export_case_scripts_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     异步导出公共接口脚本，数量超过EXPORT_ASYNC_THRESHOLD。
@@ -643,7 +643,7 @@ async def export_case_scripts_async(
 @autotest_case.post("/import_case_scripts", summary="导入公共接口脚本", description="从模板xlsx导入公共接口脚本")
 async def import_case_scripts(
         file: UploadFile = File(..., description="公共接口导入导出模板xlsx(仅读取第1个sheet页)"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     导入公共接口脚本。

@@ -15,16 +15,16 @@ from tortoise.expressions import Q
 
 from backend.applications.autotest.models.autotest_record_model import AutoTestRecordModel
 from backend.applications.autotest.schemas.autotest_record_schema import (
-    AutoTestApiRecordCreate,
-    AutoTestApiRecordUpdate,
-    AutoTestApiRecordSelect,
+    AutoTestRecordCreate,
+    AutoTestRecordUpdate,
+    AutoTestRecordSelect,
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import ParameterException, NotFoundException
 
 
-class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCreate, AutoTestApiRecordUpdate]):
+class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate, AutoTestRecordUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestRecordModel)
@@ -62,7 +62,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCrea
             return None
         return await self.model.filter(celery_id=celery_id, **kwargs).first()
 
-    async def create_record(self, data: Union[AutoTestApiRecordCreate, Dict[str, Any]]) -> AutoTestRecordModel:
+    async def create_record(self, data: Union[AutoTestRecordCreate, Dict[str, Any]]) -> AutoTestRecordModel:
         """
         创建一条任务执行记录。
 
@@ -70,14 +70,14 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCrea
         :return: 新建的记录实例
         """
         if isinstance(data, dict):
-            record_in = AutoTestApiRecordCreate.model_validate(data)
+            record_in = AutoTestRecordCreate.model_validate(data)
         else:
             record_in = data
         return await self.create(record_in.create_dict())
 
     async def update_record(
             self,
-            data: Union[AutoTestApiRecordUpdate, Dict[str, Any]],
+            data: Union[AutoTestRecordUpdate, Dict[str, Any]],
             *,
             record_id: Optional[int] = None,
             celery_id: Optional[str] = None,
@@ -105,7 +105,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCrea
                 raise NotFoundException(message=error_message)
 
         if isinstance(data, dict):
-            record_in = AutoTestApiRecordUpdate.model_validate(data)
+            record_in = AutoTestRecordUpdate.model_validate(data)
             raw = data
         else:
             record_in = data
@@ -129,7 +129,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCrea
     async def update_record_by_celery_id(
             self,
             celery_id: str,
-            data: Union[AutoTestApiRecordUpdate, Dict[str, Any]],
+            data: Union[AutoTestRecordUpdate, Dict[str, Any]],
     ) -> Optional[AutoTestRecordModel]:
         """
         根据celery_id更新执行记录；仅写入模型已有字段，部分键允许置空。
@@ -146,7 +146,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestApiRecordCrea
         except NotFoundException:
             return None
 
-    async def select_records(self, record_in: AutoTestApiRecordSelect) -> Tuple[int, List[AutoTestRecordModel]]:
+    async def select_records(self, record_in: AutoTestRecordSelect) -> Tuple[int, List[AutoTestRecordModel]]:
         """
         根据条件分页查询任务执行记录。
 

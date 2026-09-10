@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from backend.applications.base.services.scaffold import UpperStr
 
 
-class AutoTestApiCaseTransferCreate(BaseModel):
+class AutoTestCaseTransferCreate(BaseModel):
     """转让用例入参。"""
 
     case_id: int = Field(..., ge=1, description="用例ID")
@@ -21,7 +21,7 @@ class AutoTestApiCaseTransferCreate(BaseModel):
     transfer_desc: Optional[str] = Field(None, max_length=2048, description="操作描述")
 
 
-class AutoTestApiCaseTransferSelect(BaseModel):
+class AutoTestCaseTransferSelect(BaseModel):
     """分页查询转让记录入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")

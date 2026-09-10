@@ -70,7 +70,7 @@ class ConditionsBase(BaseModel):
         return AutoTestAssertionOperation(str(v).strip()).value
 
 
-class AutoTestApiDetailReqBase(BaseModel):
+class AutoTestDetailReqBase(BaseModel):
     """步骤执行明细请求字段基础模型。"""
 
     request_url: Optional[str] = Field(default=None, max_length=2048, description="实际发出的请求地址")
@@ -89,7 +89,7 @@ class AutoTestApiDetailReqBase(BaseModel):
     request_text: Optional[str] = Field(default=None, description="实际发出的请求体(Raw)")
 
 
-class AutoTestApiDetailResBase(BaseModel):
+class AutoTestDetailResBase(BaseModel):
     """步骤执行明细响应字段基础模型。"""
 
     response_cookie: NON_DICT_TYPE = Field(default=None, description="响应信息(cookies)")
@@ -99,7 +99,7 @@ class AutoTestApiDetailResBase(BaseModel):
     response_elapsed: Optional[str] = Field(default=None, max_length=16, description="响应信息(elapsed)")
 
 
-class AutoTestApiDetailVarBase(BaseModel):
+class AutoTestDetailVarBase(BaseModel):
     """步骤执行明细变量/断言/操作快照基础字段模型。"""
 
     loop_conditions: Optional[ConditionsBase] = Field(default=None, description="本次执行条件循环判断条件")
@@ -289,7 +289,7 @@ class AutoTestApiDetailVarBase(BaseModel):
         return v
 
 
-class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, AutoTestApiDetailResBase):
+class AutoTestDetailBase(AutoTestDetailReqBase, AutoTestDetailVarBase, AutoTestDetailResBase):
     """步骤执行明细公共字段。"""
 
     quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本/接口ID")
@@ -315,7 +315,7 @@ class AutoTestApiDetailBase(AutoTestApiDetailReqBase, AutoTestApiDetailVarBase, 
     dataset_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="本步骤执行使用的数据快照")
 
 
-class AutoTestApiDetailCreate(AutoTestApiDetailBase):
+class AutoTestDetailCreate(AutoTestDetailBase):
     """创建步骤执行明细入参。"""
 
     case_id: int = Field(..., ge=1, description="用例ID")
@@ -330,7 +330,7 @@ class AutoTestApiDetailCreate(AutoTestApiDetailBase):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
-class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
+class AutoTestDetailUpdate(AutoTestDetailBase):
     """更新步骤执行明细入参。"""
 
     case_id: int = Field(..., ge=1, description="用例ID")
@@ -343,7 +343,7 @@ class AutoTestApiDetailUpdate(AutoTestApiDetailBase):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiDetailSelect(BaseModel):
+class AutoTestDetailSelect(BaseModel):
     """分页查询步骤执行明细入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")

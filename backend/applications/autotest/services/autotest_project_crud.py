@@ -15,9 +15,9 @@ from tortoise.expressions import Q
 from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel, AutoTestEnvConfigModel
 from backend.applications.autotest.models.autotest_project_model import AutoTestProjectModel
 from backend.applications.autotest.schemas.autotest_project_schema import (
-    AutoTestApiProjectCreate,
-    AutoTestApiProjectUpdate,
-    AutoTestApiProjectDelete,
+    AutoTestProjectCreate,
+    AutoTestProjectUpdate,
+    AutoTestProjectDelete,
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.autotest.services.autotest_tag_crud import AutoTestTagCrud
@@ -31,7 +31,7 @@ from backend.core.exceptions import (
 )
 
 
-class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectCreate, AutoTestApiProjectUpdate]):
+class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCreate, AutoTestProjectUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestProjectModel)
@@ -132,7 +132,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_project(self, project_in: AutoTestApiProjectCreate) -> AutoTestProjectModel:
+    async def create_project(self, project_in: AutoTestProjectCreate) -> AutoTestProjectModel:
         """
         创建应用；同名软删记录恢复并更新，活跃同名报错。
 
@@ -175,7 +175,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_project(self, project_in: AutoTestApiProjectUpdate) -> AutoTestProjectModel:
+    async def update_project(self, project_in: AutoTestProjectUpdate) -> AutoTestProjectModel:
         """
         更新应用，根据project_id或project_code定位并校验名称唯一。
 
@@ -270,7 +270,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestApiProjectC
 
         return await self.soft_delete(id=instance.id)
 
-    async def delete_projects(self, project_in: AutoTestApiProjectDelete) -> int:
+    async def delete_projects(self, project_in: AutoTestProjectDelete) -> int:
         """
         根据ID或code列表批量软删除应用；逐条复用单删关联校验。
 

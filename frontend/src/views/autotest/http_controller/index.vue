@@ -1250,27 +1250,22 @@ const debugResultRef = ref(null)
 const debugModalVisible = ref(false)
 const envOptions = ref([])
 const envLoading = ref(false)
-/** 调试所选环境名称（与 /autotest/env/list、后端 schema 的 env_name 对应） */
+/** 调试所选环境名称（与后端 schema 的 env_name 对应） */
 const selectedDebugEnvName = ref(null)
 
 const loadEnvNames = async () => {
   const pid = Number(state.form.request_project_id)
-  if (!pid) {
+  const configName = String(state.form.request_config_name || '').trim()
+  if (!pid || !configName) {
     envOptions.value = []
     selectedDebugEnvName.value = null
     return
   }
   envLoading.value = true
   try {
-    // { project_id: { app|file|database|redis: env_name[] } }：与脚本执行配置弹框同源；
-    // 节点类型枚举无api值，需摊平所有类型键去重，避免下拉为空
-    const res = await api.listEnvNames({ project_id: [pid] })
-    const byProject = res?.data || {}
-    const byType = byProject[pid] || byProject[String(pid)] || {}
-    const names = new Set()
-    Object.values(byType).forEach((arr) => {
-      if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
-    })
+    // 仅返回挂载了该请求配置(app类型)的环境名称，收敛调试范围
+    const res = await api.queryAssignConfigEnvs({ project_id: pid, config_name: configName, env_type: 'app' })
+    const names = Array.isArray(res?.data) ? res.data : []
     const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
     envOptions.value = sorted.map((n) => ({ label: n, value: n }))
     if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {

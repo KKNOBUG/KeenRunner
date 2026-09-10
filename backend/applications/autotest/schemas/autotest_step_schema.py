@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Type
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from backend.applications.autotest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from backend.applications.autotest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
 from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import (
@@ -149,7 +149,7 @@ class StepAssertValidatorItem(BaseModel):
         return AutoTestAssertionOperation(str(v).strip()).value
 
 
-class AutoTestApiStepReqBase(BaseModel):
+class AutoTestStepReqBase(BaseModel):
     """步骤请求相关基础字段模型。"""
 
     request_url: Optional[str] = Field(None, max_length=2048, description="请求地址")
@@ -195,7 +195,7 @@ class AutoTestApiStepReqBase(BaseModel):
         return v
 
 
-class AutoTestApiStepDbBase(BaseModel):
+class AutoTestStepDbBase(BaseModel):
     """步骤数据库操作基础字段模型。"""
 
     database_operates: Optional[List[DataBaseOperates]] = Field(None, description="数据库请求操作列表")
@@ -219,7 +219,7 @@ class AutoTestApiStepDbBase(BaseModel):
         raise ValueError(f"参数[database_operates]必须为null或对象列表，当前类型: {type(v).__name__}")
 
 
-class AutoTestApiStepRedisBase(BaseModel):
+class AutoTestStepRedisBase(BaseModel):
     """步骤Redis操作基础字段模型。"""
 
     redis_operates: Optional[List[RedisOperates]] = Field(None, description="Redis请求操作列表")
@@ -243,7 +243,7 @@ class AutoTestApiStepRedisBase(BaseModel):
         raise ValueError(f"参数[redis_operates]必须为null或对象列表，当前类型: {type(v).__name__}")
 
 
-class AutoTestApiStepVarBase(BaseModel):
+class AutoTestStepVarBase(BaseModel):
     """步骤变量/提取/断言基础字段模型。"""
 
     session_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(所有步骤的执行结果持续累积)")
@@ -312,7 +312,7 @@ class AutoTestApiStepVarBase(BaseModel):
         return v or None
 
 
-class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTestApiStepRedisBase, AutoTestApiStepVarBase):
+class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedisBase, AutoTestStepVarBase):
     """步骤公共字段。"""
 
     model_config = ConfigDict(extra="ignore")
@@ -432,14 +432,14 @@ class AutoTestApiStepBase(AutoTestApiStepReqBase, AutoTestApiStepDbBase, AutoTes
         return v or None
 
 
-class AutoTestApiStepChildren(BaseModel):
+class AutoTestStepChildren(BaseModel):
     """步骤子节点与引用步骤字段模型。"""
 
-    children: Optional[List["AutoTestApiStepBase"]] = Field(None, description="子步骤")
-    quote_steps: Optional[List["AutoTestApiStepBase"]] = Field(None, description="引用步骤")
+    children: Optional[List["AutoTestStepBase"]] = Field(None, description="子步骤")
+    quote_steps: Optional[List["AutoTestStepBase"]] = Field(None, description="引用步骤")
 
 
-class AutoTestApiStepCreate(AutoTestApiStepBase):
+class AutoTestStepCreate(AutoTestStepBase):
     """创建步骤入参。"""
 
     step_no: int = Field(..., ge=1, description="步骤序号")
@@ -448,13 +448,13 @@ class AutoTestApiStepCreate(AutoTestApiStepBase):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
-class AutoTestApiStepUpdate(AutoTestApiStepBase):
+class AutoTestStepUpdate(AutoTestStepBase):
     """更新步骤入参。"""
 
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiStepSelect(BaseModel):
+class AutoTestStepSelect(BaseModel):
     """分页查询步骤入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
@@ -474,7 +474,7 @@ class AutoTestApiStepSelect(BaseModel):
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
-class AutoTestStepTreeUpdateItem(AutoTestApiStepBase):
+class AutoTestStepTreeUpdateItem(AutoTestStepBase):
     """步骤树更新单节点入参。"""
 
     case: NON_DICT_TYPE = Field(None, description="用例信息")
@@ -495,7 +495,7 @@ class AutoTestCaseStepTreeLoadResult(BaseModel):
     """仓储层从DB构建步骤树后的对外结果：根步骤均为已校验模型。"""
     root_steps: List["AutoTestStepTreeUpdateItem"] = Field(default_factory=list)
     step_counter: StepTreeCounter
-    case_only_when_no_steps: Optional[AutoTestApiCaseUpdate] = Field(
+    case_only_when_no_steps: Optional[AutoTestCaseUpdate] = Field(
         default=None,
         description="无任何根步骤时，与历史接口中单节点仅含case的占位信息对应"
     )
@@ -504,11 +504,11 @@ class AutoTestCaseStepTreeLoadResult(BaseModel):
 class AutoTestStepTreeUpdateList(BaseModel):
     """整棵步骤树更新入参。"""
 
-    case: AutoTestApiCaseUpdate = Field(..., description="用例信息")
+    case: AutoTestCaseUpdate = Field(..., description="用例信息")
     steps: List[AutoTestStepTreeUpdateItem] = Field(..., description="步骤树数据")
 
 
-class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
+class AutoTestHttpDebugRequest(AutoTestStepVarBase, AutoTestStepReqBase):
     """HTTP 步骤调试入参。"""
 
     env_name: str = Field(..., max_length=64, description="环境名称")
@@ -519,7 +519,7 @@ class AutoTestHttpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     request_config_name: str = Field(..., max_length=128, description="请求环境配置名称")
 
 
-class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
+class AutoTestTcpDebugRequest(AutoTestStepVarBase, AutoTestStepReqBase):
     """TCP 步骤调试入参。"""
 
     env_name: str = Field(..., max_length=64, description="环境名称")
@@ -529,14 +529,14 @@ class AutoTestTcpDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepReqBase):
     request_config_name: str = Field(..., max_length=128, description="请求环境配置名称")
 
 
-class AutoTestPythonCodeDebugRequest(AutoTestApiStepVarBase):
+class AutoTestPythonCodeDebugRequest(AutoTestStepVarBase):
     """Python 代码步骤调试入参。"""
 
     step_name: str = Field(..., max_length=255, description="步骤名称")
     code: str = Field(..., description="执行代码(Python)")
 
 
-class AutoTestRedisDebugRequest(AutoTestApiStepVarBase, AutoTestApiStepRedisBase):
+class AutoTestRedisDebugRequest(AutoTestStepVarBase, AutoTestStepRedisBase):
     """Redis 步骤调试入参。"""
 
     env_name: str = Field(..., max_length=64, description="环境名称")
@@ -661,7 +661,7 @@ def prepare_step_tree_item_for_execution(step: AutoTestStepTreeUpdateItem) -> Au
 
 
 # 允许递归引用
-AutoTestApiStepBase.model_rebuild()
+AutoTestStepBase.model_rebuild()
 BranchItem.model_rebuild()
 AutoTestStepTreeUpdateItem.model_rebuild()
 AutoTestCaseStepTreeLoadResult.model_rebuild()

@@ -15,13 +15,13 @@ from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
-from backend.applications.autotest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from backend.applications.autotest.schemas.autotest_step_schema import (
-    AutoTestApiStepCreate,
-    AutoTestApiStepUpdate,
-    AutoTestApiStepSelect,
+    AutoTestStepCreate,
+    AutoTestStepUpdate,
+    AutoTestStepSelect,
     AutoTestBatchExecuteCases,
     AutoTestStepTreeUpdateItem,
     AutoTestStepTreeUpdateList,
@@ -66,8 +66,8 @@ autotest_step = APIRouter()
 
 @autotest_step.post("/create", summary="新增步骤", description="新增步骤信息")
 async def create_step(
-        step_in: AutoTestApiStepCreate = Body(..., description="步骤信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        step_in: AutoTestStepCreate = Body(..., description="步骤信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增步骤。
@@ -105,7 +105,7 @@ async def create_step(
 async def delete_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code删除步骤。
@@ -142,8 +142,8 @@ async def delete_step(
 
 @autotest_step.post("/update", summary="更新步骤", description="根据id或code更新步骤信息")
 async def update_step(
-        step_in: AutoTestApiStepUpdate = Body(..., description="步骤信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        step_in: AutoTestStepUpdate = Body(..., description="步骤信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code更新步骤。
@@ -181,7 +181,7 @@ async def update_step(
 async def get_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code查询步骤。
@@ -217,8 +217,8 @@ async def get_step(
 
 @autotest_step.post("/search", summary="查询步骤列表", description="根据条件分页查询步骤列表信息(Body)")
 async def search_steps(
-        step_in: AutoTestApiStepSelect = Body(..., description="查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        step_in: AutoTestStepSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据条件查询步骤。
@@ -276,7 +276,7 @@ async def search_steps(
 async def get_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code查询步骤树。
@@ -309,7 +309,7 @@ async def get_step_tree(
 async def copy_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     复制用例步骤树（返回未保存的副本）。
@@ -336,7 +336,7 @@ async def copy_step_tree(
 @autotest_step.post("/splice_tree", summary="查询拼接步骤树结构", description="根据用例id或code列表批量查询并拼接步骤树结构")
 async def splice_step_tree(
         splice_in: AutoTestStepTreeSplice = Body(..., description="拼接查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     批量查询多用例步骤树并拼接为一个列表。
@@ -368,7 +368,7 @@ async def splice_step_tree(
 @autotest_step.post("/update_or_create_tree", summary="更新步骤树结构", description="更新或创建用例级步骤树结构")
 async def batch_update_steps_tree(
         tree_in: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     更新用例级步骤树。
@@ -379,7 +379,7 @@ async def batch_update_steps_tree(
     """
     try:
         # 获取用例信息和步骤数据
-        case_data: AutoTestApiCaseUpdate = tree_in.case
+        case_data: AutoTestCaseUpdate = tree_in.case
         steps_data: List[AutoTestStepTreeUpdateItem] = tree_in.steps
 
         # 1. 校验步骤树结构合法性
@@ -462,7 +462,7 @@ async def batch_update_steps_tree(
             # 2. 使用事务执行批量更新/新增
             async with in_transaction():
                 # 2.1 处理用例信息
-                cases_data: List[AutoTestApiCaseUpdate] = [case_data]
+                cases_data: List[AutoTestCaseUpdate] = [case_data]
                 if cases_data:
                     case_result: Dict[str, Any] = await services.case_curd.batch_update_or_create_cases(cases_data)
                     created_case_count: int = case_result['created_count']
@@ -641,7 +641,7 @@ async def validate_step_tree(
 @autotest_step.post("/http_debugging", summary="调试HTTP请求", description="调试HTTP请求步骤")
 async def debug_http_request(
         debug_in: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     HTTP请求调试。
@@ -667,7 +667,7 @@ async def debug_http_request(
 @autotest_step.post("/tcp_debugging", summary="调试TCP请求", description="调试TCP请求步骤")
 async def debug_tcp_request(
         debug_in: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     TCP请求调试。
@@ -719,7 +719,7 @@ async def debug_python_code(
 @autotest_step.post("/redis_debugging", summary="调试Redis请求", description="调试Redis请求步骤")
 async def debug_redis_request(
         debug_in: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     Redis请求调试。
@@ -745,7 +745,7 @@ async def debug_redis_request(
 @autotest_step.post("/execute_or_debugging", summary="执行步骤树结构", description="执行或调试步骤树结构")
 async def execute_step_tree(
         exec_in: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     执行或调试步骤树。无steps为运行模式，有steps为调试模式。
@@ -935,7 +935,7 @@ async def execute_step_tree(
             case_state: bool = statistics.get("failed_steps", 0) == 0
             case_last_time: str = defer_create_report.case_ed_time
             await services.case_curd.update_case(
-                AutoTestApiCaseUpdate(
+                AutoTestCaseUpdate(
                     case_id=case_id,
                     case_state=case_state,
                     case_last_time=case_last_time,
@@ -987,7 +987,7 @@ async def execute_step_tree(
 @autotest_step.post("/batch_execute", summary="执行批量用例", description="批量异步执行用例")
 async def batch_execute_cases(
         batch_in: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     批量执行用例。

@@ -23,7 +23,7 @@ from backend.applications.autotest.services.autotest_task_crud import AutoTestTa
 
 
 @dataclass
-class AutoTestApiServices:
+class AutoTestServices:
     """自动化测试相关CRUD服务聚合，供视图层依赖注入。"""
     case_curd: AutoTestCaseCrud
     case_transfer_curd: AutoTestCaseTransferCrud
@@ -39,13 +39,13 @@ class AutoTestApiServices:
     task_curd: AutoTestTaskCrud
 
 
-async def get_autotest_api_services() -> AutoTestApiServices:
+async def get_autotest_api_services() -> AutoTestServices:
     """
     构造并返回自动化测试CRUD服务聚合实例。
 
-    :return: AutoTestApiServices 实例
+    :return: AutoTestServices 实例
     """
-    return AutoTestApiServices(
+    return AutoTestServices(
         case_curd=AutoTestCaseCrud(),
         case_transfer_curd=AutoTestCaseTransferCrud(),
         data_source_curd=AutoTestDataSourceCrud(),

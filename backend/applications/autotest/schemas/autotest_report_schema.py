@@ -14,7 +14,7 @@ from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import AutoTestReportType, AutoTestTaskStatus
 
 
-class AutoTestApiReportBase(BaseModel):
+class AutoTestReportBase(BaseModel):
     """测试报告公共字段。"""
 
     case_st_time: Optional[str] = Field(None, max_length=32, description="用例执行开始时间")
@@ -33,7 +33,7 @@ class AutoTestApiReportBase(BaseModel):
     involve_envs: Optional[List[str]] = Field(None, description="脚本执行时涉及应用环境列表")
 
 
-class AutoTestApiReportCreate(AutoTestApiReportBase):
+class AutoTestReportCreate(AutoTestReportBase):
     """创建测试报告入参。"""
 
     case_id: int = Field(..., ge=1, description="用例ID")
@@ -50,7 +50,7 @@ class AutoTestApiReportCreate(AutoTestApiReportBase):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
-class AutoTestApiReportUpdate(AutoTestApiReportBase):
+class AutoTestReportUpdate(AutoTestReportBase):
     """更新测试报告入参。"""
 
     report_id: Optional[int] = Field(None, description="报告ID")
@@ -58,7 +58,7 @@ class AutoTestApiReportUpdate(AutoTestApiReportBase):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiReportSelect(BaseModel):
+class AutoTestReportSelect(BaseModel):
     """分页查询测试报告入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
@@ -82,7 +82,7 @@ class AutoTestApiReportSelect(BaseModel):
     date_to: Optional[str] = Field(None, description="执行开始时间-止(YYYY-MM-DD或带时分秒)")
 
 
-class AutoTestApiReportBatchSelect(BaseModel):
+class AutoTestReportBatchSelect(BaseModel):
     """按批次聚合查询任务执行历史入参（分页粒度=批次）。"""
 
     page: int = Field(default=1, ge=1, description="页码（按批次）")
@@ -91,7 +91,7 @@ class AutoTestApiReportBatchSelect(BaseModel):
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
-class AutoTestApiReportBatchDetailSelect(BaseModel):
+class AutoTestReportBatchDetailSelect(BaseModel):
     """按批次标识分页查询同批次执行报告入参（报告维度，分页粒度=报告）。"""
 
     page: int = Field(default=1, ge=1, description="页码")
@@ -102,7 +102,7 @@ class AutoTestApiReportBatchDetailSelect(BaseModel):
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
-class AutoTestApiReportBatchItem(BaseModel):
+class AutoTestReportBatchItem(BaseModel):
     """单次任务执行（一个 batch_code）的汇总行。"""
 
     batch_code: Optional[str] = Field(None, description="批次标识")

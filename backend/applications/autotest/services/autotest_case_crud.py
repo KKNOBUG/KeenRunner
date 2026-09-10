@@ -14,7 +14,7 @@ from tortoise.expressions import Q
 
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
-from backend.applications.autotest.schemas.autotest_case_schema import AutoTestApiCaseCreate, AutoTestApiCaseUpdate
+from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseCreate, AutoTestCaseUpdate
 from backend.applications.autotest.services.autotest_tag_crud import AutoTestTagCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
@@ -63,7 +63,7 @@ def _readd_explicit_null_fields(payload: Any, update_dict: Dict[str, Any], field
             update_dict[field_name] = None
 
 
-class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, AutoTestApiCaseUpdate]):
+class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoTestCaseUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestCaseModel)
@@ -204,7 +204,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
         overwrite["case_version"] = (existing.case_version or 1) + 1
         return await self.update(id=existing.id, obj_in=overwrite)
 
-    async def create_case(self, case_in: AutoTestApiCaseCreate) -> AutoTestCaseModel:
+    async def create_case(self, case_in: AutoTestCaseCreate) -> AutoTestCaseModel:
         """
         创建用例。同应用同类型同所属人同名：启用则拒绝，软删则恢复并覆盖表头。
 
@@ -278,7 +278,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
                 f"公共接口用例[id={case_instance.id}]级联对齐请求步骤所属应用为[{case_instance.case_project}]记录, 更新{updated_count}条"
             )
 
-    async def update_case(self, case_in: AutoTestApiCaseUpdate) -> AutoTestCaseModel:
+    async def update_case(self, case_in: AutoTestCaseUpdate) -> AutoTestCaseModel:
         """
         更新用例，根据case_id或case_code定位并递增case_version。
 
@@ -435,7 +435,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestApiCaseCreate, Au
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-    async def batch_update_or_create_cases(self, cases_data: List[AutoTestApiCaseUpdate]) -> Dict[str, Any]:
+    async def batch_update_or_create_cases(self, cases_data: List[AutoTestCaseUpdate]) -> Dict[str, Any]:
         """
         批量新增或更新用例：无case_id/case_code则新增，有则更新。
 

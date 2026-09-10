@@ -28,7 +28,7 @@ def _validate_db_required_fields(database_name: Any, database_type: Any, config_
         raise ValueError(f"DB配置缺少必填字段: [{', '.join(missing)}]")
 
 
-class AutoTestApiEnvConfigBase(BaseModel):
+class AutoTestEnvConfigBase(BaseModel):
     """环境配置公共字段。"""
 
     project_id: Optional[int] = Field(None, ge=1, description="应用ID(请求解析绑定用，不落配置表)")
@@ -50,7 +50,7 @@ class AutoTestApiEnvConfigBase(BaseModel):
     is_no_password: Optional[bool] = Field(None, description="是否免密")
 
 
-class AutoTestApiEnvConfigCreate(AutoTestApiEnvConfigBase):
+class AutoTestEnvConfigCreate(AutoTestEnvConfigBase):
     """创建环境配置入参。"""
 
     project_id: int = Field(..., ge=1, description="应用ID")
@@ -73,7 +73,7 @@ class AutoTestApiEnvConfigCreate(AutoTestApiEnvConfigBase):
         return self
 
 
-class AutoTestApiEnvConfigUpdate(AutoTestApiEnvConfigBase):
+class AutoTestEnvConfigUpdate(AutoTestEnvConfigBase):
     """更新环境配置入参。"""
 
     config_id: Optional[int] = Field(None, ge=1, description="配置主键ID")
@@ -95,14 +95,14 @@ class AutoTestApiEnvConfigUpdate(AutoTestApiEnvConfigBase):
         return self
 
 
-class AutoTestApiEnvConfigDelete(BaseModel):
+class AutoTestEnvConfigDelete(BaseModel):
     """批量删除环境配置入参。"""
 
     config_ids: Optional[List[int]] = Field(None, description="配置主键ID列表")
     config_codes: Optional[List[str]] = Field(None, description="配置标识代码列表")
 
 
-class AutoTestApiEnvConfigTypedDelete(BaseModel):
+class AutoTestEnvConfigTypedDelete(BaseModel):
     """按节点类型删除单条环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
@@ -110,7 +110,7 @@ class AutoTestApiEnvConfigTypedDelete(BaseModel):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiEnvConfigSelect(AutoTestApiEnvConfigBase):
+class AutoTestEnvConfigSelect(AutoTestEnvConfigBase):
     """分页查询环境配置入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
@@ -124,7 +124,7 @@ class AutoTestApiEnvConfigSelect(AutoTestApiEnvConfigBase):
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
-class AutoTestApiEnvConfigQueryByProjectsIn(BaseModel):
+class AutoTestEnvConfigQueryByProjectsIn(BaseModel):
     """根据应用ID列表查询环境配置并分类的请求体。"""
 
     project_ids: List[int] = Field(..., min_length=1, description="应用ID列表")
@@ -141,19 +141,19 @@ class TestDBConnectionRequest(BaseModel):
     database_name: str = Field(..., description="数据库名称")
 
 
-class APPEnvConfigCreate(AutoTestApiEnvConfigCreate):
+class APPEnvConfigCreate(AutoTestEnvConfigCreate):
     """新增APP类型环境配置入参。"""
 
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.APP, description="节点类型")
 
 
-class FILEEnvConfigCreate(AutoTestApiEnvConfigCreate):
+class FILEEnvConfigCreate(AutoTestEnvConfigCreate):
     """新增FILE类型环境配置入参。"""
 
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.FILE, description="节点类型")
 
 
-class DBEnvConfigCreate(AutoTestApiEnvConfigCreate):
+class DBEnvConfigCreate(AutoTestEnvConfigCreate):
     """新增DB(database)类型环境配置入参。"""
 
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.DB, description="节点类型")
@@ -163,7 +163,7 @@ class DBEnvConfigCreate(AutoTestApiEnvConfigCreate):
     config_password: str = Field(..., max_length=128, description="数据库密码")
 
 
-class RedisEnvConfigCreate(AutoTestApiEnvConfigCreate):
+class RedisEnvConfigCreate(AutoTestEnvConfigCreate):
     """新增REDIS类型环境配置入参。"""
 
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.REDIS, description="节点类型")
@@ -173,7 +173,7 @@ class RedisEnvConfigCreate(AutoTestApiEnvConfigCreate):
     config_password: Optional[str] = Field(None, max_length=128, description="Redis密码")
 
 
-class APPEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
+class APPEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改APP类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
@@ -184,7 +184,7 @@ class APPEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     project_id: int = Field(..., ge=1, description="应用ID")
 
 
-class FILEEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
+class FILEEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改FILE类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
@@ -195,7 +195,7 @@ class FILEEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     project_id: int = Field(..., ge=1, description="应用ID")
 
 
-class DBEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
+class DBEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改DB(database)类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
@@ -210,7 +210,7 @@ class DBEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     config_password: str = Field(..., max_length=128, description="数据库密码")
 
 
-class RedisEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
+class RedisEnvConfigUpdate(AutoTestEnvConfigUpdate):
     """修改REDIS类型环境配置入参。"""
 
     config_id: int = Field(..., ge=1, description="配置主键ID")
@@ -223,3 +223,11 @@ class RedisEnvConfigUpdate(AutoTestApiEnvConfigUpdate):
     database_name: Optional[str] = Field(None, max_length=128, description="Redis库编号")
     config_username: Optional[str] = Field(None, max_length=128, description="Redis用户名")
     config_password: Optional[str] = Field(None, max_length=128, description="Redis密码")
+
+
+class QueryAssignConfigEnv(BaseModel):
+    """按应用+配置名称+节点类型查询环境名称列表入参。"""
+
+    project_id: Optional[int] = Field(None, description="应用ID")
+    config_name: Optional[str] = Field(None, description="配置名称")
+    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型")

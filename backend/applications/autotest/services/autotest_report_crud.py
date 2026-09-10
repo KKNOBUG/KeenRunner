@@ -18,11 +18,11 @@ from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.models.autotest_report_model import AutoTestReportModel
 from backend.applications.autotest.schemas.autotest_report_schema import (
-    AutoTestApiReportCreate,
-    AutoTestApiReportSelect,
-    AutoTestApiReportUpdate,
-    AutoTestApiReportBatchSelect,
-    AutoTestApiReportBatchItem,
+    AutoTestReportCreate,
+    AutoTestReportSelect,
+    AutoTestReportUpdate,
+    AutoTestReportBatchSelect,
+    AutoTestReportBatchItem,
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -35,7 +35,7 @@ from backend.core.exceptions import (
 from backend.enums import AutoTestTaskStatus
 
 
-class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCreate, AutoTestApiReportUpdate]):
+class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate, AutoTestReportUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestReportModel)
@@ -82,7 +82,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_report(self, report_in: AutoTestApiReportCreate) -> AutoTestReportModel:
+    async def create_report(self, report_in: AutoTestReportCreate) -> AutoTestReportModel:
         """
         创建报告，校验用例存在。
 
@@ -109,7 +109,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_report(self, report_in: AutoTestApiReportUpdate) -> AutoTestReportModel:
+    async def update_report(self, report_in: AutoTestReportUpdate) -> AutoTestReportModel:
         """
         更新报告，根据report_id或report_code定位。
 
@@ -236,7 +236,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             return AutoTestTaskStatus.PARTIAL_SUCCESS
         return AutoTestTaskStatus.FAILURE
 
-    async def search_batches(self, batch_in: AutoTestApiReportBatchSelect) -> Tuple[int, List[AutoTestApiReportBatchItem]]:
+    async def search_batches(self, batch_in: AutoTestReportBatchSelect) -> Tuple[int, List[AutoTestReportBatchItem]]:
         """
         任务维度聚合查询：按任务标识聚合报告批次并计算执行结果/通过率/耗时, 供/search_batches接口渲染任务执行历史。
 
@@ -281,7 +281,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             group_key: str = batch_code_text or f"single:{row.get('report_code') or row.get('report_id')}"
             grouped[group_key].append(row)
 
-        batches: List[AutoTestApiReportBatchItem] = []
+        batches: List[AutoTestReportBatchItem] = []
         batch_keys: List[str] = []
         member_ids: Dict[str, List[int]] = {}
         for group_key, batch_rows in grouped.items():
@@ -292,7 +292,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             execute_result: AutoTestTaskStatus = self._resolve_batch_execute_result(batch_rows)
             member_ids[group_key] = [report_row.get("report_id") for report_row in batch_rows]
             batches.append(
-                AutoTestApiReportBatchItem(
+                AutoTestReportBatchItem(
                     batch_code=None if group_key.startswith("single:") else group_key,
                     execute_result=execute_result,
                     pass_rate=round(pass_count / report_count * 100.0, 2) if report_count else None,
@@ -306,12 +306,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
             )
             batch_keys.append(group_key)
 
-        ordered: List[Tuple[AutoTestApiReportBatchItem, str]] = list(zip(batches, batch_keys))
+        ordered: List[Tuple[AutoTestReportBatchItem, str]] = list(zip(batches, batch_keys))
         ordered.sort(key=lambda pair: pair[0].execute_time or "", reverse=True)
         start: int = (batch_in.page - 1) * batch_in.page_size
         end: int = start + batch_in.page_size
-        page_pairs: List[Tuple[AutoTestApiReportBatchItem, str]] = ordered[start:end]
-        page_batches: List[AutoTestApiReportBatchItem] = [item for item, _ in page_pairs]
+        page_pairs: List[Tuple[AutoTestReportBatchItem, str]] = ordered[start:end]
+        page_batches: List[AutoTestReportBatchItem] = [item for item, _ in page_pairs]
 
         if page_pairs:
             page_report_ids: List[int] = [report_id for _, group_key in page_pairs for report_id in member_ids[group_key]]
@@ -332,7 +332,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestApiReportCrea
         batch_total: int = len(ordered)
         return batch_total, page_batches
 
-    async def search_reports(self, search: Q, report_in: AutoTestApiReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
+    async def search_reports(self, search: Q, report_in: AutoTestReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
         """
         执行维度主查询：将多数据源执行(同batch_code)唯一化为一行代表行, 批次行携带has_multiple_dataset与dataset_count,
         多数据源批次行的step_pass_ratio为批内累积通过率; 批次明细由search_batch_reports按批次标识下钻。

@@ -1205,21 +1205,17 @@ const debugModalVisible = ref(false)
 
 const loadEnvNames = async () => {
   const pid = Number(state.form.request_project_id)
-  if (!pid) {
+  const configName = String(state.form.request_config_name || '').trim()
+  if (!pid || !configName) {
     envOptions.value = []
     selectedDebugEnvName.value = null
     return
   }
   envLoading.value = true
   try {
-    // { project_id: { app|file|database|redis: env_name[] } }：与HTTP控制器/脚本执行配置弹框同源，类型键摊平去重
-    const res = await api.listEnvNames({ project_id: [pid] })
-    const byProject = res?.data || {}
-    const byType = byProject[pid] || byProject[String(pid)] || {}
-    const names = new Set()
-    Object.values(byType).forEach((arr) => {
-      if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
-    })
+    // 仅返回挂载了该请求配置(app类型)的环境名称，收敛调试范围
+    const res = await api.queryAssignConfigEnvs({ project_id: pid, config_name: configName, env_type: 'app' })
+    const names = Array.isArray(res?.data) ? res.data : []
     const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
     envOptions.value = sorted.map((n) => ({ label: n, value: n }))
     if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {

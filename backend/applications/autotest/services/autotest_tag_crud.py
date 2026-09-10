@@ -14,9 +14,9 @@ from tortoise.expressions import Q
 
 from backend.applications.autotest.models.autotest_tag_model import AutoTestTagModel
 from backend.applications.autotest.schemas.autotest_tag_schema import (
-    AutoTestApiTagCreate,
-    AutoTestApiTagUpdate,
-    AutoTestApiTagDelete,
+    AutoTestTagCreate,
+    AutoTestTagUpdate,
+    AutoTestTagDelete,
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
@@ -28,7 +28,7 @@ from backend.core.exceptions import (
 )
 
 
-class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoTestApiTagUpdate]):
+class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTestTagUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestTagModel)
@@ -103,7 +103,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoT
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_tag(self, tag_in: AutoTestApiTagCreate) -> AutoTestTagModel:
+    async def create_tag(self, tag_in: AutoTestTagCreate) -> AutoTestTagModel:
         """
         创建标签；同应用下同大类/名称已存在则恢复并更新。
 
@@ -142,7 +142,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoT
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_tag(self, tag_in: AutoTestApiTagUpdate) -> AutoTestTagModel:
+    async def update_tag(self, tag_in: AutoTestTagUpdate) -> AutoTestTagModel:
         """
         更新标签，根据tag_id或tag_code定位并校验(tag_project, tag_mode, tag_name)唯一。
 
@@ -217,7 +217,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestApiTagCreate, AutoT
 
         return await self.soft_delete(id=instance.id)
 
-    async def delete_tags(self, tag_in: AutoTestApiTagDelete) -> int:
+    async def delete_tags(self, tag_in: AutoTestTagDelete) -> int:
         """
         根据ID或code列表批量软删除标签；逐条复用单删关联校验。
 

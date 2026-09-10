@@ -14,16 +14,16 @@ from fastapi import APIRouter, Body, Query, Depends, Path
 from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel
 from backend.applications.autotest.models.autotest_env_model import AutoTestEnvModel
-from backend.applications.autotest.schemas.autotest_record_schema import AutoTestApiRecordSelect
+from backend.applications.autotest.schemas.autotest_record_schema import AutoTestRecordSelect
 from backend.applications.autotest.schemas.autotest_task_schema import (
-    AutoTestApiTaskCreate,
-    AutoTestApiTaskId,
-    AutoTestApiTaskSchedulePreview,
-    AutoTestApiTaskSelect,
-    AutoTestApiTaskUpdate,
+    AutoTestTaskCreate,
+    AutoTestTaskId,
+    AutoTestTaskSchedulePreview,
+    AutoTestTaskSelect,
+    AutoTestTaskUpdate,
 )
 from backend.applications.autotest.services.autotest_task_crud import extract_steps_execute_envs
 from backend.applications.autotest.services.autotest_task_schedule import (
@@ -55,8 +55,8 @@ autotest_task = APIRouter()
 
 @autotest_task.post("/create", summary="新增任务", description="新增任务信息")
 async def create_task(
-        task_in: AutoTestApiTaskCreate = Body(..., description="任务信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        task_in: AutoTestTaskCreate = Body(..., description="任务信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增任务。
@@ -95,7 +95,7 @@ async def create_task(
 async def delete_task(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code删除任务。
@@ -129,8 +129,8 @@ async def delete_task(
 
 @autotest_task.post("/update", summary="更新任务", description="根据id或code更新任务信息")
 async def update_task(
-        task_in: AutoTestApiTaskUpdate = Body(..., description="任务信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        task_in: AutoTestTaskUpdate = Body(..., description="任务信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code更新任务。
@@ -169,7 +169,7 @@ async def update_task(
 async def get_task(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code查询任务。
@@ -206,8 +206,8 @@ async def get_task(
 
 @autotest_task.post("/search", summary="查询任务列表", description="根据条件分页查询任务列表信息(Body)")
 async def search_tasks(
-        task_in: AutoTestApiTaskSelect = Body(..., description="查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        task_in: AutoTestTaskSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据条件查询任务。
@@ -282,8 +282,8 @@ async def search_tasks(
 
 @autotest_task.post("/run", summary="执行任务", description="立即执行任务")
 async def run_task(
-        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        task_in: AutoTestTaskId = Body(..., description="任务ID"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     立即执行任务。
@@ -322,8 +322,8 @@ async def run_task(
 
 @autotest_task.post("/start", summary="启动任务", description="启用任务调度")
 async def start_task(
-        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        task_in: AutoTestTaskId = Body(..., description="任务ID"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     启动任务（启用调度）。
@@ -359,8 +359,8 @@ async def start_task(
 
 @autotest_task.post("/stop", summary="停止任务", description="关闭任务调度")
 async def stop_task(
-        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        task_in: AutoTestTaskId = Body(..., description="任务ID"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     停止任务（关闭调度）。
@@ -396,8 +396,8 @@ async def stop_task(
 
 @autotest_task.post("/copy", summary="复制任务", description="根据用例id或code查询任务并复刻")
 async def copy_task(
-        task_in: AutoTestApiTaskId = Body(..., description="任务ID"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        task_in: AutoTestTaskId = Body(..., description="任务ID"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     完全复刻任务记录生成新任务。
@@ -439,7 +439,7 @@ async def copy_task(
 
 @autotest_task.post("/schedule_preview", summary="定时执行预览", description="按时效与定时表达式正推即将到来的触发日期时间(近10次)")
 async def preview_task_schedule(
-        preview_in: AutoTestApiTaskSchedulePreview = Body(..., description="预览条件"),
+        preview_in: AutoTestTaskSchedulePreview = Body(..., description="预览条件"),
 ):
     """
     定时执行预览：按时效与定时表达式正推即将到来的触发日期时间，供新增/编辑页展示。
@@ -466,8 +466,8 @@ async def preview_task_schedule(
 
 @autotest_task.post("/record/search", summary="查询执行记录", description="根据条件分页查询任务执行记录(Body)")
 async def search_task_records(
-        record_in: AutoTestApiRecordSelect = Body(..., description="查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        record_in: AutoTestRecordSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     任务执行记录查询。
@@ -498,7 +498,7 @@ async def search_task_records(
 async def download_task_record_attachment(
         record_id: int = Path(..., description="执行记录主键"),
         key: str = Path(..., description="附件key，默认main"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据执行记录attachments项下载文件。

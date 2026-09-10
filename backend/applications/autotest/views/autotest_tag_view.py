@@ -12,12 +12,12 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.schemas.autotest_tag_schema import (
-    AutoTestApiTagCreate,
-    AutoTestApiTagSelect,
-    AutoTestApiTagUpdate,
-    AutoTestApiTagDelete,
+    AutoTestTagCreate,
+    AutoTestTagSelect,
+    AutoTestTagUpdate,
+    AutoTestTagDelete,
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -40,8 +40,8 @@ autotest_tag = APIRouter()
 
 @autotest_tag.post("/create", summary="新增标签", description="新增标签信息")
 async def create_tag(
-        tag_in: AutoTestApiTagCreate = Body(..., description="标签信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        tag_in: AutoTestTagCreate = Body(..., description="标签信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增标签。
@@ -77,7 +77,7 @@ async def create_tag(
 async def delete_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code删除标签。
@@ -110,8 +110,8 @@ async def delete_tag(
 
 @autotest_tag.post("/delete", summary="删除标签(批量)", description="根据id或code列表删除标签信息")
 async def batch_delete_tags(
-        tag_in: AutoTestApiTagDelete = Body(..., description="标签信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        tag_in: AutoTestTagDelete = Body(..., description="标签信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code列表删除标签。
@@ -136,8 +136,8 @@ async def batch_delete_tags(
 
 @autotest_tag.post("/update", summary="更新标签", description="根据id或code更新标签信息")
 async def update_tag(
-        tag_in: AutoTestApiTagUpdate = Body(..., description="标签信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        tag_in: AutoTestTagUpdate = Body(..., description="标签信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code更新标签。
@@ -175,7 +175,7 @@ async def update_tag(
 async def get_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code查询标签。
@@ -211,8 +211,8 @@ async def get_tag(
 
 @autotest_tag.post("/search", summary="查询标签列表", description="根据条件分页查询标签列表信息(Body)")
 async def search_tags(
-        tag_in: AutoTestApiTagSelect = Body(..., description="查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        tag_in: AutoTestTagSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据条件查询标签。

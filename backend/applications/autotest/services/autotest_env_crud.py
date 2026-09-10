@@ -18,9 +18,9 @@ from backend.applications.autotest.models.autotest_env_config_model import AutoT
 from backend.applications.autotest.models.autotest_env_model import AutoTestEnvModel
 from backend.applications.autotest.models.autotest_project_model import AutoTestProjectModel
 from backend.applications.autotest.schemas.autotest_env_schema import (
-    AutoTestApiEnvCreate,
-    AutoTestApiEnvUpdate,
-    AutoTestApiEnvDelete,
+    AutoTestEnvCreate,
+    AutoTestEnvUpdate,
+    AutoTestEnvDelete,
 )
 from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -33,7 +33,7 @@ from backend.core.exceptions import (
 from backend.enums import AutoTestConfigNodeType
 
 
-class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, AutoTestApiEnvUpdate]):
+class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, AutoTestEnvUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestEnvBindModel)
@@ -252,7 +252,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def create_env(self, env_in: AutoTestApiEnvCreate) -> AutoTestEnvBindModel:
+    async def create_env(self, env_in: AutoTestEnvCreate) -> AutoTestEnvBindModel:
         """
         创建环境绑定；同应用+环境+类型已存在则恢复启用。
 
@@ -298,7 +298,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_env(self, env_in: AutoTestApiEnvUpdate) -> AutoTestEnvBindModel:
+    async def update_env(self, env_in: AutoTestEnvUpdate) -> AutoTestEnvBindModel:
         """
         按env_id/env_code精准更新单条环境绑定；描述写在绑定表，不影响同名其他节点类型。
 
@@ -371,7 +371,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestApiEnvCreate, A
 
         return await self.soft_delete(id=instance.id)
 
-    async def delete_envs(self, env_in: AutoTestApiEnvDelete) -> int:
+    async def delete_envs(self, env_in: AutoTestEnvDelete) -> int:
         """
         根据ID或code列表批量软删除环境绑定。
 

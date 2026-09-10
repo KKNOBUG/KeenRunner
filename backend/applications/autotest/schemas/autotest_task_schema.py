@@ -36,7 +36,7 @@ class AutoTestTaskSchedule(BaseModel):
     trigger_times: Optional[List[str]] = Field(None, min_length=1, max_length=3, description="触发时间点列表(HH:MM:SS, 最多3个)：两种模式必输")
 
 
-class AutoTestApiTaskSchedulePreview(BaseModel):
+class AutoTestTaskSchedulePreview(BaseModel):
     """定时执行预览入参：按时效与定时表达式正推即将到来的触发日期时间。"""
 
     task_periodic_expr: AutoTestTaskPeriodicMode = Field(..., description="周期表达式(执行1次/执行N次)")
@@ -71,7 +71,7 @@ class AutoTestTaskCasesExecuteConfig(BaseModel):
         return self
 
 
-class AutoTestApiTaskCreate(BaseModel):
+class AutoTestTaskCreate(BaseModel):
     """创建自动化测试任务入参。"""
 
     task_name: str = Field(..., max_length=255, description="任务名称")
@@ -91,7 +91,7 @@ class AutoTestApiTaskCreate(BaseModel):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
-class AutoTestApiTaskUpdate(BaseModel):
+class AutoTestTaskUpdate(BaseModel):
     """更新自动化测试任务入参。"""
 
     task_id: Optional[int] = Field(None, description="任务ID")
@@ -115,7 +115,7 @@ class AutoTestApiTaskUpdate(BaseModel):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
+class AutoTestTaskSelect(AutoTestTaskUpdate):
     """分页查询自动化测试任务入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
@@ -131,7 +131,7 @@ class AutoTestApiTaskSelect(AutoTestApiTaskUpdate):
     env_name: Optional[str] = Field(None, max_length=64, description="涉及环境名称")
 
 
-class AutoTestApiTaskId(BaseModel):
+class AutoTestTaskId(BaseModel):
     """单任务主键入参：供执行/启动/停止/复制等单任务操作端点共用。"""
 
     task_id: int = Field(..., ge=1, description="任务主键ID")

@@ -12,13 +12,13 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.schemas.autotest_report_schema import (
-    AutoTestApiReportCreate,
-    AutoTestApiReportSelect,
-    AutoTestApiReportUpdate,
-    AutoTestApiReportBatchDetailSelect,
-    AutoTestApiReportBatchSelect,
+    AutoTestReportCreate,
+    AutoTestReportSelect,
+    AutoTestReportUpdate,
+    AutoTestReportBatchDetailSelect,
+    AutoTestReportBatchSelect,
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -39,8 +39,8 @@ autotest_report = APIRouter()
 
 @autotest_report.post("/create", summary="新增报告", description="新增报告信息")
 async def create_report(
-        report_in: AutoTestApiReportCreate = Body(..., description="报告信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        report_in: AutoTestReportCreate = Body(..., description="报告信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增报告。
@@ -76,7 +76,7 @@ async def create_report(
 async def delete_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code删除报告。
@@ -109,8 +109,8 @@ async def delete_report(
 
 @autotest_report.post("/update", summary="更新报告", description="根据id或code更新报告信息")
 async def update_report(
-        report_in: AutoTestApiReportUpdate = Body(..., description="报告信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        report_in: AutoTestReportUpdate = Body(..., description="报告信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code更新报告。
@@ -146,7 +146,7 @@ async def update_report(
 async def get_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code查询报告。
@@ -182,8 +182,8 @@ async def get_report(
 
 @autotest_report.post("/search", summary="查询报告列表", description="根据条件分页查询报告列表信息(Body)")
 async def search_reports(
-        report_in: AutoTestApiReportSelect = Body(..., description="查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        report_in: AutoTestReportSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     执行历史主查询(执行维度)：一次执行唯一化为一行, 多数据源批次行携带批次标识供下钻报告明细; 任务调度报告不在此范围(由/search_batches查询)。
@@ -250,8 +250,8 @@ async def search_reports(
 
 @autotest_report.post("/search_batch_reports", summary="查询同批次报告列表", description="根据batch_code精确分页查询同批次报告")
 async def search_batch_reports(
-        batch_detail_in: AutoTestApiReportBatchDetailSelect = Body(..., description="批次报告查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        batch_detail_in: AutoTestReportBatchDetailSelect = Body(..., description="批次报告查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     批次报告下钻查询(报告维度)：面向“执行报告”抽屉, 按批次标识精确分页返回同一次执行的全部报告, 一行=一条报告。
@@ -281,8 +281,8 @@ async def search_batch_reports(
 
 @autotest_report.post("/search_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算成功/部分成功/失败状态")
 async def search_report_batches(
-        batch_in: AutoTestApiReportBatchSelect = Body(..., description="批次查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        batch_in: AutoTestReportBatchSelect = Body(..., description="批次查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     任务执行历史查询(任务维度)：面向任务执行历史列表, 按任务标识聚合报告批次并计算执行结果, 一行=一个批次。

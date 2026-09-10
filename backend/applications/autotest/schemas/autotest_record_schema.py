@@ -20,7 +20,7 @@ from backend.enums import (
 )
 
 
-class AutoTestApiRecordBase(BaseModel):
+class AutoTestRecordBase(BaseModel):
     """任务执行观测记录公共字段。"""
 
     model_config = ConfigDict(extra="ignore")
@@ -45,7 +45,7 @@ class AutoTestApiRecordBase(BaseModel):
     celery_duration: Optional[str] = Field(None, max_length=64, description="耗时")
 
 
-class AutoTestApiRecordCreate(AutoTestApiRecordBase):
+class AutoTestRecordCreate(AutoTestRecordBase):
     """创建任务执行观测记录入参。"""
 
     celery_id: str = Field(..., max_length=255, description="Celery 调度ID")
@@ -62,7 +62,7 @@ class AutoTestApiRecordCreate(AutoTestApiRecordBase):
         return self.model_dump(exclude_unset=True, exclude_none=False)
 
 
-class AutoTestApiRecordUpdate(AutoTestApiRecordBase):
+class AutoTestRecordUpdate(AutoTestRecordBase):
     """更新任务执行观测记录入参（根据celery_id部分更新）。"""
 
     celery_id: Optional[str] = Field(None, max_length=255, description="Celery 调度ID")
@@ -77,7 +77,7 @@ class AutoTestApiRecordUpdate(AutoTestApiRecordBase):
         return self.model_dump(exclude_unset=True)
 
 
-class AutoTestApiRecordSelect(BaseModel):
+class AutoTestRecordSelect(BaseModel):
     """分页查询任务执行观测记录入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")

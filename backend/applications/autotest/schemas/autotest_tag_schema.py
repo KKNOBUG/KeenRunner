@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from backend.applications.base.services.scaffold import UpperStr
 
 
-class AutoTestApiTagCreate(BaseModel):
+class AutoTestTagCreate(BaseModel):
     """创建标签入参。"""
 
     tag_project: int = Field(..., ge=1, description="标签所属应用")
@@ -24,7 +24,7 @@ class AutoTestApiTagCreate(BaseModel):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
-class AutoTestApiTagUpdate(BaseModel):
+class AutoTestTagUpdate(BaseModel):
     """更新标签入参。"""
 
     tag_id: Optional[int] = Field(None, description="标签ID")
@@ -36,14 +36,14 @@ class AutoTestApiTagUpdate(BaseModel):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiTagDelete(BaseModel):
+class AutoTestTagDelete(BaseModel):
     """删除标签入参。"""
 
     tag_ids: Optional[List[int]] = Field(None, description="标签ID列表")
     tag_codes: Optional[List[str]] = Field(None, description="标签标识代码列表")
 
 
-class AutoTestApiTagSelect(AutoTestApiTagUpdate):
+class AutoTestTagSelect(AutoTestTagUpdate):
     """分页查询标签入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")

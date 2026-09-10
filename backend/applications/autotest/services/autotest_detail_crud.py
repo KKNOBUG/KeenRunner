@@ -14,8 +14,8 @@ from tortoise.expressions import Q
 
 from backend.applications.autotest.models.autotest_detail_model import AutoTestDetailModel
 from backend.applications.autotest.schemas.autotest_detail_schema import (
-    AutoTestApiDetailCreate,
-    AutoTestApiDetailUpdate
+    AutoTestDetailCreate,
+    AutoTestDetailUpdate
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.autotest.services.autotest_report_crud import AutoTestReportCrud
@@ -28,7 +28,7 @@ from backend.core.exceptions import (
 )
 
 
-class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCreate, AutoTestApiDetailUpdate]):
+class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate, AutoTestDetailUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestDetailModel)
@@ -75,7 +75,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_detail(self, detail_in: AutoTestApiDetailCreate, *, skip_report_check: bool = False) -> AutoTestDetailModel:
+    async def create_detail(self, detail_in: AutoTestDetailCreate, *, skip_report_check: bool = False) -> AutoTestDetailModel:
         """
         创建执行明细，校验用例与报告存在(可跳过报告校验)。
 
@@ -117,7 +117,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def create_details(self, details_in: List[AutoTestApiDetailCreate]) -> List[AutoTestDetailModel]:
+    async def create_details(self, details_in: List[AutoTestDetailCreate]) -> List[AutoTestDetailModel]:
         """
         批量创建执行明细，仅供落库事务内使用(不校验用例与报告存在性，调用方(执行/调试落库事务)在调用前已完成用例校验，并在同一事务内创建了与明细)。
         report_code同源的报告，故跳过存在性校验；唯一约束(report_code+case_code+step_code+loop_cycles)
@@ -145,7 +145,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestApiDetailCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_detail(self, detail_in: AutoTestApiDetailUpdate) -> AutoTestDetailModel:
+    async def update_detail(self, detail_in: AutoTestDetailUpdate) -> AutoTestDetailModel:
         """
         更新明细，需提供detail_id或(report_code, step_code)定位。
 

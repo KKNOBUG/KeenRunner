@@ -12,9 +12,9 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestApiServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.schemas.autotest_env_config_schema import (
-    AutoTestApiEnvConfigSelect,
+    AutoTestEnvConfigSelect,
     APPEnvConfigCreate,
     FILEEnvConfigCreate,
     DBEnvConfigCreate,
@@ -23,8 +23,9 @@ from backend.applications.autotest.schemas.autotest_env_config_schema import (
     APPEnvConfigUpdate,
     FILEEnvConfigUpdate,
     DBEnvConfigUpdate,
-    AutoTestApiEnvConfigTypedDelete,
+    AutoTestEnvConfigTypedDelete,
     TestDBConnectionRequest,
+    QueryAssignConfigEnv,
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -46,7 +47,7 @@ from backend.enums import AutoTestConfigNodeType
 autotest_env_config = APIRouter()
 
 
-async def _serialize_config_response(services: AutoTestApiServices, instance, env_name: Optional[str] = None):
+async def _serialize_config_response(services: AutoTestServices, instance, env_name: Optional[str] = None):
     """将配置ORM序列化为响应字典；未传env_name时按env_bind_id解析。"""
     if env_name is None:
         env_name_map = await services.env_curd.get_env_name_map([instance.env_bind_id])
@@ -57,7 +58,7 @@ async def _serialize_config_response(services: AutoTestApiServices, instance, en
 @autotest_env_config.post("/app/create", summary="新增APP类型环境配置", description="新增APP类型环境配置信息")
 async def create_app_config(
         config_in: APPEnvConfigCreate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增APP类型环境配置信息。
@@ -86,7 +87,7 @@ async def create_app_config(
 @autotest_env_config.post("/file/create", summary="新增FILE类型环境配置", description="新增FILE类型环境配置信息")
 async def create_file_config(
         config_in: FILEEnvConfigCreate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增FILE类型环境配置信息。
@@ -115,7 +116,7 @@ async def create_file_config(
 @autotest_env_config.post("/database/create", summary="新增DB类型环境配置", description="新增DB类型环境配置信息")
 async def create_db_config(
         config_in: DBEnvConfigCreate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增DB类型环境配置信息。
@@ -144,7 +145,7 @@ async def create_db_config(
 @autotest_env_config.post("/redis/create", summary="新增REDIS类型环境配置", description="新增REDIS类型环境配置信息")
 async def create_redis_config(
         config_in: RedisEnvConfigCreate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     新增REDIS类型环境配置信息。
@@ -173,7 +174,7 @@ async def create_redis_config(
 @autotest_env_config.post("/redis/update", summary="更新REDIS类型环境配置", description="更新REDIS类型环境配置信息")
 async def update_redis_config(
         config_in: RedisEnvConfigUpdate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     更新REDIS类型环境配置信息。
@@ -201,8 +202,8 @@ async def update_redis_config(
 
 @autotest_env_config.post("/delete", summary="删除子表环境配置", description="删除指定子表环境配置信息")
 async def delete_env_config(
-        config_in: AutoTestApiEnvConfigTypedDelete = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        config_in: AutoTestEnvConfigTypedDelete = Body(..., description="环境配置信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     删除指定子表环境配置信息。
@@ -227,7 +228,7 @@ async def delete_env_config(
 @autotest_env_config.post("/app/update", summary="更新APP类型环境配置", description="更新APP类型环境配置信息")
 async def update_app_config(
         config_in: APPEnvConfigUpdate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     更新APP类型环境配置信息。
@@ -256,7 +257,7 @@ async def update_app_config(
 @autotest_env_config.post("/file/update", summary="更新FILE类型环境配置", description="更新FILE类型环境配置信息")
 async def update_file_config(
         config_in: FILEEnvConfigUpdate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     更新FILE类型环境配置信息。
@@ -285,7 +286,7 @@ async def update_file_config(
 @autotest_env_config.post("/database/update", summary="更新DB类型环境配置", description="更新DB类型环境配置信息")
 async def update_db_config(
         config_in: DBEnvConfigUpdate = Body(..., description="环境配置信息"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     更新DB类型环境配置信息。
@@ -315,7 +316,7 @@ async def update_db_config(
 async def get_env_config(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据id或code查询环境配置信息。
@@ -351,8 +352,8 @@ async def get_env_config(
 
 @autotest_env_config.post("/search", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Body)")
 async def search_env_configs(
-        config_in: AutoTestApiEnvConfigSelect = Body(..., description="查询条件"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        config_in: AutoTestEnvConfigSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据条件分页查询环境配置列表信息。
@@ -428,7 +429,7 @@ async def get_env_config_names(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
         env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型，可选"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     获取去重后的配置名称列表。
@@ -452,6 +453,27 @@ async def get_env_config_names(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
+@autotest_env_config.post("/query_assign_config_envs", summary="查询指派配置的环境名称", description="根据应用/配置名称/节点类型查询环境名称列表")
+async def query_assign_config_envs(
+        query_in: QueryAssignConfigEnv = Body(..., description="指派配置环境查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
+):
+    """
+    根据应用/配置名称/节点类型查询符合的环境名称列表。
+
+    :param query_in: 指派配置环境查询入参(三条件均可选)
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        data = await services.env_config_curd.query_assign_config_env_names(query_in=query_in)
+        LOGGER.info(f"查询指派配置的环境名称成功, 结果明细: {data}")
+        return SuccessResponse(message="查询成功", data=data, total=len(data))
+    except Exception as e:
+        LOGGER.error(f"查询指派配置的环境名称失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
 @autotest_env_config.get("/list", summary="查询子表环境配置列表", description="按条件分页查询子表环境配置列表")
 async def list_env_configs(
         project_id: Optional[int] = Query(None, description="应用ID"),
@@ -459,7 +481,7 @@ async def list_env_configs(
         env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(app/file/database/redis)"),
         page: int = Query(1, description="页码", ge=1),
         page_size: int = Query(10, description="每页条数", ge=1, le=100),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     按条件分页查询子表环境配置列表。
@@ -491,7 +513,7 @@ async def list_env_configs(
 @autotest_env_config.post("/database/test_connection", summary="执行数据库连接测试", description="根据入参测试数据库连接是否可用")
 async def test_db_connection(
         config_in: TestDBConnectionRequest = Body(..., description="连接测试入参"),
-        services: AutoTestApiServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     根据入参测试数据库连接是否可用。

@@ -16,7 +16,7 @@ from tortoise.exceptions import FieldError
 from tortoise.expressions import Q, RawSQL
 
 from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
-from backend.applications.autotest.schemas.autotest_task_schema import AutoTestApiTaskCreate, AutoTestApiTaskUpdate
+from backend.applications.autotest.schemas.autotest_task_schema import AutoTestTaskCreate, AutoTestTaskUpdate
 from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
 from backend.applications.autotest.services.autotest_task_schedule import normalize_schedule
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -103,7 +103,7 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
     return dict(task_kwargs)
 
 
-class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, AutoTestApiTaskUpdate]):
+class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoTestTaskUpdate]):
 
     def __init__(self):
         super().__init__(model=AutoTestTaskModel)
@@ -182,7 +182,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_task(self, task_in: AutoTestApiTaskCreate) -> AutoTestTaskModel:
+    async def create_task(self, task_in: AutoTestTaskCreate) -> AutoTestTaskModel:
         """
         创建应用；同名软删记录恢复并更新，活跃同名报错。
 
@@ -247,7 +247,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         suffix: str = datetime.now().strftime("%Y%m%d%H%M%S%f")
         base_name: str = re.compile(r"_\d{20}$").sub("", source.task_name)
         new_task_name: str = f"{base_name[:255 - len(suffix) - 1]}_{suffix}"
-        copy_in = AutoTestApiTaskCreate(
+        copy_in = AutoTestTaskCreate(
             task_name=new_task_name,
             task_desc=source.task_desc,
             task_type=source.task_type,
@@ -265,7 +265,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestApiTaskCreate, Au
         )
         return await self.create_task(task_in=copy_in)
 
-    async def update_task(self, task_in: AutoTestApiTaskUpdate) -> AutoTestTaskModel:
+    async def update_task(self, task_in: AutoTestTaskUpdate) -> AutoTestTaskModel:
         """
         更新任务，根据task_id或task_code定位并校验(task_name, task_project)唯一。
 

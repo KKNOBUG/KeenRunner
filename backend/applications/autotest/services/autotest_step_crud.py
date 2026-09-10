@@ -19,10 +19,10 @@ from tortoise.transactions import in_transaction
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
-from backend.applications.autotest.schemas.autotest_case_schema import AutoTestApiCaseUpdate
+from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from backend.applications.autotest.schemas.autotest_step_schema import (
-    AutoTestApiStepCreate,
-    AutoTestApiStepUpdate,
+    AutoTestStepCreate,
+    AutoTestStepUpdate,
     AutoTestCaseStepTreeLoadResult,
     AutoTestStepTreeUpdateItem,
     StepTreeCounter,
@@ -96,7 +96,7 @@ async def _get_case_cached(
     return instance
 
 
-class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, AutoTestApiStepUpdate]):
+class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoTestStepUpdate]):
 
     def __init__(self):
         """
@@ -329,9 +329,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             })
         meta = StepTreeCounter(**step_counter)
         raw_roots = result
-        case_only: Optional[AutoTestApiCaseUpdate] = None
+        case_only: Optional[AutoTestCaseUpdate] = None
         if len(raw_roots) == 1 and isinstance(raw_roots[0], dict) and list(raw_roots[0].keys()) == ["case"]:
-            case_only = AutoTestApiCaseUpdate.model_validate(raw_roots[0]["case"])
+            case_only = AutoTestCaseUpdate.model_validate(raw_roots[0]["case"])
             root_models: List[AutoTestStepTreeUpdateItem] = []
         else:
             root_models = [step_tree_item_from_storage(r) for r in raw_roots]
@@ -494,7 +494,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
 
         return sorted(project_ids)
 
-    async def create_step(self, step_in: AutoTestApiStepCreate) -> AutoTestStepModel:
+    async def create_step(self, step_in: AutoTestStepCreate) -> AutoTestStepModel:
         """
         创建单条步骤，校验用例存在、父步骤存在且同用例，若同用例下step_no已存在则恢复并更新。
 
@@ -549,7 +549,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_step(self, step_in: AutoTestApiStepUpdate) -> AutoTestStepModel:
+    async def update_step(self, step_in: AutoTestStepUpdate) -> AutoTestStepModel:
         """
         更新单条步骤，支持根据step_id或step_code定位；校验step_no唯一、父步骤存在且无循环引用。
 
@@ -1398,7 +1398,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestApiStepCreate, Au
             await AutoTestDetailCrud().create_details(details_in=list(pending_create_details or []))
             case_state = statistics.get("failed_steps", 0) == 0
             case_last_time = defer_create_report.case_ed_time
-            await case_crud.update_case(AutoTestApiCaseUpdate(
+            await case_crud.update_case(AutoTestCaseUpdate(
                 case_id=case_id,
                 case_state=case_state,
                 case_last_time=case_last_time,

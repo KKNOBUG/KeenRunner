@@ -22,7 +22,7 @@ from xml.etree import ElementTree
 
 import orjson
 
-from backend.applications.autotest.dependencies import AutoTestApiServices
+from backend.applications.autotest.dependencies import AutoTestServices
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
@@ -94,7 +94,7 @@ def _enum_value(raw: Any) -> str:
 
 
 async def resolve_case_and_step(
-        services: AutoTestApiServices,
+        services: AutoTestServices,
         case_id: Optional[int] = None,
         case_code: Optional[str] = None,
         step_id: Optional[int] = None,
@@ -134,7 +134,7 @@ def ensure_case_allows_data_source(case: AutoTestCaseModel) -> None:
 
 
 async def resolve_enabled_data_source(
-        services: AutoTestApiServices,
+        services: AutoTestServices,
         data_source_id: Optional[int] = None,
         data_source_code: Optional[str] = None,
         case_id: Optional[int] = None,
@@ -462,7 +462,7 @@ def collect_step_report_original(step: AutoTestStepModel) -> Dict[str, Dict[str,
 # ---------------------------------------------------------------------------
 
 async def sync_step_data_source_meta(
-        services: AutoTestApiServices,
+        services: AutoTestServices,
         *,
         case_id: int,
         step_code: str,
@@ -485,7 +485,7 @@ async def sync_step_data_source_meta(
 
 
 async def clear_step_data_source_meta(
-        services: AutoTestApiServices,
+        services: AutoTestServices,
         *,
         case_id: int,
         step_code: Optional[str] = None,

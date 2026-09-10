@@ -16,8 +16,8 @@ from backend.applications.autotest.schemas.autotest_env_config_schema import (
     DBEnvConfigCreate,
     FILEEnvConfigCreate,
 )
-from backend.applications.autotest.schemas.autotest_project_schema import AutoTestApiProjectCreate
-from backend.applications.autotest.schemas.autotest_tag_schema import AutoTestApiTagCreate
+from backend.applications.autotest.schemas.autotest_project_schema import AutoTestProjectCreate
+from backend.applications.autotest.schemas.autotest_tag_schema import AutoTestTagCreate
 from backend.applications.autotest.services.autotest_env_config_crud import AutoTestEnvConfigCrud
 from backend.applications.autotest.services.autotest_env_crud import AutoTestEnvCrud
 from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
@@ -666,7 +666,7 @@ async def init_database_project():
         return
 
     await project_crud.create_project(
-        AutoTestApiProjectCreate(
+        AutoTestProjectCreate(
             project_name="ToolBox工具箱",
             project_desc="平台默认应用：ToolBox工具箱",
             project_state="开发中",
@@ -694,15 +694,15 @@ async def init_database_tag():
         LOGGER.error("[标签]初始化失败: 未找到应用 ToolBox工具箱")
         return
 
-    tag_data: List[AutoTestApiTagCreate] = [
-        AutoTestApiTagCreate(
+    tag_data: List[AutoTestTagCreate] = [
+        AutoTestTagCreate(
             tag_project=project.id,
             tag_mode="技术测试团队",
             tag_name="测试工程师",
             tag_desc=None,
             created_user=INIT_CREATED_USER,
         ),
-        AutoTestApiTagCreate(
+        AutoTestTagCreate(
             tag_project=project.id,
             tag_mode="技术测试团队",
             tag_name="开发工程师",

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 from backend.applications.base.services.scaffold import UpperStr
 
 
-class AutoTestApiProjectBase(BaseModel):
+class AutoTestProjectBase(BaseModel):
     """应用公共字段。"""
 
     project_name: Optional[str] = Field(None, max_length=255, description="应用名称")
@@ -27,7 +27,7 @@ class AutoTestApiProjectBase(BaseModel):
     project_current_month_env: Optional[Union[UpperStr, str]] = Field(None, max_length=64, description="应用当前月版环境")
 
 
-class AutoTestApiProjectCreate(AutoTestApiProjectBase):
+class AutoTestProjectCreate(AutoTestProjectBase):
     """创建应用入参。"""
 
     project_name: str = Field(..., max_length=255, description="应用名称")
@@ -102,7 +102,7 @@ class AutoTestApiProjectCreate(AutoTestApiProjectBase):
         return v
 
 
-class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
+class AutoTestProjectUpdate(AutoTestProjectBase):
     """更新应用入参。"""
 
     project_id: Optional[int] = Field(None, description="应用ID")
@@ -110,14 +110,14 @@ class AutoTestApiProjectUpdate(AutoTestApiProjectBase):
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
-class AutoTestApiProjectDelete(BaseModel):
+class AutoTestProjectDelete(BaseModel):
     """删除应用入参。"""
 
     project_ids: Optional[List[int]] = Field(None, description="应用ID列表")
     project_codes: Optional[List[str]] = Field(None, description="应用标识代码列表")
 
 
-class AutoTestApiProjectSelect(AutoTestApiProjectBase):
+class AutoTestProjectSelect(AutoTestProjectBase):
     """分页查询应用入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
