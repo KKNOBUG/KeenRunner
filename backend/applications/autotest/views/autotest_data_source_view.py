@@ -30,6 +30,7 @@ from backend.applications.autotest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceUpdate,
     AutoTestDataSourceSaveOrUpdate,
     AutoTestDataSourceSelect,
+    AutoTestDataSourceBuild,
     AutoTestDataSourceUnbindCase,
     AutoTestDataSourceUpdateFields,
 )
@@ -538,37 +539,27 @@ async def update_data_source_fields(
         return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/build", summary="构建数据源矩阵", description="查询或构建数据源矩阵，并附带报文原始值映射")
+@autotest_data_source.post("/build", summary="构建数据源矩阵", description="查询或构建数据源矩阵，并附带报文原始值映射(Body)")
 async def build_data_source(
-        data_source_id: Optional[int] = Query(None, description="数据源主键ID"),
-        data_source_code: Optional[str] = Query(None, description="数据驱动标识代码"),
-        case_id: Optional[int] = Query(None, description="用例ID"),
-        case_code: Optional[str] = Query(None, description="用例标识代码"),
-        step_id: Optional[int] = Query(None, description="步骤ID"),
-        step_code: Optional[str] = Query(None, description="步骤标识代码"),
+        build_in: AutoTestDataSourceBuild = Body(..., description="数据源矩阵构建定位条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
     获取用例下指定步骤的数据源结构，只查询不落库。
 
-    能定位到已有数据源时直接返回其dataframe；否则根据当前HTTP/TCP步骤报文构建垂直矩阵。
+    能定位到已有数据源时直接返回其dataframe；否则根据当前HTTP/TCP步骤报文构 建垂直矩阵。
 
-    :param data_source_id: 数据源主键ID
-    :param data_source_code: 数据源业务标识
-    :param case_id: 用例主键ID
-    :param case_code: 用例业务标识
-    :param step_id: 步骤主键ID
-    :param step_code: 步骤业务标识
+    :param build_in: 数据源矩阵构建定位条件
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        has_ds_locator = bool(data_source_id) or bool((data_source_code or "").strip())
+        has_ds_locator = bool(build_in.data_source_id) or bool((build_in.data_source_code or "").strip())
         if has_ds_locator:
             instance = await resolve_enabled_data_source(
                 services,
-                data_source_id=data_source_id,
-                data_source_code=data_source_code,
+                data_source_id=build_in.data_source_id,
+                data_source_code=build_in.data_source_code,
                 on_error=True,
             )
             data = await _serialize_data_source(instance)
@@ -577,10 +568,10 @@ async def build_data_source(
 
         case, step = await resolve_case_and_step(
             services,
-            case_id=case_id,
-            case_code=case_code,
-            step_id=step_id,
-            step_code=step_code,
+            case_id=build_in.case_id,
+            case_code=build_in.case_code,
+            step_id=build_in.step_id,
+            step_code=build_in.step_code,
         )
         ensure_request_step(step)
         existing = await services.data_source_curd.get_by_case_step(
@@ -591,19 +582,27 @@ async def build_data_source(
         )
         if existing:
             data = await _serialize_data_source(existing)
+            data["data_original"] = await _collect_report_original(services, existing)
             return SuccessResponse(message="查询成功", data=data, total=1)
 
         matrix = build_vertical_matrix_from_step(step)
+        # 键集合与 _serialize_data_source 输出对齐(未落库字段置None)，三分支响应结构保持一致
         data = {
+            "data_source_id": None,
             "case_id": case.id,
             "case_code": case.case_code,
             "step_id": step.id,
             "step_code": step.step_code,
-            "dataframe": matrix,
-            "axis": AXIS_VERTICAL,
+            "file_name": None,
+            "file_hash": None,
+            "file_path": None,
+            "file_desc": None,
             "dataset": {},
             "dataset_names": list(DEFAULT_SCENE_NAMES),
-            "data_source_id": None,
+            "cache_key": None,
+            "dataframe": matrix,
+            "axis": AXIS_VERTICAL,
+            "data_source_code": None,
             "data_original": collect_step_report_original(step),
         }
         return SuccessResponse(message="构建成功", data=data, total=1)

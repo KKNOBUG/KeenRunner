@@ -20,6 +20,7 @@ from backend.applications.autotest.schemas.autotest_env_schema import (
     AutoTestEnvSelect,
     AutoTestEnvDelete,
     AutoTestEnvListQuery,
+    AutoTestEnvPageSelect,
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -34,7 +35,6 @@ from backend.core.responses import (
     NotFoundResponse,
     DataBaseStorageResponse
 )
-from backend.enums import AutoTestConfigNodeType
 
 autotest_env = APIRouter()
 
@@ -293,37 +293,20 @@ async def list_environments(
         return FailureResponse(message=f"查询失败: {e}")
 
 
-@autotest_env.get("/page", summary="查询环境分页列表", description="按应用/环境/节点类型聚合后分页查询")
+@autotest_env.post("/page", summary="查询环境分页列表", description="按应用/环境/节点类型/配置名称聚合后分页查询(Body)")
 async def page_environments(
-        project_id: Optional[int] = Query(None, description="应用ID", ge=1),
-        env_name: Optional[str] = Query(None, description="环境名称"),
-        env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型(app/file/database/redis)"),
-        ip: Optional[str] = Query(None, description="IP地址"),
-        page: int = Query(1, description="页码", ge=1),
-        page_size: int = Query(10, description="每页条数", ge=1, le=100),
+        page_in: AutoTestEnvPageSelect = Body(..., description="环境分页查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    按应用/环境/节点类型聚合后分页查询。
+    按应用/环境/节点类型/配置名称聚合后分页查询。
 
-    :param project_id: 应用主键ID
-    :param env_name: 环境名称
-    :param env_type: 节点类型
-    :param ip: IP地址
-    :param page: 页码
-    :param page_size: 每页条数
+    :param page_in: 环境分页查询入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     try:
-        total, data = await services.env_curd.get_env_search_list(
-            project_id=project_id,
-            env_name=env_name,
-            env_type=env_type,
-            ip=ip,
-            page=page,
-            page_size=page_size,
-        )
+        total, data = await services.env_curd.get_env_search_list(query_in=page_in)
         return SuccessResponse(data=data, total=total, message="查询成功")
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

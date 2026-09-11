@@ -140,3 +140,14 @@ class AutoTestDataSourceSelect(BaseModel):
     file_name: Optional[str] = Field(None, max_length=255, description="数据驱动文件存储名称")
     file_path: Optional[str] = Field(None, max_length=1024, description="数据驱动文件存储路径")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+
+
+class AutoTestDataSourceBuild(BaseModel):
+    """数据源矩阵构建定位入参(优先按数据源定位，否则按用例+步骤定位)。"""
+
+    data_source_id: Optional[int] = Field(None, ge=1, description="数据源主键ID")
+    data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动文件标识代码")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
+    case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
+    step_id: Optional[int] = Field(None, ge=1, description="步骤ID")
+    step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")

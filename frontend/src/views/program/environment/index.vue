@@ -40,6 +40,7 @@ const queryItems = ref({
   env_name: '',
   env_type: null,
   ip: '',
+  config_name: '',
 })
 const projectOptions = ref([])
 const vPermission = resolveDirective('permission')
@@ -99,6 +100,7 @@ function buildSearchParams(overrides = {}) {
     env_name: (overrides.env_name ?? q.env_name) || undefined,
     env_type: (overrides.env_type ?? q.env_type) ?? undefined,
     ip: (overrides.ip ?? q.ip) || undefined,
+    config_name: (overrides.config_name ?? q.config_name) || undefined,
   }
 }
 
@@ -310,6 +312,15 @@ const columns = computed(() => {
               v-model:value="queryItems.ip"
               clearable
               placeholder="按子表主机IP过滤"
+              style="width: 150px"
+              @keypress.enter="$table?.handleSearch()"
+          />
+        </QueryBarItem>
+        <QueryBarItem label="配置名称：">
+          <NInput
+              v-model:value="queryItems.config_name"
+              clearable
+              placeholder="按子表配置名称过滤"
               style="width: 150px"
               @keypress.enter="$table?.handleSearch()"
           />

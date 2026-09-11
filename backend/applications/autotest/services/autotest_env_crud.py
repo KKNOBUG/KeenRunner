@@ -21,6 +21,7 @@ from backend.applications.autotest.schemas.autotest_env_schema import (
     AutoTestEnvCreate,
     AutoTestEnvUpdate,
     AutoTestEnvDelete,
+    AutoTestEnvPageSelect,
 )
 from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -560,49 +561,51 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             return {}
         return dict(await AutoTestEnvModel.filter(id__in=list(dict_ids)).values_list("id", "env_name"))
 
-    async def get_env_search_list(
-            self,
-            project_id: Optional[int] = None,
-            env_name: Optional[str] = None,
-            env_type: Optional[Union[AutoTestConfigNodeType, str]] = None,
-            ip: Optional[str] = None,
-            page: int = 1,
-            page_size: int = 10,
-    ) -> Tuple[int, List[Dict[str, Any]]]:
+    async def get_env_search_list(self, query_in: AutoTestEnvPageSelect) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        以环境绑定表分页查询；可选按子配置IP过滤。
+        以环境绑定表分页查询；可选按子配置IP/配置名称过滤。
 
+        :param query_in: 环境分页查询入参(过滤条件与分页)
         :return: (总条数, 当前页记录)；记录含env_id(绑定主键)/project_id/env_name/env_type/project_name/is_delete/时间字段
         """
         try:
             base_qs = self.model.filter(state=0)
 
-            if ip:
+            if query_in.ip:
                 matched_bind_ids = await AutoTestEnvConfigModel.filter(
                     state=0,
-                    config_host__contains=ip,
+                    config_host__contains=query_in.ip,
                 ).values_list("env_bind_id", flat=True)
                 if not matched_bind_ids:
                     return 0, []
                 base_qs = base_qs.filter(id__in=list(set(matched_bind_ids)))
 
-            if project_id is not None:
-                base_qs = base_qs.filter(project_id=project_id)
-            if env_name:
-                dict_ids = await self.get_dict_ids_by_name(env_name)
+            if query_in.config_name:
+                matched_bind_ids = await AutoTestEnvConfigModel.filter(
+                    state=0,
+                    config_name__contains=query_in.config_name,
+                ).values_list("env_bind_id", flat=True)
+                if not matched_bind_ids:
+                    return 0, []
+                base_qs = base_qs.filter(id__in=list(set(matched_bind_ids)))
+
+            if query_in.project_id is not None:
+                base_qs = base_qs.filter(project_id=query_in.project_id)
+            if query_in.env_name:
+                dict_ids = await self.get_dict_ids_by_name(query_in.env_name)
                 if not dict_ids:
                     return 0, []
                 base_qs = base_qs.filter(env_enum_id__in=dict_ids)
-            if env_type is not None:
-                base_qs = base_qs.filter(env_type=env_type)
+            if query_in.env_type is not None:
+                base_qs = base_qs.filter(env_type=query_in.env_type)
 
             active_project_ids = await AutoTestProjectModel.filter(state=0).values_list("id", flat=True)
             if active_project_ids:
                 base_qs = base_qs.filter(project_id__in=list(active_project_ids))
 
             total = await base_qs.count()
-            offset = (page - 1) * page_size
-            page_rows = await base_qs.offset(offset).limit(page_size).values(
+            offset = (query_in.page - 1) * query_in.page_size
+            page_rows = await base_qs.offset(offset).limit(query_in.page_size).values(
                 "id", "project_id", "env_enum_id", "env_type", "created_time", "updated_time"
             )
 

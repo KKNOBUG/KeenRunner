@@ -62,3 +62,15 @@ class AutoTestEnvListQuery(BaseModel):
     """按应用聚合查询环境名称列表入参。"""
 
     project_id: Optional[List[int]] = Field(None, description="应用ID列表，如 [999,998,997]")
+
+
+class AutoTestEnvPageSelect(BaseModel):
+    """环境绑定分页列表查询入参(按应用/环境/节点类型/子配置过滤)。"""
+
+    project_id: Optional[int] = Field(None, ge=1, description="应用ID")
+    env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
+    env_type: Optional[AutoTestConfigNodeType] = Field(None, description="节点类型(app/file/database/redis)")
+    ip: Optional[str] = Field(None, max_length=128, description="IP地址(子配置主机地址模糊匹配)")
+    config_name: Optional[str] = Field(None, max_length=128, description="配置名称(子配置名称模糊匹配)")
+    page: int = Field(default=1, ge=1, description="页码")
+    page_size: int = Field(default=10, ge=1, le=100, description="每页条数")

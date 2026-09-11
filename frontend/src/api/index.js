@@ -90,8 +90,8 @@ export default {
   getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
   /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } */
   listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
-  /** 环境分页列表（聚合应用名/是否可删）。Query: project_id/env_name/env_type；响应env_id=绑定主键 */
-  getEnvPage: (params = {}) => request.get('/autotest/env/page', { params }),
+  /** 环境分页列表（聚合应用名/是否可删）。Body: project_id/env_name/env_type/ip/config_name + 分页 */
+  getEnvPage: (data = {}) => request.post('/autotest/env/page', data),
   /** Body: { project_ids: number[] } -> project_id -> env_name -> api|file|database|redis -> config_name -> {config_host,...} */
   queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/env/query', data),
   /** 全部启用应用（环境侧）。Query: page/page_size */
@@ -280,8 +280,8 @@ export default {
   /** Query：data_source_id/code 或 (case_id|case_code)+(step_id|step_code) —— 软删除数据源并解绑步骤指针 */
   deleteDataSource: (params = {}) => request.delete('/autotest/data_source/delete', { params }),
   saveOrUpdateDataSource: (data = {}) => request.post('/autotest/data_source/save_or_update', data),
-  /** Query：data_source_id/code 或 (case_id|case_code)+(step_id|step_code) —— 已有矩阵直接返回，否则按报文构建 */
-  buildDataSource: (params = {}) => request.get('/autotest/data_source/build', { params }),
+  /** Body：data_source_id/code 或 (case_id|case_code)+(step_id|step_code) ——  已有矩阵直接返回，否则按报文构建 */
+  buildDataSource: (data = {}) => request.post('/autotest/data_source/build', data),
   /** FormData：case_id、step_id、step_code、file_desc?、file —— 单步骤数据源上传 */
   singleStepDatasetUpload: (formData) => request.post('/autotest/data_source/single_step_dataset_upload', formData),
   /** params：case_id、step_id、step_code —— 单步骤数据源下载（blob） */
