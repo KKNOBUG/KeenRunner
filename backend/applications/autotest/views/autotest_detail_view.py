@@ -16,7 +16,8 @@ from backend.applications.autotest.dependencies import AutoTestServices, get_aut
 from backend.applications.autotest.schemas.autotest_detail_schema import (
     AutoTestDetailCreate,
     AutoTestDetailUpdate,
-    AutoTestDetailSelect
+    AutoTestDetailSelect,
+    AutoTestDetailTreeSelect
 )
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -242,3 +243,35 @@ async def search_step_details(
     except Exception as e:
         LOGGER.error(f"根据条件分页查询明细列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+
+
+@autotest_detail.post("/tree", summary="查询明细树", description="根据报告标识查询完整明细树(后端组装, 不分页)")
+async def search_step_detail_tree(
+        detail_in: AutoTestDetailTreeSelect = Body(..., description="查询条件"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
+):
+    """
+    根据报告标识查询完整明细树；固定执行时间线排序组装，only_failed=True时仅保留失败步骤及其祖先链。
+
+    :param detail_in: 明细树入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应(data为嵌套children树, children恒存在且无子时为空列表; total为明细总行数)
+    """
+    try:
+        q = Q(report_code=detail_in.report_code)
+        if detail_in.case_id:
+            q &= Q(case_id=detail_in.case_id)
+        if detail_in.case_code:
+            q &= Q(case_code=detail_in.case_code)
+        q &= Q(state=detail_in.state)
+        # 固定执行时间线排序(保证父行先于子行)，由后端单遍组装为嵌套明细树
+        total, instances = await services.detail_curd.select_tree_details(search=q, order=["step_st_time", "id"])
+        for row in instances:
+            row["detail_id"] = row.pop("id")
+        data = services.detail_curd.build_detail_tree(instances, only_failed=detail_in.only_failed)
+        return SuccessResponse(message="查询成功", data=data, total=total)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"查询明细树失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询明细树失败，异常描述: {str(e)}")

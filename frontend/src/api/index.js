@@ -226,6 +226,7 @@ export default {
   },
   // 明细相关
   getApiDetailList: (data = {}) => request.post('/autotest/detail/search', data),
+  getApiDetailTree: (data = {}) => request.post('/autotest/detail/tree', data),
   getApiDetail: (params = {}) => {
     const queryParams = []
     if (params.detail_id) queryParams.push(`detail_id=${params.detail_id}`)

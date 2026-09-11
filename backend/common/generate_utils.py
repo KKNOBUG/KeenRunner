@@ -154,7 +154,7 @@ class GenerateUtils:
         """生成随机18～65岁对应的身份证号码"""
         return self.faker_cn.ssn(min_age=18, max_age=65)
 
-    def generate_ident_card_number_condition(self, min_age: int, max_age: int):
+    def generate_ident_card_number_condition(self, min_age: int = 18, max_age: int = 65):
         """
         生成随机身份证号码(可指定年龄范围)
 
@@ -165,7 +165,7 @@ class GenerateUtils:
         return self.faker_cn.ssn(min_age=min_age, max_age=max_age)
 
     @classmethod
-    def generate_ident_card_birthday(cls, ident_card_number: str):
+    def generate_ident_card_birthday(cls, ident_card_number: str = "310109196606041652"):
         """
         从身份证号码中解析出生日期段
 
@@ -175,7 +175,7 @@ class GenerateUtils:
         return ident_card_number[6:-4]
 
     @classmethod
-    def generate_ident_card_gender(cls, ident_card_number: str):
+    def generate_ident_card_gender(cls, ident_card_number: str = "310109196606041652"):
         """
         从身份证号码中解析性别
 
@@ -184,7 +184,7 @@ class GenerateUtils:
         """
         return "女" if int(ident_card_number[-2]) % 2 == 0 else "男"
 
-    def generate_invoke(self, func_name: str, func_args: Optional[dict] = None, func_local: Literal["en", "cn"] = "cn"):
+    def generate_invoke(self, func_name: str = "profile", func_args: Optional[dict] = None, func_local: Literal["en", "cn"] = "cn"):
         """
         通过反射调用 Faker 实例上的指定方法生成数据
 
@@ -196,7 +196,7 @@ class GenerateUtils:
         return getattr(eval("self.faker_" + func_local), func_name)(**func_args or {})
 
     @classmethod
-    def generate_random_int(cls, min_: int, max_: int) -> int:
+    def generate_random_int(cls, min_: int = 1, max_: int = 100) -> int:
         """
         生成指定范围内的随机整数
 
@@ -207,7 +207,7 @@ class GenerateUtils:
         return random.randint(min_, max_)
 
     @classmethod
-    def generate_random_float(cls, min_: float, max_: float, num_: int = 2) -> float:
+    def generate_random_float(cls, min_: float = 1, max_: float = 100, num_: int = 2) -> float:
         """
         生成指定范围内的随机小数
 
@@ -219,7 +219,7 @@ class GenerateUtils:
         return round(random.uniform(min_, max_), num_)
 
     @staticmethod
-    def generate_string(length: int, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
+    def generate_string(length: int = 10, digit: bool = False, char: bool = False, chinese: bool = False) -> str:
         """
         生成随机可指定长度及字符类型组合的字符串
 
@@ -309,8 +309,7 @@ class GenerateUtils:
 
         return current_datetime
 
-    def generate_pinyin(self, chars: str, splitter: str = "",
-                        convert: Literal["lower", "upper", "capitalize"] = "lower"):
+    def generate_pinyin(self, chars: str = "你好", splitter: str = "", convert: Literal["lower", "upper", "capitalize"] = "lower"):
         """
         将中文文本转换为拼音(暂不支持多音字消歧)
 
@@ -321,8 +320,7 @@ class GenerateUtils:
         """
         return self.pinyin.get_pinyin(chars=chars, splitter=splitter, convert=convert)
 
-    def generate_information(self, minAge: int = 18, maxAge: int = 65,
-                             convert: Literal["lower", "upper", "capitalize"] = "upper"):
+    def generate_information(self, minAge: int = 18, maxAge: int = 65, convert: Literal["lower", "upper", "capitalize"] = "upper"):
         """
         生成随机一套关联的个人测试信息(姓名、身份证、银行卡、联系方式等)
 
@@ -421,8 +419,7 @@ class GenerateUtils:
         return int(delta.total_seconds())
 
     @classmethod
-    def generate_seconds_until(cls, year: int = 0, month: int = 0, day: int = 0,
-                               hour: int = 0, minute: int = 0, second: int = 0) -> int:
+    def generate_seconds_until(cls, year: int = 0, month: int = 0, day: int = 0, hour: int = 0, minute: int = 0, second: int = 0) -> int:
         """
         基于当前时间，计算增加指定偏移量后的目标时间，返回剩余秒数
         支持年、月、日、时、分、秒偏移，如果目标时间早于当前时间，则返回0

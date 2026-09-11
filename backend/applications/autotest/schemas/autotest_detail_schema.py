@@ -345,7 +345,7 @@ class AutoTestDetailUpdate(AutoTestDetailBase):
 
 
 class AutoTestDetailSelect(BaseModel):
-    """分页查询步骤执行明细入参。"""
+    """分页查询步骤执行明细入参(平铺列表)。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
@@ -365,3 +365,13 @@ class AutoTestDetailSelect(BaseModel):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+
+
+class AutoTestDetailTreeSelect(BaseModel):
+    """报告明细树查询入参(不分页, 按执行时间线组装为嵌套children树)。"""
+
+    report_code: str = Field(..., description="报告标识代码(明细树为单报告维度)")
+    case_id: Optional[int] = Field(None, description="用例ID")
+    case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
+    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    only_failed: bool = Field(default=False, description="仅保留失败步骤及其祖先链(后端裁剪)")
