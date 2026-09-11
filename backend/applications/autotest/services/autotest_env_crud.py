@@ -293,7 +293,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                 restore_dict["updated_user"] = env_in.created_user
             return await self.update(id=existing_bind.id, obj_in=restore_dict)
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)环境绑定信息异常, 违反约束规则或空指针异常: {e}"
+            error_message: str = f"更新环境绑定信息异常, 违反约束规则或空指针异常: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -319,9 +319,9 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             env_id = instance.id
 
         if env_in.env_type is not None and instance.env_type != env_in.env_type:
-            raise ParameterException(message=f"类型不匹配，记录类型为{instance.env_type}，请求类型为{env_in.env_type}")
+            raise ParameterException(message="配置关联的环境节点不匹配")
         if env_in.project_id is not None and int(instance.project_id) != int(env_in.project_id):
-            raise ParameterException(message="应用ID不匹配，请检查")
+            raise ParameterException(message="配置关联的环境信息不存在")
 
         update_dict: Dict[str, Any] = env_in.model_dump(
             exclude_none=True,

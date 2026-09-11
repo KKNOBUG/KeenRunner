@@ -106,22 +106,15 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             exclude_unset=True,
             exclude={"env_name", "project_id", "env_type", "env_id"},
         )
-        payload.update({
-            "env_bind_id": env_bind.id,
-            "state": 0,
-        })
-
-        existing = await self.model.filter(
-            env_bind_id=env_bind.id,
-            config_name=config_name,
-        ).first()
+        payload.update({"env_bind_id": env_bind.id, "state": 0})
+        existing = await self.model.filter(env_bind_id=env_bind.id, config_name=config_name).first()
         if existing:
             if existing.state == 0:
-                raise DataAlreadyExistsException(message=f"配置名称[{config_name}]不允许重复")
+                raise DataAlreadyExistsException(message="相同应用和环境下, 配置名称不允许重复")
             try:
                 return await self.update(id=existing.id, obj_in=payload)
             except (DoesNotExist, IntegrityError) as e:
-                error_message = f"新增(恢复)环境配置异常, 违反约束规则或记录不存在: {e}"
+                error_message = f"更新环境配置异常, 违反约束规则或记录不存在: {e}"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
@@ -158,14 +151,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
 
         bind = await AutoTestEnvBindModel.filter(id=instance.env_bind_id).first()
         if not bind:
-            raise NotFoundException(message=f"配置所属绑定不存在, env_bind_id={instance.env_bind_id}")
-
+            raise NotFoundException(message="配置关联的环境信息不存在")
         if config_in.project_id is not None and int(config_in.project_id) != int(bind.project_id):
-            raise ParameterException(message="应用ID不匹配，请检查")
-
+            raise ParameterException(message="配置关联的所属应用不匹配")
         env_type = config_in.env_type if config_in.env_type is not None else bind.env_type
         if bind.env_type != env_type:
-            raise ParameterException(message=f"类型不匹配，记录类型为{bind.env_type}，请求类型为{env_type}")
+            raise ParameterException(message="配置关联的环境节点不匹配")
 
         env_name = config_in.env_name
         if not env_name and bind.state != 1:
@@ -186,15 +177,10 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             exclude={"config_id", "config_code", "env_name", "project_id", "env_type", "env_id"},
         )
         update_dict["env_bind_id"] = env_bind.id
-
         config_name = update_dict.get("config_name", instance.config_name)
-        name_dup = await self.model.filter(
-            env_bind_id=env_bind.id,
-            config_name=config_name,
-            state=0,
-        ).exclude(id=instance.id).first()
-        if name_dup:
-            raise DataAlreadyExistsException(message="配置名称不允许重复")
+        name_duplicated = await self.model.filter(env_bind_id=env_bind.id, config_name=config_name, state=0).exclude(id=instance.id).first()
+        if name_duplicated:
+            raise DataAlreadyExistsException(message="相同应用和环境下, 配置名称不允许重复")
 
         await self._assert_host_unique(
             env_bind_id=env_bind.id,
@@ -215,17 +201,17 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
 
     async def delete_config(self, config_in: AutoTestEnvConfigTypedDelete) -> AutoTestEnvConfigModel:
         """
-        按节点类型软删除环境配置；已删除则直接返回（幂等）。
+        按节点类型软删除环境配置；已删除则直接返回。
 
-        :param config_in: 删除入参（config_id + env_type）
+        :param config_in: 删除入参
         :return: 软删除后的配置ORM实例
         """
         instance = await self.get_by_id(config_id=config_in.config_id, on_error=True)
         bind = await AutoTestEnvBindModel.filter(id=instance.env_bind_id).first()
         if not bind:
-            raise NotFoundException(message=f"配置所属绑定不存在, env_bind_id={instance.env_bind_id}")
+            raise NotFoundException(message="配置关联的环境信息不存在")
         if bind.env_type != config_in.env_type:
-            raise ParameterException(message=f"类型不匹配，记录类型为{bind.env_type}，请求类型为{config_in.env_type}")
+            raise ParameterException(message="配置关联的环境节点不匹配")
         if instance.state == 1:
             return instance
         return await self.soft_delete(id=instance.id, updated_user=config_in.updated_user)
@@ -244,7 +230,6 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 单次批量定位并按入参顺序收集，首个缺失(或空参)按单条查询原文案抛出，替代循环逐条查询
         targets: List[AutoTestEnvConfigModel] = []
         if config_ids:
             id_map: Dict[int, AutoTestEnvConfigModel] = {
@@ -350,7 +335,6 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
 
         env_crud = AutoTestEnvCrud()
         env_name_map: Dict[int, str] = await env_crud.get_env_name_map(env_bind_ids)
-
         for cfg_row in env_config_rows:
             meta = bind_meta.get(int(cfg_row["env_bind_id"]))
             if not meta:
@@ -358,22 +342,18 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             project_id: int = int(meta["project_id"])
             if project_id not in classified_config_result:
                 continue
-
             env_name: Optional[str] = env_name_map.get(int(cfg_row["env_bind_id"]))
             if not env_name:
                 LOGGER.warning(f"跳过无对应环境主表记录的配置: config_id={cfg_row['id']}, env_bind_id={cfg_row['env_bind_id']}")
                 continue
-
             env_type = meta["env_type"].value if hasattr(meta["env_type"], "value") else str(meta["env_type"])
             if env_type not in allowed_types:
                 LOGGER.warning(f"跳过未知配置类型: project_id={project_id}, env={env_name}, env_type={env_type}")
                 continue
-
             if env_name not in classified_config_result[project_id]:
                 classified_config_result[project_id][env_name] = {
                     t: {} for t in empty_type_buckets
                 }
-
             classified_config_result[project_id][env_name][env_type][cfg_row["config_name"]] = {
                 "config_host": cfg_row["config_host"],
                 "config_port": cfg_row["config_port"],
@@ -521,8 +501,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             dup_q = dup_q.filter(database_name=mapped["database_name"])
         if await dup_q.exists():
             if env_type == AutoTestConfigNodeType.DB:
-                raise DataAlreadyExistsException(message="相同应用&环境下，数据库名称、IP、端口不允许重复")
-            raise DataAlreadyExistsException(message="相同应用&环境下，IP、端口不允许重复")
+                raise DataAlreadyExistsException(message="相同应用和环境下，数据库名称、IP和端口不允许重复")
+            raise DataAlreadyExistsException(message="相同应用和环境下，IP和端口不允许重复")
 
     async def get_config_list(
             self,

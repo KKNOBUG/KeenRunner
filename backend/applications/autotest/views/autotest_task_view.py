@@ -226,6 +226,8 @@ async def search_tasks(
             q &= Q(task_name__contains=task_in.task_name)
         if task_in.task_project:
             q &= Q(task_project=task_in.task_project)
+        if task_in.last_execute_user:
+            q &= Q(last_execute_user=task_in.last_execute_user)
         if task_in.created_user:
             q &= Q(created_user=task_in.created_user)
         if task_in.updated_user:
