@@ -1158,7 +1158,7 @@ async def single_step_template_download(
     """
     下载步骤数据源模板xlsx：按当前HTTP/TCP步骤报文构建默认原始数据(垂直矩阵)，值留空。
 
-    文件名与数据源导出一致(数据源导出_步骤id_下载时间)，sheet名为步骤名称。
+    文件名与数据源导出一致(数据源模板_步骤id_下载时间)，sheet名为步骤名称。
 
     :param case_id: 用例主键ID
     :param step_id: 步骤主键ID
@@ -1190,7 +1190,7 @@ async def single_step_template_download(
             style_data_source_sheet(writer.sheets[safe_name])
         output.seek(0)
 
-        file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        file_name = f"数据源模板_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         quoted_name: str = quote(file_name)
         headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
         return StreamingResponse(
@@ -1474,7 +1474,7 @@ async def batch_step_template_download(
                 style_data_source_sheet(writer.sheets[safe_name])
         output.seek(0)
 
-        file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        file_name = f"数据源模板汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}"}
         return StreamingResponse(
             output,
