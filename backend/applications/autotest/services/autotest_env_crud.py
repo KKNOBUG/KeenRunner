@@ -118,9 +118,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             instance = await self.model.filter(**filters).first()
         if not instance and on_error:
             type_hint = f", env_type={env_type}" if env_type is not None else ""
-            error_message: str = (
-                f"查询环境绑定信息失败, 记录[project_id={project_id}, env_name={name}{type_hint}]不存在"
-            )
+            error_message: str = f"查询环境绑定信息失败, 记录[project_id={project_id}, env_name={name}{type_hint}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
@@ -310,7 +308,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         env_code: Optional[str] = env_in.env_code
 
         if not env_id and not env_code:
-            error_message: str = "更新环境绑定信息失败, 参数[env_id]或[env_code]不允许为空"
+            error_message: str = "更新环境绑定信息失败, 参数[env_id, env_code]不允许同时为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if env_id:
@@ -321,9 +319,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             env_id = instance.id
 
         if env_in.env_type is not None and instance.env_type != env_in.env_type:
-            raise ParameterException(
-                message=f"类型不匹配，记录类型为{instance.env_type}，请求类型为{env_in.env_type}"
-            )
+            raise ParameterException(message=f"类型不匹配，记录类型为{instance.env_type}，请求类型为{env_in.env_type}")
         if env_in.project_id is not None and int(instance.project_id) != int(env_in.project_id):
             raise ParameterException(message="应用ID不匹配，请检查")
 
@@ -362,7 +358,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :return: 软删除后的环境绑定实例
         """
         if not env_id and not env_code:
-            error_message: str = "删除环境绑定信息失败, 参数[env_id]或[env_code]不允许为空"
+            error_message: str = "删除环境绑定信息失败, 参数[env_id, env_code]不允许同时为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if env_id:
@@ -382,7 +378,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         env_ids: Optional[List[int]] = env_in.env_ids
         env_codes: Optional[List[str]] = env_in.env_codes
         if not env_ids and not env_codes:
-            error_message: str = "删除环境绑定信息失败, 参数[env_ids]或[env_codes]不允许为空"
+            error_message: str = "删除环境绑定信息失败, 参数[env_ids, env_codes]不允许同时为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
@@ -456,8 +452,8 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :param with_audit: 是否附带审计字段(创建/更新人员与时间)
         :return: 环境响应字典
         """
-        dict_row = await AutoTestEnvModel.filter(id=bind.env_enum_id).first()
-        return await self._assemble_env_dict(bind, dict_row, with_audit)
+        dict_names = await AutoTestEnvModel.filter(id=bind.env_enum_id).values_list("env_name", flat=True)
+        return await self._assemble_env_dict(bind, dict_names[0] if dict_names else None, with_audit)
 
     async def serialize_envs(self, binds: List[AutoTestEnvBindModel], with_audit: bool = False) -> List[Dict[str, Any]]:
         """
@@ -468,26 +464,23 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :return: 环境响应字典列表
         """
         dict_ids = list({bind.env_enum_id for bind in binds})
-        dict_rows = await AutoTestEnvModel.filter(id__in=dict_ids).all() if dict_ids else []
-        dict_map = {row.id: row for row in dict_rows}
+        dict_map: Dict[int, str] = dict(
+            await AutoTestEnvModel.filter(id__in=dict_ids).values_list("id", "env_name")
+        ) if dict_ids else {}
         return [
             await self._assemble_env_dict(bind, dict_map.get(bind.env_enum_id), with_audit)
             for bind in binds
         ]
 
     @staticmethod
-    async def _assemble_env_dict(
-            bind: AutoTestEnvBindModel,
-            dict_row: Optional[AutoTestEnvModel],
-            with_audit: bool,
-    ) -> Dict[str, Any]:
+    async def _assemble_env_dict(bind: AutoTestEnvBindModel, env_name: Optional[str], with_audit: bool) -> Dict[str, Any]:
         """
         拼装环境响应字典。
 
         接口仍返回env_id表示绑定主键；库内字段env_enum_id不对外暴露。
 
         :param bind: 环境绑定实例
-        :param dict_row: 环境枚举实例，缺失时名称降级为空
+        :param env_name: 环境名称，缺失时降级为空
         :param with_audit: 是否附带审计字段
         :return: 环境响应字典
         """
@@ -498,14 +491,11 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             exclude_fields=exclude_fields,
             replace_fields={"id": "env_id"},
         )
-        data["env_name"] = dict_row.env_name if dict_row else ""
+        data["env_name"] = env_name or ""
         data["env_desc"] = bind.env_desc
         return data
 
-    async def get_envs(
-            self,
-            project_id: Optional[List[int]] = None,
-    ) -> Union[Dict[str, List[str]], Dict[int, Dict[str, List[str]]]]:
+    async def get_envs(self, project_id: Optional[List[int]] = None) -> Union[Dict[str, List[str]], Dict[int, Dict[str, List[str]]]]:
         """
         按节点类型聚合环境名称（读环境绑定表并联字典）。
 
@@ -599,25 +589,20 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             if query_in.env_type is not None:
                 base_qs = base_qs.filter(env_type=query_in.env_type)
 
-            active_project_ids = await AutoTestProjectModel.filter(state=0).values_list("id", flat=True)
-            if active_project_ids:
-                base_qs = base_qs.filter(project_id__in=list(active_project_ids))
+            # 启用应用一次取id+名称映射，既过滤禁用应用的绑定，也复用为页内project_name来源
+            active_project_map: Dict[int, str] = dict(
+                await AutoTestProjectModel.filter(state=0).values_list("id", "project_name")
+            )
+            if active_project_map:
+                base_qs = base_qs.filter(project_id__in=list(active_project_map))
 
             total = await base_qs.count()
             offset = (query_in.page - 1) * query_in.page_size
             page_rows = await base_qs.offset(offset).limit(query_in.page_size).values(
-                "id", "project_id", "env_enum_id", "env_type", "created_time", "updated_time"
+                "id", "project_id", "env_enum_id",
+                "env_type", "created_time", "updated_time"
             )
-
             dict_name_map = await self._get_dict_name_map({item["env_enum_id"] for item in page_rows})
-
-            project_ids = [int(item["project_id"]) for item in page_rows]
-            project_map = {}
-            if project_ids:
-                project_map = dict(
-                    await AutoTestProjectModel.filter(id__in=project_ids, state=0).values_list("id", "project_name")
-                )
-
             check_ids = [item["id"] for item in page_rows]
             sub_exists = set()
             if check_ids:
@@ -645,7 +630,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                         updated_time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2)
                         if isinstance(updated_time, datetime) else updated_time
                     ),
-                    "project_name": project_map.get(int(item["project_id"]), ""),
+                    "project_name": active_project_map.get(int(item["project_id"]), ""),
                     "is_delete": env_bind_id not in sub_exists,
                 })
             return total, result
