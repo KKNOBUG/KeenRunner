@@ -124,7 +124,7 @@ export default {
   /** Query: project_id、env_id(绑定主键)、env_type 可选 */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
   /** 按应用/配置名称/节点类型查询环境名称列表。Body: { project_id?, config_name?, env_type? } */
-  queryAssignConfigEnvs: (data = {}) => request.post('/autotest/env/config/query_assign_config_envs', data),
+  queryAssignConfigEnvs: (data = {}) => request.post('/autotest/config/query_assign_config_envs', data),
   /** 数据库连通性测试。Body: { config_id, project_id, env_name, config_name, database_name } */
   testDbConnection: (data = {}) => request.post('/autotest/config/database/test_connection', data),
 
