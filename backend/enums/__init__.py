@@ -7,6 +7,11 @@
 @DateTime: 2025/1/12 19:39
 """
 from .app_enum import Code, Message, Status
+from .perf_enum import (
+    PerfLoadMode,
+    PerfTaskStatus,
+    PerfReportStatus,
+)
 from .autotest_enum import (
     AutoTestCaseAttr,
     AutoTestCaseType,
