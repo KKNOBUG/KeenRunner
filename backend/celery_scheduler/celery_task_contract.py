@@ -16,29 +16,29 @@ CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
         "task_type": AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
         "task_name": "多个用例执行",
     },
-    "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks": {
-        "task_type": AutoTestTaskType.SCHEDULE_SCANNER,
-        "task_name": "调度任务扫描",
-    },
     "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
         "task_type": AutoTestTaskType.SINGLE_CASE_EXECUTE,
         "task_name": "单个用例执行",
     },
+    "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks": {
+        "task_type": AutoTestTaskType.SCHEDULE_SCANNER,
+        "task_name": "调度任务扫描",
+    },
     "backend.celery_scheduler.tasks.task_export_case_datagram.export_testcases_task": {
         "task_type": AutoTestTaskType.EXPORT_PUBLIC_API_DATAGRAM,
-        "task_name": "公共接口报文数据导出",
+        "task_name": "公共接口报文导出",
     },
     "backend.celery_scheduler.tasks.task_export_case_script.export_case_scripts_task": {
         "task_type": AutoTestTaskType.EXPORT_PUBLIC_API_SCRIPT,
         "task_name": "公共接口导出",
     },
-    "backend.celery_scheduler.tasks.task_public_api_to_script.generate_case_scripts_task": {
-        "task_type": AutoTestTaskType.PUBLIC_API_TO_SCRIPT,
-        "task_name": "单接口脚本生成",
-    },
     "backend.celery_scheduler.tasks.task_import_case_script.import_case_scripts_task": {
         "task_type": AutoTestTaskType.IMPORT_PUBLIC_API_SCRIPT,
         "task_name": "公共接口导入",
+    },
+    "backend.celery_scheduler.tasks.task_public_api_to_script.generate_case_scripts_task": {
+        "task_type": AutoTestTaskType.PUBLIC_API_TO_SCRIPT,
+        "task_name": "单接口脚本生成",
     },
 }
 
@@ -115,12 +115,7 @@ def _to_jsonable(value: Any) -> Any:
 
 
 def _is_envelope(value: Any) -> bool:
-    return (
-            isinstance(value, dict)
-            and "attachments" in value
-            and "raw" in value
-            and "success" in value
-    )
+    return isinstance(value, dict) and "attachments" in value and "raw" in value and "success" in value
 
 
 def _build_attachment(

@@ -154,13 +154,18 @@ function buildInvalidDetail(invalid) {
       .join('；')
 }
 
+/** 导出提交中标志：下拉菜单项无 loading 形态，用函数级 guard 拦截快速双击重复下发任务 */
+const exportDataSubmitting = ref(false)
+
 /** 导出勾选用例的请求头与请求体为 xlsx：统一异步下发，产物在异步中心下载 */
 async function handleExport() {
+  if (exportDataSubmitting.value) return
   const ids = [...(checkedRowKeys.value || [])]
   if (!ids.length) {
     window.$message?.warning?.('请先勾选要导出的用例')
     return
   }
+  exportDataSubmitting.value = true
   try {
     const res = await api.exportTestcasesAsync({ case_ids: ids })
     window.$message?.success?.(res?.message || '导出任务已提交后台执行，请稍后在异步中心查看结果')
@@ -168,16 +173,23 @@ async function handleExport() {
     // 基础错误信息已由请求拦截器弹出，此处仅补充不合规明细
     const detail = buildInvalidDetail(err?.error?.data?.invalid)
     if (detail) window.$message?.error?.(`不合规明细：${detail}`, { keepAliveOnHover: true })
+  } finally {
+    exportDataSubmitting.value = false
   }
 }
 
+/** 导出提交中标志：下拉菜单项无 loading 形态，用函数级 guard 拦截快速双击重复下发任务 */
+const exportScriptSubmitting = ref(false)
+
 /** 导出勾选公共接口为模板脚本 xlsx：统一异步下发，产物在异步中心下载；产出文件可直接用于导入脚本 */
 async function handleExportScript() {
+  if (exportScriptSubmitting.value) return
   const ids = [...(checkedRowKeys.value || [])]
   if (!ids.length) {
     window.$message?.warning?.('请先勾选要导出的公共接口')
     return
   }
+  exportScriptSubmitting.value = true
   try {
     const res = await api.exportCaseScriptsAsync({ case_ids: ids })
     window.$message?.success?.(res?.message || '导出任务已提交后台执行，请稍后在异步中心查看结果')
@@ -185,6 +197,8 @@ async function handleExportScript() {
     // 基础错误信息已由请求拦截器弹出，此处仅补充不合规明细
     const detail = buildInvalidDetail(err?.error?.data?.invalid)
     if (detail) window.$message?.error?.(`不合规明细：${detail}`, { keepAliveOnHover: true })
+  } finally {
+    exportScriptSubmitting.value = false
   }
 }
 
@@ -201,6 +215,8 @@ function handleImportScript() {
 }
 
 async function submitImportScript() {
+  // 提交中拦截：按钮 loading 依赖渲染时序，函数级 guard 确保快速双击不重复下发
+  if (importLoading.value) return
   const rawFile = importFileList.value?.[0]?.file
   if (!rawFile) {
     window.$message?.warning?.('请先选择要导入的模板文件')
@@ -311,6 +327,8 @@ watch(() => generateForm.value.case_project, (projectId) => {
 })
 
 async function submitGenerateScript() {
+  // 提交中拦截：按钮 loading 依赖渲染时序，函数级 guard 确保快速双击不重复下发
+  if (generateLoading.value) return
   if (!generateForm.value.case_project) {
     window.$message?.warning?.('请选择所属应用')
     return

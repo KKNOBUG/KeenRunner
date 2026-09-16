@@ -5,7 +5,7 @@
 export const ASYNC_CENTER_TASK_TYPE_OPTIONS = Object.freeze([
   { label: '公共接口导入', value: '公共接口导入' },
   { label: '公共接口导出', value: '公共接口导出' },
-  { label: '公共接口报文数据导出', value: '公共接口报文数据导出' },
+  { label: '公共接口报文导出', value: '公共接口报文导出' },
   { label: '单接口脚本生成', value: '单接口脚本生成' },
   { label: '测试案例生成', value: '测试案例生成' },
 ])
