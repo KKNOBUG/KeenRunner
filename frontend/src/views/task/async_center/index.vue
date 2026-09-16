@@ -3,7 +3,6 @@
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
-        v-model:expanded-row-keys="expandedRowKeys"
         :columns="columns"
         :get-data="getAsyncCenterRecordList"
         :extra-params="extraParams"
@@ -68,8 +67,6 @@ const queryItems = ref({})
 /** 非脚本执行类任务类型集合：本页仅展示异步中心范围记录，固定随请求下发 */
 const extraParams = { task_type_in: ASYNC_CENTER_TASK_TYPE_VALUES }
 const taskTypeOptions = ASYNC_CENTER_TASK_TYPE_OPTIONS
-/** 失败原因展开行（配合操作列「详情」按钮切换） */
-const expandedRowKeys = ref([])
 /** 分页元数据：渲染跨页「序号」列 */
 const pageMeta = ref({ page: 1, page_size: 10 })
 
@@ -146,16 +143,15 @@ const downloadAttachment = async (row, att) => {
   }
 }
 
-/* ---------- 行操作：详情展开 / 刷新 / 删除 ---------- */
+/* ---------- 行操作：详情 / 刷新 / 删除 ---------- */
 
 const rowKeyOf = (row) => row.record_id ?? row.id
 
-/** 详情：仅失败任务可用，切换行下方失败原因展开区 */
-const toggleDetail = (row) => {
-  const key = rowKeyOf(row)
-  const idx = expandedRowKeys.value.indexOf(key)
-  if (idx >= 0) expandedRowKeys.value.splice(idx, 1)
-  else expandedRowKeys.value.push(key)
+/** 详情：以 Message 浮层展示失败原因（可手动关闭；超长截断避免撑爆提示条） */
+const showDetail = (row) => {
+  const error = row.task_error || ''
+  const brief = error.length > 300 ? `${error.slice(0, 300)}…` : error
+  window.$message?.error?.(brief || '无失败原因信息', { closable: true, duration: 10000 })
 }
 
 /** 刷新：仅进行中任务可用，按 celery_id 重查单条并原位替换行数据 */
@@ -170,7 +166,7 @@ const refreshRow = async (row) => {
       celery_id: celeryId,
       task_type_in: ASYNC_CENTER_TASK_TYPE_VALUES,
       page: 1,
-      page_size: 1,
+      page_size: 10, // 接口约束最小分页为10；按 celery_id 过滤后实际仅一条
     })
     const latest = res?.data?.[0]
     if (!latest) {
@@ -201,19 +197,6 @@ const removeRow = async (row) => {
 /* ---------- 列定义 ---------- */
 
 const columns = [
-  {
-    type: 'expand',
-    title: '失败原因',
-    width: 90,
-    renderExpand(row) {
-      if (row.celery_status !== '失败') return h('span', { style: 'color:#999' }, '仅失败任务可查看失败原因')
-      return h(
-          'div',
-          { style: 'white-space:pre-wrap;word-break:break-all;padding:8px 12px;line-height:1.6' },
-          row.task_error || '无失败原因信息',
-      )
-    },
-  },
   {
     title: '序号',
     key: 'index',
@@ -265,7 +248,7 @@ const columns = [
   {
     title: '操作',
     key: 'actions',
-    width: 240,
+    width: 120,
     align: 'center',
     fixed: 'right',
     render(row) {
@@ -277,8 +260,9 @@ const columns = [
               size: 'tiny',
               quaternary: true,
               type: 'primary',
-              disabled: row.celery_status !== '失败',
-              onClick: () => toggleDetail(row),
+              disabled: !row.task_error,
+              title: row.task_error ? '查看失败原因' : '仅存在失败原因的任务可查看详情',
+              onClick: () => showDetail(row),
             },
             {
               default: () => '详情',
@@ -291,8 +275,8 @@ const columns = [
               size: 'tiny',
               quaternary: true,
               type: 'primary',
-              disabled: isFinal(row),
-              title: isFinal(row) ? '仅进行中任务可刷新' : '',
+              disabled: row.celery_status !== '失败',
+              title: row.celery_status === '失败' ? '重查该记录最新状态' : '仅失败任务可刷新',
               onClick: () => refreshRow(row),
             },
             {
