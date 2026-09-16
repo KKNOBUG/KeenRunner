@@ -150,9 +150,9 @@ export default {
     if (params.case_code != null) q.push(`case_code=${encodeURIComponent(params.case_code)}`)
     return request.delete(`/autotest/case/delete${q.length ? '?' + q.join('&') : ''}`)
   },
-  /** Body：{ case_ids } —— 导出公共接口用例请求头与请求体为 xlsx(统一异步)，返回 { celery_task_id } */
+  /** Body：{ case_ids } —— 导出公共接口用例请求头/体报文为 xlsx(统一异步)，返回 { celery_task_id } */
   exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_case_datagram_async', data),
-  /** Body：{ case_ids } —— 导出公共接口脚本为模板xlsx(统一异步)，返回 { celery_task_id } */
+  /** Body：{ case_ids } —— 导出公共接口脚本模板为 xlsx(统一异步)，返回 { celery_task_id } */
   exportCaseScriptsAsync: (data = {}) => request.post('/autotest/case/export_case_scripts_async', data),
   /** FormData：file —— 导入公共接口脚本（模板xlsx：按应用+接口名称匹配，存在更新/不存在新增） */
   importCaseScript: (formData) => request.post('/autotest/case/import_case_scripts', formData),

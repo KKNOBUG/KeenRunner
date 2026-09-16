@@ -13,34 +13,34 @@ from backend.enums import AutoTestTaskType
 # Celery 注册名 → 任务类型 / 默认展示名
 CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
     "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
-        "task_type": AutoTestTaskType.AUTOTEST_API,
-        "task_name": "用例编排",
+        "task_type": AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
+        "task_name": "多个用例执行",
     },
     "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks": {
-        "task_type": AutoTestTaskType.SCHEDULE_SCAN,
-        "task_name": "调度扫描",
+        "task_type": AutoTestTaskType.SCHEDULE_SCANNER,
+        "task_name": "调度任务扫描",
     },
     "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
-        "task_type": AutoTestTaskType.CASE_STEP_EXEC,
-        "task_name": "用例执行",
+        "task_type": AutoTestTaskType.SINGLE_CASE_EXECUTE,
+        "task_name": "单个用例执行",
     },
     "backend.celery_scheduler.tasks.task_export_case_datagram.export_testcases_task": {
-        "task_type": AutoTestTaskType.EXPORT_CASE_DATA,
-        "task_name": "导出用例数据",
+        "task_type": AutoTestTaskType.EXPORT_PUBLIC_API_DATAGRAM,
+        "task_name": "公共接口报文数据导出",
     },
     "backend.celery_scheduler.tasks.task_export_case_script.export_case_scripts_task": {
-        "task_type": AutoTestTaskType.EXPORT_CASE_SCRIPT,
-        "task_name": "导出公共接口",
+        "task_type": AutoTestTaskType.EXPORT_PUBLIC_API_SCRIPT,
+        "task_name": "公共接口导出",
     },
 }
 
 # 异步中心任务类型集合：命中者创建执行记录时展示名按「{任务类型}-{时间戳}」规则生成；
 # 接口导入/单接口脚本生成/测试案例生成为预留类型，任务链路待开发，命中同一命名规则
 ASYNC_CENTER_TASK_TYPES: Tuple[AutoTestTaskType, ...] = (
-    AutoTestTaskType.EXPORT_CASE_SCRIPT,
-    AutoTestTaskType.EXPORT_CASE_DATA,
-    AutoTestTaskType.IMPORT_CASE_SCRIPT,
-    AutoTestTaskType.GENERATE_CASE_SCRIPT,
+    AutoTestTaskType.EXPORT_PUBLIC_API_SCRIPT,
+    AutoTestTaskType.EXPORT_PUBLIC_API_DATAGRAM,
+    AutoTestTaskType.IMPORT_PUBLIC_API_SCRIPT,
+    AutoTestTaskType.PUBLIC_API_TO_SCRIPT,
     AutoTestTaskType.GENERATE_TEST_CASE,
 )
 

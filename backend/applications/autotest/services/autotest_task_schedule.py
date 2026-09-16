@@ -380,7 +380,7 @@ async def fetch_schedulable_tasks(task_type: Any) -> List[Any]:
     """
     拉取未删除、已启用且配置了结构化定时表达式的自动化任务，供Beat扫描使用。
 
-    :param task_type: 任务类型枚举或字符串(如AutoTestTaskType.AUTOTEST_API)
+    :param task_type: 任务类型枚举或字符串(如AutoTestTaskType.MULTIPLE_CASE_EXECUTE)
     :return: 满足条件的AutoTestTaskModel列表；参数无效时返回空列表
     """
     if not task_type:

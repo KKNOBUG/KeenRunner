@@ -177,10 +177,10 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     :return: {"scanned": int, "dispatched": int}扫描与下发统计
     """
     span_id = get_span_id_for_log()
-    tasks = await fetch_schedulable_tasks(task_type=AutoTestTaskType.AUTOTEST_API)
+    tasks = await fetch_schedulable_tasks(task_type=AutoTestTaskType.MULTIPLE_CASE_EXECUTE)
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={span_id}】开始扫描定时任务: "
-        f"task_type={AutoTestTaskType.AUTOTEST_API.value}, candidate_count={len(tasks)}"
+        f"task_type={AutoTestTaskType.MULTIPLE_CASE_EXECUTE.value}, candidate_count={len(tasks)}"
     )
     dispatched = 0
     for task in tasks:

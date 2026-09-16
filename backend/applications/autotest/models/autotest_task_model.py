@@ -32,7 +32,7 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     task_desc = fields.CharField(max_length=2048, null=True, description="任务描述")
     task_type = fields.CharEnumField(
         AutoTestTaskType,
-        default=AutoTestTaskType.AUTOTEST_API,
+        default=AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
         index=True,
         description="任务业务类型(扫描过滤)")
     task_project = fields.IntField(default=1, ge=1, index=True, description="任务所属应用")

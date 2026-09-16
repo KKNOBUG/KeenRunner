@@ -524,7 +524,7 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/task/record",
+            redirect="/task/async_center",
             created_user=INIT_CREATED_USER,
         ),
     )
@@ -545,12 +545,12 @@ async def init_database_menu():
         Menu(
             menu_type=MenuType.MENU,
             name="异步中心",
-            path="record",
+            path="async_center",
             order=2,
             parent_id=task_parent_menu.id,
             icon="fluent:document-checkmark-24-regular",
             is_hidden=False,
-            component="/task/record",
+            component="/task/async_center",
             keepalive=True
             ,
             created_user=INIT_CREATED_USER

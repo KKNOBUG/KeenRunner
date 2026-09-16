@@ -76,7 +76,7 @@ class AutoTestTaskCreate(BaseModel):
 
     task_name: str = Field(..., max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
-    task_type: Optional[AutoTestTaskType] = Field(AutoTestTaskType.AUTOTEST_API, description="任务业务类型(扫描过滤)")
+    task_type: Optional[AutoTestTaskType] = Field(AutoTestTaskType.MULTIPLE_CASE_EXECUTE, description="任务业务类型(扫描过滤)")
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
     task_execute_mode: AutoTestTaskExecuteMode = Field(AutoTestTaskExecuteMode.PARALLEL, description="执行模式(并行执行/串行执行)")
     task_case_ids: Optional[List[int]] = Field(None, description="关联用例ID列表")

@@ -48,18 +48,17 @@
 
 <script setup>
 import { computed, h, ref } from 'vue'
-import { NButton, NDatePicker, NInput, NSelect, NSpace, NTag } from 'naive-ui'
+import { NButton, NDatePicker, NInput, NPopconfirm, NSelect, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import api from '@/api'
-import { formatDateTime } from '@/utils'
+import { formatDateTime, renderIcon } from '@/utils'
 import {
   ASYNC_CENTER_TASK_TYPE_OPTIONS,
   ASYNC_CENTER_TASK_TYPE_VALUES,
-  taskTypeLabel,
 } from '@/constants/autotestTaskType'
 
 defineOptions({ name: '异步中心' })
@@ -188,18 +187,15 @@ const refreshRow = async (row) => {
   }
 }
 
-/** 删除：仅终态任务可用，二次确认后硬删记录并清理产物文件 */
-const removeRow = (row) => {
-  $dialog.confirm({
-    title: '删除确认',
-    type: 'warning',
-    content: '确定删除该任务记录吗？将同时清理产物文件，删除后不可恢复',
-    async confirm() {
-      await api.deleteApiTaskRecord(rowKeyOf(row))
-      window.$message?.success?.('删除成功')
-      $table.value?.handleSearch()
-    },
-  })
+/** 删除：仅终态任务可用，硬删记录并清理产物文件（二次确认由 NPopconfirm 承担） */
+const removeRow = async (row) => {
+  try {
+    await api.deleteApiTaskRecord(rowKeyOf(row))
+    window.$message?.success?.('删除成功')
+    $table.value?.handleSearch()
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '删除失败')
+  }
 }
 
 /* ---------- 列定义 ---------- */
@@ -232,7 +228,7 @@ const columns = [
     width: 140,
     align: 'center',
     ellipsis: { tooltip: true },
-    render: (row) => taskTypeLabel(row.task_type),
+    render: (row) => row.task_type || '-',
   },
   {
     title: '任务状态',
@@ -270,59 +266,82 @@ const columns = [
     title: '操作',
     key: 'actions',
     width: 240,
+    align: 'center',
     fixed: 'right',
     render(row) {
-      return h(NSpace, { size: 4, wrap: false }, {
-        default: () => [
-          h(
-              NButton,
-              {
-                size: 'tiny',
-                type: 'primary',
-                secondary: true,
-                disabled: row.celery_status !== '失败',
-                onClick: () => toggleDetail(row),
-              },
-              { default: () => '详情' },
-          ),
-          h(
-              NButton,
-              {
-                size: 'tiny',
-                type: 'primary',
-                secondary: true,
-                disabled: isFinal(row),
-                title: isFinal(row) ? '仅进行中任务可刷新' : '',
-                onClick: () => refreshRow(row),
-              },
-              { default: () => '刷新' },
-          ),
-          h(
-              NButton,
-              {
-                size: 'tiny',
-                type: 'primary',
-                secondary: true,
-                disabled: row.celery_status !== '成功' || !attachmentsOf(row.task_summary).length,
-                title: '仅成功且拥有可下载产物的任务可下载',
-                onClick: () => downloadAttachment(row, attachmentsOf(row.task_summary)[0]),
-              },
-              { default: () => '下载' },
-          ),
-          h(
-              NButton,
-              {
-                size: 'tiny',
-                type: 'error',
-                secondary: true,
-                disabled: !isFinal(row),
-                title: isFinal(row) ? '' : '仅成功/失败任务可删除',
-                onClick: () => removeRow(row),
-              },
-              { default: () => '删除' },
-          ),
-        ],
-      })
+      // 按钮样式对齐任务列表操作列：quaternary 无底色按钮 + 16px 图标，删除走 NPopconfirm
+      const actions = [
+        h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'primary',
+              disabled: row.celery_status !== '失败',
+              onClick: () => toggleDetail(row),
+            },
+            {
+              default: () => '详情',
+              icon: renderIcon('material-symbols:info-outline', {size: 16}),
+            },
+        ),
+        h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'primary',
+              disabled: isFinal(row),
+              title: isFinal(row) ? '仅进行中任务可刷新' : '',
+              onClick: () => refreshRow(row),
+            },
+            {
+              default: () => '刷新',
+              icon: renderIcon('material-symbols:refresh', {size: 16}),
+            },
+        ),
+        h(
+            NButton,
+            {
+              size: 'tiny',
+              quaternary: true,
+              type: 'primary',
+              disabled: row.celery_status !== '成功' || !attachmentsOf(row.task_summary).length,
+              title: '仅成功且拥有可下载产物的任务可下载',
+              onClick: () => downloadAttachment(row, attachmentsOf(row.task_summary)[0]),
+            },
+            {
+              default: () => '下载',
+              icon: renderIcon('material-symbols:download', {size: 16}),
+            },
+        ),
+        // 删除：NPopconfirm（对齐任务列表 / 用户管理 / 测试用例），独立按钮触发
+        h(
+            NPopconfirm,
+            {
+              onPositiveClick: () => removeRow(row),
+            },
+            {
+              trigger: () =>
+                  h(
+                      NButton,
+                      {
+                        size: 'tiny',
+                        quaternary: true,
+                        type: 'error',
+                        disabled: !isFinal(row),
+                        title: isFinal(row) ? '' : '仅成功/失败任务可删除',
+                      },
+                      {
+                        default: () => '删除',
+                        icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+                      },
+                  ),
+              default: () => h('div', {}, '确定删除该任务记录吗? 将同时清理产物文件，删除后不可恢复'),
+            },
+        ),
+      ]
+      return actions
     },
   },
 ]
