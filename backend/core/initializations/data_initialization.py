@@ -544,9 +544,22 @@ async def init_database_menu():
         ),
         Menu(
             menu_type=MenuType.MENU,
+            name="执行记录",
+            path="record",
+            order=2,
+            parent_id=task_parent_menu.id,
+            icon="fluent:history-24-regular",
+            is_hidden=False,
+            component="/task/record",
+            keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
             name="异步中心",
             path="async_center",
-            order=2,
+            order=3,
             parent_id=task_parent_menu.id,
             icon="fluent:document-checkmark-24-regular",
             is_hidden=False,
