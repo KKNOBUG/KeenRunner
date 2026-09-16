@@ -154,6 +154,13 @@ function buildInvalidDetail(invalid) {
       .join('；')
 }
 
+/** 任务下发冷却窗口(毫秒)：下发类接口响应极快(仅校验+下发)，loading 随响应复位后双击第二击仍会重复下发，以各入口最后提交时间戳做冷却拦截 */
+const SUBMIT_COOLDOWN_MS = 2000
+let lastExportDataSubmitAt = 0
+let lastExportScriptSubmitAt = 0
+let lastImportSubmitAt = 0
+let lastGenerateSubmitAt = 0
+
 /** 导出提交中标志：下拉菜单项无 loading 形态，用函数级 guard 拦截快速双击重复下发任务 */
 const exportDataSubmitting = ref(false)
 
@@ -165,6 +172,8 @@ async function handleExport() {
     window.$message?.warning?.('请先勾选要导出的用例')
     return
   }
+  if (Date.now() - lastExportDataSubmitAt < SUBMIT_COOLDOWN_MS) return
+  lastExportDataSubmitAt = Date.now()
   exportDataSubmitting.value = true
   try {
     const res = await api.exportTestcasesAsync({ case_ids: ids })
@@ -189,6 +198,8 @@ async function handleExportScript() {
     window.$message?.warning?.('请先勾选要导出的公共接口')
     return
   }
+  if (Date.now() - lastExportScriptSubmitAt < SUBMIT_COOLDOWN_MS) return
+  lastExportScriptSubmitAt = Date.now()
   exportScriptSubmitting.value = true
   try {
     const res = await api.exportCaseScriptsAsync({ case_ids: ids })
@@ -215,7 +226,7 @@ function handleImportScript() {
 }
 
 async function submitImportScript() {
-  // 提交中拦截：按钮 loading 依赖渲染时序，函数级 guard 确保快速双击不重复下发
+  // 提交中拦截：函数级 guard 拦截请求在途的重复点击，冷却窗拦截响应返回后的双击第二击
   if (importLoading.value) return
   const rawFile = importFileList.value?.[0]?.file
   if (!rawFile) {
@@ -224,6 +235,8 @@ async function submitImportScript() {
   }
   const formData = new FormData()
   formData.append('file', rawFile)
+  if (Date.now() - lastImportSubmitAt < SUBMIT_COOLDOWN_MS) return
+  lastImportSubmitAt = Date.now()
   importLoading.value = true
   importErrors.value = []
   try {
@@ -327,7 +340,7 @@ watch(() => generateForm.value.case_project, (projectId) => {
 })
 
 async function submitGenerateScript() {
-  // 提交中拦截：按钮 loading 依赖渲染时序，函数级 guard 确保快速双击不重复下发
+  // 提交中拦截：函数级 guard 拦截请求在途的重复点击，冷却窗拦截响应返回后的双击第二击
   if (generateLoading.value) return
   if (!generateForm.value.case_project) {
     window.$message?.warning?.('请选择所属应用')
@@ -345,6 +358,8 @@ async function submitGenerateScript() {
     window.$message?.warning?.('请选择所属标签')
     return
   }
+  if (Date.now() - lastGenerateSubmitAt < SUBMIT_COOLDOWN_MS) return
+  lastGenerateSubmitAt = Date.now()
   generateLoading.value = true
   try {
     const res = await api.generateCaseScriptsAsync({
