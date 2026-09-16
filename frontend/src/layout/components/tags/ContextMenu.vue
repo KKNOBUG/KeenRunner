@@ -84,8 +84,8 @@ const actionMap = new Map([
     'reload',
     () => {
       if (route.meta?.keepAlive) {
-        // 重置keepAlive
-        appStore.setAliveKeys(route.name, +new Date())
+        // 重置keepAlive：键与 AppMain 保持一致用 route.path（路由名由菜单全路径+ID 派生，不再等于菜单名）
+        appStore.setAliveKeys(route.path, +new Date())
       }
       appStore.reloadPage()
     },

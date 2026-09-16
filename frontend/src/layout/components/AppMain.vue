@@ -1,11 +1,12 @@
 <template>
   <router-view v-slot="{ Component, route }">
     <!-- KeepAlive 的 include 匹配的是组件名（defineOptions），不是路由名；使用 meta.componentName 或 route.name 作为组件名 -->
+    <!-- aliveKeys 以 route.path 为重置键：路由名已改为菜单全路径+ID 派生，缓存重置只认 path，与菜单名彻底解耦 -->
     <KeepAlive :include="keepAliveComponentNames">
       <component
           :is="Component"
           v-if="appStore.reloadFlag"
-          :key="appStore.aliveKeys[route.name] || (route.meta?.keepAlive ? route.path : route.fullPath)"
+          :key="appStore.aliveKeys[route.path] || (route.meta?.keepAlive ? route.path : route.fullPath)"
       />
     </KeepAlive>
   </router-view>

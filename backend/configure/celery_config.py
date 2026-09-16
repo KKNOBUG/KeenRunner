@@ -52,6 +52,7 @@ class CeleryConfig(BaseSettings):
         server_port = project.SERVER_PORT
         default_queue = f"{server_port}_default"
         autotest_queue = f"{server_port}_autotest"
+        perf_queue = f"{server_port}_perf"
 
         self.CELERY_LOG_DIR = os.path.join(project.OUTPUT_LOGS_DIR, "celery_logs")
         os.makedirs(self.CELERY_LOG_DIR, exist_ok=True)
@@ -89,6 +90,9 @@ class CeleryConfig(BaseSettings):
                 },
                 "backend.celery_scheduler.tasks.task_execute_assign_case.execute_step_tree_task": {
                     "queue": autotest_queue
+                },
+                "backend.celery_scheduler.tasks.task_performance.run_perf_task": {
+                    "queue": perf_queue
                 },
             },
             "task_default_queue": default_queue,

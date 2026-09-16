@@ -6,6 +6,7 @@
 @Module  : autotest_record_crud
 @DateTime: 2026/2/1 12:13
 """
+import os
 import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any, Union, List, Tuple
@@ -20,8 +21,31 @@ from backend.applications.autotest.schemas.autotest_record_schema import (
     AutoTestRecordSelect,
 )
 from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.celery_scheduler.celery_task_contract import list_attachments_from_summary, resolve_storage_path
 from backend.configure import LOGGER
 from backend.core.exceptions import ParameterException, NotFoundException
+from backend.enums import AutoTestTaskStatus
+
+# 终态状态值集合：仅终态(成功/失败/部分成功)记录允许删除
+_RECORD_FINAL_STATUS_VALUES = frozenset(
+    s.value for s in (AutoTestTaskStatus.SUCCESS, AutoTestTaskStatus.FAILURE, AutoTestTaskStatus.PARTIAL_SUCCESS)
+)
+
+
+def _remove_artifact_files(record: AutoTestRecordModel) -> None:
+    """物理清理执行记录的产物文件；单个文件失败仅告警，不阻断其余清理。"""
+    for attachment in list_attachments_from_summary(getattr(record, "task_summary", None)):
+        storage_key = str(attachment.get("storage_key") or "").strip()
+        if not storage_key:
+            continue
+        try:
+            file_path = resolve_storage_path(storage_key)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+        except ValueError as e:
+            LOGGER.warning(f"清理产物文件失败, 非法storage_key[{storage_key}], 异常描述: {e}")
+        except OSError as e:
+            LOGGER.warning(f"清理产物文件失败, 文件[{storage_key}], 异常描述: {e}")
 
 
 class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate, AutoTestRecordUpdate]):
@@ -166,6 +190,11 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             if record_in.task_type is not None:
                 type_val = getattr(record_in.task_type, "value", record_in.task_type)
                 q &= Q(task_type=type_val)
+            if record_in.task_type_in:
+                type_vals = [getattr(t, "value", t) for t in record_in.task_type_in]
+                q &= Q(task_type__in=type_vals)
+            if record_in.created_user:
+                q &= Q(created_user__contains=record_in.created_user)
             if record_in.task_project is not None:
                 q &= Q(task_project=record_in.task_project)
             if record_in.trigger_type is not None:
@@ -210,3 +239,25 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             error_message: str = f"查询任务执行记录异常, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
+
+    async def delete_record_with_artifacts(self, record_id: int) -> int:
+        """
+        删除终态执行记录并物理清理产物文件。
+
+        仅终态(成功/失败/部分成功)记录允许删除；记录硬删后尽力清理task_summary
+        信封中的产物文件，单个文件清理失败仅告警不影响删除结果。
+
+        :param record_id: 执行记录主键
+        :return: 删除的记录数(0或1)
+        :raises NotFoundException: 记录不存在
+        :raises ParameterException: 记录未到终态(等待执行/正在执行)不允许删除
+        """
+        record = await self.get_by_id(record_id=record_id, on_error=True, state__not=1)
+        status_val = getattr(record.celery_status, "value", record.celery_status)
+        if status_val not in _RECORD_FINAL_STATUS_VALUES:
+            error_message: str = f"删除执行记录失败, 记录[id={record_id}]未到终态(当前状态: {status_val})"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        deleted = await self.model.filter(id=record.id).delete()
+        _remove_artifact_files(record=record)
+        return deleted

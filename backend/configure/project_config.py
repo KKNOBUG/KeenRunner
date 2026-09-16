@@ -128,6 +128,7 @@ class ProjectConfig(BaseSettings):
     OUTPUT_UPLOAD_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "upload"))
     OUTPUT_MEDIA_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "media"))
     OUTPUT_XLSX_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "xlsx"))
+    OUTPUT_PERF_DIR: str = os.path.abspath(os.path.join(OUTPUT_DIR, "perf"))
     SERVICES_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "services"))
     STATIC_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "static"))
     STATIC_IMG_DIR: str = os.path.abspath(os.path.join(STATIC_DIR, "avatar"))
@@ -236,7 +237,7 @@ class ProjectConfig(BaseSettings):
     ]
 
     # 数据库配置
-    DATABASE_AUTO_MIGRATION: bool = True
+    DATABASE_AUTO_MIGRATION: bool = False
     DATABASE_CONNECTIONS: Dict[str, Any] = {}
     DATABASE_URL: str = Field("", description="数据库地址")
     DATABASE_HOST: str = Field(..., description="数据库主机")
@@ -268,6 +269,18 @@ class ProjectConfig(BaseSettings):
     # 自动化模块：数据库操作中Oracle连接模式，空值按thick；thin不兼容11g/部分12.1
     ORACLE_CLIENT_MODE: str = Field(default="", description="Oracle Instant 连接模式，仅允许：thick/thin")
     ORACLE_CLIENT_PATH: str = Field(default="", description="Oracle Instant Client 存放目录")
+
+    # 性能测试模块：施压引擎与指标链路配置
+    # VictoriaMetrics写入地址(如 http://127.0.0.1:8428/api/v1/import/prometheus)，空值时引擎不上报时序指标
+    PERF_VICTORIA_METRICS_URL: str = Field(default="", description="VictoriaMetrics指标写入地址")
+    PERF_METRICS_PUSH_INTERVAL: int = Field(default=5, ge=1, description="指标上报周期(秒)")
+    # 多进程分布式施压：并发数超过阈值时按单进程最少承载用户数计算worker进程数，上限PERF_MAX_PROCESS
+    PERF_MULTIPROCESS_THRESHOLD: int = Field(default=100, ge=1, description="启用多进程施压的并发数阈值")
+    PERF_MAX_PROCESS: int = Field(default=4, ge=1, description="多进程施压最大进程数")
+    PERF_MIN_USERS_PER_PROCESS: int = Field(default=50, ge=1, description="多进程施压单进程最少承载用户数")
+    # 多进程模式下locust master的ZMQ通信端口基数，按执行批次顺延分配避免端口冲突
+    PERF_LOCUST_MASTER_PORT_BASE: int = Field(default=9600, ge=1024, description="多进程施压master通信端口基数")
+    PERF_STOP_POLL_INTERVAL: float = Field(default=2.0, ge=0.5, description="执行管线轮询停止指令的间隔(秒)")
 
     @model_validator(mode="after")
     def validate_env_and_assemble_urls(self) -> Self:

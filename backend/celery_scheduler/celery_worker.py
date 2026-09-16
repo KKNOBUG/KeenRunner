@@ -15,7 +15,6 @@ from typing import Dict, Any, Optional
 
 from celery import Celery
 from celery import Task
-from celery._state import _task_stack
 from celery.signals import setup_logging, task_prerun, worker_process_init
 from celery.worker.request import Request
 
@@ -186,7 +185,7 @@ async def _create_task_record(
     """
     from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
     from backend.applications.autotest.services.autotest_record_crud import AutoTestRecordCrud
-    from backend.celery_scheduler.celery_task_contract import resolve_task_meta
+    from backend.celery_scheduler.celery_task_contract import build_async_center_task_name, resolve_task_meta
     from backend.enums import AutoTestTaskStatus
 
     def _normalize_username(raw: Any) -> Optional[str]:
@@ -213,7 +212,13 @@ async def _create_task_record(
     }
     if task_meta.get("task_type") is not None:
         data["task_type"] = task_meta["task_type"]
-    if task_meta.get("task_name"):
+        # 异步中心任务展示名按「{任务类型}-{时间戳}」规则生成，未命中时回落注册表默认展示名
+        async_center_name = build_async_center_task_name(task_meta["task_type"])
+        if async_center_name:
+            data["task_name"] = async_center_name
+        elif task_meta.get("task_name"):
+            data["task_name"] = task_meta["task_name"]
+    elif task_meta.get("task_name"):
         data["task_name"] = task_meta["task_name"]
 
     if isinstance(req_kwargs.get("case_ids"), list):
@@ -752,21 +757,14 @@ def create_celery():
                 trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
                 enter_celery_span(trace_id, "", "")
 
-            # 推送任务到堆栈
-            _task_stack.push(self)
-            self.push_request(args=args, kwargs=kwargs)
-
-            try:
-                if asyncio.iscoroutinefunction(self.run):
-                    # 异步函数使用惰性初始化的池执行，避免在 Web 进程导入时创建事件循环
-                    return get_async_event_loop_pool().run(self.run(*args, **kwargs))
-                else:
-                    # 同步函数直接执行
-                    return self.run(*args, **kwargs)
-            finally:
-                # 清理
-                self.pop_request()
-                _task_stack.pop()
+            # Celery build_tracer在调用自定义__call__前已push_task并压入含id/retries等
+            # 完整Request；再次push_request会以裸args/kwargs上下文遮蔽原始Request，
+            # 导致任务体内self.request.id变空(数据生成任务报celery_id为空即由此而来)。
+            if asyncio.iscoroutinefunction(self.run):
+                # 异步函数使用惰性初始化的池执行，避免在 Web 进程导入时创建事件循环
+                return get_async_event_loop_pool().run(self.run(*args, **kwargs))
+            # 同步函数直接执行
+            return self.run(*args, **kwargs)
 
     # 创建 Celery 实例
     _celery_: Celery = NewCelery("Celery-Worker", task_cls=ContextTask)

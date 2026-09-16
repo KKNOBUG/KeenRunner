@@ -322,6 +322,7 @@ async function getTreeSelect() {
         :get-data="fetchMenuList"
         :single-line="true"
         :scroll-x="1200"
+        row-key="menu_id"
         @query-bar-create="handleClickAdd"
     >
       <template #queryBar>

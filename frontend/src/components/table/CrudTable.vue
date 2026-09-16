@@ -24,8 +24,10 @@
         :scroll-x="scrollX"
         :row-key="(row) => row[rowKey]"
         :checked-row-keys="hasRowSelection ? mergedCheckedRowKeys : undefined"
+        :expanded-row-keys="expandedRowKeys"
         :pagination="isPagination ? pagination : false"
         @update:checked-row-keys="onCheckedRowKeysUpdate"
+        @update:expanded-row-keys="onExpandedRowKeysUpdate"
         @update:page="onPageChange"
     />
   </div>
@@ -95,6 +97,11 @@ const props = defineProps({
     type: Array,
     default: undefined,
   },
+  /** 展开行主键（与 row-key 一致，配合 type:'expand' 列）；不传则由表格内部状态管理 */
+  expandedRowKeys: {
+    type: Array,
+    default: undefined,
+  },
 })
 
 const emit = defineEmits([
@@ -105,6 +112,7 @@ const emit = defineEmits([
   'queryBarDelete',
   'queryBarAction',
   'update:checkedRowKeys',
+  'update:expandedRowKeys',
   /** 远程分页数据加载完成后发出，便于父组件渲染跨页「序号」列 */
   'paginationMeta',
 ])
@@ -212,6 +220,12 @@ function updateCheckedRowKeys(rowKeys) {
 function onCheckedRowKeysUpdate(rowKeys) {
   if (!hasRowSelection.value) return
   updateCheckedRowKeys(rowKeys)
+}
+
+function onExpandedRowKeysUpdate(rowKeys) {
+  if (props.expandedRowKeys !== undefined) {
+    emit('update:expandedRowKeys', rowKeys)
+  }
 }
 
 defineExpose({

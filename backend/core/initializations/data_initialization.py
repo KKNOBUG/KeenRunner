@@ -544,7 +544,7 @@ async def init_database_menu():
         ),
         Menu(
             menu_type=MenuType.MENU,
-            name="执行记录",
+            name="异步中心",
             path="record",
             order=2,
             parent_id=task_parent_menu.id,

@@ -7,14 +7,10 @@
 @DateTime: 2025/4/28
 """
 import asyncio
-import os
-import tempfile
 import traceback
 from typing import Optional, List, Dict, Any, Set, Tuple
 
 from fastapi import APIRouter, Body, Query, Depends, UploadFile, File
-from starlette.background import BackgroundTask
-from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
 from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
@@ -25,11 +21,7 @@ from backend.applications.autotest.schemas.autotest_case_schema import (
 )
 from backend.applications.autotest.services.autotest_case_excel_service import (
     prepare_export_cases,
-    build_export_workbook,
-    build_export_file_name,
     prepare_script_export_rows,
-    build_script_workbook,
-    build_script_file_name,
     parse_script_workbook,
     import_script_rows,
 )
@@ -55,9 +47,6 @@ from backend.enums import AutoTestReportType, AutoTestStepType, AutoTestCaseType
 from backend.services import get_current_username
 
 autotest_case = APIRouter()
-
-# 导出数量阈值：超过该值走异步Celery导出
-EXPORT_ASYNC_THRESHOLD = 10
 
 
 @autotest_case.post("/create", summary="新增用例", description="新增用例信息")
@@ -472,56 +461,15 @@ async def get_request_step_selected_project_ids(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_case.post("/export_case_datagram_sync", summary="导出公共接口报文", description="导出公共接口用例请求头与请求体为xlsx(同步)")
-async def export_case_datagram_sync(
-        case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestServices = Depends(get_autotest_api_services),
-):
-    """
-    同步导出公共接口用例的请求头与请求体为xlsx，数量不超过EXPORT_ASYNC_THRESHOLD。
-
-    :param case_ids: 用例主键列表
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 文件流响应
-    """
-    try:
-        if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例(公共接口)")
-        if len(case_ids) > EXPORT_ASYNC_THRESHOLD:
-            return ParameterResponse(message=f"选择的用例(公共接口)数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
-        cases_data, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
-        if invalid:
-            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
-        workbook = build_export_workbook(cases_data=cases_data)
-        # 先落临时文件再以FileResponse分块流式返回，避免整文件驻留内存OOM；发送后自动清理
-        temp = tempfile.NamedTemporaryFile(prefix="temp_export_", suffix=".xlsx", delete=False)
-        temp_path = temp.name
-        temp.close()
-        workbook.save(temp_path)
-        return FileResponse(
-            path=temp_path,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=build_export_file_name(get_current_username()),
-            background=BackgroundTask(os.remove, temp_path),
-        )
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"导出公共接口用例请求头与请求体为xlsx(同步)失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导出失败，异常描述: {e}")
-
-
-@autotest_case.post("/export_case_datagram_async", summary="导出公共接口报文(异步)", description="异步导出公共接口用例请求头与请求体为xlsx")
+@autotest_case.post("/export_case_datagram_async", summary="导出公共接口报文(异步)", description="导出公共接口用例请求头与请求体为xlsx(统一异步)")
 async def export_case_datagram_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口用例，数量超过EXPORT_ASYNC_THRESHOLD。
+    异步导出公共接口用例(统一异步，不再区分数量阈值)。
 
-    校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    校验通过后下发Celery任务，任务生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
@@ -542,7 +490,7 @@ async def export_case_datagram_async(
             expires=3600,
         )
         return SuccessResponse(
-            message="导出任务已提交后台执行，请稍后在执行记录中查看结果",
+            message="导出任务已提交后台执行，请稍后在异步中心查看结果",
             data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
             total=1,
         )
@@ -555,58 +503,16 @@ async def export_case_datagram_async(
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
-@autotest_case.post("/export_case_scripts_sync", summary="导出公共接口脚本", description="导出公共接口脚本为模板xlsx(同步)")
-async def export_case_scripts_sync(
-        case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
-        services: AutoTestServices = Depends(get_autotest_api_services),
-):
-    """
-    同步导出公共接口脚本，数量不超过EXPORT_ASYNC_THRESHOLD。
-
-    复制模板副本写入数据行，产出文件可直接用于导入脚本、更新或新增公共接口。
-
-    :param case_ids: 用例主键列表
-    :param services: 自动化测试CRUD依赖聚合
-    :return: 文件流响应
-    """
-    try:
-        if not case_ids:
-            return ParameterResponse(message="请至少选择一个用例(公共接口)")
-        if len(case_ids) > EXPORT_ASYNC_THRESHOLD:
-            return ParameterResponse(message=f"选择的用例(公共接口)数量超过{EXPORT_ASYNC_THRESHOLD}个，请使用异步导出")
-        rows, invalid = await prepare_script_export_rows(case_ids=case_ids, services=services)
-        if invalid:
-            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消导出", data={"invalid": invalid})
-        workbook = build_script_workbook(rows)
-        # 先落临时文件再以 FileResponse 分块流式返回，避免整文件驻留内存OOM；发送后自动清理
-        temp = tempfile.NamedTemporaryFile(prefix="temp_export_", suffix=".xlsx", delete=False)
-        temp_path = temp.name
-        temp.close()
-        workbook.save(temp_path)
-        return FileResponse(
-            path=temp_path,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            filename=build_script_file_name(get_current_username()),
-            background=BackgroundTask(os.remove, temp_path),
-        )
-    except NotFoundException as e:
-        return NotFoundResponse(message=str(e.message))
-    except ParameterException as e:
-        return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"导出公共接口脚本为模板xlsx(同步)失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导出失败，异常描述: {e}")
-
-
-@autotest_case.post("/export_case_scripts_async", summary="导出公共接口脚本(异步)", description="异步导出公共接口脚本为模板xlsx")
+@autotest_case.post("/export_case_scripts_async", summary="导出公共接口脚本(异步)", description="导出公共接口脚本为模板xlsx(统一异步)")
 async def export_case_scripts_async(
         case_ids: List[int] = Body(..., description="用例ID列表", embed=True),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    异步导出公共接口脚本，数量超过EXPORT_ASYNC_THRESHOLD。
+    异步导出公共接口脚本(统一异步，不再区分数量阈值)。
 
-    校验通过后下发Celery任务，任务生成xlsx并将文件名落入执行记录(task_summary)，下载入口后续于异步中心提供。
+    校验通过后下发Celery任务，任务生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载；
+    产出文件可直接用于导入脚本、更新或新增公共接口。
 
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
@@ -627,7 +533,7 @@ async def export_case_scripts_async(
             expires=3600,
         )
         return SuccessResponse(
-            message="导出任务已提交后台执行，请稍后在执行记录中查看结果",
+            message="导出任务已提交后台执行，请稍后在异步中心查看结果",
             data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
             total=1,
         )

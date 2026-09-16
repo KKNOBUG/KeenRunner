@@ -100,7 +100,7 @@ if 'task_routes' in config:
         if 'queue' in route:
             queues.add(route['queue'])
 print(','.join(sorted(queues)))
-" 2>/dev/null || echo "8519_default,8519_autotest")
+" 2>/dev/null || echo "8519_default,8519_autotest,8519_perf")
     echo "$queues"
 }
 

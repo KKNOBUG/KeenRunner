@@ -23,11 +23,9 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
 )
 from backend.applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
-    build_absolute_http_url,
     build_httpx_request_kwargs,
     format_byte_size,
     infer_http_actual_body,
-    is_absolute_http_url,
 )
 from backend.applications.autotest.services.autotest_runtime.protocol_tcp import (
     build_tcp_debug_request_info_body,
@@ -43,6 +41,7 @@ from backend.applications.autotest.services.autotest_runtime.builtin_variables i
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
 from backend.common import AioTcpClient, TcpFrameMode
 from backend.common.cache.redis_connection_pool import get_app_redis_pool
+from backend.common.url_utils import build_absolute_http_url, is_absolute_http_url
 from backend.configure import LOGGER
 from backend.core.exceptions import NotFoundException, ParameterException, ReqInvalidException
 from backend.enums import AutoTestConfigNodeType, AutoTestReqArgsType, AutoTestStepType

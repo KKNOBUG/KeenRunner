@@ -150,27 +150,9 @@ export default {
     if (params.case_code != null) q.push(`case_code=${encodeURIComponent(params.case_code)}`)
     return request.delete(`/autotest/case/delete${q.length ? '?' + q.join('&') : ''}`)
   },
-  /** Body：{ case_ids } —— 同步导出公共接口用例请求头与请求体为 xlsx（≤10），返回 blob；校验失败时返回 JSON */
-  exportTestcasesXlsx: (data = {}) => axios.post(
-      `${import.meta.env.VITE_BASE_API}/autotest/case/export_case_datagram_sync`,
-      data,
-      {
-        responseType: 'blob',
-        headers: { token: getToken() || '' },
-      },
-  ),
-  /** Body：{ case_ids } —— 异步导出公共接口用例（>10），返回 { celery_task_id } */
+  /** Body：{ case_ids } —— 导出公共接口用例请求头与请求体为 xlsx(统一异步)，返回 { celery_task_id } */
   exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_case_datagram_async', data),
-  /** Body：{ case_ids } —— 同步导出公共接口脚本为模板xlsx（≤10），返回 blob；校验失败时返回 JSON */
-  exportCaseScriptsXlsx: (data = {}) => axios.post(
-      `${import.meta.env.VITE_BASE_API}/autotest/case/export_case_scripts_sync`,
-      data,
-      {
-        responseType: 'blob',
-        headers: { token: getToken() || '' },
-      },
-  ),
-  /** Body：{ case_ids } —— 异步导出公共接口脚本（>10），返回 { celery_task_id } */
+  /** Body：{ case_ids } —— 导出公共接口脚本为模板xlsx(统一异步)，返回 { celery_task_id } */
   exportCaseScriptsAsync: (data = {}) => request.post('/autotest/case/export_case_scripts_async', data),
   /** FormData：file —— 导入公共接口脚本（模板xlsx：按应用+接口名称匹配，存在更新/不存在新增） */
   importCaseScript: (formData) => request.post('/autotest/case/import_case_scripts', formData),
@@ -255,6 +237,8 @@ export default {
   previewTaskSchedule: (data = {}) => request.post('/autotest/task/schedule_preview', data),
   // 任务执行记录
   getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
+  /** params：record_id —— 删除终态执行记录并物理清理产物文件 */
+  deleteApiTaskRecord: (recordId) => request.delete(`/autotest/task/record/delete?record_id=${recordId}`),
   /** params：record_id、key —— 下载执行记录附件（blob） */
   downloadApiTaskRecordAttachment: (recordId, key = 'main') => axios.get(
       `${import.meta.env.VITE_BASE_API}/autotest/task/record/${recordId}/attachments/${encodeURIComponent(key)}/download`,
@@ -325,5 +309,33 @@ export default {
         responseType: 'blob',
         headers: { token: getToken() || '' },
       },
-  )
+  ),
+
+  // ---------- performance：性能测试（任务/报告/指标） ----------
+  /** Body：PerfTaskSelect —— 压测任务分页列表 */
+  getPerfTaskList: (data = {}) => request.post('/perf/task/search', data),
+  /** Query：perf_id 或 perf_code —— 任务详情 */
+  getPerfTask: (params = {}) => request.get('/perf/task/get', { params }),
+  /** Body：PerfTaskCreate —— 新增压测任务 */
+  createPerfTask: (data = {}) => request.post('/perf/task/create', data),
+  /** Body：PerfTaskUpdate（perf_id/perf_code 定位）—— 更新任务，running 状态禁止 */
+  updatePerfTask: (data = {}) => request.post('/perf/task/update', data),
+  /** Query：perf_id 或 perf_code —— 软删任务 */
+  deletePerfTask: (params = {}) => request.delete('/perf/task/delete', { params }),
+  /** Body：PerfTaskDelete { perf_ids } —— 批量软删 */
+  deletePerfTaskBatch: (data = {}) => request.post('/perf/task/delete', data),
+  /** Body：PerfCaseImport { case_ids } —— 按用例批量导入步骤定义（仅返回不落库，标注角色后随任务保存） */
+  importPerfCases: (data = {}) => request.post('/perf/task/import_cases', data),
+  /** Body：PerfTaskLocate —— 立即执行（置排队后经 {port}_perf 队列异步施压） */
+  runPerfTask: (data = {}) => request.post('/perf/task/run', data),
+  /** Body：PerfTaskLocate —— 停止执行（置 stopping，管线数秒内终止） */
+  stopPerfTask: (data = {}) => request.post('/perf/task/stop', data),
+  /** Body：PerfStepDebug —— 单步连通性调试（相对地址按施压环境补齐 host，不入库） */
+  debugPerfStep: (data = {}) => request.post('/perf/task/debug', data),
+  /** Body：PerfReportSelect —— 压测报告分页列表（不含 locust_stats 快照） */
+  getPerfReportList: (data = {}) => request.post('/perf/report/search', data),
+  /** Query：report_id 或 report_code —— 报告详情（含 locust_stats 快照） */
+  getPerfReport: (params = {}) => request.get('/perf/report/get', { params }),
+  /** Body：PerfReportMetrics —— 指标曲线（代理 VictoriaMetrics query_range） */
+  getPerfReportMetrics: (data = {}) => request.post('/perf/report/metrics', data),
 }

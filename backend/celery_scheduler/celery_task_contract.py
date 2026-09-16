@@ -4,7 +4,8 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 from backend.configure import PROJECT_CONFIG
 from backend.enums import AutoTestTaskType
@@ -32,6 +33,31 @@ CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
         "task_name": "导出公共接口",
     },
 }
+
+# 异步中心任务类型集合：命中者创建执行记录时展示名按「{任务类型}-{时间戳}」规则生成；
+# 接口导入/单接口脚本生成/测试案例生成为预留类型，任务链路待开发，命中同一命名规则
+ASYNC_CENTER_TASK_TYPES: Tuple[AutoTestTaskType, ...] = (
+    AutoTestTaskType.EXPORT_CASE_SCRIPT,
+    AutoTestTaskType.EXPORT_CASE_DATA,
+    AutoTestTaskType.IMPORT_CASE_SCRIPT,
+    AutoTestTaskType.GENERATE_CASE_SCRIPT,
+    AutoTestTaskType.GENERATE_TEST_CASE,
+)
+
+_ASYNC_CENTER_TASK_TYPE_VALUES = frozenset(t.value for t in ASYNC_CENTER_TASK_TYPES)
+
+
+def build_async_center_task_name(task_type: Any) -> Optional[str]:
+    """
+    生成异步中心任务展示名：{任务类型}-{时间戳}。
+
+    :param task_type: 任务类型枚举或其存储值
+    :return: 形如「导出公共接口-20260915103000」的展示名；非异步中心任务类型返回None
+    """
+    val = getattr(task_type, "value", task_type)
+    if val not in _ASYNC_CENTER_TASK_TYPE_VALUES:
+        return None
+    return f"{val}-{datetime.now():%Y%m%d%H%M%S}"
 
 
 def resolve_task_meta(celery_task_name: Optional[str]) -> Dict[str, Any]:

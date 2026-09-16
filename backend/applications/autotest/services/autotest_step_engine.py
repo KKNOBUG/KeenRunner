@@ -29,9 +29,7 @@ if TYPE_CHECKING:
 
 from backend.applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
-    build_absolute_http_url,
     build_httpx_request_kwargs,
-    is_absolute_http_url,
 )
 from backend.applications.autotest.services.autotest_runtime.protocol_tcp import (
     select_tcp_payload,
@@ -69,6 +67,7 @@ from backend.applications.base.services.scaffold import unique_identify
 from backend.common import AioTcpClient, TcpFrameMode
 from backend.common.cache.redis_connection_pool import get_app_redis_pool, RedisConnPoolFromConfig
 from backend.common.database.database_connection_pool import get_app_database_pool, DBConnPoolFromConfig
+from backend.common.url_utils import build_absolute_http_url, is_absolute_http_url
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,

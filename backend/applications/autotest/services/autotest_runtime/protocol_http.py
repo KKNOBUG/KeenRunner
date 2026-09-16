@@ -205,26 +205,5 @@ def format_byte_size(size: int) -> str:
     return f"{size / 1024:.2f}KB" if size > 1024 else f"{size}B"
 
 
-def is_absolute_http_url(url: Optional[str]) -> bool:
-    """判断是否已是带协议的绝对HTTP/HTTPS地址。"""
-    return (url or "").strip().lower().startswith(("http://", "https://"))
-
-
-def build_absolute_http_url(host: str, port: Optional[str], path: str) -> str:
-    """
-    将环境host/port与相对路径拼成绝对HTTP URL。
-
-    path为空或/时表示根路径，结果带末尾斜杠。
-
-    :param host: 主机（可带或不带协议）
-    :param port: 端口字符串，可空
-    :param path: 相对路径
-    :return: 绝对URL
-    """
-    host = (host or "").strip().rstrip("/").rstrip(":")
-    port = (str(port).strip() if port is not None and str(port).strip() else "")
-    path = (path or "").lstrip("/")
-    if not host.lower().startswith(("http://", "https://")):
-        host = f"http://{host}"
-    origin = f"{host}:{port}" if port else host
-    return f"{origin}/{path}" if path else f"{origin}/"
+# 绝对地址判定与拼接纯函数已上移至 backend/common/url_utils.py:
+# 功能用例执行、用例调试、压测施压三条链路共用同一拼接口径, 且性能测试模块不应反向依赖本业务包。

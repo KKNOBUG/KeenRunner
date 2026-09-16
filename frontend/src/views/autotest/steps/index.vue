@@ -1150,27 +1150,26 @@ onBeforeRouteUpdate(async () => {
 
 /**
  * 关闭「步骤编辑」导航页签：清该用例缓存并标记强制刷新。
- * 若已无任何步骤编辑页签，重置 KeepAlive（组件名/路由名「步骤编辑」），避免共用 path key 的缓存实例残留。
+ * 若已无任何步骤编辑页签，重置 KeepAlive（重置键为路由 path「/autotest/steps」），避免共用 path key 的缓存实例残留。
  * 仅切换页签（页签仍在列表中）不会触发，保持保活。
  */
 watch(
-    () => tagsStore.tags.map((t) => ({ path: t.path, name: t.name })),
-    (tagList, prevTagList) => {
-      if (!Array.isArray(prevTagList)) return
-      const paths = tagList.map((t) => t.path)
-      const removed = prevTagList.filter(
-          (t) => !paths.includes(t.path) && String(t.path).startsWith('/autotest/steps'),
+    () => tagsStore.tags.map((t) => t.path),
+    (tagPaths, prevTagPaths) => {
+      if (!Array.isArray(prevTagPaths)) return
+      const removed = prevTagPaths.filter(
+          (path) => !tagPaths.includes(path) && String(path).startsWith('/autotest/steps'),
       )
       if (!removed.length) return
-      for (const t of removed) {
-        const { caseId: cid, caseCode: ccode } = parseCaseFromTagPath(t.path)
+      for (const path of removed) {
+        const { caseId: cid, caseCode: ccode } = parseCaseFromTagPath(path)
         markCaseNeedsFreshLoad(cid, ccode)
       }
-      const stepsTagLeft = paths.some((p) => String(p).startsWith('/autotest/steps'))
+      const stepsTagLeft = tagPaths.some((p) => String(p).startsWith('/autotest/steps'))
       if (!stepsTagLeft) {
-        // 此时路由可能已切到其它页，不能用当前 route.name；与 defineOptions/菜单名对齐
-        const aliveName = removed[0]?.name || '步骤编辑'
-        appStore.setAliveKeys(aliveName, String(Date.now()))
+        // 页签存的是 fullPath（带 case query），取 ? 前的 path 作为与 AppMain 一致的 KeepAlive 重置键
+        const aliveKey = String(removed[0] || '/autotest/steps').split('?')[0]
+        appStore.setAliveKeys(aliveKey, String(Date.now()))
       }
     },
 )

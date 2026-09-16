@@ -89,6 +89,9 @@ class AutoTestRecordSelect(BaseModel):
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
     task_type: Optional[AutoTestTaskType] = Field(None, description="任务类型")
+    # 异步中心范围过滤：固定传入非脚本执行类任务类型集合，与task_type单项筛选叠加生效
+    task_type_in: Optional[List[AutoTestTaskType]] = Field(None, description="任务类型集合")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员(模糊匹配)")
     task_project: Optional[int] = Field(None, description="所属应用")
     trigger_type: Optional[AutoTestTaskTriggerType] = Field(None, description="触发来源")
     batch_code: Optional[str] = Field(None, max_length=64, description="批次码")

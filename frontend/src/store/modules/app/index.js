@@ -13,7 +13,7 @@ export const useAppStore = defineStore('app', {
       reloadFlag: true,
       collapsed: false,
       fullScreen: true,
-      /** keepAlive路由的key，重新赋值可重置keepAlive */
+      /** keepAlive路由的key（按 route.path 存），重新赋值可重置keepAlive */
       aliveKeys: {},
       isDark,
       locale: currentLocale || 'en',

@@ -93,11 +93,16 @@ class AutoTestTaskType(StringEnum):
     """
     任务业务类型：Task定义分类、Beat扫描过滤、执行记录分类均根据此区分。
     AUTOTEST_API保留历史值autotest_api，与存量任务行兼容。
+    EXPORT_CASE_DATA/EXPORT_CASE_SCRIPT保留历史文案，与存量执行记录行兼容；
+    异步中心的展示名(接口报文导出/接口导出)由前端展示映射维护，不改存储值。
     """
     AUTOTEST_API = "autotest_api"  # 用例编排（任务列表定时/手动）
     CASE_STEP_EXEC = "用例执行"  # 单用例步骤树异步执行
-    EXPORT_CASE_DATA = "导出用例数据"  # 公共接口HEAD/BODY导出
-    EXPORT_CASE_SCRIPT = "导出公共接口"  # 公共接口脚本模板导出
+    EXPORT_CASE_DATA = "导出用例数据"  # 公共接口HEAD/BODY导出（异步中心展示名:接口报文导出）
+    EXPORT_CASE_SCRIPT = "导出公共接口"  # 公共接口脚本模板导出（异步中心展示名:接口导出）
+    IMPORT_CASE_SCRIPT = "接口导入"  # 公共接口脚本导入（异步中心预留，任务链路待开发）
+    GENERATE_CASE_SCRIPT = "单接口脚本生成"  # 单接口脚本生成（异步中心预留，任务链路待开发）
+    GENERATE_TEST_CASE = "测试案例生成"  # 测试案例生成（异步中心预留，任务链路待开发）
     SCHEDULE_SCAN = "调度扫描"  # Beat 扫描派发（通常不写 Record）
 
 

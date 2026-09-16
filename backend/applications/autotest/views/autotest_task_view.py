@@ -536,3 +536,30 @@ async def download_task_record_attachment(
     except Exception as e:
         LOGGER.error(f"根据记录id与附件key下载附件失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下载失败，异常描述: {str(e)}")
+
+
+@autotest_task.delete("/record/delete", summary="删除执行记录", description="删除终态执行记录并物理清理产物文件")
+async def delete_task_record(
+        record_id: int = Query(..., description="执行记录主键"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
+):
+    """
+    删除终态执行记录(硬删)并物理清理产物文件。
+
+    仅终态(成功/失败/部分成功)任务允许删除；等待执行/正在执行任务拒绝删除。
+
+    :param record_id: 执行记录主键
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        deleted = await services.record_curd.delete_record_with_artifacts(record_id=record_id)
+        LOGGER.info(f"删除执行记录成功, record_id={record_id}, deleted={deleted}")
+        return SuccessResponse(message="删除成功")
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"删除执行记录失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
