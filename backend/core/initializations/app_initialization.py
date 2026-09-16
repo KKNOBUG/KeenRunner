@@ -246,7 +246,7 @@ def register_routers(app: FastAPI) -> None:
     from backend.applications.user.views.user_view import user_public, user_secure
     from backend.applications.toolbox.views import toolbox
     from backend.applications.autotest.views import autotest
-    # from backend.applications.performance.views import performance
+    from backend.applications.performance.views import performance
 
     # 挂在路由蓝图
     app.include_router(router=base_public, prefix="/base", tags=["系统管理:认证"])
@@ -261,4 +261,4 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=dept, prefix="/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
     app.include_router(router=autotest, prefix="/autotest", dependencies=[DependPermission])
-    # app.include_router(router=performance, prefix="/perf", dependencies=[DependPermission])
+    app.include_router(router=performance, prefix="/perf", dependencies=[DependPermission])
