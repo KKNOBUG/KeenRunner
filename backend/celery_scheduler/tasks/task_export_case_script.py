@@ -55,11 +55,7 @@ async def _export_case_scripts_impl(case_ids: List[int], created_user: Optional[
 
 
 @celery.task(name="backend.celery_scheduler.tasks.task_export_case_script.export_case_scripts_task")
-def export_case_scripts_task(
-        case_ids: List[int],
-        created_user: Optional[str] = None,
-        report_type: Optional[str] = None,
-) -> Dict[str, Any]:
+def export_case_scripts_task(case_ids: List[int], created_user: Optional[str] = None, report_type: Optional[str] = None) -> Dict[str, Any]:
     """
     Celery同步入口，后台导出公共接口脚本为模板xlsx。
 

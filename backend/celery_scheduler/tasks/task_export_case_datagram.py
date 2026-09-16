@@ -55,11 +55,7 @@ async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str
 
 
 @celery.task(name="backend.celery_scheduler.tasks.task_export_case_datagram.export_testcases_task")
-def export_testcases_task(
-        case_ids: List[int],
-        created_user: Optional[str] = None,
-        report_type: Optional[str] = None,
-) -> Dict[str, Any]:
+def export_testcases_task(case_ids: List[int], created_user: Optional[str] = None, report_type: Optional[str] = None) -> Dict[str, Any]:
     """
     Celery同步入口，后台导出测试用例请求头与请求体为xlsx。
 
