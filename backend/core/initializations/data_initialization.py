@@ -512,6 +512,67 @@ async def init_database_menu():
     await Menu.bulk_create(autotest_children_menu)
     LOGGER.info(f"创建[自动化测试]目录及子菜单成功")
 
+    # 性能测试菜单配置
+    perf_parent_menu = await menu_crud.create_menu(
+        MenuCreate(
+            menu_type=MenuType.CATALOG,
+            name="性能测试",
+            path="/performance",
+            order=4,
+            parent_id=0,
+            icon="eos-icons:performance",
+            is_hidden=False,
+            component="Layout",
+            keepalive=False,
+            redirect="/performance/perf_case",
+            created_user=INIT_CREATED_USER,
+        ),
+    )
+    perf_children_menu = [
+        Menu(
+            menu_type=MenuType.MENU,
+            name="压测场景",
+            path="perf_case",
+            order=1,
+            parent_id=perf_parent_menu.id,
+            icon="mingcute:performance-line",
+            is_hidden=False,
+            component="/performance/perf_case",
+            keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="执行机器",
+            path="machine",
+            order=2,
+            parent_id=perf_parent_menu.id,
+            icon="mdi:server-network",
+            is_hidden=False,
+            component="/performance/machine",
+            keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="执行记录",
+            path="record",
+            order=3,
+            parent_id=perf_parent_menu.id,
+            icon="garden:document-search-stroke-12",
+            is_hidden=False,
+            component="/performance/record",
+            keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
+        ),
+    ]
+    await Menu.bulk_create(perf_children_menu)
+    LOGGER.info(f"创建[性能测试]目录及子菜单成功")
+
+
     # 任务管理菜单配置
     task_parent_menu = await menu_crud.create_menu(
         MenuCreate(
