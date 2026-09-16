@@ -102,11 +102,11 @@ class AutoTestTaskType(StringEnum):
     MULTIPLE_CASE_EXECUTE = "多个用例执行"  # 用例编排：任务列表定时/手动，多用例整树执行
     SINGLE_CASE_EXECUTE = "单个用例执行"  # 单用例步骤树异步执行
     SCHEDULE_SCANNER = "调度任务扫描"  # Beat 扫描派发（通常不写 Record）
-    EXPORT_PUBLIC_API_DATAGRAM = "公共接口报文数据导出"  # 公共接口请求头/体报文导出
+    EXPORT_PUBLIC_API_DATAGRAM = "公共接口报文导出"  # 公共接口请求头/体报文导出
     EXPORT_PUBLIC_API_SCRIPT = "公共接口导出"  # 公共接口脚本导出
-    IMPORT_PUBLIC_API_SCRIPT = "公共接口导入"  # 公共接口脚本导入（异步中心预留，任务链路待开发）
-    PUBLIC_API_TO_SCRIPT = "单接口脚本生成"  # 公共接口转脚本模板（异步中心预留，任务链路待开发）
-    GENERATE_TEST_CASE = "测试案例生成"  # 测试案例生成（异步中心预留，任务链路待开发）
+    IMPORT_PUBLIC_API_SCRIPT = "公共接口导入"  # 公共接口脚本导入
+    PUBLIC_API_TO_SCRIPT = "单接口脚本生成"  # 公共接口转脚本
+    GENERATE_TEST_CASE = "测试案例生成"  # 测试案例生成
 
 
 class AutoTestTaskExecuteMode(StringEnum):

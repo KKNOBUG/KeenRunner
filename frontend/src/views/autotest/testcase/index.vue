@@ -1,9 +1,10 @@
 <script setup>
 import {h, onMounted, ref, computed, watch} from 'vue'
 import {useRouter} from 'vue-router'
-import {NButton, NDropdown, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip, NModal, NUpload, NAlert, NSpace, NPopconfirm} from 'naive-ui'
+import {NButton, NDropdown, NForm, NFormItem, NInput, NSelect, NPopover, NList, NListItem, NTag, NTooltip, NModal, NUpload, NUploadDragger, NAlert, NSpace, NPopconfirm} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
+import TheIcon from '@/components/icon/TheIcon.vue'
 import ExecConfigModal from '@/views/autotest/steps/components/ExecConfigModal.vue'
 import CaseHistoryDrawer from '@/views/autotest/testcase/components/CaseHistoryDrawer.vue'
 import { useAutotestSavedCaseRun } from '@/composables/useAutotestSavedCaseRun'
@@ -104,6 +105,11 @@ const queryBarProps = computed(() => ({
       key: 'importScript',
       icon: renderIcon('material-symbols:upload', { size: 16 }),
     },
+    {
+      label: '脚本生成',
+      key: 'generateScript',
+      icon: renderIcon('material-symbols:difference', { size: 16 }),
+    },
   ],
 }))
 
@@ -111,6 +117,7 @@ function onQueryBarAction(key) {
   if (key === 'exportData') handleExport()
   else if (key === 'exportScript') handleExportScript()
   else if (key === 'importScript') handleImportScript()
+  else if (key === 'generateScript') handleGenerateScript()
 }
 
 const checkedRowKeys = ref([])
@@ -181,7 +188,7 @@ async function handleExportScript() {
   }
 }
 
-/** 导入脚本对话框状态；importErrors 为后端返回的不合规行明细([{row, reason}])，展示在对话框内便于修稿后重试 */
+/** 导入脚本对话框状态；importErrors 为后端同步返回的模板解析不合规行明细([{row, reason}])，展示在对话框内便于修稿后重试；落库结果在异步中心查看 */
 const importScriptShow = ref(false)
 const importFileList = ref([])
 const importLoading = ref(false)
@@ -204,9 +211,9 @@ async function submitImportScript() {
   importLoading.value = true
   importErrors.value = []
   try {
-    const res = await api.importCaseScript(formData)
-    window.$message?.success?.(res?.message || '导入成功')
-    // 导入已改库：清步骤树缓存，并为仍打开的步骤编辑页签标记强制重载（KeepAlive 内存态不会仅靠清缓存失效）
+    const res = await api.importCaseScriptsAsync(formData)
+    window.$message?.success?.(res?.message || '导入任务已提交后台执行，请稍后在异步中心查看结果')
+    // 导入为后台任务：清步骤树缓存并为仍打开的步骤编辑页签标记强制重载（KeepAlive 内存态不会仅靠清缓存失效），任务完成后重进页面可见最新数据
     const autotestStore = useAutotestStore()
     autotestStore.clearAllStepTreeCache()
     for (const tag of tagsStore.tags || []) {
@@ -224,6 +231,121 @@ async function submitImportScript() {
     }
   } finally {
     importLoading.value = false
+  }
+}
+
+/** 脚本生成：将勾选的公共接口逐个复制生成为独立脚本(异步任务，每个脚本仅含当前接口，不修改源接口) */
+const generateScriptShow = ref(false)
+const generateLoading = ref(false)
+// 表单默认值与新增脚本口径一致：脚本类型默认用户脚本、属性默认正案例；标签用户脚本必选、公共脚本可选
+const generateForm = ref({
+  case_project: null,
+  case_type: '用户脚本',
+  case_attr: '正案例',
+  case_tags: [],
+})
+// 脚本类型选项(不含公共接口：公共接口是生成源而非目标类型，与后端 schema 校验一致)
+const generateTypeOptions = [
+  { label: '用户脚本', value: '用户脚本' },
+  { label: '公共脚本', value: '公共脚本' },
+]
+const generateTagRequired = computed(() => generateForm.value.case_type === '用户脚本')
+// 弹窗内已选公共接口数量(入口已保证非空，此处仅作只读展示)
+const generateSelectedCount = computed(() => (checkedRowKeys.value || []).length)
+// 弹窗内标签二级面板状态(与查询区/步骤编辑面板同构，选中态独立于查询区)
+const generateTagPopoverShow = ref(false)
+const generateSelectedTagMode = ref(null)
+const generateCurrentTagNames = computed(() => {
+  if (!generateSelectedTagMode.value) return []
+  return tagModeGroups.value[generateSelectedTagMode.value] || []
+})
+
+const isGenerateTagSelected = (tagId) => {
+  const tags = generateForm.value.case_tags
+  return Array.isArray(tags) && tags.includes(tagId)
+}
+
+// 弹窗内勾选/取消标签(支持多选)
+const handleGenerateTagSelect = (tagId) => {
+  if (!Array.isArray(generateForm.value.case_tags)) {
+    generateForm.value.case_tags = []
+  }
+  const index = generateForm.value.case_tags.indexOf(tagId)
+  if (index > -1) {
+    generateForm.value.case_tags.splice(index, 1)
+  } else {
+    generateForm.value.case_tags.push(tagId)
+  }
+}
+
+// 已选标签名称回显(切换应用会清空已选，用当前过滤后的标签清单解析即可)
+const getGenerateSelectedTagNames = () => {
+  const tags = generateForm.value.case_tags
+  if (!Array.isArray(tags) || tags.length === 0) {
+    return ''
+  }
+  const names = tags
+      .map((tagId) => tagOptions.value.find((t) => t.tag_id === tagId)?.tag_name)
+      .filter((name) => name)
+  return names.join(', ')
+}
+
+function handleGenerateScript() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    window.$message?.warning?.('请先选择要生成脚本的接口')
+    return
+  }
+  generateForm.value = { case_project: null, case_type: '用户脚本', case_attr: '正案例', case_tags: [] }
+  generateSelectedTagMode.value = null
+  generateScriptShow.value = true
+  loadTags(null)
+}
+
+// 弹窗内切换所属应用时按应用过滤标签并清空已选；关闭弹窗后的表单重置不重复拉取(打开时已统一全量加载)
+watch(() => generateForm.value.case_project, (projectId) => {
+  if (!generateScriptShow.value) return
+  generateForm.value.case_tags = []
+  generateSelectedTagMode.value = null
+  loadTags(projectId)
+})
+
+async function submitGenerateScript() {
+  if (!generateForm.value.case_project) {
+    window.$message?.warning?.('请选择所属应用')
+    return
+  }
+  if (!generateForm.value.case_type) {
+    window.$message?.warning?.('请选择脚本类型')
+    return
+  }
+  if (!generateForm.value.case_attr) {
+    window.$message?.warning?.('请选择用例属性')
+    return
+  }
+  if (generateTagRequired.value && !(generateForm.value.case_tags || []).length) {
+    window.$message?.warning?.('请选择所属标签')
+    return
+  }
+  generateLoading.value = true
+  try {
+    const res = await api.generateCaseScriptsAsync({
+      case_ids: [...(checkedRowKeys.value || [])],
+      case_project: generateForm.value.case_project,
+      case_type: generateForm.value.case_type,
+      case_attr: generateForm.value.case_attr,
+      case_tags: generateForm.value.case_tags || [],
+    })
+    window.$message?.success?.(res?.message || '脚本生成任务已提交后台执行，请稍后在异步中心查看结果')
+    generateScriptShow.value = false
+    // 生成结果为新增用例记录，刷新列表可见
+    $table.value?.handleSearch?.()
+  } catch (err) {
+    // 基础错误信息已由请求拦截器弹出，此处仅补充不合规明细
+    const detail = buildInvalidDetail(err?.error?.data?.invalid)
+    if (detail) window.$message?.error?.(`不合规明细：${detail}`, { keepAliveOnHover: true })
+  } finally {
+    generateLoading.value = false
   }
 }
 
@@ -998,15 +1120,20 @@ const columns = computed(() => {
 
     </CrudTable>
 
-    <!-- 导入公共接口脚本对话框：选择模板xlsx上传；不合规行明细在框内展示便于修稿后重试 -->
+    <!-- 导入公共接口脚本对话框：点击或拖拽上传模板xlsx；解析不合规行明细在框内展示便于修稿后重试，落库结果在异步中心查看 -->
     <NModal v-model:show="importScriptShow" preset="card" title="导入公共接口脚本" style="width: 640px">
       <NUpload
           v-model:file-list="importFileList"
           :max="1"
           accept=".xlsx"
           :default-upload="false"
+          directory-dnd
       >
-        <NButton>选择模板文件(.xlsx)</NButton>
+        <NUploadDragger>
+          <TheIcon icon="material-symbols:upload" :size="40" class="import-drag-icon" />
+          <div class="import-drag-text">点击或拖拽文件到该区域以上传</div>
+          <div class="import-drag-hint">请使用模板文件(.xlsx)，仅读取第1个sheet页</div>
+        </NUploadDragger>
       </NUpload>
       <NAlert
           v-if="importErrors.length"
@@ -1026,6 +1153,105 @@ const columns = computed(() => {
       </template>
     </NModal>
 
+    <!-- 公共接口转脚本对话框：为勾选的公共接口逐个生成独立脚本(异步任务，结果在异步中心查看) -->
+    <NModal v-model:show="generateScriptShow" preset="card" title="脚本生成" style="width: 560px">
+      <NAlert type="info" style="margin-bottom: 16px">
+        将为每个接口生成独立脚本，脚本仅包含当前接口
+      </NAlert>
+      <NForm :model="generateForm" label-placement="left" label-width="80" size="small">
+        <NFormItem label="所属应用" required>
+          <NSelect
+              v-model:value="generateForm.case_project"
+              :options="projectOptions"
+              :loading="projectLoading"
+              clearable
+              filterable
+              placeholder="请选择所属应用"
+          />
+        </NFormItem>
+        <NFormItem label="脚本类型" required>
+          <NSelect
+              v-model:value="generateForm.case_type"
+              :options="generateTypeOptions"
+              clearable
+              placeholder="请选择脚本类型"
+          />
+        </NFormItem>
+        <NFormItem label="用例属性" required>
+          <NSelect
+              v-model:value="generateForm.case_attr"
+              :options="caseAttrOptions"
+              clearable
+              placeholder="请选择用例属性"
+          />
+        </NFormItem>
+        <NFormItem label="所属标签" :required="generateTagRequired">
+          <NPopover
+              v-model:show="generateTagPopoverShow"
+              trigger="click"
+              placement="bottom-start"
+              :style="{ width: '400px' }"
+          >
+            <template #trigger>
+              <NInput
+                  :value="getGenerateSelectedTagNames()"
+                  clearable
+                  readonly
+                  placeholder="请选择所属标签"
+                  @clear="generateForm.case_tags = []"
+                  @click="generateTagPopoverShow = !generateTagPopoverShow"
+              />
+            </template>
+            <template #default>
+              <div class="tag-picker-panel">
+                <div class="tag-picker-col overlay-scroll">
+                  <NList v-if="Object.keys(tagModeGroups).length > 0">
+                    <NListItem
+                        v-for="(tags, mode) in tagModeGroups"
+                        :key="mode"
+                        :class="{ 'tag-mode-selected': generateSelectedTagMode === mode, 'tag-mode-item': true }"
+                        @click="generateSelectedTagMode = mode"
+                    >
+                      <span class="tag-mode-text" :title="mode">{{ mode }}</span>
+                    </NListItem>
+                  </NList>
+                  <div v-else class="autotest-empty-hint">
+                    {{ tagLoading ? '加载中...' : '暂无标签数据' }}
+                  </div>
+                </div>
+                <div class="tag-picker-col tag-picker-col--names overlay-scroll">
+                  <NList v-if="generateSelectedTagMode && generateCurrentTagNames.length > 0">
+                    <NListItem
+                        v-for="tag in generateCurrentTagNames"
+                        :key="tag.tag_id"
+                        :class="{ 'tag-name-selected': isGenerateTagSelected(tag.tag_id) }"
+                        class="tag-list-item"
+                        @click="handleGenerateTagSelect(tag.tag_id)"
+                    >
+                      <span class="tag-checkbox">{{ isGenerateTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
+                      <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
+                    </NListItem>
+                  </NList>
+                  <div v-else class="autotest-empty-hint">
+                    {{ generateSelectedTagMode ? '该分类下暂无标签' : '请先选择左侧分类' }}
+                  </div>
+                </div>
+              </div>
+            </template>
+          </NPopover>
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <div class="generate-footer">
+          <span class="generate-selected-hint">已选择 {{ generateSelectedCount }} 条</span>
+          <NSpace justify="end">
+            <NButton @click="generateScriptShow = false">取消</NButton>
+            <NButton type="primary" :loading="generateLoading" @click="submitGenerateScript">开始生成</NButton>
+          </NSpace>
+        </div>
+      </template>
+    </NModal>
+
     <ExecConfigModal ref="execConfigModalRef" v-model:run-loading="runLoading" />
     <CaseHistoryDrawer
         v-model:show="historyDrawerVisible"
@@ -1036,6 +1262,22 @@ const columns = computed(() => {
 
 
 <style scoped>
+/* 导入公共接口脚本弹窗：拖拽上传区提示 */
+.import-drag-icon {
+  color: var(--n-text-color-3);
+  margin-bottom: 8px;
+}
+
+.import-drag-text {
+  font-size: 14px;
+}
+
+.import-drag-hint {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--n-text-color-3);
+}
+
 .import-error-list {
   max-height: 240px;
   overflow-y: auto;
@@ -1152,6 +1394,19 @@ const columns = computed(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
+}
+
+/* 脚本生成弹窗：footer 左下角已选数量与右侧按钮分列两端 */
+.generate-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 脚本生成弹窗：已选接口数量置灰提示 */
+.generate-selected-hint {
+  color: var(--n-text-color-3);
+  font-size: 13px;
 }
 
 </style>

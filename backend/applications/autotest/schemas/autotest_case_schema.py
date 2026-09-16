@@ -8,7 +8,7 @@
 """
 from typing import Optional, List, Dict, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType
@@ -66,6 +66,53 @@ class AutoTestCaseUpdate(AutoTestCaseMeta, AutoTestCaseBase):
 
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+
+
+class AutoTestCaseScriptGenerate(BaseModel):
+    """公共接口转脚本生成入参。"""
+
+    case_ids: List[int] = Field(..., description="公共接口用例ID列表")
+    case_project: int = Field(..., ge=1, description="脚本所属应用")
+    case_type: AutoTestCaseType = Field(..., description="脚本类型(仅用户脚本/公共脚本)")
+    case_attr: AutoTestCaseAttr = Field(..., description="用例属性(正案例/反案例)")
+    case_tags: Optional[List[int]] = Field(None, description="脚本所属标签(用户脚本必选, 公共脚本可选)")
+
+    @field_validator("case_type")
+    @classmethod
+    def _validate_script_type(cls, v: AutoTestCaseType) -> AutoTestCaseType:
+        """
+        校验脚本类型：公共接口自身不允许作为生成目标类型。
+
+        :param v: 脚本类型
+        :return: 校验通过的脚本类型
+        """
+        if v not in (AutoTestCaseType.PRIVATE_SCRIPT, AutoTestCaseType.PUBLIC_SCRIPT):
+            raise ValueError("脚本类型仅允许[用户脚本/公共脚本]")
+        return v
+
+    @field_validator("case_tags", mode="before")
+    @classmethod
+    def _empty_tags_to_none(cls, v: Any) -> Any:
+        """
+        标签空数组归一为null，与用例schema标签口径保持一致。
+
+        :param v: 原始标签列表
+        :return: 空数组时返回None，其余原样返回
+        """
+        if isinstance(v, list) and not v:
+            return None
+        return v
+
+    @model_validator(mode="after")
+    def _validate_tags_required(self) -> "AutoTestCaseScriptGenerate":
+        """
+        跨字段校验：脚本类型为用户脚本时标签必选，公共脚本可选(与新增脚本表单口径一致)。
+
+        :return: 校验通过的入参实例
+        """
+        if self.case_type == AutoTestCaseType.PRIVATE_SCRIPT and not self.case_tags:
+            raise ValueError("脚本类型为[用户脚本]时必须选择所属标签")
+        return self
 
 
 class AutoTestCaseSelect(AutoTestCaseMeta, AutoTestCaseBase):

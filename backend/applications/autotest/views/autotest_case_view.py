@@ -16,6 +16,7 @@ from tortoise.expressions import Q
 from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.schemas.autotest_case_schema import (
     AutoTestCaseCreate,
+    AutoTestCaseScriptGenerate,
     AutoTestCaseSelect,
     AutoTestCaseUpdate
 )
@@ -23,10 +24,11 @@ from backend.applications.autotest.services.autotest_case_excel_service import (
     prepare_export_cases,
     prepare_script_export_rows,
     parse_script_workbook,
-    import_script_rows,
 )
 from backend.celery_scheduler.tasks.task_export_case_datagram import export_testcases_task
 from backend.celery_scheduler.tasks.task_export_case_script import export_case_scripts_task
+from backend.celery_scheduler.tasks.task_import_case_script import import_case_scripts_task
+from backend.celery_scheduler.tasks.task_public_api_to_script import generate_case_scripts_task
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -546,18 +548,75 @@ async def export_case_scripts_async(
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
-@autotest_case.post("/import_case_scripts", summary="导入公共接口脚本", description="从模板xlsx导入公共接口脚本")
-async def import_case_scripts(
-        file: UploadFile = File(..., description="公共接口导入导出模板xlsx(仅读取第1个sheet页)"),
+@autotest_case.post("/generate_case_scripts_async", summary="公共接口生成脚本(异步)", description="公共接口批量生成独立脚本用例(统一异步)")
+async def generate_case_scripts_async(
+        generate_in: AutoTestCaseScriptGenerate = Body(..., description="脚本生成入参"),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    导入公共接口脚本。
+    将勾选的公共接口复制生成为脚本用例。
 
-    解析模板文件逐行校验，根据所属应用+接口名称匹配，存在更新、不存在新增；用例类型固定公共接口、用例属性固定正案例；全部行校验通过才在单事务内落库。
+    校验全部入参用例均为公共接口后下发Celery任务；命名规则：脚本名称=接口名称，
+    同应用下已有同名记录时按「{接口名称}-{时间戳}」命名；生成结果在异步中心查询。
+
+    :param generate_in: 脚本生成入参
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        case_ids = generate_in.case_ids
+        if not case_ids:
+            return ParameterResponse(message="请至少选择一个用例(公共接口)")
+        case_models = await services.case_curd.model.filter(id__in=list(dict.fromkeys(case_ids)), state__not=1)
+        case_map = {instance.id: instance for instance in case_models}
+        invalid: List[Dict[str, Any]] = []
+        for case_id in dict.fromkeys(case_ids):
+            instance = case_map.get(case_id)
+            if not instance:
+                invalid.append({"case_id": case_id, "case_name": str(case_id), "reason": "用例不存在"})
+            elif instance.case_type != AutoTestCaseType.PUBLIC_API:
+                invalid.append({"case_id": case_id, "case_name": instance.case_name, "reason": "非公共接口用例"})
+
+        if invalid:
+            return ParameterResponse(message="选择的用例(公共接口)存在不合规，已取消生成", data={"invalid": invalid})
+
+        apply_async_result = generate_case_scripts_task.apply_async(
+            kwargs={
+                "case_ids": case_ids,
+                "case_project": generate_in.case_project,
+                "case_type": generate_in.case_type.value,
+                "case_attr": generate_in.case_attr.value,
+                "case_tags": generate_in.case_tags,
+                "created_user": get_current_username(),
+                "report_type": AutoTestReportType.ASYNC_EXEC.value,
+            },
+            expires=3600,
+        )
+        return SuccessResponse(
+            message="脚本生成任务已提交后台执行，请稍后在异步中心查看结果",
+            data={"celery_task_id": apply_async_result.task_id, "count": len(case_ids)},
+            total=1,
+        )
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"公共接口转脚本任务下发失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下发脚本生成任务失败，异常描述: {e}")
+
+
+@autotest_case.post("/import_case_scripts_async", summary="导入公共接口脚本(异步)", description="解析模板xlsx文件并生成公共接口脚本(统一异步)")
+async def import_case_scripts_async(
+        file: UploadFile = File(..., description="公共接口导入导出模板xlsx(仅读取第1个sheet页)"),
+):
+    """
+    异步导入公共接口脚本(统一异步)。
+
+    模板解析与行格式校验同步完成(不合规行明细即时返回便于修稿重试)，校验通过后下发Celery任务；
+    行级匹配校验与落库在后台执行(存在更新、不存在新增)，结果与不合规明细落入执行记录(task_summary)，在异步中心查询。
 
     :param file: 模板xlsx文件
-    :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
     if not (file.filename or "").endswith(".xlsx"):
@@ -567,12 +626,18 @@ async def import_case_scripts(
         rows, parse_invalid = parse_script_workbook(content)
         if parse_invalid:
             return ParameterResponse(message="文件存在不合规行，已取消导入", data={"invalid": parse_invalid})
-        result, resolve_invalid = await import_script_rows(rows=rows, services=services)
-        if resolve_invalid:
-            return ParameterResponse(message="存在无法落库的行，已取消导入", data={"invalid": resolve_invalid})
+        apply_async_result = import_case_scripts_task.apply_async(
+            kwargs={
+                "rows": rows,
+                "file_name": file.filename,
+                "created_user": get_current_username(),
+                "report_type": AutoTestReportType.ASYNC_EXEC.value,
+            },
+            expires=3600,
+        )
         return SuccessResponse(
-            message=f"导入成功: 新增{result['created_count']}个, 更新{result['updated_count']}个公共接口",
-            data=result,
+            message="导入任务已提交后台执行，请稍后在异步中心查看结果",
+            data={"celery_task_id": apply_async_result.task_id, "count": len(rows)},
             total=1,
         )
     except NotFoundException as e:
@@ -580,5 +645,5 @@ async def import_case_scripts(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"从模板xlsx导入公共接口脚本失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导入失败，异常描述: {e}")
+        LOGGER.error(f"下发导入公共接口脚本任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下发导入任务失败，异常描述: {e}")

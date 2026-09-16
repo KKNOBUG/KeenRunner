@@ -154,8 +154,10 @@ export default {
   exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_case_datagram_async', data),
   /** Body：{ case_ids } —— 导出公共接口脚本模板为 xlsx(统一异步)，返回 { celery_task_id } */
   exportCaseScriptsAsync: (data = {}) => request.post('/autotest/case/export_case_scripts_async', data),
-  /** FormData：file —— 导入公共接口脚本（模板xlsx：按应用+接口名称匹配，存在更新/不存在新增） */
-  importCaseScript: (formData) => request.post('/autotest/case/import_case_scripts', formData),
+  /** Body：{ case_ids, case_project, case_type, case_attr, case_tags } —— 公共接口转脚本生成(统一异步，每个接口生成独立脚本)，返回 { celery_task_id } */
+  generateCaseScriptsAsync: (data = {}) => request.post('/autotest/case/generate_case_scripts_async', data),
+  /** FormData：file —— 导入公共接口脚本（模板xlsx：按应用+接口名称匹配，存在更新/不存在新增；统一异步），返回 { celery_task_id } */
+  importCaseScriptsAsync: (formData) => request.post('/autotest/case/import_case_scripts_async', formData),
   getAutoTestStepTree: (data = {}) => {
     const params = []
     if (data.case_id) params.push(`case_id=${data.case_id}`)

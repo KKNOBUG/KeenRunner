@@ -32,10 +32,17 @@ CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
         "task_type": AutoTestTaskType.EXPORT_PUBLIC_API_SCRIPT,
         "task_name": "公共接口导出",
     },
+    "backend.celery_scheduler.tasks.task_public_api_to_script.generate_case_scripts_task": {
+        "task_type": AutoTestTaskType.PUBLIC_API_TO_SCRIPT,
+        "task_name": "单接口脚本生成",
+    },
+    "backend.celery_scheduler.tasks.task_import_case_script.import_case_scripts_task": {
+        "task_type": AutoTestTaskType.IMPORT_PUBLIC_API_SCRIPT,
+        "task_name": "公共接口导入",
+    },
 }
 
 # 异步中心任务类型集合：命中者创建执行记录时展示名按「{任务类型}-{时间戳}」规则生成；
-# 接口导入/单接口脚本生成/测试案例生成为预留类型，任务链路待开发，命中同一命名规则
 ASYNC_CENTER_TASK_TYPES: Tuple[AutoTestTaskType, ...] = (
     AutoTestTaskType.EXPORT_PUBLIC_API_SCRIPT,
     AutoTestTaskType.EXPORT_PUBLIC_API_DATAGRAM,
