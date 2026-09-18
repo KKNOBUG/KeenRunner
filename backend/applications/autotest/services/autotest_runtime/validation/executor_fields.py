@@ -184,6 +184,21 @@ class ExecutorFieldsValidation:
                         if not getattr(item, "operation", None):
                             missing.append(f"{op_label}.operation")
 
+            elif step_type == AutoTestStepType.EXTRACT:
+                if not step.extract_variables:
+                    missing.append("extract_variables")
+                else:
+                    for idx, item in enumerate(step.extract_variables):
+                        op_label = f"extract_variables[{idx}]"
+                        if not getattr(item, "name", None):
+                            missing.append(f"{op_label}.name")
+                        if not getattr(item, "source", None):
+                            missing.append(f"{op_label}.source")
+                        # 与提取管线对齐：scope为ALL时返回整段数据可省略表达式，SOME模式下表达式必填
+                        scope = str(getattr(item, "scope", None) or "").strip().upper()
+                        if scope != "ALL" and not getattr(item, "expr", None):
+                            missing.append(f"{op_label}.expr")
+
             if missing:
                 errors.append({
                     "step_code": step_code,

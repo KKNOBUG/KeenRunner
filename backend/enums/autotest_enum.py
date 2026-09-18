@@ -48,6 +48,7 @@ class AutoTestStepType(StringEnum):
     QUOTE = "引用公共脚本/接口"
     DIFF = "报文比对"
     ASSERT = "断言"
+    EXTRACT = "提取"
 
 
 class AutoTestLoopMode(StringEnum):
