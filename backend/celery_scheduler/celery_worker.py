@@ -350,12 +350,12 @@ async def _update_task_record_on_end(
         if getattr(start, "tzinfo", None) is not None:
             start = start.replace(tzinfo=None)
         delta = now - start
-        data["celery_duration"] = f"{delta.total_seconds():.2f}s"
+        data["celery_elapsed"] = f"{delta.total_seconds():.2f}s"
     await record_crud.update_record_by_celery_id(celery_id=celery_id, data=data)
     LOGGER.info(
         f"{_LOG_PREFIX}【span_id={get_span_id()}】更新执行记录成功: "
         f"celery_id={celery_id}, status={getattr(status_enum, 'value', status_enum)}, "
-        f"batch_code={resolved_batch}, duration={data.get('celery_duration')}"
+        f"batch_code={resolved_batch}, elapsed={data.get('celery_elapsed')}"
     )
 
 

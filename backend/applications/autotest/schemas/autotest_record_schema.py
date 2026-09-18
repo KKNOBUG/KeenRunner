@@ -42,7 +42,7 @@ class AutoTestRecordBase(BaseModel):
     celery_status: Optional[AutoTestTaskStatus] = Field(None, description="执行状态")
     celery_start_time: Optional[datetime] = Field(None, description="开始时间")
     celery_end_time: Optional[datetime] = Field(None, description="结束时间")
-    celery_duration: Optional[str] = Field(None, max_length=64, description="耗时")
+    celery_elapsed: Optional[str] = Field(None, max_length=64, description="耗时")
 
 
 class AutoTestRecordCreate(AutoTestRecordBase):

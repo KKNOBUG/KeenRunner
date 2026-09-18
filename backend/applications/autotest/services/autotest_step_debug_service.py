@@ -21,6 +21,10 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     StepExtractVariableItem,
     StepVariablesBase,
 )
+from backend.applications.autotest.services.autotest_runtime.builtin_variables import (
+    collect_builtin_step_variables,
+    strip_host_scheme,
+)
 from backend.applications.autotest.services.autotest_runtime.protocol_http import (
     assemble_http_body_payloads,
     build_httpx_request_kwargs,
@@ -33,10 +37,6 @@ from backend.applications.autotest.services.autotest_runtime.protocol_tcp import
     parse_tcp_timeouts,
     resolve_tcp_debug_request_extract_sources,
     select_tcp_debug_payload,
-)
-from backend.applications.autotest.services.autotest_runtime.builtin_variables import (
-    collect_builtin_step_variables,
-    strip_host_scheme,
 )
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
 from backend.common import AioTcpClient, TcpFrameMode
@@ -339,7 +339,7 @@ class StepDebugService:
     @staticmethod
     def pack_debug_result(
             *,
-            duration: int,
+            elapsed: str,
             size: str,
             data: Any,
             extract_results: List[Dict[str, Any]],
@@ -353,7 +353,7 @@ class StepDebugService:
         """
         组装调试统一出参壳。
 
-        :param duration: 耗时毫秒
+        :param elapsed: 耗时秒
         :param size: 可读大小
         :param data: 协议响应体
         :param extract_results: 提取结果
@@ -370,7 +370,7 @@ class StepDebugService:
             "headers": headers if headers is not None else {},
             "cookies": cookies if cookies is not None else {},
             "data": data,
-            "duration": duration,
+            "elapsed": elapsed,
             "size": size,
             "extract_results": extract_results,
             "validator_results": validator_results,
@@ -535,14 +535,14 @@ class StepDebugService:
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise StepDebugException(message="HTTP请求调试异常", data=error_message) from e
 
-        duration = int((time.time() - start_time) * 1000)
+        elapsed = f"{time.time() - start_time:.2f}"
         log(
             f"【HTTP请求】调试完成: \n\t"
             f"状态描述: {response.reason_phrase}\n\t"
             f"状态代码: {response.status_code}\n\t"
             f"响应字符: {response.encoding}\n\t"
             f"响应版本: {response.http_version}\n\t"
-            f"响应耗时: {duration}ms"
+            f"响应耗时: {elapsed}s"
         )
 
         response_json = None
@@ -599,7 +599,7 @@ class StepDebugService:
             headers=dict(response.headers),
             cookies=response_cookies,
             data=response_data,
-            duration=duration,
+            elapsed=elapsed,
             size=format_byte_size(len(response.content)),
             extract_results=extract_results,
             validator_results=validator_results,
@@ -616,7 +616,7 @@ class StepDebugService:
         )
         LOGGER.info(
             f"HTTP请求调试完成: {request_method} {request_url}, "
-            f"状态码: {response.status_code}, 耗时: {duration}ms"
+            f"状态码: {response.status_code}, 耗时: {elapsed}s"
         )
         return result
 
@@ -762,8 +762,8 @@ class StepDebugService:
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise StepDebugException(message="TCP请求调试异常", data=error_message) from e
 
-        duration = int((time.time() - start_time) * 1000)
-        log(f"TCP请求调试完成: 耗时: {duration}ms")
+        elapsed = f"{time.time() - start_time:.2f}"
+        log(f"TCP请求调试完成: 耗时: {elapsed}s")
         parsed = parse_tcp_response(raw_bytes, encoding=encoding, response_type=response_type)
         request_json_for_extract, request_text_for_extract = resolve_tcp_debug_request_extract_sources(
             request_body=request_body, request_text=request_text
@@ -783,7 +783,7 @@ class StepDebugService:
 
         result = cls.pack_debug_result(
             data=parsed.response_data,
-            duration=duration,
+            elapsed=elapsed,
             size=format_byte_size(len(raw_bytes)),
             extract_results=extract_results,
             validator_results=validator_results,
@@ -803,7 +803,7 @@ class StepDebugService:
                 ),
             },
         )
-        LOGGER.info(f"TCP请求调试完成: 耗时: {duration}ms")
+        LOGGER.info(f"TCP请求调试完成: 耗时: {elapsed}s")
         return result
 
     @classmethod
@@ -1131,9 +1131,9 @@ class StepDebugService:
                     message=error_message, data={"logs": logger.logs}
                 ) from e
 
-        duration = int((time.time() - start_time) * 1000)
+        elapsed = f"{time.time() - start_time:.2f}"
         response_text_str = orjson.dumps(redis_operates_response, default=str).decode("UTF-8")
-        log(f"Redis请求调试完成: 耗时: {duration}ms")
+        log(f"Redis请求调试完成: 耗时: {elapsed}s")
 
         for extract_item in mark_extract_variables:
             if isinstance(extract_item, dict) and extract_item.get("success") and extract_item.get("name") is not None:
@@ -1160,7 +1160,7 @@ class StepDebugService:
 
         result = cls.pack_debug_result(
             data=redis_operates_response,
-            duration=duration,
+            elapsed=elapsed,
             size=format_byte_size(len(response_text_str.encode("utf-8"))),
             extract_results=extract_results,
             validator_results=validator_results,
@@ -1171,5 +1171,5 @@ class StepDebugService:
                 "redis_searched": redis_searched,
             },
         )
-        LOGGER.info(f"Redis请求调试完成: 耗时: {duration}ms")
+        LOGGER.info(f"Redis请求调试完成: 耗时: {elapsed}s")
         return result

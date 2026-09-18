@@ -172,7 +172,7 @@ async def logging_middleware(request: Request, call_next):
         # 接口服务结束时间
         end_time = time.time()
         response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(end_time))
-        response_elapsed = f"{end_time - start_time:.4f}s"
+        response_elapsed = f"{end_time - start_time:.2f}s"
 
         # 记录日志
         audit_log: Dict[str, Any] = {

@@ -42,7 +42,7 @@ class AutoTestRecordModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     celery_status = fields.CharEnumField(AutoTestTaskStatus, default=AutoTestTaskStatus.RUNNING, description="执行状态")
     celery_start_time = fields.DatetimeField(null=True, description="开始时间")
     celery_end_time = fields.DatetimeField(null=True, description="结束时间")
-    celery_duration = fields.CharField(max_length=64, null=True, description="耗时")
+    celery_elapsed = fields.CharField(max_length=64, null=True, description="耗时")
 
     class Meta:
         table = "krun_autotest_record"
