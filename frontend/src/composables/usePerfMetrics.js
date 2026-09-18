@@ -12,7 +12,7 @@ import { DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } f
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent])
 
-/** 指标元数据：中文名/单位/颜色/轴（rps|users 类左轴计数，latency 右轴毫秒，rate 百分比） */
+/** 指标元数据：中文名/单位/颜色/轴（rps|users 类左轴计数，latency 右轴毫秒，rate 百分比，host 施压机资源） */
 export const PERF_METRIC_META = {
   krun_perf_rps: { label: 'RPS', unit: 'req/s', color: '#18a058', axis: 'count' },
   krun_perf_current_users: { label: '并发用户', unit: '人', color: '#2080f0', axis: 'count' },
@@ -21,6 +21,10 @@ export const PERF_METRIC_META = {
   krun_perf_p95_latency_ms: { label: 'P95 延迟', unit: 'ms', color: '#722ed1', axis: 'latency' },
   krun_perf_requests_total: { label: '累计请求', unit: '次', color: '#0fa3a3', axis: 'count' },
   krun_perf_failures_total: { label: '累计失败', unit: '次', color: '#c2255c', axis: 'count' },
+  krun_perf_host_cpu_percent: { label: 'CPU 占用', unit: '%', color: '#e05d44', axis: 'host' },
+  krun_perf_host_memory_percent: { label: '内存占用', unit: '%', color: '#3a8ee6', axis: 'host' },
+  krun_perf_host_net_sent_kb_s: { label: '网卡发送', unit: 'KB/s', color: '#2bb596', axis: 'host' },
+  krun_perf_host_net_recv_kb_s: { label: '网卡接收', unit: 'KB/s', color: '#e6a23c', axis: 'host' },
 }
 
 /** 总口径序列名（与后端 perf_metrics_service.TOTAL_SERIES_NAME、引擎 metrics_push 一致） */
@@ -36,45 +40,79 @@ export function toChartPoints(points = []) {
 }
 
 /**
- * 构建指标曲线 echarts option（双 y 轴：计数 + 延迟毫秒；失败率并入计数轴百分比展示）。
+ * 曲线分区定义: 吞吐/响应时间/错误率/施压机资源各占一区, 指标名与 PERF_METRIC_META 对齐。
+ * 累计类指标(requests_total/failures_total)单调递增不参与分区(与报告指标卡重复)。
+ * 主机指标与引擎 host_monitor.py 的 METRIC_HOST_* 对齐(三处同步: 后端 perf_metrics_service/引擎/本文件)。
+ */
+export const PERF_METRIC_ZONES = [
+  { title: '吞吐', metrics: ['krun_perf_rps', 'krun_perf_current_users'] },
+  { title: '响应时间', metrics: ['krun_perf_avg_latency_ms', 'krun_perf_p95_latency_ms'] },
+  { title: '错误率', metrics: ['krun_perf_failure_rate'] },
+  { title: '施压机资源', metrics: ['krun_perf_host_cpu_percent', 'krun_perf_host_memory_percent', 'krun_perf_host_net_sent_kb_s', 'krun_perf_host_net_recv_kb_s'] },
+]
+
+/**
+ * 构建指标曲线分区 echarts option: 吞吐/响应时间/错误率/施压机资源纵排分区,
+ * 共享时间轴与缩放联动(定位突发毛刺时各区同步观察吞吐/延迟/错误率/主机资源的联动关系)。
  * @param {Object} series 后端归一化序列 { 指标名: [{time, value}] }
- * @param {string[]} [metricNames] 参与绘制的指标（缺省全部有元数据的指标）
  * @returns {Object} echarts option
  */
-export function buildMetricsOption(series = {}, metricNames) {
-  const names = metricNames || Object.keys(PERF_METRIC_META)
+export function buildZonedMetricsOption(series = {}) {
   const legendData = []
   const seriesList = []
-  let hasLatency = false
-  names.forEach((name) => {
-    const meta = PERF_METRIC_META[name]
-    const points = series[name]
-    if (!meta || !Array.isArray(points)) return
-    if (meta.axis === 'latency') hasLatency = true
-    legendData.push(meta.label)
-    seriesList.push({
-      name: meta.label,
-      type: 'line',
-      // 延迟类指标走右轴毫秒，其余走左轴计数（与下方 yAxis 声明对应）
-      yAxisIndex: meta.axis === 'latency' ? 1 : 0,
-      showSymbol: false,
-      smooth: true,
-      lineStyle: { width: 1.5, color: meta.color },
-      itemStyle: { color: meta.color },
-      data: toChartPoints(points),
+  const gridList = []
+  const xAxisList = []
+  const yAxisList = []
+  // 分区纵向布局按区数动态计算: 预留顶部 legend(7%)与底部缩放条(top 76% 起), 区间内均匀分布
+  const zoneCount = PERF_METRIC_ZONES.length
+  const layoutTop = 7
+  const layoutBottom = 75
+  const layoutGap = 2.5
+  const layoutHeight = (layoutBottom - layoutTop - (zoneCount - 1) * layoutGap) / zoneCount
+  PERF_METRIC_ZONES.forEach((zone, zoneIndex) => {
+    const layout = { top: `${layoutTop + zoneIndex * (layoutHeight + layoutGap)}%`, height: `${layoutHeight}%` }
+    gridList.push({ ...layout, left: 56, right: 24 })
+    // 各区独立时间轴, 末区显示刻度其余隐藏
+    xAxisList.push({
+      type: 'time', gridIndex: zoneIndex,
+      show: zoneIndex === PERF_METRIC_ZONES.length - 1,
+      axisLabel: { hideOverlap: true },
+    })
+    yAxisList.push({ type: 'value', gridIndex: zoneIndex, name: zone.title, scale: true })
+    zone.metrics.forEach((name) => {
+      const meta = PERF_METRIC_META[name]
+      const points = series[name]
+      if (!meta || !Array.isArray(points)) return
+      legendData.push(meta.label)
+      seriesList.push({
+        name: meta.label,
+        type: 'line',
+        xAxisIndex: zoneIndex,
+        yAxisIndex: zoneIndex,
+        showSymbol: false,
+        smooth: true,
+        lineStyle: { width: 1.5, color: meta.color },
+        itemStyle: { color: meta.color },
+        data: toChartPoints(points),
+      })
     })
   })
+  const zoomAxisIndexes = PERF_METRIC_ZONES.map((_, index) => index)
   return {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', valueFormatter: (v) => (v == null ? '-' : v) },
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: (v) => (v == null ? '-' : v),
+      axisPointer: { link: [{ xAxisIndex: 'all' }] },
+    },
     legend: { data: legendData, top: 0, type: 'scroll' },
-    grid: { left: 56, right: hasLatency ? 60 : 28, top: 36, bottom: 48 },
-    xAxis: { type: 'time', axisLabel: { hideOverlap: true } },
-    yAxis: [
-      { type: 'value', name: '次数/用户', scale: true },
-      { type: 'value', name: 'ms', scale: true, splitLine: { show: false } },
+    grid: gridList,
+    xAxis: xAxisList,
+    yAxis: yAxisList,
+    dataZoom: [
+      { type: 'inside', xAxisIndex: zoomAxisIndexes },
+      { type: 'slider', xAxisIndex: zoomAxisIndexes, height: 16, bottom: 4 },
     ],
-    dataZoom: [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 8 }],
     series: seriesList,
   }
 }
@@ -98,7 +136,7 @@ export function buildStatTargetOptions(seriesByName = {}) {
  * @param {Object} series 总口径序列 {指标名: [点]}
  * @param {Object} seriesByName 分接口序列 {指标名: {接口名: [点]}}
  * @param {string} target 统计对象（total 或接口名）
- * @returns {Object} {指标名: [点]}，可直接交给 buildMetricsOption
+ * @returns {Object} {指标名: [点]}，可直接交给 buildZonedMetricsOption
  */
 export function resolveSeriesByTarget(series, seriesByName, target) {
   if (!target || target === TOTAL_SERIES_NAME) return series || {}

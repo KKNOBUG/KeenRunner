@@ -94,6 +94,9 @@ class CeleryConfig(BaseSettings):
                 "backend.celery_scheduler.tasks.task_performance.run_perf_task": {
                     "queue": perf_queue
                 },
+                "backend.celery_scheduler.tasks.task_perf_data_job.run_perf_data_job": {
+                    "queue": perf_queue
+                },
             },
             "task_default_queue": default_queue,
             "task_default_exchange": default_queue,

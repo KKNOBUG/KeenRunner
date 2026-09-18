@@ -313,7 +313,60 @@ export default {
       },
   ),
 
-  // ---------- performance：性能测试（任务/报告/指标） ----------
+  // ---------- performance：性能测试（接口/数据集/场景/任务/报告） ----------
+  /** Body：PerfApiSelect —— 压测接口分页列表 */
+  searchPerfApiList: (data = {}) => request.post('/perf/api/search', data),
+  /** Query：api_id 或 api_code —— 接口详情 */
+  getPerfApi: (params = {}) => request.get('/perf/api/get', { params }),
+  /** Body：PerfApiCreate —— 新增压测接口 */
+  createPerfApi: (data = {}) => request.post('/perf/api/create', data),
+  /** Body：PerfApiUpdate（api_id/api_code 定位）—— 更新接口，版本号自增 */
+  updatePerfApi: (data = {}) => request.post('/perf/api/update', data),
+  /** Query：api_id 或 api_code —— 软删接口（被场景引用时禁止） */
+  deletePerfApi: (params = {}) => request.delete('/perf/api/delete', { params }),
+  /** Body：PerfApiLocate —— 复制接口为同应用下新资产 */
+  copyPerfApi: (data = {}) => request.post('/perf/api/copy', data),
+  /** Body：PerfApiDebug —— 真实请求验证已保存接口（口径与施压引擎一致，回写调试结论） */
+  debugPerfApi: (data = {}) => request.post('/perf/api/debug', data),
+  /** Body：PerfApiImport —— 从公共接口/用例步骤导入草稿（仅返回不落库，确认后走 create） */
+  importPerfApisFromCase: (data = {}) => request.post('/perf/api/import_from_case', data),
+  /** Body：PerfApiCurlParse —— cURL粘贴解析为接口草稿（不落库，另含warnings解析提示） */
+  parsePerfApiCurl: (data = {}) => request.post('/perf/api/parse_curl', data),
+  /** Body：PerfApiOpenapiParse —— OpenAPI/Swagger文档批量解析为接口草稿列表（不落库，逐条确认后走 create） */
+  parsePerfApisOpenapi: (data = {}) => request.post('/perf/api/parse_openapi', data),
+  /** Body：PerfApiSimpleSelect —— 场景选择器查询启用接口（不分页+名称搜索） */
+  getPerfApisForScene: (data = {}) => request.post('/perf/api/list_for_scene', data),
+
+  /** Query：api_id —— 某接口可用数据集（归属该接口，轻量字段不分页，编辑页数据源卡/调试取数/场景下拉共用） */
+  listPerfDatasetsForApi: (params = {}) => request.get('/perf/dataset/list_for_api', { params }),
+  /** Query：ds_id 或 ds_code —— 数据集详情（含 dataframe+axis 矩阵） */
+  getPerfDataset: (params = {}) => request.get('/perf/dataset/get', { params }),
+  /** Body：PerfDatasetCreate —— 新增数据集（dataframe+axis 矩阵协议，dataset/dataset_names 由服务端派生） */
+  createPerfDataset: (data = {}) => request.post('/perf/dataset/create', data),
+  /** Body：PerfDatasetUpdate（ds_id/ds_code 定位）—— 更新数据集，矩阵整体覆盖 */
+  updatePerfDataset: (data = {}) => request.post('/perf/dataset/update', data),
+  /** Query：ds_id 或 ds_code —— 软删数据集（被场景引用时禁止） */
+  deletePerfDataset: (params = {}) => request.delete('/perf/dataset/delete', { params }),
+  /** FormData：ds_project + file —— 上传xlsx解析为矩阵预览（不落库，保存时随create/update提交dataframe+axis+溯源） */
+  uploadPerfDataset: (formData) => request.post('/perf/dataset/upload', formData),
+
+  /** Body：PerfSceneSelect —— 场景分页列表（不含容器大字段） */
+  searchPerfSceneList: (data = {}) => request.post('/perf/scene/search', data),
+  /** Query：scene_id 或 scene_code —— 场景详情（含编排与判定口径全量字段） */
+  getPerfScene: (params = {}) => request.get('/perf/scene/get', { params }),
+  /** Body：PerfSceneCreate —— 新增场景（接口项引用保存期校验） */
+  createPerfScene: (data = {}) => request.post('/perf/scene/create', data),
+  /** Body：PerfSceneUpdate（scene_id/scene_code 定位）—— 整编排覆盖保存 */
+  updatePerfScene: (data = {}) => request.post('/perf/scene/update', data),
+  /** Query：scene_id 或 scene_code —— 软删场景（被任务引用时禁止） */
+  deletePerfScene: (params = {}) => request.delete('/perf/scene/delete', { params }),
+  /** Body：PerfSceneLocate —— 复制场景为同应用下新场景 */
+  copyPerfScene: (data = {}) => request.post('/perf/scene/copy', data),
+  /** Body：PerfScenePrecheck —— 场景预检：逐接口发1次真实请求回显连通性与业务结论 */
+  precheckPerfScene: (data = {}) => request.post('/perf/scene/precheck', data),
+  /** Body：PerfScenePinBaseline —— 钉选/取消场景基线报告（同场景 completed 限定，report_code 留空为取消） */
+  pinPerfSceneBaseline: (data = {}) => request.post('/perf/scene/pin_baseline', data),
+
   /** Body：PerfTaskSelect —— 压测任务分页列表 */
   getPerfTaskList: (data = {}) => request.post('/perf/task/search', data),
   /** Query：perf_id 或 perf_code —— 任务详情 */
@@ -324,20 +377,60 @@ export default {
   updatePerfTask: (data = {}) => request.post('/perf/task/update', data),
   /** Query：perf_id 或 perf_code —— 软删任务 */
   deletePerfTask: (params = {}) => request.delete('/perf/task/delete', { params }),
-  /** Body：PerfTaskDelete { perf_ids } —— 批量软删 */
-  deletePerfTaskBatch: (data = {}) => request.post('/perf/task/delete', data),
-  /** Body：PerfCaseImport { case_ids } —— 按用例批量导入步骤定义（仅返回不落库，标注角色后随任务保存） */
-  importPerfCases: (data = {}) => request.post('/perf/task/import_cases', data),
-  /** Body：PerfTaskLocate —— 立即执行（置排队后经 {port}_perf 队列异步施压） */
+  /** Body：PerfTaskRun —— 立即执行（场景装载闸门 + 高危二次确认，置排队后异步施压） */
   runPerfTask: (data = {}) => request.post('/perf/task/run', data),
   /** Body：PerfTaskLocate —— 停止执行（置 stopping，管线数秒内终止） */
   stopPerfTask: (data = {}) => request.post('/perf/task/stop', data),
-  /** Body：PerfStepDebug —— 单步连通性调试（相对地址按施压环境补齐 host，不入库） */
-  debugPerfStep: (data = {}) => request.post('/perf/task/debug', data),
+
+  /** Body：PerfJobSelect —— 数据作业分页列表（不含失败原因大字段） */
+  searchPerfJobList: (data = {}) => request.post('/perf/job/search', data),
+  /** Body：PerfJobCreate —— 新增数据作业（prepare需提取列+归属接口，无update契约，配置变更重建） */
+  createPerfJob: (data = {}) => request.post('/perf/job/create', data),
+  /** Body：PerfJobLocate —— 立即执行（置排队后经{port}_perf队列异步跑脚本用例N轮） */
+  runPerfJob: (data = {}) => request.post('/perf/job/run', data),
+  /** Query：job_id 或 job_code —— 轻量轮询执行状态与观测字段 */
+  getPerfJobStatus: (params = {}) => request.get('/perf/job/status', { params }),
+  /** Query：job_id 或 job_code —— 软删作业（执行中禁止） */
+  deletePerfJob: (params = {}) => request.delete('/perf/job/delete', { params }),
+
   /** Body：PerfReportSelect —— 压测报告分页列表（不含 locust_stats 快照） */
   getPerfReportList: (data = {}) => request.post('/perf/report/search', data),
   /** Query：report_id 或 report_code —— 报告详情（含 locust_stats 快照） */
   getPerfReport: (params = {}) => request.get('/perf/report/get', { params }),
   /** Body：PerfReportMetrics —— 指标曲线（代理 VictoriaMetrics query_range） */
   getPerfReportMetrics: (data = {}) => request.post('/perf/report/metrics', data),
+  /** Query：report_code + baseline_code —— 对比两份报告（双侧指标对照 + 配置差异明细） */
+  getPerfReportSnapshotDiff: (params = {}) => request.get('/perf/report/snapshot_diff', { params }),
+  /** Query：report_code —— 报告产物清单（场景快照/引擎日志/结果分片；裸 axios 直连，404=无产物由调用方静默处理） */
+  getPerfReportArtifacts: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/perf/report/artifacts`,
+      { params, headers: { token: getToken() || '' } },
+  ),
+  /** Query：report_code + name —— 下载报告产物文件（blob，白名单内） */
+  downloadPerfReportArtifact: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/perf/report/artifact_download`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
+  /** Query：report_code —— 导出报告 xlsx 报表（blob，六 sheet） */
+  exportPerfReport: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/perf/report/export`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
+
+  /** Body：PerfComparisonCreate —— 新建多记录对比/汇总（创建时一次性计算结果快照，无update契约） */
+  createPerfComparison: (data = {}) => request.post('/perf/comparison/create', data),
+  /** Query：comparison_id 或 comparison_code —— 对比详情（含结果快照与引用报告现存性复核） */
+  getPerfComparison: (params = {}) => request.get('/perf/comparison/detail', { params }),
+  /** Body：PerfComparisonSelect —— 对比记录分页列表（不含结果快照大字段） */
+  searchPerfComparisonList: (data = {}) => request.post('/perf/comparison/search', data),
+  /** Query：comparison_id 或 comparison_code —— 软删对比记录（结论可重新创建） */
+  deletePerfComparison: (params = {}) => request.delete('/perf/comparison/delete', { params }),
 }

@@ -1148,7 +1148,7 @@ const detailColumns = [
       if (elapsed) {
         const elapsedNum = parseFloat(elapsed)
         if (!isNaN(elapsedNum)) {
-          return h('span', elapsedNum.toFixed(3))
+          return h('span', elapsedNum.toFixed(2))
         }
       }
       return h('span', '-')

@@ -11,10 +11,12 @@ from backend.enums.base_enum_cls import StringEnum
 
 class PerfLoadMode(StringEnum):
     """
-    压测施压模式：fixed 固定并发(P0 实现)；stepped 阶梯加压(P1 实现，任务表字段先行建齐避免二次表变更)。
+    压测施压模式：fixed 固定并发(P0 实现)；stepped 阶梯加压(P1 实现，任务表字段先行建齐避免二次表变更)；
+    rps 吞吐模式(固定并发池上限 + 每虚拟用户节流, 稳态吞吐≈目标RPS)。
     """
     FIXED = "fixed"
     STEPPED = "stepped"
+    RPS = "rps"
 
 
 class PerfTaskStatus(StringEnum):
@@ -38,19 +40,6 @@ class PerfReportStatus(StringEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     STOPPED = "stopped"
-
-
-class PerfStepRole(StringEnum):
-    """
-    压测步骤角色：由用户显式标注，是用例步骤在某一轮压测中的意图而非步骤固有属性。
-
-    SETUP  前置准备(每虚拟用户 on_start 执行一次, 走 requests 不进 locust 统计)
-    TARGET 被测目标(每圈执行, 按「方法+路径模板」独立计入统计)
-    SKIP   不参与施压(仅展示溯源)
-    """
-    SETUP = "setup"
-    TARGET = "target"
-    SKIP = "skip"
 
 
 class PerfApiRole(StringEnum):
@@ -102,9 +91,28 @@ class PerfDatasetStrategy(StringEnum):
 
 
 class PerfDatasetSource(StringEnum):
-    """数据集来源：file 文件上传解析；manual 页面表格录入(job 造数作业产出随数据作业阶段补充)。"""
+    """数据集来源：file 文件上传解析；manual 页面表格录入；job 造数作业产出(溯源 job_id/job_code)。"""
     FILE = "file"
     MANUAL = "manual"
+    JOB = "job"
+
+
+class PerfJobType(StringEnum):
+    """
+    数据作业类型(带外作业, 复用功能执行链): prepare 压测前造数/铺底并回写数据集;
+    verify 压测后校验(对压测产生数据做库面断言, 独立报告); cleanup 压测后按标记清理。
+    """
+    PREPARE = "prepare"
+    VERIFY = "verify"
+    CLEANUP = "cleanup"
+
+
+class PerfJobStatus(StringEnum):
+    """数据作业执行状态: pending 排队; running 执行中; success 成功; failed 失败(终态)。"""
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
 
 
 class PerfApiSource(StringEnum):
@@ -112,16 +120,8 @@ class PerfApiSource(StringEnum):
     MANUAL = "manual"
     PUBLIC_API = "public_api"
     HTTP_STEP = "http_step"
-
-
-class PerfSafetyLevel(StringEnum):
-    """
-    接口写安全等级：read 只读；write 写入业务数据；dangerous 高危(执行前二次确认,
-    提示确认被测端具备压测数据隔离与清理手段)。
-    """
-    READ = "read"
-    WRITE = "write"
-    DANGEROUS = "dangerous"
+    CURL = "curl"
+    OPENAPI = "openapi"
 
 
 class PerfAssertMode(StringEnum):
@@ -183,10 +183,21 @@ class PerfTargetSeverity(StringEnum):
     WARN = "warn"
 
 
+class PerfComparisonMode(StringEnum):
+    """
+    多记录对比/汇总模式(krun_perf_comparison)。
+
+    compare 横向对比: 指定基准, 逐份报告相对基准的指标变化与配置差异;
+    merge 汇总合并: 同场景多份报告视为并行实例聚合成一份视图(限同场景);
+    hybrid 两者兼出。设计§3.7 对齐 BrickCore PerfComparisonReport。
+    """
+    COMPARE = "compare"
+    MERGE = "merge"
+    HYBRID = "hybrid"
+
+
 # 准备段与抽查段不计入业务吞吐: 参与指标汇总的角色集合(仅 MEASURED 进业务指标)
 PERF_BUSINESS_ROLES = (PerfApiRole.MEASURED,)
-# 高危等级清单(执行前需二次确认)
-PERF_CONFIRM_REQUIRED_SAFETY = (PerfSafetyLevel.WRITE, PerfSafetyLevel.DANGEROUS)
 # 集合点屏障默认超时秒数(到达并行度或超时二者取先放行, 禁止裸 busy-wait)
 PERF_BARRIER_TIMEOUT_SECONDS = 30
 # 统计可信度常量: 样本量/时长不足时不得下 SLA 与对比结论(防止用噪声下结论)

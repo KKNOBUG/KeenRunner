@@ -115,9 +115,9 @@ async def register_database(app: FastAPI) -> None:
         )
         return
 
-    # 生成迁移文件
+    # 生成迁移文件；no_input=True：无人值守场景遇同类型删列+增列默认按 rename 处理，避免 aerich click.prompt 等待 stdin 卡死启动
     try:
-        await command.migrate(name="auto_migrate")
+        await command.migrate(name="auto_migrate", no_input=True)
     except AttributeError as e:
         LOGGER.error(f"无法从数据库中检索模型历史记录, 请检查[migration]与[aerich]表记录是否一致: {e}\n错误回溯: {traceback.format_exc()}")
         if PROJECT_CONFIG.aerich_should_run_on_startup:

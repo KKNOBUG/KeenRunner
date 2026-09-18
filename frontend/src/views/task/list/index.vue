@@ -169,7 +169,7 @@ const logRecordColumns = [
   { title: '调度ID', key: 'celery_id', width: 200, ellipsis: { tooltip: true } },
   { title: '开始时间', key: 'celery_start_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_start_time) || '-') },
   { title: '结束时间', key: 'celery_end_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_end_time) || '-') },
-  { title: '耗时', key: 'celery_duration', width: 80, align: 'center', ellipsis: { tooltip: true } },
+  { title: '耗时', key: 'celery_elapsed', width: 80, align: 'center', ellipsis: { tooltip: true } },
 ]
 
 // 历史/日志弹窗样式

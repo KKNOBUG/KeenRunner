@@ -59,6 +59,7 @@ dependencies = [
     "ply==3.11",
     "portalocker==3.0.0",
     "propcache==0.2.0",
+    "psutil==7.2.2",
     "pycparser==2.22",
     "pydantic==2.10.6",
     "pydantic-core==2.27.2",

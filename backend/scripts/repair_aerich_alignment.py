@@ -172,8 +172,7 @@ async def repair_records(app: str, fake_max: str, execute: bool, assume_yes: boo
 
             fake_max_text = "all" if resolved_fake_max >= FAKE_MAX_ALL else str(resolved_fake_max)
             print(f"[登记修复] 迁移文件目录: {MIGRATION_DIR}")
-            print(
-                f"[登记修复] 数据库中记录 {len(rows)} 条(重复 {len(duplicate_rows)} 条); 磁盘迁移文件 {len(files)} 个; 查漏补缺范围: {fake_max_text}")
+            print(f"[登记修复] 数据库中记录 {len(rows)} 条(重复 {len(duplicate_rows)} 条); 磁盘迁移文件 {len(files)} 个; 查漏补缺范围: {fake_max_text}")
             print_repair_plan(duplicate_rows, stale_rows, missing_files, resolved_fake_max)
             if matched_max_num is None and missing_files:
                 print("[提示] 数据库里没有一条记录和磁盘文件对得上, 查漏补缺范围自动按 -1 处理: 所有漏记文件都会真实执行SQL!")

@@ -229,7 +229,7 @@
           <n-space align="center" :wrap="false">
             <n-space v-if="response && !debugLoading" align="center" :wrap="false">
               <n-tag :type="responseStatusType" round size="small">Status: {{ responseStatusText }}</n-tag>
-              <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
+              <n-tag :type="durationTagType" round size="small">Time: {{ response.elapsed }}s</n-tag>
               <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
               <n-tag round>Type: {{ contentType }}</n-tag>
             </n-space>
@@ -644,7 +644,7 @@ const responseStatusType = computed(() => {
 
 const durationTagType = computed(() => {
   if (!response.value) return 'default'
-  return response.value.duration > 1000 ? 'warning' : 'success'
+  return parseFloat(response.value.elapsed) > 1 ? 'warning' : 'success'
 })
 
 const sizeTagType = computed(() => {

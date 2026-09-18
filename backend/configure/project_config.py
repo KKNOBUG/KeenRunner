@@ -237,7 +237,7 @@ class ProjectConfig(BaseSettings):
     ]
 
     # 数据库配置
-    DATABASE_AUTO_MIGRATION: bool = False
+    DATABASE_AUTO_MIGRATION: bool = True
     DATABASE_CONNECTIONS: Dict[str, Any] = {}
     DATABASE_URL: str = Field("", description="数据库地址")
     DATABASE_HOST: str = Field(..., description="数据库主机")

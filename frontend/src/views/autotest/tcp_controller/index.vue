@@ -222,7 +222,7 @@
         <div class="card-header-actions">
           <n-space align="center" :wrap="false">
             <n-space v-if="response && !debugLoading" align="center" :wrap="false">
-              <n-tag :type="durationTagType" round size="small">Time: {{ response.duration }}ms</n-tag>
+              <n-tag :type="durationTagType" round size="small">Time: {{ response.elapsed }}s</n-tag>
               <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
               <n-tag round size="small">Type: {{ contentType }}</n-tag>
             </n-space>
@@ -972,11 +972,11 @@ const formattedResponse = computed(() => {
   }
 })
 
-// 耗时标签颜色
+// 耗时标签颜色（elapsed 为秒级字符串，阈值 5s/1s）
 const durationTagType = computed(() => {
-  const d = response.value?.duration
-  if (d == null) return 'default'
-  return d >= 5000 ? 'error' : d >= 1000 ? 'warning' : 'success'
+  const d = parseFloat(response.value?.elapsed)
+  if (Number.isNaN(d)) return 'default'
+  return d >= 5 ? 'error' : d >= 1 ? 'warning' : 'success'
 })
 
 // 大小标签颜色

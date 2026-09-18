@@ -318,7 +318,7 @@ const columns = [
     align: 'center',
     render: renderAttachmentCell,
   },
-  { title: '执行耗时', key: 'celery_duration', width: 90, align: 'center', ellipsis: { tooltip: true } },
+  { title: '执行耗时', key: 'celery_elapsed', width: 90, align: 'center', ellipsis: { tooltip: true } },
   {
     title: '错误信息',
     key: 'task_error',
