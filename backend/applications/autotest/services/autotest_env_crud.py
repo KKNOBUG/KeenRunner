@@ -355,11 +355,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
     async def delete_env(self, env_id: Optional[int] = None, env_code: Optional[str] = None) -> AutoTestEnvBindModel:
         """
-        软删除环境绑定。
+        软删除环境绑定；绑定下仍存在未删除的环境配置时禁止删除。
 
         :param env_id: 环境绑定主键，与env_code二选一
         :param env_code: 绑定标识代码，与env_id二选一
         :return: 软删除后的环境绑定实例
+        :raises DataAlreadyExistsException: 绑定下存在未删除的环境配置
         """
         if not env_id and not env_code:
             error_message: str = "删除环境绑定信息失败, 参数[env_id, env_code]不允许同时为空"
@@ -369,6 +370,13 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             instance = await self.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(env_code=env_code, on_error=True, state__not=1)
+
+        # 外键为RESTRICT，物理删除本会被拦截；软删会绕过约束，故在应用层前置校验绑定项
+        config_count: int = await AutoTestEnvConfigModel.filter(env_bind_id=instance.id, state__not=1).count()
+        if config_count > 0:
+            error_message: str = f"删除环境绑定信息失败, 存在{config_count}个环境配置, 无法直接删除"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
 
         return await self.soft_delete(id=instance.id)
 
