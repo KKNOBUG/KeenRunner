@@ -30,6 +30,7 @@ from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
+    DataAlreadyExistsException,
 )
 from backend.enums import AutoTestConfigNodeType
 
@@ -251,11 +252,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def create_env(self, env_in: AutoTestEnvCreate) -> AutoTestEnvBindModel:
+    async def create_env(self, env_in: AutoTestEnvCreate, strict_duplicate: bool = False) -> AutoTestEnvBindModel:
         """
         创建环境绑定；同应用+环境+类型已存在则恢复启用。
 
-        :param env_in: 环境创建schema（含 project_id / env_type）
+        :param env_in: 环境创建schema定义
+        :param strict_duplicate: 为True时，命中启用态绑定直接判重报错，为False时幂等复用已存在绑定
         :return: 创建或恢复后的环境绑定实例
         """
         await AutoTestProjectCrud().get_by_id(project_id=env_in.project_id, on_error=True, state__not=1)
@@ -284,7 +286,8 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         # 已启用则直接复用；仅软删记录需要恢复
         if existing_bind.state == 0:
-            # raise ParameterException(message="新增失败, 已存在相同应用、环境及节点记录")
+            if strict_duplicate:
+                raise DataAlreadyExistsException(message="新增失败, 已存在相同应用、环境及节点记录")
             return existing_bind
         try:
             restore_dict: Dict[str, Any] = {"state": 0}
