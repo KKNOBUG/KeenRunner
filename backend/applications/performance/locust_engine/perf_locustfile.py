@@ -588,6 +588,11 @@ class PerfUser(HttpUser):
         self.variable_pool: Dict[str, Any] = {
             item.get("key"): item.get("value") for item in SESSION_VARIABLES if item.get("key")
         }
+        # 接口定义变量覆盖会话初始池(defined > session, 与调试链路同口径); 多项同名按声明序后者生效
+        for item in ALL_ITEMS:
+            for kv in item.get("defined_variables") or []:
+                if isinstance(kv, dict) and kv.get("key"):
+                    self.variable_pool[kv["key"]] = kv.get("value")
         self.prepare_runners: List[ItemRunner] = [ItemRunner(item, self.variable_pool) for item in PREPARE_ITEMS]
         self.measured_runners: List[ItemRunner] = [ItemRunner(item, self.variable_pool) for item in MEASURED_ITEMS]
         self.verify_runners: List[ItemRunner] = [ItemRunner(item, self.variable_pool) for item in VERIFY_ITEMS]

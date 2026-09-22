@@ -29,12 +29,19 @@ def _has_text(value: Optional[str]) -> bool:
 
 
 class PerfDatasetBase(BaseModel):
-    """数据集公共字段(矩阵协议: dataframe为二维矩阵, 第0行/列承载场景名与分区标记)。"""
+    """数据集公共字段(矩阵协议: dataframe为二维矩阵, 第0行/列承载场景名与分区标记)。
 
-    ds_project: int = Field(..., ge=1, description="数据集所属应用")
-    ds_name: str = Field(..., min_length=1, max_length=255, description="数据集名称")
+    绑定关系: bind_api_id 必填(一个接口只能有一个数据源, 对齐 autotest 设计);
+    ds_name 由服务端自动生成(格式: {api_name}_数据源), 不再作为用户输入项;
+    ds_project 可选(接口无 api_project 后, 数据集所属应用不再强制, 默认 1)。
+    """
+
+    ds_project: int = Field(default=1, ge=1, description="数据集所属应用(可选, 默认 1)")
+    # ds_name 由服务端自动生成, 保留字段以兼容既有导出/日志; 前端无需传入
+    ds_name: Optional[str] = Field(None, max_length=255, description="数据集名称(自动生成, 无需传入)")
     ds_desc: Optional[str] = Field(None, max_length=2048, description="数据集描述")
-    bind_api_id: Optional[int] = Field(None, ge=1, description="归属压测接口ID(空=场景级自由数据)")
+    # bind_api_id 必填: 一个接口只能有一个数据源(对齐 autotest 的 case_id+step_code 唯一)
+    bind_api_id: int = Field(..., ge=1, description="归属压测接口ID(必填, 唯一)")
     dataframe: List[List[Any]] = Field(
         default_factory=list,
         description="数据二维矩阵(水平: 首行分区标记+字段名/首列场景名; 垂直: 首列分区标记+字段名/首行场景名)",
@@ -60,14 +67,14 @@ class PerfDatasetCreate(PerfDatasetBase):
 
 
 class PerfDatasetUpdate(PerfDatasetBase):
-    """更新数据集入参(定位字段二选一, 其余字段可选)。"""
+    """更新数据集入参(按 bind_api_id 定位, 一个接口只能有一个数据源)。"""
 
-    ds_id: Optional[int] = Field(None, ge=1, description="数据集ID")
-    ds_code: Optional[str] = Field(None, max_length=64, description="数据集标识代码")
+    ds_id: Optional[int] = Field(None, ge=1, description="数据集ID(可选, 优先使用 bind_api_id 定位)")
+    ds_code: Optional[str] = Field(None, max_length=64, description="数据集标识代码(可选)")
     ds_project: Optional[int] = Field(None, ge=1, description="数据集所属应用")
-    ds_name: Optional[str] = Field(None, min_length=1, max_length=255, description="数据集名称")
+    ds_name: Optional[str] = Field(None, max_length=255, description="数据集名称(自动生成, 无需传入)")
     ds_desc: Optional[str] = Field(None, max_length=2048, description="数据集描述")
-    bind_api_id: Optional[int] = Field(None, ge=1, description="归属压测接口ID(提交null=解除归属)")
+    bind_api_id: int = Field(..., ge=1, description="归属压测接口ID(必填, 用于定位)")
     dataframe: Optional[List[List[Any]]] = Field(None, description="数据二维矩阵(null=本次不修改矩阵数据)")
     axis: Optional[int] = Field(None, ge=0, le=1, description="数据矩阵(0:水平模式, 1:垂直模式)")
     ds_source: Optional[PerfDatasetSource] = Field(None, description="数据来源")
@@ -76,11 +83,17 @@ class PerfDatasetUpdate(PerfDatasetBase):
     file_hash: Optional[str] = Field(None, max_length=64, description="来源文件哈希")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
+
+class PerfDatasetUpdateFields(BaseModel):
+    """同步报文字段入参(按 api_id 定位数据集与参照接口, 一个接口只能有一个数据源)。"""
+
+    api_id: int = Field(..., ge=1, description="压测接口ID(用于定位数据集与参照报文)")
+
     @model_validator(mode="after")
-    def _require_locator(self):
-        """更新必须能定位到一个数据集。"""
-        if not self.ds_id and not _has_text(self.ds_code):
-            raise ValueError("请提供参数[ds_id | ds_code]完成数据集更新")
+    def _require_api_locator(self):
+        """字段同步必须能定位到参照接口(矩阵字段路径以接口报文为准)。"""
+        if not self.api_id:
+            raise ValueError("请提供参数[api_id]完成报文字段同步")
         return self
 
 

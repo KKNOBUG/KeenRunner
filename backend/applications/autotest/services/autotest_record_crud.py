@@ -24,7 +24,7 @@ from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.celery_scheduler.celery_task_contract import list_attachments_from_summary, resolve_storage_path
 from backend.configure import LOGGER
 from backend.core.exceptions import ParameterException, NotFoundException
-from backend.enums import AutoTestTaskStatus
+from backend.enums import AutoTestTaskStatus, AutoTestTaskType
 
 # 终态状态值集合：仅终态(成功/失败/部分成功)记录允许删除
 _RECORD_FINAL_STATUS_VALUES = frozenset(
@@ -193,6 +193,12 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             if record_in.task_type_in:
                 type_vals = [getattr(t, "value", t) for t in record_in.task_type_in]
                 q &= Q(task_type__in=type_vals)
+            else:
+                q &= Q(task_type__not_in=[
+                    AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
+                    AutoTestTaskType.SINGLE_CASE_EXECUTE,
+                    AutoTestTaskType.SCHEDULE_SCANNER]
+                )
             if record_in.created_user:
                 q &= Q(created_user__contains=record_in.created_user)
             if record_in.task_project is not None:

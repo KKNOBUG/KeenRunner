@@ -55,7 +55,6 @@ const emit = defineEmits(['confirm'])
 
 const show = defineModel('show', { type: Boolean, default: false })
 
-const apiProject = ref(null)
 /** 已被场景引用的接口标识（候选中排除，避免同接口重复编排） */
 const excludedCodes = ref([])
 const excludedCount = computed(() => excludedCodes.value.length)
@@ -88,7 +87,6 @@ async function loadApis() {
   loading.value = true
   try {
     const res = await api.getPerfApisForScene({
-      api_project: apiProject.value,
       api_name: queryName.value || null,
     })
     apiRows.value = (res.data || []).filter((row) => !excludedCodes.value.includes(row.api_code))
@@ -108,11 +106,10 @@ function handleConfirm() {
 }
 
 /**
- * 打开弹窗。
- * @param {Object} payload { api_project, excludedCodes }
+ * 打开弹窗（接口资产全局共享，不再按应用过滤）。
+ * @param {Object} payload { excludedCodes }
  */
 function open(payload = {}) {
-  apiProject.value = payload.api_project || null
   excludedCodes.value = [...(payload.excludedCodes || [])]
   queryName.value = null
   checkedKeys.value = []

@@ -47,12 +47,12 @@ API_DEFINITION_FIELDS = (
     "step_type", "request_url", "request_port", "request_method", "request_header", "request_params",
     "request_form_data", "request_form_urlencoded", "request_form_file", "request_text", "request_body",
     "request_args_type", "request_project_id", "request_config_name",
-    "extract_variables", "assert_validators",
+    "defined_variables", "extract_variables", "assert_validators",
 )
 # 可从功能步骤平移至压测接口的定义字段(请求块与 autotest 步骤同形, 全量平移)
 IMPORTABLE_API_FIELDS = API_DEFINITION_FIELDS
 # 元素是 pydantic 模型的容器字段: 必须从解析后的对象重转, 不能依赖父层 dump(会递归丢默认值键)
-API_NESTED_CONTAINER_FIELDS = ("extract_variables", "assert_validators")
+API_NESTED_CONTAINER_FIELDS = ("defined_variables", "extract_variables", "assert_validators")
 
 
 class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
@@ -159,12 +159,11 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
 
     async def create_perf_api(self, api_in: PerfApiCreate) -> PerfApiModel:
         """
-        新增压测接口；同应用下同名接口已存在(含禁用)则恢复并覆盖。
+        新增压测接口；同名接口已存在(含禁用)则恢复并覆盖(接口名称全局唯一)。
 
         :param api_in: 接口创建schema
         :return: 创建或恢复后的接口实例
         """
-        await self._ensure_project_exists(project_id=api_in.api_project)
         if api_in.request_project_id:
             await self._ensure_project_exists(project_id=api_in.request_project_id)
 
@@ -173,7 +172,8 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         api_dict.setdefault("debug_state", PerfDebugState.NEVER)
         api_dict.setdefault("api_version", 1)
 
-        existing = await self.model.filter(api_project=api_in.api_project, api_name=api_in.api_name).first()
+        # 接口名称全局唯一(对齐 AutoTestStepModel: 无 api_project)
+        existing = await self.model.filter(api_name=api_in.api_name).first()
         if not existing:
             try:
                 return await self.create(obj_in=api_dict)
@@ -229,14 +229,14 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
             update_dict["debug_state"] = PerfDebugState.NEVER
             update_dict["debug_time"] = None
 
-        if "api_name" in update_dict or "api_project" in update_dict:
+        if "api_name" in update_dict:
             api_name: str = update_dict.get("api_name", instance.api_name)
-            api_project: int = update_dict.get("api_project", instance.api_project)
+            # 接口名称全局唯一(对齐 AutoTestStepModel: 无 api_project)
             existing = await self.model.filter(
-                api_name=api_name, api_project=api_project, state__not=1
+                api_name=api_name, state__not=1
             ).exclude(id=api_id).first()
             if existing:
-                error_message: str = f"压测接口[api_name={api_name}, api_project={api_project}]已存在"
+                error_message: str = f"压测接口[api_name={api_name}]已存在"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
@@ -256,7 +256,7 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
     async def copy_perf_api(self, *, api_id: Optional[int] = None, api_code: Optional[str] = None,
                             created_user: Optional[str] = None) -> PerfApiModel:
         """
-        复制压测接口为同应用下的新资产(名称追加副本后缀, 调试结论与溯源不继承)。
+        复制压测接口为新资产(名称追加副本后缀, 调试结论与溯源不继承)。
 
         :param api_id: 源接口ID(与api_code二选一)
         :param api_code: 源接口标识(与api_id二选一)
@@ -269,7 +269,7 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
             source = await self.get_by_code(api_code=api_code, on_error=True, state__not=1)
 
         copy_dict: Dict[str, Any] = await source.to_dict(
-            include_fields=list(API_DEFINITION_FIELDS) + ["api_project", "api_desc"],
+            include_fields=list(API_DEFINITION_FIELDS) + ["api_desc"],
         )
         copy_dict.pop("id", None)
         copy_dict["api_name"] = build_copy_name(source.api_name)
@@ -337,17 +337,16 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message)
 
-    async def list_for_scene(self, *, api_project: int, api_name: Optional[str] = None,
+    async def list_for_scene(self, *, api_name: Optional[str] = None,
                              step_type: Optional[str] = None) -> List[PerfApiModel]:
         """
-        场景选择器查询(不分页, 仅启用态)。
+        场景选择器查询(不分页, 仅启用态; 无 api_project 过滤, 接口名称全局唯一)。
 
-        :param api_project: 接口所属应用
         :param api_name: 名称模糊匹配
         :param step_type: 请求类型过滤
         :return: 接口实例列表
         """
-        query: Q = Q(api_project=api_project, state=0)
+        query: Q = Q(state=0)
         if api_name:
             query &= Q(api_name__contains=api_name)
         if step_type:

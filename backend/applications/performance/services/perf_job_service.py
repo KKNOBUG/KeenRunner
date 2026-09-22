@@ -356,7 +356,6 @@ async def _write_back_dataset(*, job: PerfJobModel, rows: List[Dict[str, Any]],
         raise ParameterException(message=error_message)
 
     ds_in = PerfDatasetCreate(
-        ds_project=api.api_project,
         ds_name=job.job_name,
         ds_desc=f"数据作业[{job.job_code}]产出, 执行{job.loop_times}轮, 每轮一个场景",
         bind_api_id=api.id,

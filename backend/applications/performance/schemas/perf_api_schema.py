@@ -131,11 +131,11 @@ class PerfApiRequestBlock(BaseModel):
 
 
 class PerfApiBase(PerfApiRequestBlock):
-    """压测接口公共字段。"""
+    """压测接口公共字段(对齐 AutoTestStepModel: 无 api_project, 接口名称全局唯一)。"""
 
-    api_project: int = Field(..., ge=1, description="接口所属应用")
-    api_name: str = Field(..., min_length=1, max_length=255, description="接口名称")
+    api_name: str = Field(..., min_length=1, max_length=255, description="接口名称(全局唯一)")
     api_desc: Optional[str] = Field(None, max_length=2048, description="接口描述")
+    defined_variables: Optional[List[RequestKvItem]] = Field(None, description="定义变量列表(施压/调试时注入变量池, 优先级高于会话变量)")
     extract_variables: Optional[List[ExtractVariableItem]] = Field(None, description="变量提取规则列表")
     assert_validators: Optional[List[AssertValidatorItem]] = Field(None, description="业务断言规则列表")
 
@@ -171,9 +171,9 @@ class PerfApiUpdate(PerfApiRequestBlock):
 
     api_id: Optional[int] = Field(None, ge=1, description="接口ID")
     api_code: Optional[str] = Field(None, max_length=64, description="接口标识代码")
-    api_project: Optional[int] = Field(None, ge=1, description="接口所属应用")
-    api_name: Optional[str] = Field(None, min_length=1, max_length=255, description="接口名称")
+    api_name: Optional[str] = Field(None, min_length=1, max_length=255, description="接口名称(全局唯一)")
     api_desc: Optional[str] = Field(None, max_length=2048, description="接口描述")
+    defined_variables: Optional[List[RequestKvItem]] = Field(None, description="定义变量列表(施压/调试时注入变量池, 优先级高于会话变量)")
     extract_variables: Optional[List[ExtractVariableItem]] = Field(None, description="变量提取规则列表")
     assert_validators: Optional[List[AssertValidatorItem]] = Field(None, description="业务断言规则列表")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
@@ -187,11 +187,10 @@ class PerfApiUpdate(PerfApiRequestBlock):
 
 
 class PerfApiSelect(BaseModel):
-    """分页查询压测接口入参。"""
+    """分页查询压测接口入参(无 api_project 过滤, 接口名称全局唯一)。"""
 
     api_id: Optional[int] = Field(None, ge=1, description="接口ID")
     api_code: Optional[str] = Field(None, max_length=64, description="接口标识代码")
-    api_project: Optional[int] = Field(None, ge=1, description="接口所属应用")
     api_name: Optional[str] = Field(None, max_length=255, description="接口名称(模糊匹配)")
     step_type: Optional[AutoTestStepType] = Field(None, description="请求类型")
     request_project_id: Optional[int] = Field(None, ge=1, description="请求目标应用ID")
@@ -206,7 +205,6 @@ class PerfApiSelect(BaseModel):
 class PerfApiSimpleSelect(BaseModel):
     """场景选择器查询入参(不分页, 只回精简字段, 避免全量拉取拖慢抽屉打开)。"""
 
-    api_project: int = Field(..., ge=1, description="接口所属应用")
     api_name: Optional[str] = Field(None, max_length=255, description="接口名称(模糊匹配)")
     step_type: Optional[AutoTestStepType] = Field(None, description="请求类型")
 
@@ -231,6 +229,10 @@ class PerfApiDebug(BaseModel):
 
     调试结果回写 api.debug_state/debug_time, 是施压前预检闸门的依据; 未保存的表单请先保存再调试
     (调试结论必须挂在可追溯的资产版本上, 否则 debug_state 无处落)。
+
+    数据源取数(对齐 autotest 设计):
+    - enable_data_source: 是否启用数据源(接口绑定的唯一数据源)
+    - scene_name: 启用数据源时选择的场景名称(调试只可选一个场景, 施压可选多个)
     """
 
     api_id: Optional[int] = Field(None, ge=1, description="接口ID")
@@ -239,17 +241,17 @@ class PerfApiDebug(BaseModel):
     env_name: Optional[str] = Field(None, max_length=128, description="调试环境名称")
     env_config_name: Optional[str] = Field(None, max_length=128, description="调试目标配置名称(APP节点)")
     session_variables: Optional[List[RequestKvItem]] = Field(None, description="临时变量池(渲染请求占位符, 不落库)")
-    # 参数化取数: 数据集与接口无绑定列(数据集反向归属接口, 一个接口可挂多个数据集), 故调试时必须显式指定
-    ds_code: Optional[str] = Field(None, max_length=64, description="调试取数数据集标识(空=不注入参数化数据)")
-    scene_index: int = Field(default=0, ge=0, description="取该数据集的第几个场景做调试(0起, 按场景声明顺序)")
+    # 数据源取数: 对齐 autotest 设计, 一个接口绑定一个数据源, 调试时选择是否启用 + 场景名称
+    enable_data_source: bool = Field(default=False, description="是否启用数据源(接口绑定的唯一数据源)")
+    scene_name: Optional[str] = Field(None, max_length=255, description="启用数据源时选择的场景名称(调试只可选一个)")
 
     @model_validator(mode="after")
     def _require_locator(self):
-        """调试必须能定位到一条接口; 指定场景序号时必须同时指定数据集。"""
+        """调试必须能定位到一条接口; 启用数据源时必须指定场景名称。"""
         if not self.api_id and not _has_text(self.api_code):
             raise ValueError("请提供参数[api_id | api_code]完成调试")
-        if self.scene_index > 0 and not _has_text(self.ds_code):
-            raise ValueError("参数[scene_index]仅在指定[ds_code]时有效, 请同时提供数据集标识")
+        if self.enable_data_source and not _has_text(self.scene_name):
+            raise ValueError("启用数据源时必须指定[scene_name]场景名称")
         return self
 
 

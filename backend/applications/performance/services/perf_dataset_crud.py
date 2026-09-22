@@ -18,7 +18,6 @@ import traceback
 from typing import Any, Dict, List, Optional
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
-from tortoise.expressions import Q
 
 from backend.applications.autotest.services.autotest_data_source_service import apply_dataframe_payload
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -95,33 +94,29 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         return instance
 
     @staticmethod
-    async def resolve_bind_api_id(*, ds_project: int, bind_api_id: Optional[int]) -> Dict[str, Any]:
+    async def resolve_bind_api_id(*, bind_api_id: int) -> Dict[str, Any]:
         """
-        解析归属压测接口, 返回绑定字段的落库值。
+        解析归属压测接口, 返回绑定字段的落库值与自动生成的 ds_name。
 
-        归属关系要求接口与数据集同应用: 跨应用绑定会让场景编排与实际施压对象脱节。
-        传空表示「场景级自由数据」, 同时清除旧绑定。
+        bind_api_id 必填(一个接口只能有一个数据源, 对齐 autotest 设计);
+        接口名称全局唯一(无 api_project), 数据集通过 bind_api_id 直接关联接口。
 
-        :param ds_project: 数据集所属应用
-        :param bind_api_id: 归属压测接口ID, 可为空
-        :return: {"bind_api_id": xx}
+        :param bind_api_id: 归属压测接口ID(必填)
+        :return: {"bind_api_id": xx, "ds_name": "{api_name}_数据源"}
         """
         if not bind_api_id:
-            return {"bind_api_id": None}
+            error_message: str = "校验压测数据集失败, 参数[bind_api_id]不允许为空(一个接口只能有一个数据源)"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
 
         api: Optional[PerfApiModel] = await PerfApiModel.filter(id=bind_api_id, state__not=1).first()
         if not api:
             error_message: str = f"校验压测数据集失败, 归属压测接口[id={bind_api_id}]不存在或已禁用"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        if api.api_project != ds_project:
-            error_message: str = (
-                f"校验压测数据集失败, 归属压测接口[{api.api_name}]属于应用[{api.api_project}], "
-                f"与数据集所属应用[{ds_project}]不一致"
-            )
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        return {"bind_api_id": api.id}
+        # ds_name 自动生成: {api_name}_数据源(对齐 autotest 设计, 不再作为用户输入项)
+        auto_name: str = f"{api.api_name}_数据源"
+        return {"bind_api_id": api.id, "ds_name": auto_name}
 
     @staticmethod
     async def _parse_matrix_payload(*, dataframe: Optional[List[Any]], axis: Optional[int]) -> Dict[str, Any]:
@@ -162,10 +157,13 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
 
     async def create_perf_dataset(self, ds_in: PerfDatasetCreate) -> PerfDatasetModel:
         """
-        新增数据集；同应用下同名数据集已存在(含禁用)则恢复并覆盖。
+        新增或更新数据集(按 bind_api_id upsert, 一个接口只能有一个数据源)。
+
+        对齐 autotest 设计: 数据源是接口的附属资产, 不存在则创建, 已存在则更新。
+        ds_name 由服务端自动生成(格式: {api_name}_数据源), 不再作为用户输入项。
 
         :param ds_in: 数据集创建schema
-        :return: 创建或恢复后的数据集实例
+        :return: 创建或更新后的数据集实例
         """
         await self._ensure_project_exists(project_id=ds_in.ds_project)
 
@@ -175,11 +173,13 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         ds_dict.update(
             await self._parse_matrix_payload(dataframe=ds_in.dataframe, axis=ds_in.axis)
         )
+        # 解析绑定关系并自动生成 ds_name(无 api_project 校验, 接口名称全局唯一)
         ds_dict.update(
-            await self.resolve_bind_api_id(ds_project=ds_in.ds_project, bind_api_id=ds_in.bind_api_id)
+            await self.resolve_bind_api_id(bind_api_id=ds_in.bind_api_id)
         )
 
-        existing = await self.model.filter(ds_project=ds_in.ds_project, ds_name=ds_in.ds_name).first()
+        # 按 bind_api_id 查找已存在的数据集(一个接口只能有一个数据源)
+        existing = await self.model.filter(bind_api_id=ds_in.bind_api_id, state__not=1).first()
         if not existing:
             try:
                 return await self.create(obj_in=ds_dict)
@@ -188,6 +188,7 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
+        # 已存在则更新(保留 id, 覆盖其他字段)
         try:
             ds_dict["state"] = 0
             return await self.update(id=existing.id, obj_in=ds_dict)
@@ -198,32 +199,28 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
 
     async def update_perf_dataset(self, ds_in: PerfDatasetUpdate) -> PerfDatasetModel:
         """
-        更新数据集(按 id 或 code 定位)。
+        更新数据集(按 bind_api_id 定位, 一个接口只能有一个数据源)。
 
-        不做 exclude_none: 改回手工录入后要清掉来源文件名/路径/哈希、解除接口归属都是「提交 null
+        不做 exclude_none: 改回手工录入后要清掉来源文件名/路径/哈希都是「提交 null
         即清空」的合法意图, 丢掉 null 会让旧的溯源信息常驻, 列表上的来源标识与真实录入方式分叉。
         dataframe 为 None 表示本次不修改矩阵数据, 已落库的场景数据保持不变。
 
         :param ds_in: 数据集更新schema
         :return: 更新后的数据集实例
         """
-        ds_id: Optional[int] = ds_in.ds_id
-        ds_code: Optional[str] = ds_in.ds_code
-        if ds_id:
-            instance = await self.get_by_id(ds_id=ds_id, on_error=True, state__not=1)
-        else:
-            instance = await self.get_by_code(ds_code=ds_code, on_error=True, state__not=1)
-            ds_id = instance.id
+        bind_api_id: int = ds_in.bind_api_id
+        # 按 bind_api_id 定位数据集(一个接口只能有一个数据源)
+        instance = await self.model.filter(bind_api_id=bind_api_id, state__not=1).first()
+        if not instance:
+            error_message: str = f"更新压测数据集信息失败, 接口[id={bind_api_id}]尚未绑定数据源"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        ds_id: int = instance.id
 
         update_dict: Dict[str, Any] = ds_in.model_dump(
-            mode="json", exclude_unset=True, exclude={"ds_id", "ds_code"}
+            mode="json", exclude_unset=True, exclude={"ds_id", "ds_code", "bind_api_id"}
         )
         ds_project: int = update_dict.get("ds_project", instance.ds_project)
-        # 按键存在而非值非空判定: 提交 null 是「解除接口归属」的合法意图
-        if "bind_api_id" in update_dict:
-            update_dict.update(
-                await self.resolve_bind_api_id(ds_project=ds_project, bind_api_id=ds_in.bind_api_id)
-            )
         # 矩阵按键存在判定: 提交矩阵才重新解析派生(空场景数据拒绝落库; 非法矩阵转译为入参异常);
         # 解析结果含清洗后 dataframe/实际axis, 直接覆盖 model_dump 里的入参原值
         if "dataframe" in update_dict:
@@ -231,15 +228,8 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
                 await self._parse_matrix_payload(dataframe=ds_in.dataframe, axis=ds_in.axis)
             )
 
-        if "ds_name" in update_dict or "ds_project" in update_dict:
-            ds_name: str = update_dict.get("ds_name", instance.ds_name)
-            existing = await self.model.filter(
-                ds_name=ds_name, ds_project=ds_project, state__not=1
-            ).exclude(id=ds_id).first()
-            if existing:
-                error_message: str = f"压测数据集[ds_name={ds_name}, ds_project={ds_project}]已存在"
-                LOGGER.error(error_message)
-                raise DataAlreadyExistsException(message=error_message)
+        # ds_name 由服务端自动生成, 不接受前端传入(如果传入了也忽略)
+        update_dict.pop("ds_name", None)
 
         # 非空列不接受 null(dataset/ds_name 等): 在解析与绑定回查之后的写入口拦截,
         # 避免拖到 DB 层才炸成定位不到字段的约束错误
@@ -247,7 +237,7 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         try:
             return await self.update(id=ds_id, obj_in=update_dict)
         except DoesNotExist as e:
-            error_message: str = f"更新压测数据集信息失败, 记录[id={ds_id}]或[code={ds_code}]不存在, 错误描述: {e}"
+            error_message: str = f"更新压测数据集信息失败, 记录[id={ds_id}]不存在, 错误描述: {e}"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
@@ -289,12 +279,12 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
 
     async def list_enabled_for_api(self, api_id: int) -> List[Dict[str, Any]]:
         """
-        查询某压测接口可用的数据集(归属该接口 + 同应用下的自由数据), 供场景编排下拉。
+        查询某压测接口绑定的数据源(一个接口只能有一个数据源, 对齐 autotest 设计)。
 
         返回字典而非模型实例: 选择器只需轻量字段, 显式取列避免加载场景数据大字段。
 
         :param api_id: 压测接口主键ID
-        :return: 数据集轻量字典列表
+        :return: 数据集轻量字典列表(最多一条)
         """
         api = await PerfApiModel.filter(id=api_id, state__not=1).first()
         if not api:
@@ -302,8 +292,9 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
 
+        # 一个接口只能有一个数据源, 直接按 bind_api_id 查询
         return await self.model.filter(
-            Q(bind_api_id=api.id) | Q(ds_project=api.api_project, bind_api_id=None),
+            bind_api_id=api.id,
             state__not=1,
         ).order_by("-updated_time").values(*DATASET_LIST_FIELDS)
 

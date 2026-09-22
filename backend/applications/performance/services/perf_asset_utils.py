@@ -28,6 +28,11 @@ COPY_NAME_SUFFIX_PATTERN = re.compile(r"_\d{20}$")
 # 微秒级时间戳: 唯一性由时间戳保证, 无需回库查重(查重式命名会在循环里发SQL)
 COPY_NAME_TIME_FORMAT = "%Y%m%d%H%M%S%f"
 
+# Excel sheet 名非法字符(Excel 硬约束: :\/?*[] 不允许出现在 sheet 名中)
+SHEET_NAME_INVALID_CHARS = re.compile(r"[:\\/?*\[\]]")
+# Excel sheet 名长度上限
+SHEET_NAME_MAX_LENGTH = 31
+
 
 def model_field_literal(instance: Any, field: str) -> Any:
     """
@@ -57,6 +62,26 @@ def build_copy_name(source_name: str, *, max_length: int = 255) -> str:
         base_name = base_name[: -len(COPY_NAME_MARKER)]
     marker: str = f"{COPY_NAME_MARKER}_{datetime.now().strftime(COPY_NAME_TIME_FORMAT)}"
     return f"{base_name[: max_length - len(marker)]}{marker}"
+
+
+def safe_sheet_name(name: str, used: set) -> str:
+    """
+    清洗为合法Excel sheet名(去非法字符、截断31字符、重名追加序号)。
+
+    :param name: 原始名称(接口名/数据集名/步骤名)
+    :param used: 已占用的sheet名集合(调用方传入并会被追加本次结果)
+    :return: 合法且不重复的sheet名
+    """
+    clean = SHEET_NAME_INVALID_CHARS.sub("_", str(name or "").strip()) or "sheet"
+    clean = clean[:SHEET_NAME_MAX_LENGTH]
+    base = clean
+    index = 1
+    while clean in used:
+        suffix = f"_{index}"
+        clean = base[:SHEET_NAME_MAX_LENGTH - len(suffix)] + suffix
+        index += 1
+    used.add(clean)
+    return clean
 
 
 def _strip_none_keys(value: Any) -> Any:

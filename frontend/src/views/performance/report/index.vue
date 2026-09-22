@@ -1,7 +1,8 @@
 <!--
   压测报告列表页 — 一次施压的不可变结论（只读快照，不回查场景与接口）
 
-  列表不含 locust_stats/config_snapshot 大字段；详情经 PerfReportDrawer 全量拉取，
+  列表不含 locust_stats/config_snapshot 大字段；详情跳转独立标签页
+  /performance/report/detail（query 传 report_code）全量展示，
   含全局指标、SLA 判定、接口/事务维度聚合、准备与抽查、错误归因与指标曲线。
 -->
 <template>
@@ -35,19 +36,18 @@
       </template>
     </CrudTable>
 
-    <PerfReportDrawer ref="reportDrawerRef" />
     <PerfReportCompareModal ref="compareModalRef" />
   </CommonPage>
 </template>
 
 <script setup>
 import { h, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { NButton, NInput, NPopconfirm, NSelect, NSpace, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
-import PerfReportDrawer from '../components/PerfReportDrawer.vue'
 import PerfReportCompareModal from '../components/PerfReportCompareModal.vue'
 
 import { formatDateTime } from '@/utils'
@@ -77,8 +77,13 @@ const queryBarProps = {
 }
 
 const $table = ref(null)
-const reportDrawerRef = ref(null)
 const compareModalRef = ref(null)
+const router = useRouter()
+
+/** 详情跳转独立标签页（query 传 report_code），对齐压测接口编辑子页的跳转约定 */
+function goDetail(row) {
+  router.push({ path: '/performance/report/detail', query: { report_code: row.report_code } })
+}
 
 const queryItems = ref({
   report_code: null,
@@ -153,7 +158,7 @@ const columns = [
     render(row) {
       return h(NSpace, { size: 4, wrap: false }, {
         default: () => [
-          h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => reportDrawerRef.value?.open(row.report_code) },
+          h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => goDetail(row) },
               { default: () => '详情' }),
           h(NButton, { size: 'tiny', type: 'info', secondary: true, disabled: !row.scene_code, onClick: () => compareModalRef.value?.open(row) },
               { default: () => '对比' }),

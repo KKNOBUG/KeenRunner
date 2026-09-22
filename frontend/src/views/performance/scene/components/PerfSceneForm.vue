@@ -445,7 +445,6 @@ function handleDsChange(item, dsCode) {
 
 function openSelectPanel() {
   selectPanelRef.value?.open({
-    api_project: form.scene_project,
     excludedCodes: form.scene_items.map((item) => item.api_code),
   })
 }

@@ -1,44 +1,8 @@
 /**
- * 性能测试域共用下拉常量，与 backend/enums/perf_enum.py 及
- * perf_api_schema.PERF_ASSERT_SOURCES 取值逐字对齐。
- * 后端枚举扩展时同步维护本文件。
+ * 性能测试域共用下拉常量。
+ * 提取/断言来源选项已改由 autotest RESPONSE_EXTRACT/ASSERT_OBJECT_OPTIONS 承担
+ * （perf 小写 source 与面板大写 object 的映射见 utils/perfExtractAssert.js）。
  */
-
-/** 断言/提取来源分组选项（值必须与后端 PERF_ASSERT_SOURCES 一致，引擎 EXTRACTORS 注册表键为小写） */
-export const PERF_SOURCE_GROUP_OPTIONS = [
-  {
-    type: 'group',
-    label: '响应',
-    key: 'perf-source-response',
-    children: [
-      { label: 'Response Json', value: 'response json' },
-      { label: 'Response Text', value: 'response text' },
-      { label: 'Response Headers', value: 'response headers' },
-      { label: 'Response Cookie', value: 'response cookie' },
-    ],
-  },
-  {
-    type: 'group',
-    label: '请求',
-    key: 'perf-source-request',
-    children: [
-      { label: 'Request Json', value: 'request json' },
-      { label: 'Request Text', value: 'request text' },
-      { label: 'Request Headers', value: 'request headers' },
-      { label: 'Request Cookie', value: 'request cookie' },
-      { label: 'Request Form-Data', value: 'request form-data' },
-    ],
-  },
-  {
-    type: 'group',
-    label: '会话',
-    key: 'perf-source-session',
-    children: [
-      { label: '会话变量', value: 'session_variables' },
-      { label: '变量池', value: '变量池' },
-    ],
-  },
-]
 
 /** 接口项指标口径角色 */
 export const PERF_API_ROLE_OPTIONS = [

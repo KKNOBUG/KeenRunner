@@ -164,6 +164,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         按业务唯一键查找用例，含软删，不滤state。
 
+        唯一性类型范围按用例类型分组：公共脚本与用户脚本同组(组内不允许同名)，公共接口独立成组(可与脚本类型同名)。
+        命中多行时按启用态(state=0)优先、再按最近更新返回，确保调用方先看到启用态冲突再考虑软删复活。
+
         :param case_project: 所属应用
         :param case_name: 用例名称
         :param case_type: 用例类型
@@ -178,12 +181,15 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         query = self.model.filter(
             case_project=case_project,
             case_name=case_name,
-            case_type=case_type,
             owner_user=owner_user,
         )
+        if case_type in (AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PRIVATE_SCRIPT):
+            query = query.filter(case_type__in=[AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PRIVATE_SCRIPT])
+        else:
+            query = query.filter(case_type=case_type)
         if exclude_id:
             query = query.exclude(id=exclude_id)
-        return await query.first()
+        return await query.order_by("state", "-updated_time").first()
 
     async def _restore_and_overwrite_case(
             self,
@@ -206,7 +212,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
     async def create_case(self, case_in: AutoTestCaseCreate) -> AutoTestCaseModel:
         """
-        创建用例。同应用同类型同所属人同名：启用则拒绝，软删则恢复并覆盖表头。
+        创建用例。同应用同所属人同名(脚本组跨类型互斥、公共接口独立)：启用则拒绝，同类型软删则恢复并覆盖表头。
 
         :param case_in: 用例创建schema
         :return: 创建或恢复后的用例实例
@@ -233,12 +239,22 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             owner_user=owner_user,
         )
         if existing_case and existing_case.state != 1:
-            message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+            message_error: str = "相同应用及所属人时, 用例名称不允许重复"
             LOGGER.error(
                 f"{message_error}, "
                 f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
             )
             raise DataAlreadyExistsException(message=message_error)
+        # 分组命中的可能是异类型软删记录(如新建公共脚本却命中软删的用户脚本)：复活须落到同精确类型的软删行，
+        # 否则会撞DB唯一键(case_project+case_name+case_type+owner_user)或产生两条启用态同名脚本
+        if existing_case and existing_case.case_type != case_type:
+            existing_case = await self.model.filter(
+                case_project=case_project,
+                case_name=case_name,
+                case_type=case_type,
+                owner_user=owner_user,
+                state=1,
+            ).first()
         try:
             case_dict = case_in.model_dump(exclude_none=True, exclude_unset=True)
             case_dict.pop("created_user", None)
@@ -333,7 +349,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 exclude_id=case_id,
             )
             if existing_case:
-                message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                message_error: str = "相同应用及所属人时, 用例名称不允许重复"
                 LOGGER.error(
                     f"{message_error}, "
                     f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={unique_case_type}, owner_user={instance.owner_user}]"
@@ -499,12 +515,21 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 )
                 create_case_dict["case_tags"] = case_tags
                 if existing_case_instance and existing_case_instance.state != 1:
-                    message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                    message_error: str = "相同应用及所属人时, 用例名称不允许重复"
                     LOGGER.error(
                         f"第{cid}条用例新增失败, {message_error}, "
                         f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
                     )
                     raise DataAlreadyExistsException(message=message_error)
+                # 分组命中的异类型软删记录不可直接复活：改落到同精确类型的软删行，避免撞DB唯一键或产生两条启用态同名脚本
+                if existing_case_instance and existing_case_instance.case_type != case_type:
+                    existing_case_instance = await self.model.filter(
+                        case_project=case_project,
+                        case_name=case_name,
+                        case_type=case_type,
+                        owner_user=owner_user,
+                        state=1,
+                    ).first()
                 try:
                     if existing_case_instance:
                         new_case_instance = await self._restore_and_overwrite_case(
@@ -583,7 +608,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         exclude_id=case_id,
                     )
                     if existing_case_instance:
-                        message_error: str = "相同应用下同类型同所属人用例名称不允许重复"
+                        message_error: str = "相同应用及所属人时, 用例名称不允许重复"
                         LOGGER.error(
                             f"第{cid}条用例新增失败, {message_error}, "
                             f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, case_type={unique_case_type}, owner_user={case_instance.owner_user}]"

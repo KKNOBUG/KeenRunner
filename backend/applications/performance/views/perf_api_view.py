@@ -11,12 +11,19 @@
 @Module  : perf_api_view.py
 @DateTime: 2026/9/16 10:30
 """
+import io
 import traceback
+from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
+import pandas as pd
 from fastapi import APIRouter, Body, Depends, Query
+from fastapi.responses import StreamingResponse
 from tortoise.expressions import Q
 
+from backend.applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
+from backend.applications.autotest.services.autotest_data_source_service import build_vertical_matrix_from_step
 from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
 from backend.applications.performance.schemas.perf_api_schema import (
     PerfApiCreate,
@@ -30,6 +37,7 @@ from backend.applications.performance.schemas.perf_api_schema import (
     PerfApiUpdate,
 )
 from backend.applications.performance.services.perf_api_service import PerfApiService
+from backend.applications.performance.services.perf_asset_utils import safe_sheet_name
 from backend.common.curl_utils import parse_curl_command
 from backend.common.openapi_utils import parse_openapi_document
 from backend.configure import LOGGER
@@ -58,6 +66,8 @@ API_EXCLUDE_FIELDS = {
     "updated_user", "updated_time",
     "reserve_1", "reserve_2", "reserve_3",
 }
+# 列表序列化仅排除软删态与备用字段: 更新/创建人员与时间供列表列展示(详情仍走 API_EXCLUDE_FIELDS)
+API_LIST_EXCLUDE_FIELDS = {"state", "reserve_1", "reserve_2", "reserve_3"}
 API_REPLACE_FIELDS = {"id": "api_id"}
 
 
@@ -194,8 +204,6 @@ async def search_perf_apis(
             q &= Q(id=api_in.api_id)
         if api_in.api_code:
             q &= Q(api_code=api_in.api_code)
-        if api_in.api_project:
-            q &= Q(api_project=api_in.api_project)
         if api_in.api_name:
             q &= Q(api_name__contains=api_in.api_name)
         if api_in.step_type:
@@ -214,7 +222,7 @@ async def search_perf_apis(
             order=api_in.order
         )
         data: List[Dict[str, Any]] = [
-            await obj.to_dict(exclude_fields=API_EXCLUDE_FIELDS, replace_fields=API_REPLACE_FIELDS)
+            await obj.to_dict(exclude_fields=API_LIST_EXCLUDE_FIELDS, replace_fields=API_REPLACE_FIELDS)
             for obj in instances
         ]
         return SuccessResponse(message="查询成功", data=data, total=total)
@@ -278,6 +286,77 @@ async def debug_perf_api(
     except Exception as e:
         LOGGER.error(f"压测接口调试失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"调试失败，异常描述: {str(e)}")
+
+
+@perf_api.get("/build_matrix", summary="推导数据源矩阵模板", description="按接口报文推导DataSource矩阵模板(HEAD/BODY分区预填path key, 只读不落库)")
+async def build_perf_api_matrix(
+        api_id: Optional[int] = Query(None, description="接口ID"),
+        api_code: Optional[str] = Query(None, description="接口标识代码"),
+        services: PerfServices = Depends(get_perf_api_services),
+):
+    """
+    按接口报文推导数据源矩阵模板。
+
+    :param api_id: 接口主键ID
+    :param api_code: 接口业务标识
+    :param services: 性能测试CRUD依赖聚合
+    :return: 统一HTTP响应(data: dataframe+axis)
+    """
+    try:
+        data = await PerfApiService.build_matrix_template(api_id=api_id, api_code=api_code)
+        return SuccessResponse(message="查询成功", data=data, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"推导数据源矩阵模板失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"推导失败，异常描述: {str(e)}")
+
+
+@perf_api.get("/template_download", summary="下载数据源模板", description="按接口报文构建数据源模板xlsx(HEAD/BODY分区path key字段行, 值留空, 样式与功能数据源模板一致)")
+async def download_perf_api_template(
+        api_id: Optional[int] = Query(None, description="接口ID"),
+        api_code: Optional[str] = Query(None, description="接口标识代码"),
+        services: PerfServices = Depends(get_perf_api_services),
+):
+    """
+    按接口报文下载数据源模板xlsx(垂直矩阵, 值留空, sheet名为接口名称)。
+
+    :param api_id: 接口主键ID
+    :param api_code: 接口业务标识
+    :param services: 性能测试CRUD依赖聚合
+    :return: 文件流响应
+    """
+    try:
+        if api_id:
+            api = await services.api_curd.get_by_id(api_id=api_id, on_error=True, state__not=1)
+        else:
+            api = await services.api_curd.get_by_code(api_code=api_code, on_error=True, state__not=1)
+        safe_name = safe_sheet_name(api.api_name or api.api_code, set())
+        df = pd.DataFrame(build_vertical_matrix_from_step(api) or [[]])
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
+            # 统一样式: 分区标记黄底、居中换行、行高/列宽自适应(与功能数据源模板导出风格一致)
+            style_data_source_sheet(writer.sheets[safe_name])
+        output.seek(0)
+
+        file_name = f"数据源模板_{api.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        quoted_name: str = quote(file_name)
+        headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers=headers,
+        )
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"下载数据源模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"下载失败，异常描述: {e}")
 
 
 @perf_api.post("/import_from_case", summary="从功能资产导入压测接口", description="读取公共接口或用例步骤转为压测接口草稿(仅返回不落库, 确认后走create保存)")
@@ -348,13 +427,13 @@ async def parse_perf_api_openapi(
         return FailureResponse(message=f"解析失败，异常描述: {str(e)}")
 
 
-@perf_api.post("/list_for_scene", summary="场景选择器查询压测接口", description="按应用查询启用接口(不分页+名称搜索, 供场景编排抽屉选择)")
+@perf_api.post("/list_for_scene", summary="场景选择器查询压测接口", description="查询启用接口(不分页+名称搜索, 供场景编排抽屉选择; 无应用过滤, 接口名称全局唯一)")
 async def list_perf_apis_for_scene(
         select_in: PerfApiSimpleSelect = Body(..., description="选择器查询条件"),
         services: PerfServices = Depends(get_perf_api_services),
 ):
     """
-    场景选择器查询压测接口(不分页, 仅启用态)。
+    场景选择器查询压测接口(不分页, 仅启用态; 无 api_project 过滤)。
 
     :param select_in: 选择器查询条件
     :param services: 性能测试CRUD依赖聚合
@@ -362,7 +441,6 @@ async def list_perf_apis_for_scene(
     """
     try:
         instances = await services.api_curd.list_for_scene(
-            api_project=select_in.api_project,
             api_name=select_in.api_name,
             step_type=select_in.step_type.value if select_in.step_type else None,
         )

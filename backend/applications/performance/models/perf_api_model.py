@@ -27,17 +27,18 @@ from backend.enums import (
 
 class PerfApiModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
     """
-    性能测试-压测接口资产表。
+    性能测试-压测接口资产表(对齐 AutoTestStepModel 中 HTTP/TCP 请求类型)。
 
     一条记录 = 一个可独立施压的 HTTP/TCP 请求 + 其断言与变量提取, 是施压热路径的唯一合法单元;
     请求类字段命名与 krun_autotest_step 逐字对齐, 使「从公共接口/HTTP步骤导入」为纯字段搬运,
     且引擎侧 RequestBuilder 消费口径无需二次映射。
+
+    与 AutoTestStepModel 对齐: 无 api_project 字段(性能测试无用例层次), 接口名称全局唯一;
+    施压目标通过 request_project_id + request_config_name 定位(与步骤请求配置一致)。
     """
-    api_name = fields.CharField(max_length=255, index=True, description="压测接口名称")
+    api_name = fields.CharField(max_length=255, unique=True, description="压测接口名称(全局唯一)")
     api_desc = fields.CharField(max_length=2048, null=True, description="接口描述")
     api_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="接口标识代码")
-    # 所属应用ID（普通字段，不设外键，业务层验证）
-    api_project = fields.IntField(default=1, ge=1, index=True, description="接口所属应用")
     api_version = fields.IntField(default=1, ge=1, description="接口版本号(每次保存自增, 报告快照记录, 用于可比性判定)")
 
     # 仅 HTTP请求/TCP请求 两类, 且保存时强校验有且仅一个请求(与公共接口同构, 保证压测单元语义纯净)
@@ -60,7 +61,8 @@ class PerfApiModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, Res
     request_project_id = fields.BigIntField(null=True, description="请求目标应用ID")
     request_config_name = fields.CharField(max_length=128, null=True, description="请求目标环境配置名称(APP节点)")
 
-    # 变量与断言(元素结构与步骤容器字段一致: extract_variables含name/scope/source/expr/index; assert_validators含name/expr/source/operation/except_value)
+    # 变量与断言(元素结构与步骤容器字段一致: defined_variables含key/value/desc; extract_variables含name/scope/source/expr/index; assert_validators含name/expr/source/operation/except_value)
+    defined_variables = fields.JSONField(null=True, description="定义变量(用户自定义、引用函数的结果)")
     extract_variables = fields.JSONField(null=True, description="变量提取规则列表")
     assert_validators = fields.JSONField(null=True, description="业务断言规则列表")
 
@@ -75,11 +77,9 @@ class PerfApiModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, Res
     class Meta:
         table = "krun_perf_api"
         table_description = "性能测试-压测接口资产表"
-        unique_together = (
-            ("api_project", "api_name"),
-        )
+        # api_name 已设 unique=True, 无需 unique_together
         indexes = (
-            ("api_project", "state", "created_time"),
+            ("state", "created_time"),
             ("api_code", "state"),
             ("request_project_id", "state"),
         )

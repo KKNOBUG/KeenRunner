@@ -1,8 +1,12 @@
 <!--
-  PerfApiDebugDrawer — 压测接口调试抽屉
+  PerfApiDebugDrawer — 压测接口调试抽屉（对齐 autotest 设计）
 
   对已保存接口发一次真实请求（口径与施压引擎一致），回显状态码/耗时/响应片段与断言、提取结果；
   调试结论回写 api.debug_state，是施压前预检闸门的依据。地址为绝对地址时环境可留空。
+
+  数据源取数（对齐 autotest 设计）：
+  - 一个接口绑定一个数据源，调试时选择"是否启用数据源"
+  - 启用后选择场景名称（调试只可选一个场景，施压可选多个）
 -->
 <template>
   <n-drawer v-model:show="show" :width="720" placement="right">
@@ -19,43 +23,24 @@
                     clearable
                     filterable
                     placeholder="绝对地址可留空"
-                    @update:value="envName && loadConfigNames()"
                 />
               </n-form-item>
             </n-gi>
             <n-gi :span="12">
-              <n-form-item label="APP配置">
-                <n-select
-                    v-model:value="envConfigName"
-                    :options="configOptions"
-                    :loading="configLoading"
-                    :disabled="!envName"
-                    clearable
-                    filterable
-                    placeholder="施压目标APP节点"
-                />
+              <n-form-item label="启用数据源">
+                <n-switch v-model:value="enableDataSource" @update:value="onEnableDataSourceChange" />
               </n-form-item>
             </n-gi>
-            <n-gi :span="12">
-              <n-form-item label="取数数据集">
+            <n-gi v-if="enableDataSource" :span="12">
+              <n-form-item label="场景名称">
                 <n-select
-                    v-model:value="dsCode"
-                    :options="datasetOptions"
-                    :loading="datasetLoading"
-                    clearable
-                    filterable
-                    placeholder="绑定数据集（可选）"
-                    @update:value="onDatasetChange"
-                />
-              </n-form-item>
-            </n-gi>
-            <n-gi :span="12">
-              <n-form-item label="取数场景">
-                <n-select
-                    v-model:value="sceneIndex"
+                    v-model:value="sceneName"
                     :options="sceneOptions"
-                    :disabled="!dsCode"
-                    placeholder="第几个场景(按声明顺序)"
+                    :loading="sceneLoading"
+                    :disabled="!enableDataSource"
+                    placeholder="选择场景（调试只可选一个）"
+                    clearable
+                    filterable
                 />
               </n-form-item>
             </n-gi>
@@ -121,7 +106,7 @@
 import { computed, h, ref } from 'vue'
 import {
   NAlert, NButton, NDataTable, NDescriptions, NDescriptionsItem, NDivider, NDrawer,
-  NDrawerContent, NForm, NFormItem, NGi, NGrid, NInput, NSelect, NSpace, NTag, NText,
+  NDrawerContent, NForm, NFormItem, NGi, NGrid, NInput, NSelect, NSpace, NSwitch, NTag, NText,
 } from 'naive-ui'
 
 import api from '@/api'
@@ -135,25 +120,16 @@ const show = defineModel('show', { type: Boolean, default: false })
 
 const apiRow = ref(null)
 const envName = ref(null)
-const envConfigName = ref(null)
-const dsCode = ref(null)
-const sceneIndex = ref(0)
+// 数据源取数（对齐 autotest 设计：一个接口绑定一个数据源）
+const enableDataSource = ref(false)
+const sceneName = ref(null)
 
 const envOptions = ref([])
 const envLoading = ref(false)
-const configOptions = ref([])
-const configLoading = ref(false)
-const datasetOptions = ref([])
-const datasetLoading = ref(false)
-/** 已选数据集的场景名声明序（调试取数按场景序号替换） */
-const sceneNames = ref([])
+const sceneOptions = ref([])
+const sceneLoading = ref(false)
 const debugging = ref(false)
 const result = ref(null)
-
-/** 场景下拉：label=场景名，value=声明序号（0起，与后端 scene_index 同口径） */
-const sceneOptions = computed(() =>
-    sceneNames.value.map((name, index) => ({ label: `${index + 1}. ${name}`, value: index })),
-)
 
 const extractColumns = [
   { title: '变量名', key: 'name', width: 140, ellipsis: { tooltip: true } },
@@ -191,66 +167,55 @@ async function loadEnvNames(projectId) {
   }
 }
 
-async function loadConfigNames() {
-  if (!apiRow.value?.api_project || !envName.value) {
-    configOptions.value = []
+/** 加载接口绑定的数据源场景列表（一个接口只能有一个数据源） */
+async function loadScenes(apiId) {
+  if (!apiId) {
+    sceneOptions.value = []
     return
   }
-  configLoading.value = true
-  try {
-    const res = await api.getEnvConfigList({
-      project_id: apiRow.value.api_project,
-      env_name: envName.value,
-      env_type: 'app',
-      page: 1,
-      page_size: 100,
-    })
-    configOptions.value = (Array.isArray(res?.data) ? res.data : [])
-        .map((row) => ({ label: row.config_name, value: row.config_name }))
-  } catch (e) {
-    configOptions.value = []
-  } finally {
-    configLoading.value = false
-  }
-}
-
-/** 接口可用数据集（归属该接口），并缓存各数据集的场景名序供场景下拉 */
-const datasetRows = ref([])
-
-async function loadDatasets(apiId) {
-  if (!apiId) return
-  datasetLoading.value = true
+  sceneLoading.value = true
   try {
     const res = await api.listPerfDatasetsForApi({ api_id: apiId })
-    datasetRows.value = (res.data || []).filter((row) => row.bind_api_id === apiId)
-    datasetOptions.value = datasetRows.value.map((row) => ({ label: row.ds_name, value: row.ds_code }))
-    sceneNames.value = []
+    const rows = (res.data || []).filter((row) => row.bind_api_id === apiId)
+    // 一个接口只能有一个数据源，取第一条
+    const dsRow = rows.length > 0 ? rows[0] : null
+    if (dsRow) {
+      sceneOptions.value = (dsRow.dataset_names || []).map((name) => ({ label: name, value: name }))
+    } else {
+      sceneOptions.value = []
+    }
   } catch (e) {
-    datasetRows.value = []
-    datasetOptions.value = []
-    sceneNames.value = []
+    sceneOptions.value = []
   } finally {
-    datasetLoading.value = false
+    sceneLoading.value = false
   }
 }
 
-/** 选定数据集后同步场景名序（场景下拉取 dataset_names 声明序） */
-function onDatasetChange(dsCodeValue) {
-  sceneIndex.value = 0
-  const matched = datasetRows.value.find((row) => row.ds_code === dsCodeValue)
-  sceneNames.value = matched?.dataset_names || []
+/** 启用数据源开关变化时加载场景列表 */
+function onEnableDataSourceChange(enabled) {
+  if (enabled) {
+    loadScenes(apiRow.value?.api_id)
+  } else {
+    sceneName.value = null
+    sceneOptions.value = []
+  }
 }
 
 async function handleDebug() {
+  // 启用数据源时必须选择场景
+  if (enableDataSource.value && !sceneName.value) {
+    window.$message?.warning('启用数据源时请选择场景名称')
+    return
+  }
   debugging.value = true
   result.value = null
   try {
     const res = await api.debugPerfApi({
       api_id: apiRow.value.api_id,
       env_name: envName.value,
-      env_config_name: envConfigName.value,
-      ds_code: dsCode.value,
-      scene_index: sceneIndex.value || 0,
+      // 不再传 env_config_name（APP配置已在接口定义中）
+      enable_data_source: enableDataSource.value,
+      scene_name: enableDataSource.value ? sceneName.value : null,
     })
     result.value = res.data
     emit('finished')
@@ -266,21 +231,18 @@ async function handleDebug() {
   }
 }
 
-/** 打开抽屉并预载环境与数据集候选 */
+/** 打开抽屉并预载环境候选 */
 async function open(row) {
   apiRow.value = row
   envName.value = null
-  envConfigName.value = null
-  dsCode.value = null
-  sceneIndex.value = 0
+  enableDataSource.value = false
+  sceneName.value = null
   result.value = null
   envOptions.value = []
-  configOptions.value = []
-  datasetOptions.value = []
-  sceneNames.value = []
+  sceneOptions.value = []
   show.value = true
-  loadEnvNames(row?.api_project)
-  loadDatasets(row?.api_id)
+  // 环境候选按接口所属应用(request_project_id)加载，与施压环境解析口径一致
+  loadEnvNames(row?.request_project_id)
 }
 
 defineExpose({ open })

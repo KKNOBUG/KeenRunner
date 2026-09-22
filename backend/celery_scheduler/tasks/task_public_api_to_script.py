@@ -31,7 +31,7 @@ from backend.services.ctx import CTX_USERNAME
 # (前端保存链路始终提交case_steps=totalSteps，后端树保存不重算，缺失会导致列表步骤数显示为0)
 CASE_COPY_HEADER_KEYS: tuple = ("case_desc", "session_variables", "case_steps")
 # 名称追加时间戳后缀的预留长度：毫秒级时间戳格式YYYYMMDDHHMMSSfff共17字符+分隔符1字符
-NAME_TIMESTAMP_SUFFIX_LENGTH: int = 18
+NAME_TIMESTAMP_SUFFIX_LENGTH: int = 21
 # 时间戳候选名撞名重试次数：同毫秒极端撞名时重新取当前时间重试，耗尽后由落库查重兜底
 # (启用态同名报失败进明细，软删同名复活覆盖，业务等价生成成功)
 NAME_TIMESTAMP_RETRY_TIMES: int = 3
@@ -80,34 +80,30 @@ def _recursive_update_case_id(steps: List[AutoTestStepTreeUpdateItem], case_id: 
                     _recursive_update_case_id(branch.branch_children, case_id)
 
 
-async def _resolve_script_name(
-        services: AutoTestServices,
-        source_name: str,
-        case_project: int,
-) -> str:
+async def _resolve_script_name(services: AutoTestServices, case_project: int, case_name: str, case_type: str) -> str:
     """
     解析生成脚本名称：脚本名称=接口名称；同应用下已有同名记录(含软删、不限类型)时按「{接口名称}-{时间戳}」命名。
 
-    查重含软删记录：规避batch_update_or_create_cases的软删复活覆盖路径，确保生成走纯新增；
-    时间戳取毫秒级并复查候选名，避免同秒内重复提交同批接口时后缀撞名。
-
     :param services: 自动化测试CRUD服务聚合
-    :param source_name: 源接口名称
+    :param case_name: 公共接口名称
     :param case_project: 脚本所属应用ID
     :return: 生成脚本名称
     """
     exists = await services.case_curd.model.filter(
-        case_project=case_project, case_name=source_name
+        case_project=case_project,
+        case_type=case_type,
+        case_name=case_name
     ).exists()
     if not exists:
-        return source_name
+        return case_name
     # 截断基础名称为时间戳后缀预留长度，防止拼接后超长触发数据库截断异常
-    base_name = source_name[: 255 - NAME_TIMESTAMP_SUFFIX_LENGTH]
+    base_name = case_name[: 255 - NAME_TIMESTAMP_SUFFIX_LENGTH]
     candidate = base_name
     for _ in range(NAME_TIMESTAMP_RETRY_TIMES):
-        candidate = f"{base_name}-{datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}"
+        candidate = f"{base_name}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
         exists_candidate = await services.case_curd.model.filter(
-            case_project=case_project, case_name=candidate
+            case_project=case_project,
+            case_name=candidate
         ).exists()
         if not exists_candidate:
             break
@@ -118,8 +114,8 @@ async def _generate_single_script(
         services: AutoTestServices,
         *,
         case_id: int,
-        source_name: str,
-        new_name: str,
+        case_name: str,
+        new_case_name: str,
         case_project: int,
         case_type: str,
         case_attr: str,
@@ -129,9 +125,9 @@ async def _generate_single_script(
     单接口复制生成脚本：整树副本覆盖表头后按「新增用例+整树落库」既有写路径持久化(不修改源接口)。
 
     :param services: 自动化测试CRUD服务聚合
-    :param case_id: 源公共接口用例主键
-    :param source_name: 源接口名称(结果明细展示)
-    :param new_name: 生成脚本名称
+    :param case_id: 公共接口用例主键
+    :param case_name: 公共接口用例名称
+    :param new_case_name: 生成脚本名称
     :param case_project: 脚本所属应用ID
     :param case_type: 脚本类型(用户脚本/公共脚本)
     :param case_attr: 用例属性(正案例/反案例)
@@ -152,7 +148,7 @@ async def _generate_single_script(
     new_case_block.update({
         "case_id": None,
         "case_code": None,
-        "case_name": new_name,
+        "case_name": new_case_name,
         "case_type": case_type,
         "case_attr": case_attr,
         "case_tags": case_tags,
@@ -166,10 +162,7 @@ async def _generate_single_script(
     is_valid, error_msg = AutoTestToolService.validate_step_tree_structure(tree_in.steps)
     if not is_valid:
         raise ValueError(f"步骤树结构校验失败: {error_msg}")
-    # 副本已剥离step_no，落库前按前序遍历补号(与前端保存前assignStepNumbers同序)
     _assign_step_nos(tree_in.steps, 1)
-
-    # 与视图/autotest/step/update_or_create_tree 同编排：用例先落库，再回填case_id保存整树
     async with in_transaction():
         case_result = await services.case_curd.batch_update_or_create_cases([tree_in.case])
         new_case_id: Optional[int] = (case_result.get("success_detail") or [{}])[0].get("case_id")
@@ -178,14 +171,15 @@ async def _generate_single_script(
         _recursive_update_case_id(tree_in.steps, new_case_id)
         await services.step_curd.batch_update_or_create_steps(tree_in.steps)
     LOGGER.info(
-        f"【Celery-Worker】公共接口转脚本成功: source_case_id={case_id}, source_name={source_name}, "
-        f"new_case_id={new_case_id}, new_name={new_name}"
+        f"【Celery-Worker】公共接口转脚本成功: "
+        f"case_id={case_id}, case_name={case_name}, "
+        f"new_case_id={new_case_id}, new_case_name={new_case_name}"
     )
     return {
-        "case_id": new_case_id,
-        "case_name": new_name,
-        "source_case_id": case_id,
-        "source_case_name": source_name,
+        "case_id": case_id,
+        "case_name": case_name,
+        "new_case_id": new_case_id,
+        "new_case_name": new_case_name,
     }
 
 
@@ -217,25 +211,28 @@ async def _generate_case_scripts_impl(
     failed_details: List[Dict[str, Any]] = []
     unique_ids = list(dict.fromkeys(case_ids or []))
     for case_id in unique_ids:
-        source_name = str(case_id)
+        case_name = str(case_id)
         try:
             # 防御校验：视图下发后任务排队期间用例可能被删除或改类型，此处按当前库内状态复核
-            source_case = await services.case_curd.get_by_id(case_id=case_id, state__not=1)
-            if not source_case:
-                failed_details.append({"case_id": case_id, "case_name": source_name, "reason": "用例不存在"})
+            case_instance = await services.case_curd.get_by_id(case_id=case_id, state__not=1)
+            if not case_instance:
+                failed_details.append({"case_id": case_id, "case_name": case_name, "reason": "用例不存在"})
                 continue
-            source_name = source_case.case_name or source_name
-            if source_case.case_type != AutoTestCaseType.PUBLIC_API:
-                failed_details.append({"case_id": case_id, "case_name": source_name, "reason": "非公共接口用例"})
+            case_name = case_instance.case_name or case_name
+            if case_instance.case_type != AutoTestCaseType.PUBLIC_API:
+                failed_details.append({"case_id": case_id, "case_name": case_name, "reason": "非公共接口用例"})
                 continue
-            new_name = await _resolve_script_name(
-                services=services, source_name=source_name, case_project=case_project
+            new_case_name = await _resolve_script_name(
+                services=services,
+                case_project=case_project,
+                case_name=case_name,
+                case_type=case_type
             )
             created = await _generate_single_script(
                 services=services,
                 case_id=case_id,
-                source_name=source_name,
-                new_name=new_name,
+                case_name=case_name,
+                new_case_name=new_case_name,
                 case_project=case_project,
                 case_type=case_type,
                 case_attr=case_attr,
@@ -244,11 +241,8 @@ async def _generate_case_scripts_impl(
             created_cases.append(created)
         except Exception as e:
             # 单接口失败仅记录明细并继续，保证其余接口正常生成(部分成功语义)
-            failed_details.append({"case_id": case_id, "case_name": source_name, "reason": str(e)})
-            LOGGER.error(
-                f"【Celery-Worker】公共接口转脚本失败: case_id={case_id}, "
-                f"错误类型={type(e).__name__}, 错误描述={e}"
-            )
+            failed_details.append({"case_id": case_id, "case_name": case_name, "reason": str(e)})
+            LOGGER.error(f"【Celery-Worker】公共接口转脚本失败: case_id={case_id}, 错误类型={type(e).__name__}, 错误描述={e}")
 
     total_cases = len(unique_ids)
     success_cases = len(created_cases)
@@ -305,8 +299,5 @@ def generate_case_scripts_task(
         )
         return result
     except Exception as e:
-        LOGGER.error(
-            f"【Celery-Worker】公共接口转脚本任务失败: 数量={len(case_ids or [])}, "
-            f"错误类型={type(e).__name__}, 错误描述={e}"
-        )
+        LOGGER.error(f"【Celery-Worker】公共接口转脚本任务失败: 数量={len(case_ids or [])}, 错误类型={type(e).__name__}, 错误描述={e}")
         raise

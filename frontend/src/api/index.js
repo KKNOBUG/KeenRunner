@@ -318,6 +318,17 @@ export default {
   searchPerfApiList: (data = {}) => request.post('/perf/api/search', data),
   /** Query：api_id 或 api_code —— 接口详情 */
   getPerfApi: (params = {}) => request.get('/perf/api/get', { params }),
+  /** Query：api_id 或 api_code —— 按接口报文推导 DataSource 矩阵模板（HEAD/BODY 分区预填 path key，不落库） */
+  buildPerfApiMatrix: (params = {}) => request.get('/perf/api/build_matrix', { params }),
+  /** params：api_id 或 api_code —— 接口数据源模板下载（blob，按接口报文生成默认矩阵） */
+  downloadPerfApiTemplate: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/perf/api/template_download`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
   /** Body：PerfApiCreate —— 新增压测接口 */
   createPerfApi: (data = {}) => request.post('/perf/api/create', data),
   /** Body：PerfApiUpdate（api_id/api_code 定位）—— 更新接口，版本号自增 */
@@ -349,6 +360,17 @@ export default {
   deletePerfDataset: (params = {}) => request.delete('/perf/dataset/delete', { params }),
   /** FormData：ds_project + file —— 上传xlsx解析为矩阵预览（不落库，保存时随create/update提交dataframe+axis+溯源） */
   uploadPerfDataset: (formData) => request.post('/perf/dataset/upload', formData),
+  /** Body：PerfDatasetUpdateFields（ds + api 定位）—— 按参照接口当前报文同步数据集矩阵字段 */
+  updatePerfDatasetFields: (data = {}) => request.post('/perf/dataset/update_fields', data),
+  /** params：ds_id 或 ds_code —— 数据集导出下载（blob，sheet名为数据集名称） */
+  downloadPerfDataset: (params = {}) => axios.get(
+      `${import.meta.env.VITE_BASE_API}/perf/dataset/download`,
+      {
+        params,
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
 
   /** Body：PerfSceneSelect —— 场景分页列表（不含容器大字段） */
   searchPerfSceneList: (data = {}) => request.post('/perf/scene/search', data),

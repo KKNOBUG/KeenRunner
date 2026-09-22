@@ -1,122 +1,116 @@
 <!--
-  PerfApiDatasetPanel — 压测接口参数化数据集卡（接口编辑页内联数据源管理）
+  PerfApiDatasetPanel — 压测接口 DataSource 卡（对齐 autotest StepDataSourcePanel 设计）
 
-  数据集归属锁定当前接口（bind_api_id 随接口落库，用户无需再选归属）；
-  矩阵编辑交互对齐 autotest StepDataSourcePanel（分区标记行 + 垂直/水平转置），
-  上传解析复用 /perf/dataset/upload（autotest 四分区解析器），保存走 dataframe+axis 矩阵协议。
+  数据源归属锁定当前接口（一个接口只能有一个数据源，bind_api_id 唯一）；
+  卡片默认折叠，展开时自动加载接口绑定的数据源（不存在则按接口报文推导矩阵模板）；
+  卡内承载该接口数据源的编辑：矩阵方向/Luckysheet 在线编辑后经「更多」下拉「保存数据源」落库
+  （create/update 走 dataframe+axis 矩阵协议，按 bind_api_id upsert）；
+  「更多」下拉 12 项与文案逐字对齐 StepDataSourcePanel：
+  导入/导出/保存/同步报文字段/正交易场景/模板下载/全屏/解绑。
+  上传解析复用 /perf/dataset/upload（autotest 四分区解析器），保存时随 payload 留文件溯源。
+  卡片壳复用全局 .step-editor-card。
 -->
 <template>
-  <n-card size="small">
+  <n-card
+      :bordered="false"
+      style="width: 100%;"
+      :class="['step-editor-card', { 'is-collapsed': collapsed }]"
+  >
     <template #header>
-      <n-space align="center" :size="8">
-        <span class="card-title">参数化数据集</span>
-        <n-tag v-if="!editingMode" size="small" type="info" :bordered="false">{{ datasets.length }} 个</n-tag>
-      </n-space>
-    </template>
-    <template #header-extra>
-      <n-button v-if="!editorVisible && apiRow?.api_id" size="small" type="primary" @click="openCreate">
-        新增数据集
-      </n-button>
-    </template>
-
-    <!-- 接口未落库：数据集必须归属接口，先保存接口 -->
-    <n-alert v-if="!apiRow?.api_id" :bordered="false" type="info">
-      请先保存接口后再管理参数化数据集（数据集归属当前接口，施压时按场景轮询替换报文占位符）。
-    </n-alert>
-
-    <!-- 列表态 -->
-    <template v-else-if="!editorVisible">
-      <n-empty v-if="!datasets.length && !loading" description="暂无数据集，点击右上角「新增数据集」在线编辑或上传文件" class="py-40" />
-      <n-data-table
-          v-else
-          :columns="dsColumns"
-          :data="datasets"
-          :loading="loading"
-          :pagination="false"
-          :max-height="360"
-          size="small"
-          :scroll-x="640"
-      />
-      <n-text depth="3" style="font-size: 12px; display: block; margin-top: 8px">
-        场景列中的字段路径（如 $.data.token、./Order/@no）在施压期替换请求报文中的同名占位符；HEAD/BODY 行分别对应请求头与请求体。
-      </n-text>
-    </template>
-
-    <!-- 编辑态：矩阵在线编辑 / 上传解析回填 -->
-    <template v-else>
-      <n-form label-placement="left" label-width="96" size="small">
-        <n-grid :cols="24" :x-gap="12">
-          <n-gi :span="10">
-            <n-form-item label="数据集名称" :show-feedback="false">
-              <n-input v-model:value="dsForm.ds_name" placeholder="请输入数据集名称" clearable />
-            </n-form-item>
-          </n-gi>
-          <n-gi :span="14">
-            <n-form-item label="数据集描述" :show-feedback="false">
-              <n-input v-model:value="dsForm.ds_desc" placeholder="数据集描述（可选）" clearable />
-            </n-form-item>
-          </n-gi>
-        </n-grid>
-      </n-form>
-
-      <n-space align="center" :size="12" style="margin: 8px 0">
-        <span class="axis-label">矩阵方向：</span>
-        <n-radio-group v-model:value="axis" size="small" @update:value="onAxisChange">
-          <n-radio-button :value="1">垂直模式</n-radio-button>
-          <n-radio-button :value="0">水平模式</n-radio-button>
-        </n-radio-group>
-        <n-text depth="3" style="font-size: 12px">
-          {{ axis === 0 ? '场景为行、字段为列' : '场景为列、字段为行' }}
-        </n-text>
-        <n-space :size="8" style="margin-left: auto">
-          <n-button size="small" :loading="uploading" @click="triggerUpload">上传 xlsx</n-button>
-          <n-popconfirm @positive-click="applyBlankTemplate">
+      <div class="card-header-row card-header-row--with-actions">
+        <div
+            class="panel-title-wrap"
+            role="button"
+            tabindex="0"
+            @click="toggleCollapsed"
+            @keydown.enter.prevent="toggleCollapsed"
+        >
+          <TheIcon
+              class="panel-collapse-icon"
+              :icon="collapsed ? 'material-symbols:chevron-right' : 'material-symbols:expand-more'"
+              :size="20"
+          />
+          <div class="panel-title">DataSource</div>
+        </div>
+        <div v-if="collapsed" class="card-header-actions">
+          <n-tooltip trigger="hover">
             <template #trigger>
-              <n-button size="small">重置模板</n-button>
+              <n-text class="data-source-tip" depth="3" style="cursor: help;">
+                {{ collapsedTip }}
+              </n-text>
             </template>
-            确认清空当前矩阵并重置为空白模板？
-          </n-popconfirm>
-        </n-space>
-      </n-space>
-
-      <div class="luckysheet-wrap">
-        <Luckysheet
-            ref="luckysheetRef"
-            :data="sheetData"
-            :columns="sheetColumns"
-            :readonly="false"
-            :protectedRowKeywords="FIXED_KEYWORDS"
-            @protectedAction="onProtectedAction"
-        />
+            {{ collapsedTip }}
+          </n-tooltip>
+        </div>
       </div>
-
-      <n-space justify="end" style="margin-top: 12px">
-        <n-button @click="closeEditor">返 回</n-button>
-        <n-button type="primary" :loading="saving" @click="handleSave">保 存</n-button>
-      </n-space>
     </template>
-  </n-card>
 
-  <!-- 上传解析：结果仅回填矩阵预览，保存时随 create/update 落库并留文件溯源 -->
-  <input
-      ref="uploadFileRef"
-      type="file"
-      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      style="display: none"
-      @change="onUploadFileChange"
-  />
+    <n-collapse-transition :show="!collapsed">
+      <!-- 接口未落库：数据源必须归属接口，先保存接口 -->
+      <n-alert v-if="!apiRow?.api_id" :bordered="false" type="info">
+        请先保存接口后再使用数据源（数据源归属当前接口，施压时按场景轮询替换报文占位符）。
+      </n-alert>
+
+      <div v-else class="data-source-content">
+        <n-space vertical :size="12">
+          <!-- 矩阵方向（对齐 StepDataSourcePanel） -->
+          <div class="data-source-axis-row">
+            <span class="data-source-axis-label">矩阵方向：</span>
+            <n-radio-group v-model:value="axis" size="small" @update:value="onAxisChange">
+              <n-radio-button :value="1">垂直模式</n-radio-button>
+              <n-radio-button :value="0">水平模式</n-radio-button>
+            </n-radio-group>
+            <n-text depth="3" class="data-source-axis-tip">
+              {{ axis === 0 ? '场景为行、字段为列' : '场景为列、字段为行' }}
+            </n-text>
+            <n-text v-if="hasDbRecord" depth="3" class="data-source-axis-tip" style="margin-left: 16px;">
+              {{ sceneCount }} 个场景
+            </n-text>
+          </div>
+
+          <!-- 矩阵编辑区：右上「更多」下拉承载保存等操作（对齐 StepDataSourcePanel，无底部按钮行） -->
+          <div class="luckysheet-wrap" :class="{ 'is-fullscreen': isFullscreen }">
+            <div class="luckysheet-more-dropdown">
+              <n-dropdown trigger="click" placement="bottom-end" :options="moreOptions" @select="onMoreSelect">
+                <n-button size="tiny" quaternary>
+                  更多
+                  <TheIcon icon="material-symbols:arrow-drop-down" :size="16" />
+                </n-button>
+              </n-dropdown>
+            </div>
+            <input
+                ref="uploadFileRef"
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                style="display: none"
+                @change="onUploadFileChange"
+            />
+            <Luckysheet
+                ref="luckysheetRef"
+                :data="sheetData"
+                :columns="sheetColumns"
+                :protectedRowKeywords="FIXED_KEYWORDS"
+                @change="onSheetChange"
+                @protectedAction="onProtectedAction"
+            />
+          </div>
+        </n-space>
+      </div>
+    </n-collapse-transition>
+  </n-card>
 </template>
 
 <script setup>
-import { h, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
-  NAlert, NButton, NCard, NDataTable, NEmpty, NForm, NFormItem, NGi, NGrid, NInput,
-  NPopconfirm, NRadioButton, NRadioGroup, NSpace, NTag, NText,
+  NAlert, NButton, NCard, NCollapseTransition, NDropdown,
+  NRadioButton, NRadioGroup, NSpace, NText, NTooltip,
 } from 'naive-ui'
 
+import TheIcon from '@/components/icon/TheIcon.vue'
 import Luckysheet from '@/components/common/Luckysheet.vue'
-import { formatDateTime } from '@/utils'
 import api from '@/api'
+import { downloadBlobResponse } from '@/utils/common/downloadFile'
 
 defineOptions({ name: 'PerfApiDatasetPanel' })
 
@@ -135,57 +129,56 @@ const AXIS_VERTICAL = 1
 const loading = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
-/** 该接口可用数据集（归属当前接口） */
-const datasets = ref([])
+// 默认折叠（对齐步骤编辑页 DataSource 卡），展开时才按需加载数据源
+const collapsed = ref(true)
+/** 接口绑定的数据源（一个接口只能有一个数据源） */
+const dataSource = ref(null)
+/** 表格有未保存修改（切换/重置前据此确认丢弃） */
+const isDirty = ref(false)
+/** 上传解析的文件溯源（保存时随 create/update 落库） */
+const uploadedFileInfo = ref(null)
 
-// ---------- 矩阵编辑状态（对齐 StepDataSourcePanel 的 sheet↔matrix 约定） ----------
+/** 数据源是否已落库（后端返回 ds_id 而非 id） */
+const hasDbRecord = computed(() => Boolean(dataSource.value?.ds_id))
+/** 场景数量 */
+const sceneCount = computed(() => (dataSource.value?.dataset_names || []).length)
+
+/** 折叠态提示文案（对齐 StepDataSourcePanel 的 tip 口径） */
+const collapsedTip = computed(() => {
+  if (!props.apiRow?.api_id) return '请先保存接口后再使用数据源'
+  const name = String(props.apiRow.api_name || '').trim()
+  if (hasDbRecord.value) {
+    return `${name} - ${sceneCount.value} 个场景`
+  }
+  return `${name} - 数据驱动文件上传或在线编辑`
+})
+
+/** 「更多」下拉：12 项结构与文案逐字对齐 StepDataSourcePanel（同步/导出/解绑仅对已落库数据源可用） */
+const moreOptions = computed(() => {
+  const canUse = Boolean(props.apiRow?.api_id);
+  console.log(canUse);
+  return [
+    { label: '撤销', key: 'undo', disabled: !canUse },
+    { label: '重做', key: 'redo', disabled: !canUse },
+    { type: 'divider', key: 'd1' },
+    { label: '导入数据源', key: 'import', disabled: !canUse || uploading.value },
+    { label: '导出数据源', key: 'export', disabled: !canUse || !hasDbRecord.value || exportLoading.value },
+    { label: '保存数据源', key: 'save', disabled: !canUse || saving.value || uploading.value },
+    { label: '同步报文字段', key: 'syncFields', disabled: !canUse || !hasDbRecord.value || syncFieldsLoading.value },
+    { label: '导入正交易场景', key: 'importNormalScene', disabled: !canUse },
+    { label: '数据源模板下载', key: 'templateDownload', disabled: !canUse || templateDownloadLoading.value },
+    { type: 'divider', key: 'd2' },
+    { label: isFullscreen.value ? '退出全屏' : '全屏', key: 'fullscreen' },
+    { label: '解绑', key: 'unbind', disabled: !canUse || !hasDbRecord.value || unbindLoading.value },
+  ]
+})
+
+// ---------- 矩阵工具（与 StepDataSourcePanel 的 sheet↔matrix 约定一致） ----------
 
 const luckysheetRef = ref(null)
 const sheetColumns = ref([])
 const sheetData = ref([])
 const axis = ref(AXIS_VERTICAL)
-
-/** 编辑中的数据集ID；null 表示新增 */
-const editingId = ref(null)
-/** 编辑态开关（列表态/编辑态切换） */
-const editorVisible = ref(false)
-/** 上传解析的文件溯源（保存时随 create/update 落库） */
-const uploadedFileInfo = ref(null)
-
-const dsForm = reactive({ ds_name: null, ds_desc: null })
-
-const DS_SOURCE_LABELS = { manual: '手动录入', file: '文件导入', job: '数据作业' }
-
-const dsColumns = [
-  { title: '数据集名称', key: 'ds_name', minWidth: 160, ellipsis: { tooltip: true } },
-  {
-    title: '场景数', key: 'scene_count', width: 80,
-    render: (row) => (row.dataset_names || []).length,
-  },
-  {
-    title: '来源', key: 'ds_source', width: 90,
-    render: (row) => DS_SOURCE_LABELS[row.ds_source] || row.ds_source || '-',
-  },
-  {
-    title: '更新时间', key: 'updated_time', width: 160,
-    render: (row) => (row.updated_time ? formatDateTime(row.updated_time) : '-'),
-  },
-  {
-    title: '操作', key: 'actions', width: 120,
-    render: (row) => h(NSpace, { size: 4, wrap: false }, {
-      default: () => [
-        h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => openEdit(row) },
-            { default: () => '编辑' }),
-        h(NButton, {
-          size: 'tiny', type: 'error', secondary: true,
-          onClick: () => handleDelete(row),
-        }, { default: () => '删除' }),
-      ],
-    }),
-  },
-]
-
-// ---------- 矩阵工具（复制 StepDataSourcePanel 的列头/数据行约定） ----------
 
 const isSectionMarker = (value) => {
   const text = value == null ? '' : String(value).trim().toUpperCase()
@@ -258,7 +251,7 @@ const applyMatrixToSheet = (matrix) => {
   sheetData.value = effective.slice(1).map((row) => padTypedRow(row, maxCol))
 }
 
-/** 当前表格内容 → 二维矩阵（Luckysheet 未就绪时回落到已载入状态） */
+/** 当前表格内容 → 二维矩阵（Luckysheet 未就绪时返回空） */
 const getCurrentMatrix = () => {
   if (luckysheetRef.value?.getDataForSave) {
     const { headers = [], rows = [] } = luckysheetRef.value.getDataForSave() || {}
@@ -276,73 +269,153 @@ const onProtectedAction = (action) => {
   }
 }
 
+const onSheetChange = () => {
+  isDirty.value = true
+}
+
 /** 切换矩阵方向：将当前表格内容转置到目标方向（axis 已由 v-model 更新） */
 const onAxisChange = () => {
   const matrix = getCurrentMatrix()
   applyMatrixToSheet(matrix.length >= 2 ? transposeMatrix(matrix) : buildBlankMatrix())
+  isDirty.value = true
 }
 
-const applyBlankTemplate = () => {
-  axis.value = AXIS_VERTICAL
-  uploadedFileInfo.value = null
-  applyMatrixToSheet(buildBlankMatrix())
+/** 有未保存修改时先确认丢弃（对齐 autotest 数据不丢语义） */
+const confirmDiscardIfDirty = (onConfirm) => {
+  if (!isDirty.value) {
+    onConfirm()
+    return
+  }
+  window.$dialog?.warning({
+    title: '放弃未保存修改',
+    content: '当前数据源矩阵有未保存的修改，继续将丢弃这些修改',
+    positiveText: '放弃修改',
+    negativeText: '留在本页',
+    onPositiveClick: () => onConfirm(),
+  })
 }
 
-// ---------- 列表与编辑器 ----------
+// ---------- 数据源加载 ----------
 
-async function loadDatasets() {
+/** 报文原始值映射（HEAD/BODY 分区 → 字段路径 → 原始值），供正交易场景列回填（与 /build 同源返回） */
+const reportOriginals = ref({})
+const exportLoading = ref(false)
+const syncFieldsLoading = ref(false)
+const templateDownloadLoading = ref(false)
+const unbindLoading = ref(false)
+
+/** 加载接口绑定的数据源（一个接口只能有一个数据源） */
+async function loadDataSource() {
   if (!props.apiRow?.api_id) {
-    datasets.value = []
+    dataSource.value = null
     return
   }
   loading.value = true
   try {
     const res = await api.listPerfDatasetsForApi({ api_id: props.apiRow.api_id })
-    datasets.value = (res.data || []).filter((row) => row.bind_api_id === props.apiRow.api_id)
+    // 后端已按 bind_api_id 过滤，直接取第一条
+    const rows = res.data || []
+    const dsRow = rows.length > 0 ? rows[0] : null
+    if (dsRow?.ds_id) {
+      // 加载详情（含矩阵数据）
+      const detailRes = await api.getPerfDataset({ ds_id: dsRow.ds_id })
+      dataSource.value = detailRes.data || null
+      const matrix = Array.isArray(dataSource.value?.dataframe) ? dataSource.value.dataframe : []
+      axis.value = detectAxisFromMatrix(matrix)
+      applyMatrixToSheet(matrix)
+      // 已落库数据源: 加载报文原始值映射供正交易场景回填
+      await fetchReportOriginals()
+    } else {
+      dataSource.value = null
+      // 未绑定数据源，按接口报文推导矩阵模板
+      applyMatrixToSheet(await fetchReportTemplate())
+    }
+    uploadedFileInfo.value = null
+    isDirty.value = false
   } catch (e) {
-    datasets.value = []
+    dataSource.value = null
+    applyMatrixToSheet(buildBlankMatrix())
   } finally {
     loading.value = false
   }
 }
 
-function openCreate() {
-  editingId.value = null
-  dsForm.ds_name = null
-  dsForm.ds_desc = null
-  uploadedFileInfo.value = null
-  axis.value = AXIS_VERTICAL
-  applyMatrixToSheet(buildBlankMatrix())
-  editorVisible.value = true
+/** 按接口报文推导矩阵模板（HEAD/BODY 分区预填 path key）；未落库或失败回落空白模板；缓存报文原始值供正交易场景回填 */
+async function fetchReportTemplate() {
+  if (!props.apiRow?.api_id) return buildBlankMatrix()
+  try {
+    const res = await api.buildPerfApiMatrix({ api_id: props.apiRow.api_id })
+    reportOriginals.value = res.data?.data_original && typeof res.data.data_original === 'object' ? res.data.data_original : {}
+    const matrix = Array.isArray(res.data?.dataframe) ? res.data.dataframe : []
+    return matrix.length ? matrix : buildBlankMatrix()
+  } catch (e) {
+    return buildBlankMatrix()
+  }
 }
 
-function openEdit(row) {
-  loading.value = true
-  api.getPerfDataset({ ds_id: row.id }).then((res) => {
-    const detail = res.data || {}
-    editingId.value = row.id
-    dsForm.ds_name = detail.ds_name
-    dsForm.ds_desc = detail.ds_desc
-    uploadedFileInfo.value = null
-    axis.value = detectAxisFromMatrix(detail.dataframe)
-    applyMatrixToSheet(detail.dataframe)
-    editorVisible.value = true
-  }).catch(() => {}).finally(() => {
-    loading.value = false
-  })
+/** 仅加载报文原始值映射（供正交易场景回填，不返回矩阵） */
+async function fetchReportOriginals() {
+  if (!props.apiRow?.api_id) return
+  try {
+    const res = await api.buildPerfApiMatrix({ api_id: props.apiRow.api_id })
+    reportOriginals.value = res.data?.data_original && typeof res.data.data_original === 'object' ? res.data.data_original : {}
+  } catch (e) {
+    reportOriginals.value = {}
+  }
 }
 
-function closeEditor() {
-  editorVisible.value = false
-  editingId.value = null
+function toggleCollapsed() {
+  collapsed.value = !collapsed.value
+  // 展开时加载数据源
+  if (!collapsed.value && props.apiRow?.api_id) {
+    loadDataSource()
+  }
 }
 
-// ---------- 上传解析 ----------
+// ---------- 「更多」下拉动作 ----------
 
 const uploadFileRef = ref(null)
 
-function triggerUpload() {
-  uploadFileRef.value?.click()
+function onMoreSelect(key) {
+  if (key === 'undo') {
+    luckysheetRef.value?.getLuckysheet()?.undo?.()
+    return
+  }
+  if (key === 'redo') {
+    luckysheetRef.value?.getLuckysheet()?.redo?.()
+    return
+  }
+  if (key === 'import') {
+    uploadFileRef.value?.click()
+    return
+  }
+  if (key === 'export') {
+    handleExport()
+    return
+  }
+  if (key === 'save') {
+    handleSave()
+    return
+  }
+  if (key === 'syncFields') {
+    handleSyncFields()
+    return
+  }
+  if (key === 'importNormalScene') {
+    handleImportNormalScene()
+    return
+  }
+  if (key === 'templateDownload') {
+    handleTemplateDownload()
+    return
+  }
+  if (key === 'fullscreen') {
+    toggleFullscreen()
+    return
+  }
+  if (key === 'unbind') {
+    handleUnbind()
+  }
 }
 
 async function onUploadFileChange(event) {
@@ -353,7 +426,8 @@ async function onUploadFileChange(event) {
   uploading.value = true
   try {
     const fd = new FormData()
-    fd.append('ds_project', String(props.apiRow.api_project))
+    // ds_project 随接口所属应用(request_project_id)，缺省回落后端默认值 1
+    fd.append('ds_project', String(props.apiRow.request_project_id || 1))
     fd.append('file', file)
     const res = await api.uploadPerfDataset(fd)
     applyParsedFile(res?.data || {})
@@ -378,6 +452,7 @@ function applyParsedFile(parsed) {
     file_path: parsed.file_path || null,
     file_hash: parsed.file_hash || null,
   }
+  isDirty.value = true
   window.$message?.success('解析成功，请确认矩阵后保存')
 }
 
@@ -403,19 +478,13 @@ function validateMatrix(matrix) {
 }
 
 async function handleSave() {
-  const name = String(dsForm.ds_name || '').trim()
-  if (!name) {
-    window.$message?.error('请输入数据集名称')
-    return
-  }
   const matrix = getCurrentMatrix()
   if (!validateMatrix(matrix)) return
   saving.value = true
   try {
+    // 按 bind_api_id upsert（一个接口只能有一个数据源）
     const payload = {
-      ds_project: props.apiRow.api_project,
-      ds_name: name,
-      ds_desc: String(dsForm.ds_desc || '').trim() || null,
+      ds_project: props.apiRow.request_project_id || 1,
       bind_api_id: props.apiRow.api_id,
       dataframe: matrix,
       axis: detectAxisFromMatrix(matrix),
@@ -426,14 +495,13 @@ async function handleSave() {
       payload.file_path = uploadedFileInfo.value.file_path
       payload.file_hash = uploadedFileInfo.value.file_hash
     }
-    if (editingId.value) {
-      await api.updatePerfDataset({ ds_id: editingId.value, ...payload })
-    } else {
-      await api.createPerfDataset(payload)
-    }
+    // 使用 create 接口（后端按 bind_api_id upsert）
+    const res = await api.createPerfDataset(payload)
+    uploadedFileInfo.value = null
+    isDirty.value = false
     window.$message?.success('保存成功')
-    closeEditor()
-    await loadDatasets()
+    // 重新加载数据源
+    await loadDataSource()
   } catch (e) {
     /* 拦截器已提示 */
   } finally {
@@ -441,41 +509,337 @@ async function handleSave() {
   }
 }
 
-async function handleDelete(row) {
-  window.$dialog?.warning({
-    title: '删除确认',
-    content: `确认删除数据集「${row.ds_name}」？已被场景引用时删除会被拒绝。`,
-    positiveText: '删 除',
-    negativeText: '取 消',
-    onPositiveClick: async () => {
-      try {
-        await api.deletePerfDataset({ ds_id: row.id })
-        window.$message?.success('删除成功')
-        await loadDatasets()
-      } catch (e) {
-        /* 拦截器已提示 */
+/** 导出当前接口绑定的数据源（blob 下载，sheet 名为数据源名称） */
+async function handleExport() {
+  if (exportLoading.value) return
+  if (!hasDbRecord.value) {
+    window.$message?.warning('请先保存数据源')
+    return
+  }
+  exportLoading.value = true
+  try {
+    const res = await api.downloadPerfDataset({ ds_id: dataSource.value.ds_id })
+    const name = String(dataSource.value?.ds_name || props.apiRow?.api_name || '数据源').trim()
+    await downloadBlobResponse(res, `${name}.xlsx`)
+    window.$message?.success('导出成功')
+  } catch (e) {
+    window.$message?.error(`导出失败：${e?.message || e}`)
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+/** 同步报文字段：以接口当前报文为基准增删字段路径（保留字段值不动）；未保存编辑先确认 */
+async function handleSyncFields() {
+  if (syncFieldsLoading.value) return
+  if (!hasDbRecord.value) {
+    window.$message?.warning('请先保存数据源')
+    return
+  }
+  if (isDirty.value) {
+    // 同步以已落库数据为基准，先确认避免静默覆盖未保存编辑
+    const goOn = await new Promise((resolve) => {
+      window.$dialog?.confirm?.({
+        title: '同步报文字段',
+        type: 'warning',
+        content: '当前表格有未保存的编辑，同步将以已保存的数据为准并覆盖当前编辑。是否继续？',
+        positiveText: '继续同步',
+        negativeText: '先不同步',
+        confirm: () => resolve(true),
+        cancel: () => resolve(false),
+      }) ?? resolve(true)
+    })
+    if (!goOn) return
+  }
+  syncFieldsLoading.value = true
+  try {
+    // 使用新的 update_fields 接口（只需 api_id）
+    const res = await api.updatePerfDatasetFields({ api_id: props.apiRow.api_id })
+    window.$message?.success(res?.message || '字段同步成功')
+    await loadDataSource()
+    // 接口报文可能已变化，顺带刷新原始值映射供正交易场景回填（只读不落库）
+    fetchReportTemplate()
+  } catch (e) {
+    /* 拦截器已提示 */
+  } finally {
+    syncFieldsLoading.value = false
+  }
+}
+
+/** 按接口报文下载数据源模板（HEAD/BODY 分区 path key 字段行，值留空） */
+async function handleTemplateDownload() {
+  if (templateDownloadLoading.value) return
+  if (!props.apiRow?.api_id) {
+    window.$message?.warning('请先保存接口后再下载模板')
+    return
+  }
+  templateDownloadLoading.value = true
+  try {
+    const res = await api.downloadPerfApiTemplate({ api_id: props.apiRow.api_id })
+    await downloadBlobResponse(res, '数据源导出模板.xlsx')
+    window.$message?.success('下载成功')
+  } catch (e) {
+    window.$message?.error(`下载失败：${e?.message || e}`)
+  } finally {
+    templateDownloadLoading.value = false
+  }
+}
+
+/* ============ 导入正交易场景（本地插入，随保存落库；与 StepDataSourcePanel 同款纯函数） ============ */
+const NORMAL_SCENE_NAME = '正交易场景'
+
+/** 垂直矩阵：第 0 行第 1 列起为场景名 */
+const extractSceneNamesFromMatrix = (matrix) => {
+  if (!Array.isArray(matrix) || !matrix.length) return []
+  const header = Array.isArray(matrix[0]) ? matrix[0] : []
+  const names = []
+  for (let c = 1; c < header.length; c++) {
+    const text = header[c] == null ? '' : String(header[c]).trim()
+    if (text) names.push(text)
+  }
+  return names
+}
+
+/** 在矩阵第2列(垂直)/第2行(水平)插入正交易场景：HEAD/BODY字段按所属分区取报文原始值(隔离同名字段)，其余填空；插入值全空时返回 null */
+const insertNormalSceneIntoMatrix = (matrix, originals) => {
+  const valueOf = (path, section) => {
+    const value = (originals?.[section] || {})[path]
+    return value === undefined || value === null ? '' : value
+  }
+  const newMatrix = matrix.map((row) => [...(row || [])])
+  const insertedValues = []
+  if (detectAxisFromMatrix(matrix) === AXIS_HORIZONTAL) {
+    // 水平：第0行为分区标记+字段名行，新场景行固定在第2行，原有场景行整体下移
+    const header = newMatrix[0] || []
+    const sceneRow = [NORMAL_SCENE_NAME]
+    let section = ''
+    for (let c = 1; c < header.length; c++) {
+      const cell = header[c] == null ? '' : String(header[c]).trim()
+      if (isSectionMarker(cell)) {
+        section = cell.toUpperCase()
+        sceneRow.push('')
+        continue
       }
-    },
+      const value = (section === 'HEAD' || section === 'BODY') && cell ? valueOf(cell, section) : ''
+      insertedValues.push(value)
+      sceneRow.push(value)
+    }
+    newMatrix.splice(1, 0, sceneRow)
+  } else {
+    // 垂直：第0行为场景名行，新场景列固定在第2列，原有场景列整体右移
+    let section = ''
+    newMatrix.forEach((row, rowIndex) => {
+      const cell = row[0] == null ? '' : String(row[0]).trim()
+      if (rowIndex === 0) {
+        row.splice(1, 0, NORMAL_SCENE_NAME)
+        return
+      }
+      if (isSectionMarker(cell)) {
+        section = cell.toUpperCase()
+        row.splice(1, 0, '')
+        return
+      }
+      const value = (section === 'HEAD' || section === 'BODY') && cell ? valueOf(cell, section) : ''
+      insertedValues.push(value)
+      row.splice(1, 0, value)
+    })
+  }
+  if (!insertedValues.some((value) => value !== '' && String(value).trim() !== '')) return null
+  return newMatrix
+}
+
+const handleImportNormalScene = () => {
+  if (!props.apiRow?.api_id) {
+    window.$message?.warning('请先保存接口后再导入正交易场景')
+    return
+  }
+  // 以当前表格内容(含未保存编辑)为插入基准，随保存链路统一落库
+  const matrix = getCurrentMatrix()
+  if (!Array.isArray(matrix) || matrix.length < 2) {
+    window.$message?.warning('当前没有可用字段，无法导入正交易场景')
+    return
+  }
+  if (extractSceneNamesFromMatrix(matrix).includes(NORMAL_SCENE_NAME)) {
+    window.$message?.warning('该接口已存在名称为"正交易场景"的测试数据，无法导入')
+    return
+  }
+  const nextMatrix = insertNormalSceneIntoMatrix(matrix, reportOriginals.value || {})
+  if (!nextMatrix) {
+    window.$message?.warning('报文字段与数据源矩阵不匹配，正交易场景无可用数据')
+    return
+  }
+  applyMatrixToSheet(nextMatrix)
+  isDirty.value = true
+  window.$message?.success('正交易场景已插入，保存后生效')
+}
+
+/* ============ 全屏（CSS 铺满页面窗口，与 StepDataSourcePanel 同款三段实现） ============ */
+const isFullscreen = ref(false)
+
+const BODY_FULLSCREEN_CLASS = 'luckysheet-fullscreen-active'
+
+const toggleFullscreen = () => {
+  isFullscreen.value = !isFullscreen.value
+  document.body.classList.toggle(BODY_FULLSCREEN_CLASS, isFullscreen.value)
+  nextTick(() => {
+    try {
+      luckysheetRef.value?.getLuckysheet()?.resize?.()
+    } catch (_) {}
   })
 }
 
-// 接口落库后（api_id 从无到有）自动加载归属数据集
+const onFullscreenKeydown = (e) => {
+  if (e.key === 'Escape' && isFullscreen.value) {
+    isFullscreen.value = false
+    document.body.classList.remove(BODY_FULLSCREEN_CLASS)
+    nextTick(() => {
+      try {
+        luckysheetRef.value?.getLuckysheet()?.resize?.()
+      } catch (_) {}
+    })
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', onFullscreenKeydown, true)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onFullscreenKeydown, true)
+  document.body.classList.remove(BODY_FULLSCREEN_CLASS)
+})
+
+/** 解绑：硬删当前接口绑定的数据源并回到新增形态（对齐 autotest 解绑语义） */
+async function handleUnbind() {
+  if (unbindLoading.value) return
+  if (!hasDbRecord.value) {
+    window.$message?.warning('当前接口未绑定数据源')
+    return
+  }
+  unbindLoading.value = true
+  try {
+    await api.deletePerfDataset({ ds_id: dataSource.value.ds_id })
+    dataSource.value = null
+    applyMatrixToSheet(buildBlankMatrix())
+    isDirty.value = false
+    window.$message?.success('解绑成功')
+  } catch (e) {
+    window.$message?.error('解绑失败：' + (e?.message || ''))
+  } finally {
+    unbindLoading.value = false
+  }
+}
+
+// 接口落库后（api_id 从无到有）自动加载数据源
 watch(() => props.apiRow?.api_id, (val) => {
-  if (val) loadDatasets()
-  else datasets.value = []
+  if (val) {
+    loadDataSource()
+  } else {
+    dataSource.value = null
+    applyMatrixToSheet(buildBlankMatrix())
+  }
 }, { immediate: true })
 </script>
 
 <style scoped>
-.card-title {
-  font-weight: 600;
+/* 卡片壳/标题/折叠见 styles/autotest-theme.scss .step-editor-card；行规格与 Luckysheet 容器对齐 StepDataSourcePanel */
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.axis-label {
-  font-size: 13px;
+/* 折叠态右侧提示词预留空间（对齐 StepDataSourcePanel） */
+.card-header-row--with-actions {
+  padding-right: 220px;
+}
+
+.panel-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.panel-collapse-icon {
+  cursor: pointer;
+}
+
+.data-source-tip {
+  display: inline-block;
+  font-size: 12px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-source-content {
+  padding-top: 4px;
+}
+
+.data-source-axis-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.data-source-axis-label {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.data-source-axis-tip {
+  font-size: 12px;
 }
 
 .luckysheet-wrap {
-  height: 360px;
+  width: 100%;
+  min-height: 400px;
+  height: 520px;
+  border: 1px solid var(--n-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.luckysheet-more-dropdown {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  height: 28px;
+}
+
+/* 全屏模式：CSS 铺满当前页面窗口 */
+.luckysheet-wrap.is-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  border-radius: 0;
+  border: none;
+  background: var(--n-color);
+  padding: 8px;
+}
+
+.luckysheet-wrap.is-fullscreen > .luckysheet-more-dropdown {
+  z-index: 10000;
+}
+</style>
+
+<!-- 全屏时 Luckysheet 输入框/编辑器挂载在 body 上，需提升其 z-index 使其不被全屏容器遮挡 -->
+<style>
+body.luckysheet-fullscreen-active #luckysheet-input-box,
+body.luckysheet-fullscreen-active #luckysheet-rightclick-menu,
+body.luckysheet-fullscreen-active .luckysheet-cols-menu,
+body.luckysheet-fullscreen-active .luckysheet-cols-rows-shift-panel {
+  z-index: 10001 !important;
 }
 </style>

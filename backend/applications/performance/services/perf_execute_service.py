@@ -455,6 +455,7 @@ async def _assemble_scene_payload(
             "request_text": api.request_text,
             "request_body": api.request_body,
             "request_args_type": api.request_args_type.value if api.request_args_type else None,
+            "defined_variables": api.defined_variables or [],
             "extract_variables": api.extract_variables or [],
             "assert_validators": api.assert_validators or [],
             "weight": int(item.get("weight") or 1),
