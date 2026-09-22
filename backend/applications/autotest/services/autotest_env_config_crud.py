@@ -599,7 +599,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             raise NotFoundException(message="配置表未找到对应记录，请检查")
 
         try:
-            await get_app_database_pool().create_pool(
+            await get_app_database_pool().get_or_create_pool(
                 project_id=project_id,
                 env_name=env_name,
                 config_name=config_name,

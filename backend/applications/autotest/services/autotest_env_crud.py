@@ -284,7 +284,8 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         # 已启用则直接复用；仅软删记录需要恢复
         if existing_bind.state == 0:
-            raise ParameterException(message="新增失败, 已存在相同应用、环境及节点记录")
+            # raise ParameterException(message="新增失败, 已存在相同应用、环境及节点记录")
+            return existing_bind
         try:
             restore_dict: Dict[str, Any] = {"state": 0}
             if env_in.env_desc is not None:
