@@ -82,16 +82,25 @@ def _recursive_update_case_id(steps: List[AutoTestStepTreeUpdateItem], case_id: 
 
 async def _resolve_script_name(services: AutoTestServices, case_project: int, case_name: str, case_type: str) -> str:
     """
-    解析生成脚本名称：脚本名称=接口名称；同应用下已有同名记录(含软删、不限类型)时按「{接口名称}-{时间戳}」命名。
+    解析生成脚本名称：脚本名称=接口名称；同应用下已有同名记录(含软删、按唯一性分组)时按「{接口名称}-{时间戳}」命名。
+
+    查重范围必须与 AutoTestCaseCrud._get_by_owner_key 的唯一性分组一致：公共脚本与用户脚本同组，
+    组内(含跨这两类)同名即视为冲突；若仍按精确单一类型查重，会漏判异类型同名脚本，
+    导致返回原名后落库时被 batch_update_or_create_cases 判重失败(部分成功)。
 
     :param services: 自动化测试CRUD服务聚合
-    :param case_name: 公共接口名称
     :param case_project: 脚本所属应用ID
+    :param case_name: 公共接口名称
+    :param case_type: 目标脚本类型(用户脚本/公共脚本)
     :return: 生成脚本名称
     """
+    # 与 _get_by_owner_key 保持一致的分组查重：脚本类型按整组(公共脚本+用户脚本)比对，其余类型按精确类型
+    script_group = (AutoTestCaseType.PUBLIC_SCRIPT.value, AutoTestCaseType.PRIVATE_SCRIPT.value)
+    ct_val = getattr(case_type, "value", case_type)
+    type_scope = list(script_group) if ct_val in script_group else [ct_val]
     exists = await services.case_curd.model.filter(
         case_project=case_project,
-        case_type=case_type,
+        case_type__in=type_scope,
         case_name=case_name
     ).exists()
     if not exists:
