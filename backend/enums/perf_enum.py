@@ -19,9 +19,9 @@ class PerfLoadMode(StringEnum):
     RPS = "rps"
 
 
-class PerfTaskStatus(StringEnum):
+class PerfPresetStatus(StringEnum):
     """
-    压测任务最近一次执行状态：idle 仅配置未执行；stopping 为用户请求停止的过渡态，由执行管线感知后落 stopped。
+    负载预设最近一次执行状态：idle 仅配置未执行；stopping 为用户请求停止的过渡态，由执行管线感知后落 stopped。
     """
     IDLE = "idle"
     QUEUED = "queued"

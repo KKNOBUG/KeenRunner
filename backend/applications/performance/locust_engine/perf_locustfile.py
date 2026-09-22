@@ -8,7 +8,7 @@ KeenRunner 性能测试 Locust 施压入口(由执行管线以 `locust -f 本文
 - PERF_RESULT_FILE: 结果分片输出目录(各进程写 result_{pid}.json, 管线合并)
 - PERF_VERIFY_MIN_INTERVAL_SECONDS: 校验抽查进程级最小间隔(缺省10秒)
 - PERF_VM_URL / PERF_METRICS_PUSH_INTERVAL: VictoriaMetrics上报配置(兼作熔断巡检周期)
-- PERF_REPORT_CODE / PERF_PERF_CODE: 报告与任务标识(指标label与结果分片)
+- PERF_REPORT_CODE / PERF_PRESET_CODE: 报告与负载预设标识(指标label与结果分片)
 
 施压场景来源: krun_perf_scene.scene_items + 引用接口定义, 由管线在子进程启动前解析组装
 (回查接口/数据集/环境三级链并补齐绝对地址), 引擎永不回查数据库。

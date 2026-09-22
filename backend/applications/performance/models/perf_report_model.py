@@ -31,9 +31,9 @@ class PerfReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, 
     引擎产物目录为 OUTPUT_PERF_DIR/{report_code}/, 由 report_code 派生, 不另存路径列。
     """
     # ---------- A. 归属与快照 ----------
-    # 任务双轨关联: 表内定位用 perf_id, 跨表引用用 perf_code(对齐 report 表 case_id+case_code 模式)
-    perf_id = fields.BigIntField(index=True, description="压测任务ID")
-    perf_code = fields.CharField(max_length=64, index=True, description="压测任务标识代码")
+    # 负载预设双轨关联: 表内定位用 preset_id, 跨表引用用 preset_code(对齐 report 表 case_id+case_code 模式)
+    preset_id = fields.BigIntField(index=True, description="负载预设ID")
+    preset_code = fields.CharField(max_length=64, index=True, description="负载预设标识代码")
     report_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="报告标识代码")
     # 批次码串联压测记录、注入的 x-perf-batch 标记、造数/校验作业与产出数据集
     batch_code = fields.CharField(max_length=64, default=None, null=True, index=True, description="压测批次标识代码")
@@ -120,8 +120,8 @@ class PerfReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, 
         table = "krun_perf_report"
         table_description = "性能测试-执行报告表"
         indexes = (
-            ("perf_id", "perf_code"),
-            ("perf_code", "state"),
+            ("preset_id", "preset_code"),
+            ("preset_code", "state"),
             ("scene_id", "state"),
             ("batch_code", "state"),
             ("status", "state"),

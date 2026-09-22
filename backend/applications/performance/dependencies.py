@@ -14,13 +14,13 @@ from backend.applications.performance.services.perf_dataset_crud import PerfData
 from backend.applications.performance.services.perf_job_crud import PerfJobCrud
 from backend.applications.performance.services.perf_report_crud import PerfReportCrud
 from backend.applications.performance.services.perf_scene_crud import PerfSceneCrud
-from backend.applications.performance.services.perf_task_crud import PerfTaskCrud
+from backend.applications.performance.services.perf_load_preset_crud import PerfLoadPresetCrud
 
 
 @dataclass
 class PerfServices:
     """性能测试相关CRUD服务聚合，供视图层依赖注入。"""
-    task_curd: PerfTaskCrud
+    preset_curd: PerfLoadPresetCrud
     report_curd: PerfReportCrud
     api_curd: PerfApiCrud
     scene_curd: PerfSceneCrud
@@ -36,7 +36,7 @@ async def get_perf_api_services() -> PerfServices:
     :return: PerfServices 实例
     """
     return PerfServices(
-        task_curd=PerfTaskCrud(),
+        preset_curd=PerfLoadPresetCrud(),
         report_curd=PerfReportCrud(),
         api_curd=PerfApiCrud(),
         scene_curd=PerfSceneCrud(),

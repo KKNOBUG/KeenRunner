@@ -22,7 +22,7 @@ from backend.core.exceptions import NotFoundException, ParameterException
 # target_result 随列表返回是刻意保留: 列表页需一眼看出哪条未达标, 其元素个数受场景 SLA 目标条数上限约束
 REPORT_LIST_FIELDS = (
     "id", "report_code", "batch_code", "status",
-    "perf_id", "perf_code", "scene_id", "scene_code", "scene_name", "run_mode",
+    "preset_id", "preset_code", "scene_id", "scene_code", "scene_name", "run_mode",
     "concurrent_users", "target_rps", "run_duration", "process_count", "env_name", "env_config_name",
     "started_time", "finished_time", "duration_seconds", "warmup_seconds",
     "total_requests", "success_requests", "fail_requests", "error_rate",
@@ -87,7 +87,7 @@ class PerfReportCrud(ScaffoldCrud[PerfReportModel, Any, Any]):
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 基类 get_or_none 的 id 为必传位参, 按业务标识查询必须走 model.filter(对齐 PerfTaskCrud.get_by_code)
+        # 基类 get_or_none 的 id 为必传位参, 按业务标识查询必须走 model.filter(对齐 PerfLoadPresetCrud.get_by_code)
         instance = await self.model.filter(report_code=report_code, **kwargs).first()
         if not instance and on_error:
             error_message: str = f"查询压测报告信息失败, 记录[report_code={report_code}]不存在"

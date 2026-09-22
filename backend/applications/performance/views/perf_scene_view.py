@@ -2,7 +2,7 @@
 """
 压测场景视图：/perf/scene/* 路由编排(参数接收 -> 服务调用 -> 统一响应)。
 
-场景回答「打什么、怎么打」: 编排(scene_items)与判定口径(perf_targets)是任务执行的唯一来源,
+场景回答「打什么、怎么打」: 编排(scene_items)与判定口径(perf_targets)是负载预设执行的唯一来源,
 保存期已由 crud 完成资产引用校验(validate_and_fill_items), 视图只做查询条件与序列化编排。
 
 @Author  : yangkai
@@ -19,13 +19,17 @@ from tortoise.expressions import Q
 
 from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
 from backend.applications.performance.schemas.perf_scene_schema import (
+    PerfPresetBatchDuplicate,
     PerfSceneCreate,
     PerfSceneLocate,
     PerfScenePinBaseline,
     PerfScenePrecheck,
+    PerfSceneRunAllPresets,
     PerfSceneSelect,
     PerfSceneUpdate,
+    PerfSceneWizardPayload,
 )
+from backend.applications.performance.services.perf_scene_service import PerfSceneService
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -45,7 +49,7 @@ from backend.services.ctx import get_current_username
 
 perf_scene = APIRouter()
 
-# 场景序列化统一排除脚手架字段(对齐 task 视图模式)
+# 场景序列化统一排除脚手架字段(对齐 load_preset 视图模式)
 SCENE_EXCLUDE_FIELDS = {
     "state",
     "created_user", "created_time",
@@ -86,7 +90,7 @@ async def create_perf_scene(
         return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
 
 
-@perf_scene.delete("/delete", summary="删除压测场景", description="根据id或code删除压测场景信息(被任务引用时禁止)")
+@perf_scene.delete("/delete", summary="删除压测场景", description="根据id或code删除压测场景信息(被负载预设引用时禁止)")
 async def delete_perf_scene(
         scene_id: Optional[int] = Query(None, description="场景ID"),
         scene_code: Optional[str] = Query(None, description="场景标识代码"),
@@ -304,3 +308,106 @@ async def copy_perf_scene(
     except Exception as e:
         LOGGER.error(f"复制压测场景失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
+
+
+@perf_scene.post("/save_wizard", summary="一体化保存场景+负载预设", description="场景独立编辑页 4 Tab 唯一提交入口: upsert scene + diff upsert presets(新增/更新/软删)")
+async def save_wizard_perf_scene(
+        payload: PerfSceneWizardPayload = Body(..., description="场景 + 负载预设一体化保存入参"),
+        services: PerfServices = Depends(get_perf_api_services),
+):
+    """
+    场景独立编辑页一体化保存(Tab 编辑页唯一提交入口)。
+
+    :param payload: PerfSceneWizardPayload(scene + presets)
+    :param services: 性能测试CRUD依赖聚合
+    :return: 统一HTTP响应, data = {scene: {...}, presets: [{...}]}
+    """
+    try:
+        result = await PerfSceneService.save_wizard(payload, current_user=get_current_username())
+        scene_data = await result["scene"].to_dict(
+            exclude_fields=SCENE_EXCLUDE_FIELDS, replace_fields=SCENE_REPLACE_FIELDS,
+        )
+        preset_data = [
+            await p.to_dict(
+                exclude_fields={"state", "created_user", "created_time", "updated_user", "updated_time",
+                                "reserve_1", "reserve_2", "reserve_3"},
+                replace_fields={"id": "preset_id"},
+            )
+            for p in result["presets"]
+        ]
+        return SuccessResponse(message="保存成功", data={"scene": scene_data, "presets": preset_data}, total=1)
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"一体化保存场景失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"保存失败，异常描述: {str(e)}")
+
+
+@perf_scene.post("/preset/batch_duplicate", summary="批量派生负载预设档位", description="拐点测试快捷操作: 基于已有预设批量派生多个并发档位")
+async def batch_duplicate_perf_presets(
+        payload: PerfPresetBatchDuplicate = Body(..., description="批量派生入参(基准预设 + 并发列表)"),
+        services: PerfServices = Depends(get_perf_api_services),
+):
+    """
+    批量派生负载预设档位(拐点测试快捷操作)。
+
+    :param payload: PerfPresetBatchDuplicate(base_preset_id/base_preset_code + concurrent_users_list + name_template)
+    :param services: 性能测试CRUD依赖聚合
+    :return: 统一HTTP响应, data = [{...}] 新建预设列表
+    """
+    try:
+        created = await PerfSceneService.batch_duplicate_presets(payload, current_user=get_current_username())
+        data = [
+            await p.to_dict(
+                exclude_fields={"state", "created_user", "created_time", "updated_user", "updated_time",
+                                "reserve_1", "reserve_2", "reserve_3"},
+                replace_fields={"id": "preset_id"},
+            )
+            for p in created
+        ]
+        return SuccessResponse(message=f"已派生 {len(created)} 份负载预设", data=data, total=len(created))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"批量派生负载预设失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"派生失败，异常描述: {str(e)}")
+
+
+@perf_scene.post("/run_all_presets", summary="一键跑全部负载预设", description="批量下发场景下所有预设执行(锁定态跳过, 失败逐条记录不阻塞其余)")
+async def run_all_perf_scene_presets(
+        locate_in: PerfSceneRunAllPresets = Body(..., description="场景定位入参"),
+        services: PerfServices = Depends(get_perf_api_services),
+):
+    """
+    一键批量下发场景下所有负载预设执行。
+
+    :param locate_in: PerfSceneRunAllPresets(scene_id 或 scene_code)
+    :param services: 性能测试CRUD依赖聚合
+    :return: 统一HTTP响应, data = {scene_id, scene_code, total, dispatched, skipped, failed, items}
+    """
+    try:
+        result = await PerfSceneService.run_all_presets(locate_in, current_user=get_current_username())
+        message = (
+            f"已下发 {result['dispatched']}/{result['total']} 份负载预设"
+            f"(跳过 {result['skipped']}, 失败 {result['failed']})"
+        )
+        return SuccessResponse(message=message, data=result, total=result["total"])
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"一键跑全部负载预设失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"批量下发失败，异常描述: {str(e)}")

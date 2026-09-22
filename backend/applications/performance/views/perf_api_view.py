@@ -59,7 +59,7 @@ from backend.services.ctx import get_current_username
 
 perf_api = APIRouter()
 
-# 接口序列化统一排除脚手架字段(列表/详情共用, 对齐 task 视图模式)
+# 接口序列化统一排除脚手架字段(列表/详情共用, 对齐 load_preset 视图模式)
 API_EXCLUDE_FIELDS = {
     "state",
     "created_user", "created_time",

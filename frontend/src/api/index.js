@@ -389,20 +389,27 @@ export default {
   /** Body：PerfScenePinBaseline —— 钉选/取消场景基线报告（同场景 completed 限定，report_code 留空为取消） */
   pinPerfSceneBaseline: (data = {}) => request.post('/perf/scene/pin_baseline', data),
 
-  /** Body：PerfTaskSelect —— 压测任务分页列表 */
-  getPerfTaskList: (data = {}) => request.post('/perf/task/search', data),
-  /** Query：perf_id 或 perf_code —— 任务详情 */
-  getPerfTask: (params = {}) => request.get('/perf/task/get', { params }),
-  /** Body：PerfTaskCreate —— 新增压测任务 */
-  createPerfTask: (data = {}) => request.post('/perf/task/create', data),
-  /** Body：PerfTaskUpdate（perf_id/perf_code 定位）—— 更新任务，running 状态禁止 */
-  updatePerfTask: (data = {}) => request.post('/perf/task/update', data),
-  /** Query：perf_id 或 perf_code —— 软删任务 */
-  deletePerfTask: (params = {}) => request.delete('/perf/task/delete', { params }),
-  /** Body：PerfTaskRun —— 立即执行（场景装载闸门 + 高危二次确认，置排队后异步施压） */
-  runPerfTask: (data = {}) => request.post('/perf/task/run', data),
-  /** Body：PerfTaskLocate —— 停止执行（置 stopping，管线数秒内终止） */
-  stopPerfTask: (data = {}) => request.post('/perf/task/stop', data),
+  /** Body：PerfLoadPresetSelect —— 负载预设分页列表 */
+  getPerfLoadPresetList: (data = {}) => request.post('/perf/load_preset/search', data),
+  /** Query：preset_id 或 preset_code —— 负载预设详情 */
+  getPerfLoadPreset: (params = {}) => request.get('/perf/load_preset/get', { params }),
+  /** Body：PerfLoadPresetCreate —— 新增负载预设 */
+  createPerfLoadPreset: (data = {}) => request.post('/perf/load_preset/create', data),
+  /** Body：PerfLoadPresetUpdate（preset_id/preset_code 定位）—— 更新负载预设，running 状态禁止 */
+  updatePerfLoadPreset: (data = {}) => request.post('/perf/load_preset/update', data),
+  /** Query：preset_id 或 preset_code —— 软删负载预设 */
+  deletePerfLoadPreset: (params = {}) => request.delete('/perf/load_preset/delete', { params }),
+  /** Body：PerfLoadPresetLocate —— 立即执行（场景装载闸门 + 高危二次确认，置排队后异步施压） */
+  runPerfLoadPreset: (data = {}) => request.post('/perf/load_preset/run', data),
+  /** Body：PerfLoadPresetLocate —— 停止执行（置 stopping，管线数秒内终止） */
+  stopPerfLoadPreset: (data = {}) => request.post('/perf/load_preset/stop', data),
+
+  /** Body：PerfSceneWizardPayload —— 一体化保存场景+负载预设（Tab 编辑页唯一提交入口） */
+  savePerfSceneWizard: (data = {}) => request.post('/perf/scene/save_wizard', data),
+  /** Body：PerfPresetBatchDuplicate —— 批量派生负载预设档位（拐点测试快捷操作） */
+  batchDuplicatePerfPreset: (data = {}) => request.post('/perf/scene/preset/batch_duplicate', data),
+  /** Body：PerfSceneRunAllPresets —— 一键跑全部负载预设（批量下发场景下所有预设执行） */
+  runAllPerfScenePresets: (data = {}) => request.post('/perf/scene/run_all_presets', data),
 
   /** Body：PerfJobSelect —— 数据作业分页列表（不含失败原因大字段） */
   searchPerfJobList: (data = {}) => request.post('/perf/job/search', data),

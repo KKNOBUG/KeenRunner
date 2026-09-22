@@ -25,8 +25,8 @@ class PerfSceneModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, R
     性能测试-压测场景表(编排层)。
 
     场景回答「打什么、怎么打」: 接口项组合(角色/权重/思考时间/事务/数据集策略)、业务链路阶段、
-    判定口径(SLA目标/基线策略/熔断/warmup); 「打多狠、什么时候打」由 krun_perf_task 承载。
-    本表不直接执行, 故不建 last_execute_* 三件套(与任务表重复即分叉源)。
+    判定口径(SLA目标/基线策略/熔断/warmup); 「打多狠、什么时候打」由 krun_perf_load_preset 承载。
+    本表不直接执行, 故不建 last_execute_* 三件套(与负载预设表重复即分叉源)。
     事务不单独建字段: 由 scene_items[].transaction 与 journey.phases 派生, 避免两处维护互相漂移。
     """
     scene_name = fields.CharField(max_length=255, index=True, description="场景名称")

@@ -23,7 +23,7 @@ from backend.applications.performance.models.perf_api_model import PerfApiModel
 from backend.applications.performance.models.perf_dataset_model import PerfDatasetModel
 from backend.applications.performance.models.perf_report_model import PerfReportModel
 from backend.applications.performance.models.perf_scene_model import PerfSceneModel
-from backend.applications.performance.models.perf_task_model import PerfTaskModel
+from backend.applications.performance.models.perf_load_preset_model import PerfLoadPresetModel
 from backend.applications.performance.schemas.perf_scene_schema import (
     PerfSceneCreate,
     PerfSceneItem,
@@ -441,7 +441,7 @@ class PerfSceneCrud(ScaffoldCrud[PerfSceneModel, PerfSceneCreate, PerfSceneUpdat
 
     async def delete_perf_scene(self, scene_id: Optional[int] = None, scene_code: Optional[str] = None) -> PerfSceneModel:
         """
-        软删除压测场景；被压测任务引用时禁止删除。
+        软删除压测场景；被负载预设引用时禁止删除。
 
         :param scene_id: 场景主键ID，与scene_code二选一
         :param scene_code: 场景标识代码，与scene_id二选一
@@ -461,20 +461,20 @@ class PerfSceneCrud(ScaffoldCrud[PerfSceneModel, PerfSceneCreate, PerfSceneUpdat
     @staticmethod
     async def ensure_scenes_deletable(scene_codes: List[str]) -> None:
         """
-        删除保护: 被压测任务引用的场景禁止删除(任务列为真实字段, 走索引精确查, 无需扫描容器)。
+        删除保护: 被负载预设引用的场景禁止删除(预设列为真实字段, 走索引精确查, 无需扫描容器)。
 
         :param scene_codes: 待删除的场景标识列表
         :return: None
         """
-        referencing: List[PerfTaskModel] = await PerfTaskModel.filter(
+        referencing: List[PerfLoadPresetModel] = await PerfLoadPresetModel.filter(
             scene_code__in=scene_codes, state__not=1
-        ).only("perf_code", "perf_name", "scene_code")
+        ).only("preset_code", "preset_name", "scene_code")
         if not referencing:
             return
         grouped: Dict[str, List[str]] = {}
-        for task in referencing:
-            grouped.setdefault(task.scene_code, []).append(f"{task.perf_name}(code={task.perf_code})")
-        error_message: str = f"删除压测场景信息失败, 以下场景仍被压测任务引用, 请先删除或改绑任务: {grouped}"
+        for preset in referencing:
+            grouped.setdefault(preset.scene_code, []).append(f"{preset.preset_name}(code={preset.preset_code})")
+        error_message: str = f"删除压测场景信息失败, 以下场景仍被负载预设引用, 请先删除或改绑预设: {grouped}"
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
 
@@ -523,7 +523,7 @@ class PerfSceneCrud(ScaffoldCrud[PerfSceneModel, PerfSceneCreate, PerfSceneUpdat
     @staticmethod
     async def _ensure_project_exists(project_id: int) -> None:
         """
-        校验应用主数据存在(与压测任务同一口径, 业务层验证不设外键)。
+        校验应用主数据存在(与负载预设同一口径, 业务层验证不设外键)。
 
         :param project_id: 应用ID
         :return: None

@@ -37,7 +37,7 @@ from backend.services.file_transfer import FileTransfer
 
 perf_report = APIRouter()
 
-# 报告序列化统一排除脚手架字段(列表/详情共用, 对齐 task 视图模式)；
+# 报告序列化统一排除脚手架字段(列表/详情共用, 对齐 load_preset 视图模式)；
 # created_user/created_time 保留: 执行人与创建时间是报告页与执行记录列表的业务列
 REPORT_EXCLUDE_FIELDS = {
     "state",
@@ -284,10 +284,10 @@ def build_report_search_query(report_in: PerfReportSelect) -> Q:
         q &= Q(id=report_in.report_id)
     if report_in.report_code:
         q &= Q(report_code__contains=report_in.report_code.strip())
-    if report_in.perf_id:
-        q &= Q(perf_id=report_in.perf_id)
-    if report_in.perf_code:
-        q &= Q(perf_code=report_in.perf_code)
+    if report_in.preset_id:
+        q &= Q(preset_id=report_in.preset_id)
+    if report_in.preset_code:
+        q &= Q(preset_code=report_in.preset_code)
     if report_in.batch_code:
         q &= Q(batch_code=report_in.batch_code)
     if report_in.status:

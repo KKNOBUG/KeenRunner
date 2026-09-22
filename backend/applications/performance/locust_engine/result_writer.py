@@ -34,7 +34,7 @@ from reservoir import Reservoir
 # 环境变量契约: 由backend执行管线在启动locust子进程前注入(与管线双声明同步维护)
 ENV_RESULT_FILE = "PERF_RESULT_FILE"
 ENV_REPORT_CODE = "PERF_REPORT_CODE"
-ENV_PERF_CODE = "PERF_PERF_CODE"
+ENV_PRESET_CODE = "PERF_PRESET_CODE"
 
 # 分片文件名模板: 以进程pid区分, 多进程模式下各worker各写一份
 RESULT_SHARD_NAME = "result_{pid}.json"
@@ -102,7 +102,7 @@ class ResultWriter:
             *,
             result_dir: str,
             report_code: str,
-            perf_code: str,
+            preset_code: str,
             samples: Reservoir,
             prepare_metrics: Dict[str, Dict[str, float]],
             item_index: List[Dict[str, Any]],
@@ -115,7 +115,7 @@ class ResultWriter:
         :param environment: locust Environment实例
         :param result_dir: 分片输出目录(PERF_RESULT_FILE语义为目录)
         :param report_code: 报告标识
-        :param perf_code: 任务标识
+        :param preset_code: 负载预设标识
         :param samples: 本进程蓄水池(引用, test_stop时读取最终样本)
         :param prepare_metrics: 准备段指标注册表(引用, 由施压入口持续累计)
         :param item_index: 接口项索引(统计行名与压测接口资产的归因关系)
@@ -125,7 +125,7 @@ class ResultWriter:
         self.environment = environment
         self.result_dir = result_dir
         self.report_code = report_code
-        self.perf_code = perf_code
+        self.preset_code = preset_code
         self.samples = samples
         self.prepare_metrics = prepare_metrics
         self.item_index = item_index
@@ -168,7 +168,7 @@ class ResultWriter:
             environment,
             result_dir=result_dir,
             report_code=os.environ.get(ENV_REPORT_CODE, "unknown"),
-            perf_code=os.environ.get(ENV_PERF_CODE, "unknown"),
+            preset_code=os.environ.get(ENV_PRESET_CODE, "unknown"),
             samples=samples,
             prepare_metrics=prepare_metrics,
             item_index=item_index,
@@ -194,7 +194,7 @@ class ResultWriter:
     def build_result(self) -> Dict[str, Any]:
         """
         构建结果分片(统计+样本+归因索引), 结构:
-            {"shard_version": 2, "report_code": "xxx", "perf_code": "yyy", "pid": 123,
+            {"shard_version": 2, "report_code": "xxx", "preset_code": "yyy", "pid": 123,
              "status": "completed", "stopped_reason": "completed",
              "started_time": "2026-09-16T06:00:00+00:00", "finished_time": "...",
              "actual_duration": 60, "run_duration": 60, "warmup_seconds": 20,
@@ -225,7 +225,7 @@ class ResultWriter:
         return {
             "shard_version": SHARD_VERSION,
             "report_code": self.report_code,
-            "perf_code": self.perf_code,
+            "preset_code": self.preset_code,
             "pid": os.getpid(),
             "status": "completed",
             "stopped_reason": stopped_reason,

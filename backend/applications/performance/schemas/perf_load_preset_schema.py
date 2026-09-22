@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-压测任务入参契约(调度层)。
+负载预设入参契约(调度层)。
 
-任务只承载「打多狠、什么时候打」: 场景引用 + 负载参数。流量结构与判定口径一律来自场景,
+负载预设只承载「打多狠、什么时候打」: 场景引用 + 负载参数。流量结构与判定口径一律来自场景,
 本文件不再定义任何请求/断言/数据集结构(那属于 perf_api_schema 与 perf_scene_schema)。
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : perf_task_schema.py
+@Module  : perf_load_preset_schema.py
 @DateTime: 2026/9/14 11:20
 """
 from typing import List, Optional
@@ -33,12 +33,12 @@ def _has_text(value: Optional[str]) -> bool:
     return bool((value or "").strip())
 
 
-class PerfTaskBase(BaseModel):
-    """任务公共字段(负载模型)。"""
+class PerfLoadPresetBase(BaseModel):
+    """负载预设公共字段(负载模型)。"""
 
-    perf_project: int = Field(..., ge=1, description="任务所属应用")
-    perf_name: str = Field(..., min_length=1, max_length=255, description="任务名称")
-    perf_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
+    preset_project: int = Field(..., ge=1, description="负载预设所属应用")
+    preset_name: str = Field(..., min_length=1, max_length=255, description="负载预设名称")
+    preset_desc: Optional[str] = Field(None, max_length=2048, description="负载预设描述")
     # 施压脚本来源: 跨表引用以 code 为准, id 与名称由 crud 回查覆盖
     scene_code: str = Field(..., min_length=1, max_length=64, description="压测场景标识代码")
     scene_id: Optional[int] = Field(None, ge=1, description="压测场景ID(展示冗余, 保存时回查覆盖)")
@@ -61,19 +61,19 @@ class PerfTaskBase(BaseModel):
     target_rps: Optional[float] = Field(None, gt=0, le=PERF_TARGET_RPS_MAX, description="目标吞吐RPS(rps专用)")
 
 
-class PerfTaskCreate(PerfTaskBase):
-    """创建压测任务入参。"""
+class PerfLoadPresetCreate(PerfLoadPresetBase):
+    """创建负载预设入参。"""
 
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
-class PerfTaskUpdate(PerfTaskBase):
-    """更新压测任务入参(定位字段二选一, 负载字段整体覆盖)。"""
+class PerfLoadPresetUpdate(PerfLoadPresetBase):
+    """更新负载预设入参(定位字段二选一, 负载字段整体覆盖)。"""
 
-    perf_id: Optional[int] = Field(None, ge=1, description="任务ID")
-    perf_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
-    perf_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
-    perf_name: Optional[str] = Field(None, min_length=1, max_length=255, description="任务名称")
+    preset_id: Optional[int] = Field(None, ge=1, description="负载预设ID")
+    preset_code: Optional[str] = Field(None, max_length=64, description="负载预设标识代码")
+    preset_project: Optional[int] = Field(None, ge=1, description="负载预设所属应用")
+    preset_name: Optional[str] = Field(None, min_length=1, max_length=255, description="负载预设名称")
     scene_code: Optional[str] = Field(None, min_length=1, max_length=64, description="压测场景标识代码")
     load_mode: Optional[PerfLoadMode] = Field(None, description="施压模式(fixed/stepped/rps)")
     concurrent_users: Optional[int] = Field(None, ge=1, le=PERF_CONCURRENT_USERS_MAX, description="并发用户数")
@@ -89,19 +89,19 @@ class PerfTaskUpdate(PerfTaskBase):
 
     @model_validator(mode="after")
     def _require_locator(self):
-        """更新必须能定位到一条任务。"""
-        if not self.perf_id and not _has_text(self.perf_code):
-            raise ValueError("请提供参数[perf_id | perf_code]完成压测任务更新")
+        """更新必须能定位到一条负载预设。"""
+        if not self.preset_id and not _has_text(self.preset_code):
+            raise ValueError("请提供参数[preset_id | preset_code]完成负载预设更新")
         return self
 
 
-class PerfTaskSelect(BaseModel):
-    """分页查询压测任务入参。"""
+class PerfLoadPresetSelect(BaseModel):
+    """分页查询负载预设入参。"""
 
-    perf_id: Optional[int] = Field(None, ge=1, description="任务ID")
-    perf_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
-    perf_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
-    perf_name: Optional[str] = Field(None, max_length=255, description="任务名称(模糊匹配)")
+    preset_id: Optional[int] = Field(None, ge=1, description="负载预设ID")
+    preset_code: Optional[str] = Field(None, max_length=64, description="负载预设标识代码")
+    preset_project: Optional[int] = Field(None, ge=1, description="负载预设所属应用")
+    preset_name: Optional[str] = Field(None, max_length=255, description="负载预设名称(模糊匹配)")
     scene_id: Optional[int] = Field(None, ge=1, description="压测场景ID")
     scene_code: Optional[str] = Field(None, max_length=64, description="压测场景标识代码")
     load_mode: Optional[PerfLoadMode] = Field(None, description="施压模式")
@@ -114,15 +114,15 @@ class PerfTaskSelect(BaseModel):
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 
 
-class PerfTaskLocate(BaseModel):
-    """执行/停止压测任务入参(id或code二选一定位)。"""
+class PerfLoadPresetLocate(BaseModel):
+    """执行/停止负载预设入参(id或code二选一定位)。"""
 
-    perf_id: Optional[int] = Field(None, ge=1, description="任务ID")
-    perf_code: Optional[str] = Field(None, min_length=1, max_length=64, description="任务标识代码")
+    preset_id: Optional[int] = Field(None, ge=1, description="负载预设ID")
+    preset_code: Optional[str] = Field(None, min_length=1, max_length=64, description="负载预设标识代码")
 
     @model_validator(mode="after")
     def _require_locator(self):
-        """必须能定位到一条任务。"""
-        if not self.perf_id and not _has_text(self.perf_code):
-            raise ValueError("请提供参数[perf_id | perf_code]完成任务定位")
+        """必须能定位到一条负载预设。"""
+        if not self.preset_id and not _has_text(self.preset_code):
+            raise ValueError("请提供参数[preset_id | preset_code]完成负载预设定位")
         return self

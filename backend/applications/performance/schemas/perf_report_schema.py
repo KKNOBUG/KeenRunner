@@ -28,8 +28,8 @@ class PerfReportSelect(BaseModel):
 
     report_id: Optional[int] = Field(None, ge=1, description="报告ID")
     report_code: Optional[str] = Field(None, min_length=1, max_length=64, description="报告标识代码(模糊匹配)")
-    perf_id: Optional[int] = Field(None, ge=1, description="压测任务ID")
-    perf_code: Optional[str] = Field(None, min_length=1, max_length=64, description="压测任务标识代码(精确匹配)")
+    preset_id: Optional[int] = Field(None, ge=1, description="负载预设ID")
+    preset_code: Optional[str] = Field(None, min_length=1, max_length=64, description="负载预设标识代码(精确匹配)")
     scene_id: Optional[int] = Field(None, ge=1, description="压测场景ID(同场景梯度对比的主过滤条件)")
     scene_code: Optional[str] = Field(None, min_length=1, max_length=64, description="压测场景标识代码")
     run_mode: Optional[PerfRunMode] = Field(None, description="场景施压语义")

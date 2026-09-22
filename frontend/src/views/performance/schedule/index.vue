@@ -1,6 +1,6 @@
 <template>
   <CommonPage show-footer title="定时压测">
-    <NEmpty description="功能建设中：压测任务定时调度（P1 规划，复用 redbeat 到期扫描下发 {port}_perf 队列）" class="py-120" />
+    <NEmpty description="功能建设中：负载预设定时调度（P1 规划，复用 redbeat 到期扫描下发 {port}_perf 队列）" class="py-120" />
   </CommonPage>
 </template>
 

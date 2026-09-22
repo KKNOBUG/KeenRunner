@@ -3,10 +3,10 @@
 压测执行服务：执行下发、停止链与 Celery 编排管线（backend 主进程侧）。
 
 职责边界：
-- run_task/stop_task：视图侧业务（状态校验与原子状态迁移），进程操作不在此层；
+- run_preset/stop_preset：视图侧业务（状态校验与原子状态迁移），进程操作不在此层；
 - execute_pipeline：Celery 任务编排主体（装载场景 → 建报告 → 拉起引擎 → 等待循环
   → 分片合并聚合 → 落库回填），执行期不持有长 DB 事务（等待循环仅轮询状态列），
-  任何异常兜底置 failed 保证任务不卡 running。
+  任何异常兜底置 failed 保证负载预设不卡 running。
 
 引擎环境变量契约（PERF_ENV_*）：与 locust_engine 引擎文件的 ENV_* 字符串逐字对齐；
 引擎子包禁止 import backend，契约常量在两侧独立声明，新增契约字段须同步引擎文件
@@ -49,8 +49,8 @@ from backend.applications.performance.models.perf_api_model import PerfApiModel
 from backend.applications.performance.models.perf_dataset_model import PerfDatasetModel
 from backend.applications.performance.models.perf_report_model import PerfReportModel
 from backend.applications.performance.models.perf_scene_model import PerfSceneModel
-from backend.applications.performance.models.perf_task_model import PerfTaskModel
-from backend.applications.performance.schemas.perf_task_schema import PerfTaskLocate
+from backend.applications.performance.models.perf_load_preset_model import PerfLoadPresetModel
+from backend.applications.performance.schemas.perf_load_preset_schema import PerfLoadPresetLocate
 from backend.applications.performance.services.perf_asset_utils import diff_report_pair, summarize_report_diff
 from backend.applications.performance.services.perf_process_registry import (
     KILL_WAIT_TIMEOUT,
@@ -61,7 +61,7 @@ from backend.applications.performance.services.perf_result_aggregator import (
     merge_result_shards,
     parse_iso,
 )
-from backend.applications.performance.services.perf_task_crud import STEPPED_REQUIRED_FIELDS, PerfTaskCrud
+from backend.applications.performance.services.perf_load_preset_crud import STEPPED_REQUIRED_FIELDS, PerfLoadPresetCrud
 from backend.common.url_utils import build_absolute_http_url, is_absolute_http_url
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import ParameterException
@@ -76,7 +76,7 @@ from backend.enums import (
     PerfReportStatus,
     PerfRunMode,
     PerfStoppedReason,
-    PerfTaskStatus,
+    PerfPresetStatus,
 )
 
 # ---------- 引擎环境变量契约(与 locust_engine 引擎文件 ENV_* 逐字对齐, 禁止单侧擅改) ----------
@@ -85,14 +85,14 @@ PERF_ENV_RESULT_FILE = "PERF_RESULT_FILE"
 PERF_ENV_VM_URL = "PERF_VM_URL"
 PERF_ENV_PUSH_INTERVAL = "PERF_METRICS_PUSH_INTERVAL"
 PERF_ENV_REPORT_CODE = "PERF_REPORT_CODE"
-PERF_ENV_PERF_CODE = "PERF_PERF_CODE"
+PERF_ENV_PRESET_CODE = "PERF_PRESET_CODE"
 
 # 引擎契约全量清单: perf_locustfile 2 项 + metrics_push 4 项 + result_writer 3 项(去重);
 # host_monitor 复用 metrics_push 的 VM/周期/标识四项, 不新增环境变量,
 # 冒烟脚本按此清单与引擎源码双向核对, 防两侧声明漂移
 PERF_ENV_FIELDS = (
     PERF_ENV_SCENE_FILE, PERF_ENV_RESULT_FILE, PERF_ENV_VM_URL,
-    PERF_ENV_PUSH_INTERVAL, PERF_ENV_REPORT_CODE, PERF_ENV_PERF_CODE,
+    PERF_ENV_PUSH_INTERVAL, PERF_ENV_REPORT_CODE, PERF_ENV_PRESET_CODE,
 )
 
 # ---------- 引擎产物文件名约定(OUTPUT_PERF_DIR/{report_code}/ 目录下) ----------
@@ -112,8 +112,8 @@ LOG_TAIL_LIMIT = 2000
 # 管线等待循环兜底时限系数: 2倍run_duration + 该宽限秒数后强制回收进程组
 PIPELINE_IDLE_GRACE = 600
 
-# 执行锁定态(与 PerfTaskCrud.ensure_task_editable 口径一致): 排队/执行中/停止中禁止再次下发
-EXECUTE_LOCKED_STATES = (PerfTaskStatus.QUEUED, PerfTaskStatus.RUNNING, PerfTaskStatus.STOPPING)
+# 执行锁定态(与 PerfLoadPresetCrud.ensure_preset_editable 口径一致): 排队/执行中/停止中禁止再次下发
+EXECUTE_LOCKED_STATES = (PerfPresetStatus.QUEUED, PerfPresetStatus.RUNNING, PerfPresetStatus.STOPPING)
 
 
 def _pick_scene_items(scene: PerfSceneModel) -> List[Dict[str, Any]]:
@@ -141,8 +141,8 @@ async def _resolve_endpoints(
     按 APP 配置名批量解析施压环境端点(host/port)。
 
     复用 autotest 调试链路同一解析器 resolve_env_config, 保证与用例执行得到的
-    环境地址口径完全一致(环境变更实时生效, 不依赖任务保存时的快照)。配置名去重后
-    每个配置名一次解析, 且仅在任务下发时执行一次(不在虚拟用户循环内触库)。
+    环境地址口径完全一致(环境变更实时生效, 不依赖负载预设保存时的快照)。配置名去重后
+    每个配置名一次解析, 且仅在负载预设下发时执行一次(不在虚拟用户循环内触库)。
 
     :param project_id: 应用ID(krun_autotest_project.id)
     :param env_name: 施压环境名称
@@ -204,21 +204,21 @@ def _validate_launchable_items(payload_items: List[Dict[str, Any]]) -> None:
         parsed = urlparse(build_request_url(request_url, item.get("request_port")))
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             error_message: str = (
-                f"执行压测任务失败, 接口[{item.get('api_name')}]地址[{request_url}]缺少目标host, "
+                f"执行负载预设失败, 接口[{item.get('api_name')}]地址[{request_url}]缺少目标host, "
                 "请检查施压环境APP配置的host或把接口地址完善为 http(s)://host[:port]/path 完整地址"
             )
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
 
-def _stepped_load_plan(task: PerfTaskModel) -> Optional[Dict[str, Any]]:
+def _stepped_load_plan(preset: PerfLoadPresetModel) -> Optional[Dict[str, Any]]:
     """
     构建阶梯负载计划(stepped 专用; fixed 返回 None, 消费方按无阶梯处理)。
 
     档数/总时长等派生值在此统一计算, 随 payload.load 段下发引擎与报告快照/管线
     deadline 共用同一份口径(单一事实源), 引擎 shape 只消费不重复推导。
 
-    :param task: 压测任务实例
+    :param preset: 负载预设实例
     :return: 负载计划字典(fixed 模式返回 None), 形如:
         {"mode": "stepped", "users": 10, "spawn_rate": 5, "start_users": 10,
          "increment": 10, "step_duration": 60, "max_users": 50,
@@ -228,12 +228,12 @@ def _stepped_load_plan(task: PerfTaskModel) -> Optional[Dict[str, Any]]:
     # 注意: 不能用 str(枚举成员) 与 .value 比较 —— Enum 元类覆盖了 __str__,
     # str(PerfLoadMode.STEPPED) 是 'PerfLoadMode.STEPPED' 而非 'stepped';
     # StringEnum 为 str mixin, 与枚举或裸字符串直接 == 均成立(兼容JSON往返)
-    if getattr(task, "load_mode", None) != PerfLoadMode.STEPPED:
+    if getattr(preset, "load_mode", None) != PerfLoadMode.STEPPED:
         return None
-    values: Dict[str, Optional[int]] = {field: getattr(task, field, None) for field in STEPPED_REQUIRED_FIELDS}
+    values: Dict[str, Optional[int]] = {field: getattr(preset, field, None) for field in STEPPED_REQUIRED_FIELDS}
     missing = [field for field, value in values.items() if not value]
     if missing:
-        error_message: str = f"执行压测任务失败, 阶梯负载专用字段缺失: {missing}, 请补全任务负载配置"
+        error_message: str = f"执行负载预设失败, 阶梯负载专用字段缺失: {missing}, 请补全负载预设配置"
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
     start_users = int(values["step_start_users"])
@@ -245,7 +245,7 @@ def _stepped_load_plan(task: PerfTaskModel) -> Optional[Dict[str, Any]]:
     sustain_duration = int(values["step_sustain_duration"])
     return {
         "mode": PerfLoadMode.STEPPED.value,
-        "users": start_users, "spawn_rate": int(task.spawn_rate or 1),
+        "users": start_users, "spawn_rate": int(preset.spawn_rate or 1),
         "start_users": start_users, "increment": increment,
         "step_duration": step_duration, "max_users": max_users,
         "sustain_duration": sustain_duration,
@@ -254,60 +254,60 @@ def _stepped_load_plan(task: PerfTaskModel) -> Optional[Dict[str, Any]]:
     }
 
 
-def _rps_load_plan(task: PerfTaskModel) -> Optional[Dict[str, Any]]:
+def _rps_load_plan(preset: PerfLoadPresetModel) -> Optional[Dict[str, Any]]:
     """
     构建吞吐负载计划(rps 专用; 其余模式返回 None)。
 
     引擎无 shape 类, 用户数/时长与 fixed 同走 CLI; 差异仅在 load 段 target_rps:
     引擎按 上限并发/目标RPS 做每虚拟用户节流, 全局稳态吞吐≈target_rps。
 
-    :param task: 压测任务实例
+    :param preset: 负载预设实例
     :return: 负载计划字典(非 rps 模式返回 None), 形如:
         {"mode": "rps", "users": 50, "spawn_rate": 10, "target_rps": 100.0, "total_seconds": 600}
     :raises ParameterException: rps 模式目标RPS缺失(保存期已校验, 执行期快速失败防脏数据)
     """
-    if getattr(task, "load_mode", None) != PerfLoadMode.RPS:
+    if getattr(preset, "load_mode", None) != PerfLoadMode.RPS:
         return None
-    target_rps = float(task.target_rps or 0)
+    target_rps = float(preset.target_rps or 0)
     if target_rps <= 0:
-        error_message: str = "执行压测任务失败, 吞吐模式[rps]目标RPS缺失或非法, 请补全任务负载配置"
+        error_message: str = "执行负载预设失败, 吞吐模式[rps]目标RPS缺失或非法, 请补全负载预设配置"
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
     return {
         "mode": PerfLoadMode.RPS.value,
-        "users": int(task.concurrent_users or 1), "spawn_rate": int(task.spawn_rate or 1),
+        "users": int(preset.concurrent_users or 1), "spawn_rate": int(preset.spawn_rate or 1),
         "target_rps": target_rps,
-        "total_seconds": int(task.run_duration or 0),
+        "total_seconds": int(preset.run_duration or 0),
     }
 
 
-def _resolve_load_plan(task: PerfTaskModel) -> Optional[Dict[str, Any]]:
+def _resolve_load_plan(preset: PerfLoadPresetModel) -> Optional[Dict[str, Any]]:
     """
     按施压模式解析负载计划(stepped/rps 各自产计划, fixed 返回 None)。
 
-    :param task: 压测任务实例
+    :param preset: 负载预设实例
     :return: 负载计划字典(fixed 模式返回 None)
     """
-    if getattr(task, "load_mode", None) == PerfLoadMode.RPS:
-        return _rps_load_plan(task)
-    return _stepped_load_plan(task)
+    if getattr(preset, "load_mode", None) == PerfLoadMode.RPS:
+        return _rps_load_plan(preset)
+    return _stepped_load_plan(preset)
 
 
-def _effective_peak_users(task: PerfTaskModel) -> int:
+def _effective_peak_users(preset: PerfLoadPresetModel) -> int:
     """
     实际峰值并发: stepped 取阶梯峰值, fixed/rps 取并发用户数(报告快照/执行闸门/指纹统一口径)。
 
-    :param task: 压测任务实例
+    :param preset: 负载预设实例
     :return: 峰值并发用户数
     """
-    load_plan = _resolve_load_plan(task)
+    load_plan = _resolve_load_plan(preset)
     if load_plan and load_plan.get("mode") == PerfLoadMode.STEPPED:
         return int(load_plan["max_users"])
     # fixed/rps 的用户池上限均为 concurrent_users
-    return int(task.concurrent_users or 1)
+    return int(preset.concurrent_users or 1)
 
 
-def _derive_warmup_seconds(scene: PerfSceneModel, task: PerfTaskModel, users: int, spawn_rate: int) -> int:
+def _derive_warmup_seconds(scene: PerfSceneModel, preset: PerfLoadPresetModel, users: int, spawn_rate: int) -> int:
     """
     解析预热剔除秒数: 场景显式配置优先; 未配置时按加压期时长派生(上限
     PERF_WARMUP_DEFAULT_MAX, 预热本质是剔除ramp爬坡段, 不应把整段压测剔空)。
@@ -317,14 +317,14 @@ def _derive_warmup_seconds(scene: PerfSceneModel, task: PerfTaskModel, users: in
     保持段已是稳态流量, 不属于预热范畴)。
 
     :param scene: 压测场景实例
-    :param task: 压测任务实例
+    :param preset: 负载预设实例
     :param users: 并发用户数
     :param spawn_rate: 每秒启动用户数
     :return: 预热剔除秒数(0=不剔除)
     """
     if scene.warmup_seconds is not None:
         return int(scene.warmup_seconds)
-    load_plan = _resolve_load_plan(task)
+    load_plan = _resolve_load_plan(preset)
     if load_plan and load_plan.get("mode") == PerfLoadMode.STEPPED:
         ramp_seconds = int(load_plan["rampup_stages"]) * int(load_plan["step_duration"])
     else:
@@ -334,7 +334,7 @@ def _derive_warmup_seconds(scene: PerfSceneModel, task: PerfTaskModel, users: in
 
 async def _assemble_scene_payload(
         *,
-        task: PerfTaskModel,
+        preset: PerfLoadPresetModel,
         scene: PerfSceneModel,
         batch_code: str,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, int]]:
@@ -345,20 +345,20 @@ async def _assemble_scene_payload(
     journey模式拒绝(引擎未实装链路编排) -> TCP项拒绝(M1仅HTTP施压)
     -> measured项存在 -> unique策略行数充足 -> 地址合法性。
 
-    :param task: 压测任务实例
+    :param preset: 负载预设实例
     :param scene: 压测场景实例
     :param batch_code: 压测批次标识(注入 x-perf-batch 与报告关联)
     :return: (场景负载字典, 接口项负载列表, 接口版本映射{api_code: version})
     :raises ParameterException: 任一闸门不通过或引用资产缺失
     """
-    users = int(task.concurrent_users or 1)
-    spawn_rate = int(task.spawn_rate or 1)
-    load_plan = _resolve_load_plan(task)
+    users = int(preset.concurrent_users or 1)
+    spawn_rate = int(preset.spawn_rate or 1)
+    load_plan = _resolve_load_plan(preset)
     # 阶梯模式的行饥饿闸门/预热派生均以峰值并发为口径(爬坡初期行数充足不代表峰值期充足)
-    peak_users = _effective_peak_users(task)
+    peak_users = _effective_peak_users(preset)
     if scene.run_mode == PerfRunMode.JOURNEY:
         error_message: str = (
-            "执行压测任务失败, 施压引擎暂不支持journey链路模式, "
+            "执行负载预设失败, 施压引擎暂不支持journey链路模式, "
             "请改用单接口(single)或混合流量(mixed)场景"
         )
         LOGGER.error(error_message)
@@ -366,7 +366,7 @@ async def _assemble_scene_payload(
 
     scene_items = _pick_scene_items(scene)
     if not any(str(item.get("role")) == PerfApiRole.MEASURED.value for item in scene_items):
-        error_message = "执行压测任务失败, 场景中没有启用的被测接口项(measured)"
+        error_message = "执行负载预设失败, 场景中没有启用的被测接口项(measured)"
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
 
@@ -376,7 +376,7 @@ async def _assemble_scene_payload(
     api_map: Dict[str, PerfApiModel] = {api.api_code: api for api in apis}
     missing_apis = [code for code in api_codes if code not in api_map]
     if missing_apis:
-        error_message = f"执行压测任务失败, 场景引用的压测接口不存在或已禁用: {missing_apis}"
+        error_message = f"执行负载预设失败, 场景引用的压测接口不存在或已禁用: {missing_apis}"
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
     tcp_apis = [
@@ -385,7 +385,7 @@ async def _assemble_scene_payload(
     ]
     if tcp_apis:
         error_message = (
-            f"执行压测任务失败, TCP施压暂未开放(当前仅支持HTTP), "
+            f"执行负载预设失败, TCP施压暂未开放(当前仅支持HTTP), "
             f"请从场景中移除TCP接口: {tcp_apis}"
         )
         LOGGER.error(error_message)
@@ -396,7 +396,7 @@ async def _assemble_scene_payload(
     dataset_map: Dict[str, PerfDatasetModel] = {ds.ds_code: ds for ds in datasets}
     missing_datasets = [code for code in ds_codes if code not in dataset_map]
     if missing_datasets:
-        error_message = f"执行压测任务失败, 场景引用的参数化数据集不存在或已禁用: {missing_datasets}"
+        error_message = f"执行负载预设失败, 场景引用的参数化数据集不存在或已禁用: {missing_datasets}"
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
     for item in scene_items:
@@ -407,24 +407,24 @@ async def _assemble_scene_payload(
         scene_count: int = len(dataset.dataset_names or [])
         if scene_count < peak_users:
             error_message = (
-                f"执行压测任务失败, 接口[{item.get('api_name')}]的unique策略数据场景数"
+                f"执行负载预设失败, 接口[{item.get('api_name')}]的unique策略数据场景数"
                 f"[{scene_count}]小于并发用户数[{peak_users}], 请补充数据或降低并发"
             )
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-    # 地址组装: 接口侧配置名为主, 回退任务级缺省配置(与功能用例执行同口径)
-    default_config: str = (task.env_config_name or "").strip()
-    env_name: str = (task.env_name or "").strip()
+    # 地址组装: 接口侧配置名为主, 回退负载预设级缺省配置(与功能用例执行同口径)
+    default_config: str = (preset.env_config_name or "").strip()
+    env_name: str = (preset.env_name or "").strip()
     step_configs: List[str] = []
     for item in scene_items:
         api = api_map[str(item.get("api_code"))]
         step_configs.append((api.request_config_name or "").strip() or default_config)
     endpoints: Dict[str, EnvEndpoint] = await _resolve_endpoints(
-        project_id=task.perf_project,
+        project_id=preset.preset_project,
         env_name=env_name,
         config_names=step_configs,
-        label=f"执行压测任务失败(施压环境[{env_name or '未选择'}])",
+        label=f"执行负载预设失败(施压环境[{env_name or '未选择'}])",
     )
 
     payload_items: List[Dict[str, Any]] = []
@@ -435,7 +435,7 @@ async def _assemble_scene_payload(
             endpoint = endpoints.get(config_name)
             if endpoint is None:
                 error_message = (
-                    f"执行压测任务失败, 接口[{api.api_name}]地址[{request_url}]是相对路径, "
+                    f"执行负载预设失败, 接口[{api.api_name}]地址[{request_url}]是相对路径, "
                     f"但未解析到施压环境APP配置[{config_name or '未选择'}]的host"
                 )
                 LOGGER.error(error_message)
@@ -489,10 +489,10 @@ async def _assemble_scene_payload(
         "run_mode": scene.run_mode.value,
         "perf_batch_code": batch_code,
         # stepped 模式 run_duration 语义为阶梯计划总时长(shape 自控结束, CLI --run-time 不参与)
-        "run_duration": int(load_plan["total_seconds"]) if load_plan else int(task.run_duration or 0),
+        "run_duration": int(load_plan["total_seconds"]) if load_plan else int(preset.run_duration or 0),
         # 负载计划段(stepped 专用; fixed 模式为 None, 引擎无消费方)
         "load": load_plan,
-        "warmup_seconds": _derive_warmup_seconds(scene, task, users, spawn_rate),
+        "warmup_seconds": _derive_warmup_seconds(scene, preset, users, spawn_rate),
         "error_rate_threshold": float(scene.error_rate_threshold or 0),
         "inject_perf_tag": bool(scene.inject_perf_tag),
         "assert_mode": scene.assert_mode.value,
@@ -521,13 +521,13 @@ def _resolve_target_host(payload_items: List[Dict[str, Any]]) -> Optional[str]:
 
 def _build_config_fingerprint(
         scene_payload: Dict[str, Any],
-        task: PerfTaskModel,
+        preset: PerfLoadPresetModel,
 ) -> str:
     """
     计算配置指纹(可比性判定依据): 场景结构与负载参数的md5, 任一变化即视为不可比。
 
     :param scene_payload: 场景负载字典(见 _assemble_scene_payload)
-    :param task: 压测任务实例
+    :param preset: 负载预设实例
     :return: 32位md5十六进制串
     """
     fingerprint_source = orjson.dumps({
@@ -545,24 +545,24 @@ def _build_config_fingerprint(
         "warmup_seconds": scene_payload.get("warmup_seconds"),
         "error_rate_threshold": scene_payload.get("error_rate_threshold"),
         # 指纹取有效峰值并发/计划总时长/目标吞吐: 两份报告指纹相同即负载口径完全一致(可比前提)
-        "concurrent_users": _effective_peak_users(task),
+        "concurrent_users": _effective_peak_users(preset),
         "run_duration": int(scene_payload.get("run_duration") or 0),
-        "target_rps": (float(task.target_rps) if task.target_rps is not None
-                       and getattr(task, "load_mode", None) == PerfLoadMode.RPS else None),
+        "target_rps": (float(preset.target_rps) if preset.target_rps is not None
+                       and getattr(preset, "load_mode", None) == PerfLoadMode.RPS else None),
     })
     return hashlib.md5(fingerprint_source).hexdigest()
 
 
 def _build_launch_context(
         *,
-        task: PerfTaskModel,
+        preset: PerfLoadPresetModel,
         report_code: str,
         scene_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
     构建施压引擎启动上下文：工作目录、场景文件、环境变量与 locust 命令行。
 
-    :param task: 压测任务实例(配置于子进程启动前读取, 全程不变)
+    :param preset: 负载预设实例(配置于子进程启动前读取, 全程不变)
     :param report_code: 报告标识(工作目录与指标标签键)
     :param scene_payload: 已组装的场景负载(见 _assemble_scene_payload)
     :return: 启动上下文字典, 结构:
@@ -582,9 +582,9 @@ def _build_launch_context(
 
     # 阶梯模式峰值并发参与多进程决策; CLI -u/-r/--run-time 传 fixed 与 rps 模式
     # (stepped 由引擎 shape 类接管用户数驱动, locust 发现 shape 会忽略这三参数)
-    users = _effective_peak_users(task)
+    users = _effective_peak_users(preset)
     load_plan = scene_payload.get("load") if isinstance(scene_payload.get("load"), dict) else None
-    planned_duration = int(load_plan["total_seconds"]) if load_plan else int(task.run_duration or 0)
+    planned_duration = int(load_plan["total_seconds"]) if load_plan else int(preset.run_duration or 0)
     argv: List[str] = [
         sys.executable, "-m", "locust",
         "-f", LOCUSTFILE_PATH,
@@ -593,8 +593,8 @@ def _build_launch_context(
     if not load_plan or load_plan.get("mode") == PerfLoadMode.RPS:
         argv += [
             "--users", str(users),
-            "--spawn-rate", str(int(task.spawn_rate or 1)),
-            "--run-time", f"{int(task.run_duration or 0)}s",
+            "--spawn-rate", str(int(preset.spawn_rate or 1)),
+            "--run-time", f"{int(preset.run_duration or 0)}s",
         ]
     argv += ["--stop-timeout", str(LOCUST_STOP_TIMEOUT)]
     # 多进程决策: 并发达阈值时按 机器核数/配置上限/单进程承载 三者取最小(至少2进程)
@@ -611,7 +611,7 @@ def _build_launch_context(
     env: Dict[str, str] = {
         **os.environ,
         PERF_ENV_REPORT_CODE: report_code,
-        PERF_ENV_PERF_CODE: task.perf_code,
+        PERF_ENV_PRESET_CODE: preset.preset_code,
         PERF_ENV_SCENE_FILE: scene_file,
         # PERF_RESULT_FILE 语义为分片目录: 各引擎进程写 result_{pid}.json, 管线合并
         PERF_ENV_RESULT_FILE: work_dir,
@@ -820,89 +820,89 @@ class PerfExecuteService:
     """压测执行业务服务：执行下发、停止链与 Celery 编排管线。"""
 
     @staticmethod
-    async def _locate_task(task_in: PerfTaskLocate) -> PerfTaskModel:
+    async def _locate_preset(preset_in: PerfLoadPresetLocate) -> PerfLoadPresetModel:
         """
-        按id或code二选一定位任务(未禁用)。
+        按id或code二选一定位负载预设(未禁用)。
 
-        :param task_in: 任务定位入参
-        :return: 任务实例
+        :param preset_in: 负载预设定位入参
+        :return: 负载预设实例
         """
-        if task_in.perf_id:
-            return await PerfTaskCrud().get_by_id(perf_id=task_in.perf_id, on_error=True, state__not=1)
-        if task_in.perf_code:
-            return await PerfTaskCrud().get_by_code(perf_code=task_in.perf_code, on_error=True, state__not=1)
-        error_message: str = "定位压测任务失败, 参数[perf_id]或[perf_code]不允许为空"
+        if preset_in.preset_id:
+            return await PerfLoadPresetCrud().get_by_id(preset_id=preset_in.preset_id, on_error=True, state__not=1)
+        if preset_in.preset_code:
+            return await PerfLoadPresetCrud().get_by_code(preset_code=preset_in.preset_code, on_error=True, state__not=1)
+        error_message: str = "定位负载预设失败, 参数[preset_id]或[preset_code]不允许为空"
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
 
     @staticmethod
-    async def run_task(task_in: PerfTaskLocate) -> PerfTaskModel:
+    async def run_preset(preset_in: PerfLoadPresetLocate) -> PerfLoadPresetModel:
         """
         执行下发前置业务：完整性校验并原子置排队(下发 apply_async 由视图层编排)。
 
-        :param task_in: 任务定位入参(id或code二选一)
-        :return: 已置排队状态的任务实例
+        :param preset_in: 负载预设定位入参(id或code二选一)
+        :return: 已置排队状态的负载预设实例
         """
-        instance = await PerfExecuteService._locate_task(task_in)
+        instance = await PerfExecuteService._locate_preset(preset_in)
         # 下发前就完成场景装载与组装校验: 让用户在点击时得到确定反馈, 而非排队后才发现无法施压
         scene = await PerfSceneModel.filter(scene_code=instance.scene_code, state__not=1).first()
         if scene is None:
             error_message: str = (
-                f"执行压测任务失败, 任务引用的压测场景不存在或已禁用[{instance.scene_code}]"
+                f"执行负载预设失败, 负载预设引用的压测场景不存在或已禁用[{instance.scene_code}]"
             )
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        await _assemble_scene_payload(task=instance, scene=scene, batch_code="precheck")
+        await _assemble_scene_payload(preset=instance, scene=scene, batch_code="precheck")
 
         # 原子置排队: 排除执行锁定态, 与视图并发点击/引擎状态回写竞争互斥;
-        # 未执行过的存量任务该列为 NULL, 而 SQL 三值逻辑下 NOT(NULL IN(...)) 恒为 UNKNOWN 会误排 NULL 行,
-        # 必须显式补 IS NULL 分支(新建任务已由 create_perf_task 落 idle, 新增行不再依赖此分支)
-        updated = await PerfTaskModel.filter(id=instance.id).filter(
+        # 未执行过的存量负载预设该列为 NULL, 而 SQL 三值逻辑下 NOT(NULL IN(...)) 恒为 UNKNOWN 会误排 NULL 行,
+        # 必须显式补 IS NULL 分支(新建负载预设已由 create_perf_preset 落 idle, 新增行不再依赖此分支)
+        updated = await PerfLoadPresetModel.filter(id=instance.id).filter(
             Q(last_execute_state=None) | ~Q(last_execute_state__in=EXECUTE_LOCKED_STATES),
         ).update(
-            last_execute_state=PerfTaskStatus.QUEUED,
+            last_execute_state=PerfPresetStatus.QUEUED,
             last_execute_time=datetime.now(),
             last_execute_error=None,
         )
         if not updated:
             state_value = instance.last_execute_state.value if instance.last_execute_state else "无"
-            error_message = f"执行压测任务失败, 记录[id={instance.id}]当前状态为[{state_value}], 不允许执行"
+            error_message = f"执行负载预设失败, 记录[id={instance.id}]当前状态为[{state_value}], 不允许执行"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        LOGGER.info(f"压测任务已置排队: perf_id={instance.id}, perf_code={instance.perf_code}")
-        return await PerfTaskCrud().get_by_id(perf_id=instance.id, on_error=True)
+        LOGGER.info(f"负载预设已置排队: preset_id={instance.id}, preset_code={instance.preset_code}")
+        return await PerfLoadPresetCrud().get_by_id(preset_id=instance.id, on_error=True)
 
     @staticmethod
-    async def stop_task(task_in: PerfTaskLocate) -> PerfTaskModel:
+    async def stop_preset(preset_in: PerfLoadPresetLocate) -> PerfLoadPresetModel:
         """
-        停止链业务：仅排队/执行中任务允许置停止中, 重复请求幂等收敛。
+        停止链业务：仅排队/执行中负载预设允许置停止中, 重复请求幂等收敛。
 
         引擎等待循环按 PERF_STOP_POLL_INTERVAL 感知 stopping 后杀进程组并落 stopped 终态。
 
-        :param task_in: 任务定位入参
-        :return: 已置停止中状态的任务实例
+        :param preset_in: 负载预设定位入参
+        :return: 已置停止中状态的负载预设实例
         """
-        instance = await PerfExecuteService._locate_task(task_in)
-        updated = await PerfTaskModel.filter(
+        instance = await PerfExecuteService._locate_preset(preset_in)
+        updated = await PerfLoadPresetModel.filter(
             id=instance.id,
-            last_execute_state__in=[PerfTaskStatus.QUEUED, PerfTaskStatus.RUNNING],
-        ).update(last_execute_state=PerfTaskStatus.STOPPING)
+            last_execute_state__in=[PerfPresetStatus.QUEUED, PerfPresetStatus.RUNNING],
+        ).update(last_execute_state=PerfPresetStatus.STOPPING)
         if not updated:
-            fresh = await PerfTaskCrud().get_by_id(perf_id=instance.id, on_error=True)
-            if fresh.last_execute_state == PerfTaskStatus.STOPPING:
+            fresh = await PerfLoadPresetCrud().get_by_id(preset_id=instance.id, on_error=True)
+            if fresh.last_execute_state == PerfPresetStatus.STOPPING:
                 # 幂等: 停止指令已下发, 直接返回当前状态
                 return fresh
             state_value = fresh.last_execute_state.value if fresh.last_execute_state else "无"
-            error_message: str = f"停止压测任务失败, 记录[id={instance.id}]当前状态为[{state_value}], 不在执行中"
+            error_message: str = f"停止负载预设失败, 记录[id={instance.id}]当前状态为[{state_value}], 不在执行中"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
-        LOGGER.info(f"压测任务已置停止中: perf_id={instance.id}, perf_code={instance.perf_code}")
-        return await PerfTaskCrud().get_by_id(perf_id=instance.id, on_error=True)
+        LOGGER.info(f"负载预设已置停止中: preset_id={instance.id}, preset_code={instance.preset_code}")
+        return await PerfLoadPresetCrud().get_by_id(preset_id=instance.id, on_error=True)
 
     @staticmethod
     async def execute_pipeline(
             *,
-            perf_code: str,
+            preset_code: str,
             celery_id: Optional[str] = None,
             execute_user: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -914,79 +914,79 @@ class PerfExecuteService:
         result_{pid}.json 分片为准(断言失败/熔断是压测数据而非管线错误), 分片缺失/
         全部损坏才置 failed。
 
-        :param perf_code: 压测任务标识代码
-        :param celery_id: Celery任务ID(报告与任务表回填溯源)
+        :param preset_code: 负载预设标识代码
+        :param celery_id: Celery负载预设ID(报告与负载预设表回填溯源)
         :param execute_user: 触发人账号(报告维护字段归因)
         :return: 管线执行结果字典, 结构:
-            {"success": true, "perf_code": "xxx", "report_code": "yyy",
+            {"success": true, "preset_code": "xxx", "report_code": "yyy",
              "status": "completed", "error": null}
         """
-        task = await PerfTaskCrud().get_by_code(perf_code=perf_code, on_error=True)
+        preset = await PerfLoadPresetCrud().get_by_code(preset_code=preset_code, on_error=True)
 
         # 消费闸门: 仅排队中继续; 排队期间被撤销(stopping)收敛为stopped; 其余状态(消息重投等)跳过
-        if task.last_execute_state != PerfTaskStatus.QUEUED:
-            if task.last_execute_state == PerfTaskStatus.STOPPING:
-                await PerfTaskModel.filter(id=task.id).update(
-                    last_execute_state=PerfTaskStatus.STOPPED,
+        if preset.last_execute_state != PerfPresetStatus.QUEUED:
+            if preset.last_execute_state == PerfPresetStatus.STOPPING:
+                await PerfLoadPresetModel.filter(id=preset.id).update(
+                    last_execute_state=PerfPresetStatus.STOPPED,
                     last_execute_time=datetime.now(),
                 )
                 return {
-                    "success": False, "perf_code": perf_code, "report_code": None,
-                    "status": PerfTaskStatus.STOPPED.value, "error": "任务在排队期间被撤销, 未执行",
+                    "success": False, "preset_code": preset_code, "report_code": None,
+                    "status": PerfPresetStatus.STOPPED.value, "error": "负载预设在排队期间被撤销, 未执行",
                 }
-            state_value = task.last_execute_state.value if task.last_execute_state else "无"
-            LOGGER.warning(f"压测任务状态非排队中, 跳过重复消费: perf_code={perf_code}, state={state_value}")
+            state_value = preset.last_execute_state.value if preset.last_execute_state else "无"
+            LOGGER.warning(f"负载预设状态非排队中, 跳过重复消费: preset_code={preset_code}, state={state_value}")
             return {
-                "success": False, "perf_code": perf_code, "report_code": None,
-                "status": state_value, "error": "任务状态非排队中, 跳过重复消费",
+                "success": False, "preset_code": preset_code, "report_code": None,
+                "status": state_value, "error": "负载预设状态非排队中, 跳过重复消费",
             }
 
         report_code = unique_identify()
         # 原子置执行中: 防消息重投与停止指令竞争
-        updated = await PerfTaskModel.filter(
-            id=task.id, last_execute_state=PerfTaskStatus.QUEUED,
+        updated = await PerfLoadPresetModel.filter(
+            id=preset.id, last_execute_state=PerfPresetStatus.QUEUED,
         ).update(
-            last_execute_state=PerfTaskStatus.RUNNING,
+            last_execute_state=PerfPresetStatus.RUNNING,
             last_execute_time=datetime.now(),
             last_celery_id=celery_id,
         )
         if not updated:
-            error_message: str = f"压测任务[perf_code={perf_code}]状态已变更, 终止本次执行"
+            error_message: str = f"负载预设[preset_code={preset_code}]状态已变更, 终止本次执行"
             LOGGER.warning(error_message)
-            return {"success": False, "perf_code": perf_code, "report_code": None,
-                    "status": PerfTaskStatus.IDLE.value, "error": error_message}
+            return {"success": False, "preset_code": preset_code, "report_code": None,
+                    "status": PerfPresetStatus.IDLE.value, "error": error_message}
 
-        # 场景装载与启动上下文: 失败(引用缺失/闸门不通过)不建报告, 任务直接置failed
+        # 场景装载与启动上下文: 失败(引用缺失/闸门不通过)不建报告, 负载预设直接置failed
         launch: Optional[Dict[str, Any]] = None
         scene: Optional[PerfSceneModel] = None
         try:
-            scene = await PerfSceneModel.filter(scene_code=task.scene_code, state__not=1).first()
+            scene = await PerfSceneModel.filter(scene_code=preset.scene_code, state__not=1).first()
             if scene is None:
                 raise ParameterException(
-                    message=f"任务引用的压测场景不存在或已禁用[{task.scene_code}]"
+                    message=f"负载预设引用的压测场景不存在或已禁用[{preset.scene_code}]"
                 )
             scene_payload, payload_items, api_versions = await _assemble_scene_payload(
-                task=task, scene=scene, batch_code=report_code,
+                preset=preset, scene=scene, batch_code=report_code,
             )
             launch = _build_launch_context(
-                task=task, report_code=report_code, scene_payload=scene_payload,
+                preset=preset, report_code=report_code, scene_payload=scene_payload,
             )
         except Exception as e:
             error_message = f"压测场景装载失败: {getattr(e, 'message', None) or e}"
-            LOGGER.error(f"压测场景装载失败: perf_code={perf_code}, 错误描述: {e}\n{traceback.format_exc()}")
-            await PerfTaskModel.filter(id=task.id).update(
-                last_execute_state=PerfTaskStatus.FAILED,
+            LOGGER.error(f"压测场景装载失败: preset_code={preset_code}, 错误描述: {e}\n{traceback.format_exc()}")
+            await PerfLoadPresetModel.filter(id=preset.id).update(
+                last_execute_state=PerfPresetStatus.FAILED,
                 last_execute_time=datetime.now(),
                 last_execute_error=error_message,
             )
             return {
-                "success": False, "perf_code": perf_code, "report_code": None,
-                "status": PerfTaskStatus.FAILED.value, "error": error_message,
+                "success": False, "preset_code": preset_code, "report_code": None,
+                "status": PerfPresetStatus.FAILED.value, "error": error_message,
             }
 
         report = await PerfReportModel.create(
-            perf_id=task.id,
-            perf_code=task.perf_code,
+            preset_id=preset.id,
+            preset_code=preset.preset_code,
             report_code=report_code,
             batch_code=report_code,
             status=PerfReportStatus.RUNNING,
@@ -1000,14 +1000,14 @@ class PerfExecuteService:
             # 基线引用随报告创建即固化(快照哲学): 事后改钉不影响本报告的对比对象记载
             baseline_report_id=scene.baseline_report_id,
             baseline_report_code=scene.baseline_report_code,
-            concurrent_users=_effective_peak_users(task),
+            concurrent_users=_effective_peak_users(preset),
             # 目标吞吐随报告固化(负载快照): rps 报告必须可溯压测目标, 其余模式为空
-            target_rps=(float(task.target_rps) if task.target_rps is not None
-                        and getattr(task, "load_mode", None) == PerfLoadMode.RPS else None),
+            target_rps=(float(preset.target_rps) if preset.target_rps is not None
+                        and getattr(preset, "load_mode", None) == PerfLoadMode.RPS else None),
             run_duration=int(launch["planned_duration"] or 0),
             process_count=launch["process_count"],
-            env_name=task.env_name,
-            env_config_name=task.env_config_name,
+            env_name=preset.env_name,
+            env_config_name=preset.env_config_name,
             target_host=launch["target_host"],
             config_snapshot={
                 **scene_payload,
@@ -1016,7 +1016,7 @@ class PerfExecuteService:
             },
             scene_items_snapshot=payload_items,
             api_versions=api_versions,
-            config_fingerprint=_build_config_fingerprint(scene_payload, task),
+            config_fingerprint=_build_config_fingerprint(scene_payload, preset),
         )
 
         process: Optional[subprocess.Popen] = None
@@ -1035,8 +1035,8 @@ class PerfExecuteService:
                 )
                 PERF_PROCESS_REGISTRY.register(report_code, _collect_process_group(process))
                 LOGGER.info(
-                    f"压测进程已启动: perf_code={perf_code}, report_code={report_code}, "
-                    f"pid={process.pid}, processes={launch['process_count']}, users={_effective_peak_users(task)}"
+                    f"压测进程已启动: preset_code={preset_code}, report_code={report_code}, "
+                    f"pid={process.pid}, processes={launch['process_count']}, users={_effective_peak_users(preset)}"
                 )
                 deadline = time.monotonic() + int(launch["planned_duration"] or 0) * 2 + PIPELINE_IDLE_GRACE
                 poll_interval = PROJECT_CONFIG.PERF_STOP_POLL_INTERVAL
@@ -1044,10 +1044,10 @@ class PerfExecuteService:
                     await asyncio.sleep(poll_interval)
                     # 每轮刷新进程组登记(多进程worker异步拉起, 晚于master)
                     PERF_PROCESS_REGISTRY.register(report_code, _collect_process_group(process))
-                    current_state = await PerfTaskModel.filter(id=task.id).values_list(
+                    current_state = await PerfLoadPresetModel.filter(id=preset.id).values_list(
                         "last_execute_state", flat=True,
                     )
-                    if current_state and current_state[0] == PerfTaskStatus.STOPPING:
+                    if current_state and current_state[0] == PerfPresetStatus.STOPPING:
                         stop_requested = True
                         await asyncio.to_thread(PERF_PROCESS_REGISTRY.stop, report_code)
                         await asyncio.to_thread(process.wait, KILL_WAIT_TIMEOUT)
@@ -1063,7 +1063,7 @@ class PerfExecuteService:
         except Exception as e:
             pipeline_error = f"执行管线异常: {type(e).__name__}: {e}"
             LOGGER.error(
-                f"压测执行管线异常: perf_code={perf_code}, report_code={report_code}, "
+                f"压测执行管线异常: preset_code={preset_code}, report_code={report_code}, "
                 f"错误描述: {e}\n{traceback.format_exc()}"
             )
         finally:
@@ -1099,51 +1099,51 @@ class PerfExecuteService:
                         "text": "多进程模式下unique数据行在各进程独立分配, 跨进程可能复用同一批行",
                     })
         if merged is None:
-            pipeline_status = PerfTaskStatus.FAILED
+            pipeline_status = PerfPresetStatus.FAILED
             stopped_reason = PerfStoppedReason.ENGINE_ERROR
             if not pipeline_error:
                 log_tail = _read_log_tail(launch["log_file"]) if launch else ""
                 exit_code = process.returncode if process is not None else "N/A"
                 pipeline_error = f"引擎结果分片缺失({shards_error}), locust退出码[{exit_code}], 日志尾部: {log_tail}"
         elif stop_requested:
-            pipeline_status = PerfTaskStatus.STOPPED
+            pipeline_status = PerfPresetStatus.STOPPED
             stopped_reason = PerfStoppedReason.MANUAL
         elif timeout_hit or pipeline_error:
-            pipeline_status = PerfTaskStatus.FAILED
+            pipeline_status = PerfPresetStatus.FAILED
             stopped_reason = PerfStoppedReason.TIMEOUT_KILL if timeout_hit else PerfStoppedReason.ENGINE_ERROR
         else:
             total_requests = sum(
                 int(entry.get("num_requests") or 0) for entry in merged.get("entries") or []
             )
             if process is not None and process.returncode and not total_requests:
-                # locust非零退出且零请求: 引擎在任务首请求前即崩溃(地址非法/不可达等),
+                # locust非零退出且零请求: 引擎在负载预设首请求前即崩溃(地址非法/不可达等),
                 # 区别于"断言失败是压测数据"的正常运行, 必须判failed而非全零假完成
                 exit_code = process.returncode
                 log_tail = _read_log_tail(launch["log_file"]) if launch else ""
-                pipeline_status = PerfTaskStatus.FAILED
+                pipeline_status = PerfPresetStatus.FAILED
                 stopped_reason = PerfStoppedReason.ENGINE_ERROR
                 pipeline_error = f"施压进程异常退出(exit={exit_code})且零请求, 日志尾部: {log_tail}"
                 LOGGER.error(f"压测零请求异常退出: report_code={report_code}, {pipeline_error}")
             elif merged.get("circuit_break"):
                 # 熔断是运行被主动中止, 报告数据完整有效, 执行结局仍是completed
-                pipeline_status = PerfTaskStatus.COMPLETED
+                pipeline_status = PerfPresetStatus.COMPLETED
                 stopped_reason = PerfStoppedReason.CIRCUIT_BREAK
             elif merged.get("stopped_reason") == "stopped":
                 # 无人工叫停且无熔断, 分片却处于提前结束态: 引擎半程异常(如用户进程全灭)
-                pipeline_status = PerfTaskStatus.FAILED
+                pipeline_status = PerfPresetStatus.FAILED
                 stopped_reason = PerfStoppedReason.ENGINE_ERROR
                 pipeline_error = "施压引擎提前停止(非熔断且无终止指令), 请检查引擎日志"
             else:
-                pipeline_status = PerfTaskStatus.COMPLETED
+                pipeline_status = PerfPresetStatus.COMPLETED
                 stopped_reason = PerfStoppedReason.COMPLETED
 
         report_status_map = {
-            PerfTaskStatus.COMPLETED: PerfReportStatus.COMPLETED,
-            PerfTaskStatus.STOPPED: PerfReportStatus.STOPPED,
-            PerfTaskStatus.FAILED: PerfReportStatus.FAILED,
+            PerfPresetStatus.COMPLETED: PerfReportStatus.COMPLETED,
+            PerfPresetStatus.STOPPED: PerfReportStatus.STOPPED,
+            PerfPresetStatus.FAILED: PerfReportStatus.FAILED,
         }
         final_error = pipeline_error
-        # 收尾回填(独立短事务): 回填失败不中断管线, 任务口径降级为failed防卡running
+        # 收尾回填(独立短事务): 回填失败不中断管线, 负载预设口径降级为failed防卡running
         try:
             if merged is None:
                 final_error = final_error or shards_error or "压测结果分片缺失"
@@ -1166,9 +1166,9 @@ class PerfExecuteService:
                 f"压测报告终态回填失败: report_code={report_code}, 错误描述: {e}\n{traceback.format_exc()}"
             )
             final_error = final_error or f"报告终态回填失败: {e}"
-            pipeline_status = PerfTaskStatus.FAILED
+            pipeline_status = PerfPresetStatus.FAILED
 
-        # 基线对比(独立短事务): 基线是趋势结论, 失败只记日志不改变任务执行结局
+        # 基线对比(独立短事务): 基线是趋势结论, 失败只记日志不改变负载预设执行结局
         try:
             baseline_diff = await _build_baseline_diff(report, scene)
             if baseline_diff is not None:
@@ -1178,28 +1178,28 @@ class PerfExecuteService:
             LOGGER.error(f"基线对比回填失败: report_code={report_code}, 错误描述: {e}\n{traceback.format_exc()}")
 
         try:
-            task_fields: Dict[str, Any] = {
+            preset_fields: Dict[str, Any] = {
                 "last_execute_state": pipeline_status,
                 "last_execute_time": datetime.now(),
             }
             if final_error:
-                task_fields["last_execute_error"] = final_error
-            await PerfTaskModel.filter(id=task.id).update(**task_fields)
+                preset_fields["last_execute_error"] = final_error
+            await PerfLoadPresetModel.filter(id=preset.id).update(**preset_fields)
         except Exception as e:
             LOGGER.error(
-                f"压测任务状态回填失败: perf_code={perf_code}, 错误描述: {e}\n{traceback.format_exc()}"
+                f"负载预设状态回填失败: preset_code={preset_code}, 错误描述: {e}\n{traceback.format_exc()}"
             )
 
         # 产物目录保留(不随管线结束删除): 报告页原始分片与引擎日志下载依赖该目录,
         # 由报告删除接口随报告生命周期一并清理
         LOGGER.info(
-            f"压测管线结束: perf_code={perf_code}, report_code={report_code}, "
+            f"压测管线结束: preset_code={preset_code}, report_code={report_code}, "
             f"status={pipeline_status.value}, stopped_reason={stopped_reason.value}, "
-            f"success={pipeline_status != PerfTaskStatus.FAILED}"
+            f"success={pipeline_status != PerfPresetStatus.FAILED}"
         )
         return {
-            "success": pipeline_status != PerfTaskStatus.FAILED,
-            "perf_code": perf_code,
+            "success": pipeline_status != PerfPresetStatus.FAILED,
+            "preset_code": preset_code,
             "report_code": report_code,
             "status": pipeline_status.value,
             "error": final_error,

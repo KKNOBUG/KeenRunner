@@ -42,9 +42,9 @@ ROLE_LABEL_PREPARE = "prepare"
 ENV_VM_URL = "PERF_VM_URL"
 ENV_PUSH_INTERVAL = "PERF_METRICS_PUSH_INTERVAL"
 ENV_REPORT_CODE = "PERF_REPORT_CODE"
-ENV_PERF_CODE = "PERF_PERF_CODE"
+ENV_PRESET_CODE = "PERF_PRESET_CODE"
 
-# Prometheus指标名: 压测核心时序指标(VM侧按 report_code/perf_code label 检索绘制曲线)
+# Prometheus指标名: 压测核心时序指标(VM侧按 report_code/preset_code label 检索绘制曲线)
 METRIC_CURRENT_USERS = "krun_perf_current_users"
 METRIC_RPS = "krun_perf_rps"
 METRIC_FAILURE_RATE = "krun_perf_failure_rate"
@@ -81,7 +81,7 @@ class MetricsPusher:
             push_interval: float,
             vm_url: str,
             report_code: str,
-            perf_code: str,
+            preset_code: str,
             series_labels: Optional[Dict[Tuple[str, str], Dict[str, str]]] = None,
             prepare_metrics: Optional[List[Dict[str, Any]]] = None,
     ) -> None:
@@ -92,7 +92,7 @@ class MetricsPusher:
         :param push_interval: 上报周期(秒)
         :param vm_url: VictoriaMetrics写入地址(完整 /api/v1/import/prometheus 路径)
         :param report_code: 报告标识(指标label)
-        :param perf_code: 任务标识(指标label)
+        :param preset_code: 负载预设标识(指标label)
         :param series_labels: 统计行名到附加label的索引, 键为(name, method),
             值含 role/api_code/transaction(施压入口构建, 引擎内归因唯一来源)
         :param prepare_metrics: 准备段指标注册表(引用, 施压入口持续累计, role=prepare 独立序列上报)
@@ -101,7 +101,7 @@ class MetricsPusher:
         self.push_interval = push_interval
         self.vm_url = vm_url.rstrip("/")
         self.report_code = report_code
-        self.perf_code = perf_code
+        self.preset_code = preset_code
         self.series_labels = series_labels or {}
         self.prepare_metrics = prepare_metrics or {}
         self._greenlet: Optional[gevent.Greenlet] = None
@@ -139,7 +139,7 @@ class MetricsPusher:
             push_interval=max(push_interval, 1.0),
             vm_url=vm_url,
             report_code=os.environ.get(ENV_REPORT_CODE, "unknown"),
-            perf_code=os.environ.get(ENV_PERF_CODE, "unknown"),
+            preset_code=os.environ.get(ENV_PRESET_CODE, "unknown"),
             series_labels=series_labels,
             prepare_metrics=prepare_metrics,
         )
@@ -173,11 +173,11 @@ class MetricsPusher:
         总口径与逐接口口径共用指标名, 由 name label 区分; 活跃用户数只属于全局量。
 
         :return: 文本负载, 结构:
-            krun_perf_rps{report_code="xxx",perf_code="yyy",name="total"} 12.5 1757826000000
-            krun_perf_rps{report_code="xxx",perf_code="yyy",name="POST /api/users"} 8.1 1757826000000
+            krun_perf_rps{report_code="xxx",preset_code="yyy",name="total"} 12.5 1757826000000
+            krun_perf_rps{report_code="xxx",preset_code="yyy",name="POST /api/users"} 8.1 1757826000000
         """
         runner = self.environment.runner
-        base_label = f'report_code="{self.report_code}",perf_code="{self.perf_code}"'
+        base_label = f'report_code="{self.report_code}",preset_code="{self.preset_code}"'
         timestamp_ms = int(time.time() * 1000)
         user_count = getattr(runner, "user_count", 0) or 0
         lines: List[str] = [

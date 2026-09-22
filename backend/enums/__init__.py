@@ -9,7 +9,7 @@
 from .app_enum import Code, Message, Status
 from .perf_enum import (
     PerfLoadMode,
-    PerfTaskStatus,
+    PerfPresetStatus,
     PerfReportStatus,
     PerfApiRole,
     PerfRunMode,

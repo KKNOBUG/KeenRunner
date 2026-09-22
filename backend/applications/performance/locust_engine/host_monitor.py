@@ -34,7 +34,7 @@ from locust.runners import WorkerRunner
 from metrics_push import (
     ENV_PUSH_INTERVAL,
     ENV_REPORT_CODE,
-    ENV_PERF_CODE,
+    ENV_PRESET_CODE,
     ENV_VM_URL,
     TOTAL_SERIES_NAME,
     DEFAULT_PUSH_INTERVAL,
@@ -42,7 +42,7 @@ from metrics_push import (
     _escape_label,
 )
 
-# Prometheus指标名: 施压机资源时序(VM侧按 report_code/perf_code label 检索, 与业务指标同报告维度)
+# Prometheus指标名: 施压机资源时序(VM侧按 report_code/preset_code label 检索, 与业务指标同报告维度)
 METRIC_HOST_CPU = "krun_perf_host_cpu_percent"
 METRIC_HOST_MEMORY = "krun_perf_host_memory_percent"
 METRIC_HOST_NET_SENT = "krun_perf_host_net_sent_kb_s"
@@ -69,7 +69,7 @@ class HostResourceMonitor:
             push_interval: float,
             vm_url: str,
             report_code: str,
-            perf_code: str,
+            preset_code: str,
     ) -> None:
         """
         初始化监控器。
@@ -78,13 +78,13 @@ class HostResourceMonitor:
         :param push_interval: 采集上报周期(秒)
         :param vm_url: VictoriaMetrics写入地址(完整 /api/v1/import/prometheus 路径)
         :param report_code: 报告标识(指标label)
-        :param perf_code: 任务标识(指标label)
+        :param preset_code: 负载预设标识(指标label)
         """
         self.environment = environment
         self.push_interval = push_interval
         self.vm_url = vm_url.rstrip("/")
         self.report_code = report_code
-        self.perf_code = perf_code
+        self.preset_code = preset_code
         self._greenlet: Optional[gevent.Greenlet] = None
         self._stopped = gevent.event.Event()
         # 网卡速率差分基准: (时间戳秒, 累计发送字节, 累计接收字节); 首轮无基准跳过速率上报
@@ -115,7 +115,7 @@ class HostResourceMonitor:
             push_interval=max(push_interval, 1.0),
             vm_url=vm_url,
             report_code=os.environ.get(ENV_REPORT_CODE, "unknown"),
-            perf_code=os.environ.get(ENV_PERF_CODE, "unknown"),
+            preset_code=os.environ.get(ENV_PRESET_CODE, "unknown"),
         )
 
     def start(self) -> None:
@@ -147,9 +147,9 @@ class HostResourceMonitor:
         构造 Prometheus 文本格式指标负载(带毫秒时间戳)。
 
         :return: 文本负载, 结构:
-            krun_perf_host_cpu_percent{report_code="xxx",perf_code="yyy",name="total"} 62.5 1757826000000
+            krun_perf_host_cpu_percent{report_code="xxx",preset_code="yyy",name="total"} 62.5 1757826000000
         """
-        base_label = f'report_code="{self.report_code}",perf_code="{self.perf_code}"'
+        base_label = f'report_code="{self.report_code}",preset_code="{self.preset_code}"'
         label = f'{base_label},name="{_escape_label(TOTAL_SERIES_NAME)}"'
         timestamp_ms = int(time.time() * 1000)
         return "\n".join(self._collect_lines(label=label, timestamp_ms=timestamp_ms)) + "\n"

@@ -41,7 +41,7 @@ from backend.core.responses import (
 
 perf_job = APIRouter()
 
-# 作业序列化统一排除脚手架字段(对齐 dataset/task 视图模式)
+# 作业序列化统一排除脚手架字段(对齐 dataset/load_preset 视图模式)
 JOB_EXCLUDE_FIELDS = {
     "state",
     "created_user", "created_time",

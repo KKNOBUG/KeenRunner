@@ -12,11 +12,15 @@
 @Module  : perf_scene_schema.py
 @DateTime: 2026/9/15 16:00
 """
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.base.services.scaffold import UpperStr
+from backend.applications.performance.schemas.perf_load_preset_schema import (
+    PerfLoadPresetCreate,
+    PerfLoadPresetUpdate,
+)
 from backend.enums import (
     PERF_WARMUP_DEFAULT_MAX,
     PerfApiRole,
@@ -280,4 +284,55 @@ class PerfScenePinBaseline(PerfSceneLocate):
     """场景基线钉选入参(定位场景 + 指定基线报告; report_code留空=取消钉选)。"""
 
     report_code: Optional[str] = Field(None, max_length=64, description="基线报告标识代码(空=取消钉选)")
+
+
+class PerfSceneWizardPresetDelete(BaseModel):
+    """一体化保存中预设软删项(仅定位字段 + _delete 标记)。"""
+
+    preset_id: Optional[int] = Field(None, ge=1, description="负载预设ID")
+    preset_code: Optional[str] = Field(None, max_length=64, description="负载预设标识代码")
+    _delete: bool = True
+
+    @model_validator(mode="after")
+    def _require_locator(self):
+        """软删必须能定位到一条负载预设。"""
+        if not self.preset_id and not _has_text(self.preset_code):
+            raise ValueError("请提供参数[preset_id | preset_code]完成预设软删定位")
+        return self
+
+
+class PerfSceneWizardPayload(BaseModel):
+    """
+    场景独立编辑页一体化保存入参(Tab 编辑页唯一提交入口)。
+
+    结构 = { scene: PerfSceneCreate|PerfSceneUpdate, presets: List[PerfLoadPresetCreate|PerfLoadPresetUpdate|PerfSceneWizardPresetDelete] };
+    服务层在事务内 upsert scene + diff upsert presets(新增/更新/软删)。
+    """
+
+    scene: Union[PerfSceneCreate, PerfSceneUpdate] = Field(..., description="场景实体(含 scene_id/scene_code 时为更新)")
+    presets: List[Union[PerfLoadPresetCreate, PerfLoadPresetUpdate, PerfSceneWizardPresetDelete]] = Field(
+        default_factory=list, description="负载预设列表(含 preset_id/preset_code 为更新; 含 _delete=True 为软删; 其余为新增)"
+    )
+
+
+class PerfPresetBatchDuplicate(BaseModel):
+    """拐点测试快捷操作: 基于已有预设批量派生多个并发档位。"""
+
+    base_preset_id: Optional[int] = Field(None, ge=1, description="基准预设ID(并发档位以该预设为模板)")
+    base_preset_code: Optional[str] = Field(None, max_length=64, description="基准预设标识代码")
+    concurrent_users_list: List[int] = Field(..., min_length=1, description="待派生的并发用户数列表(如 [50,100,200])")
+    name_template: Optional[str] = Field(None, max_length=255, description="预设名称模板(包含 {users} 占位符; 缺省=基准名称-并发数)")
+
+    @model_validator(mode="after")
+    def _require_locator(self):
+        """必须能定位到基准预设。"""
+        if not self.base_preset_id and not _has_text(self.base_preset_code):
+            raise ValueError("请提供参数[base_preset_id | base_preset_code]定位基准预设")
+        if not self.concurrent_users_list or any(u < 1 for u in self.concurrent_users_list):
+            raise ValueError("concurrent_users_list 必须为非空正整数列表")
+        return self
+
+
+class PerfSceneRunAllPresets(PerfSceneLocate):
+    """一键批量下发场景下所有预设执行入参(定位场景即可)。"""
 

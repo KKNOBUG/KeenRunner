@@ -52,7 +52,7 @@ from backend.core.responses import (
 
 perf_dataset = APIRouter()
 
-# 数据集序列化统一排除脚手架字段(对齐 task 视图模式)
+# 数据集序列化统一排除脚手架字段(对齐 load_preset 视图模式)
 DATASET_EXCLUDE_FIELDS = {
     "state",
     "created_user", "created_time",
