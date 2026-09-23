@@ -57,8 +57,8 @@ SCENE_EXCLUDE_FIELDS = {
     "reserve_1", "reserve_2", "reserve_3",
 }
 SCENE_REPLACE_FIELDS = {"id": "scene_id"}
-# 列表页不下发容器大字段(scene_items/journey/perf_targets), 以接口项计数替代; 详情接口全量下发
-SCENE_LIST_EXCLUDE_FIELDS = SCENE_EXCLUDE_FIELDS | {"scene_items", "journey", "perf_targets", "baseline_policy"}
+# 列表页不下发容器大字段(scene_items/journey/perf_targets), 以接口项计数替代; 创建/更新人员与时间供列表列展示
+SCENE_LIST_EXCLUDE_FIELDS = {"state", "reserve_1", "reserve_2", "reserve_3", "scene_items", "journey", "perf_targets", "baseline_policy"}
 
 
 @perf_scene.post("/create", summary="新增压测场景", description="新增压测场景(接口项引用在保存期完成存在性校验)")

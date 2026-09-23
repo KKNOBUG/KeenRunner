@@ -10,10 +10,11 @@
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
         :columns="columns"
         :get-data="fetchReportList"
         :query-bar-props="queryBarProps"
-        :scroll-x="1320"
+        :scroll-x="1700"
         row-key="report_id"
         @pagination-meta="onPaginationMeta"
     >
@@ -43,14 +44,14 @@
 <script setup>
 import { h, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NInput, NPopconfirm, NSelect, NSpace, NTag } from 'naive-ui'
+import { NButton, NDropdown, NInput, NSelect, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 import PerfReportCompareModal from '../components/PerfReportCompareModal.vue'
 
-import { formatDateTime } from '@/utils'
+import { formatDateTime, renderIcon } from '@/utils'
 import { downloadBlobResponse } from '@/utils/common/downloadFile'
 import api from '@/api'
 
@@ -79,6 +80,8 @@ const queryBarProps = {
 const $table = ref(null)
 const compareModalRef = ref(null)
 const router = useRouter()
+/** 跨页复选保留的勾选主键（同压测接口页逻辑） */
+const checkedRowKeys = ref([])
 
 /** 详情跳转独立标签页（query 传 report_code），对齐压测接口编辑子页的跳转约定 */
 function goDetail(row) {
@@ -117,66 +120,101 @@ function fmtNum(value, digits = 2) {
 }
 
 const columns = [
-  { title: '序号', key: 'row_no', width: 60, render: (_row, index) => renderRowNo(index) },
-  { title: '报告编码', key: 'report_code', width: 170, ellipsis: { tooltip: true } },
-  { title: '压测场景', key: 'scene_name', width: 150, ellipsis: { tooltip: true } },
+  { type: 'selection', fixed: 'left', width: 48 },
+  { title: '序号', key: 'row_no', width: 50, align: 'center', fixed: 'left', render: (_row, index) => renderRowNo(index) },
+  { title: '报告编码', key: 'report_code', width: 170, align: 'center', ellipsis: { tooltip: true } },
+  {
+    title: '压测场景', key: 'scene_name', width: 150, align: 'center', ellipsis: { tooltip: true },
+    render: (row) => row.scene_name || '-',
+  },
   {
     title: '施压模式',
     key: 'run_mode',
-    width: 90,
-    render: (row) => h(NTag, { size: 'small', type: row.run_mode === 'mixed' ? 'warning' : 'info' },
+    width: 100,
+    align: 'center',
+    render: (row) => h(NTag, { size: 'small', type: row.run_mode === 'mixed' ? 'warning' : 'info', round: true },
         { default: () => RUN_MODE_LABELS[row.run_mode] || row.run_mode || '-' }),
   },
-  { title: '并发', key: 'concurrent_users', width: 70 },
+  { title: '并发', key: 'concurrent_users', width: 70, align: 'center' },
   {
     title: '状态',
     key: 'status',
     width: 85,
-    render: (row) => h(NTag, { size: 'small', type: STATUS_TAG_TYPES[row.status] || 'default' },
+    align: 'center',
+    render: (row) => h(NTag, { size: 'small', type: STATUS_TAG_TYPES[row.status] || 'default', round: true },
         { default: () => STATUS_LABELS[row.status] || row.status }),
   },
-  { title: '总请求', key: 'total_requests', width: 90 },
-  { title: 'RPS', key: 'rps', width: 80, render: (row) => fmtNum(row.rps) },
+  { title: '总请求', key: 'total_requests', width: 90, align: 'center' },
+  { title: 'RPS', key: 'rps', width: 80, align: 'center', render: (row) => fmtNum(row.rps) },
   {
     title: '失败率',
     key: 'error_rate',
     width: 80,
+    align: 'center',
     render: (row) => `${fmtNum(row.error_rate)}%`,
   },
-  { title: '平均RT(ms)', key: 'avg_rt', width: 100, render: (row) => fmtNum(row.avg_rt) },
+  { title: '平均RT(ms)', key: 'avg_rt', width: 100, align: 'center', render: (row) => fmtNum(row.avg_rt) },
   {
     title: '开始时间',
     key: 'started_time',
-    width: 160,
-    render: (row) => (row.started_time ? formatDateTime(row.started_time) : '-'),
+    width: 180,
+    align: 'center',
+    render: (row) => h('span', row.started_time ? formatDateTime(row.started_time) : '-'),
+  },
+  { title: '创建人员', key: 'created_user', width: 150, align: 'center', ellipsis: { tooltip: true } },
+  {
+    title: '创建时间', key: 'created_time', width: 180, align: 'center',
+    render: (row) => h('span', row.created_time ? formatDateTime(row.created_time) : '-'),
   },
   {
+    // 操作列对齐压测接口页：详情/导出平铺 + 「更多」下拉（对比、设为基线）
     title: '操作',
     key: 'actions',
-    width: 200,
+    width: 130,
+    align: 'center',
     fixed: 'right',
     render(row) {
-      return h(NSpace, { size: 4, wrap: false }, {
-        default: () => [
-          h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => goDetail(row) },
-              { default: () => '详情' }),
-          h(NButton, { size: 'tiny', type: 'info', secondary: true, disabled: !row.scene_code, onClick: () => compareModalRef.value?.open(row) },
-              { default: () => '对比' }),
-          h(NButton, { size: 'tiny', type: 'success', secondary: true, loading: exportingCode.value === row.report_code, onClick: () => handleExportReport(row) },
-              { default: () => '导出' }),
-          // 基线钉在场景上: 仅同场景已完成报告可钉(后端同口径校验), 失败/运行中报告无稳定结论可比
-          h(NPopconfirm, { onPositiveClick: () => handlePinBaseline(row) }, {
-            trigger: () => h(NButton, { size: 'tiny', type: 'warning', secondary: true, disabled: row.status !== 'completed' || !row.scene_code },
-                { default: () => '设为基线' }),
-            default: () => `确认将报告 ${row.report_code} 钉为场景[${row.scene_name || row.scene_code}]的退化对比基线？`,
-          }),
-        ],
-      })
+      const dropdownOptions = [
+        { label: '对比', key: 'compare', icon: renderIcon('material-symbols:compare-arrows', { size: 16 }), disabled: !row.scene_code, onClick: () => compareModalRef.value?.open(row) },
+        { label: '设为基线', key: 'pin_baseline', icon: renderIcon('material-symbols:bookmark-outline', { size: 16 }), disabled: row.status !== 'completed' || !row.scene_code, onClick: () => handlePinBaselineConfirm(row) },
+      ]
+      return [
+        h(NButton,
+            { size: 'tiny', quaternary: true, type: 'primary', onClick: () => goDetail(row) },
+            { default: () => '详情', icon: renderIcon('material-symbols:visibility-outline', { size: 16 }) }
+        ),
+        h(NButton,
+            { size: 'tiny', quaternary: true, type: 'info', loading: exportingCode.value === row.report_code, onClick: () => handleExportReport(row) },
+            { default: () => '导出', icon: renderIcon('material-symbols:download-2-rounded', { size: 16 }) }
+        ),
+        h(NDropdown,
+            {
+              trigger: 'click',
+              options: dropdownOptions.map((opt) => ({ label: opt.label, key: opt.key, icon: opt.icon, disabled: opt.disabled })),
+              onSelect: (key) => dropdownOptions.find((o) => o.key === key)?.onClick?.(),
+            },
+            {
+              default: () => h(NButton, { size: 'tiny', quaternary: true, type: 'default' },
+                  { default: () => '更多', icon: renderIcon('material-symbols:more-horiz', { size: 16 }) }),
+            }
+        ),
+      ]
     },
   },
 ]
 
 /** 设为基线: 钉选到报告所属场景, 后续执行报告将自动固化该基线做退化对比 */
+function handlePinBaselineConfirm(row) {
+  window.$dialog?.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确认将报告 ${row.report_code} 钉为场景[${row.scene_name || row.scene_code}]的退化对比基线？`,
+    async confirm() {
+      await handlePinBaseline(row)
+    },
+  })
+}
+
 async function handlePinBaseline(row) {
   try {
     await api.pinPerfSceneBaseline({ scene_code: row.scene_code, report_code: row.report_code })

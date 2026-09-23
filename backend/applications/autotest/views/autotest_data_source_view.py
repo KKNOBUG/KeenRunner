@@ -539,7 +539,7 @@ async def update_data_source_fields(
         return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/build", summary="构建数据源矩阵", description="查询或构建数据源矩阵，并附带报文原始值映射(Body)")
+@autotest_data_source.post("/build", summary="查询或构建数据源矩阵", description="查询或构建数据源矩阵，并附带报文原始值映射(Body)")
 async def build_data_source(
         build_in: AutoTestDataSourceBuild = Body(..., description="数据源矩阵构建定位条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
