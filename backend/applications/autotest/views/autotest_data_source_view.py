@@ -489,7 +489,7 @@ async def _unbind_empty_data_source(
     return True
 
 
-@autotest_data_source.post("/update_fields", summary="同步数据源字段", description="按步骤当前报文同步数据源矩阵字段")
+@autotest_data_source.post("/update_fields", summary="更新数据源字段", description="按步骤当前报文同步数据源矩阵字段")
 async def update_data_source_fields(
         data_in: AutoTestDataSourceUpdateFields = Body(..., description="数据源定位"),
         services: AutoTestServices = Depends(get_autotest_api_services),

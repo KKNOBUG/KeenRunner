@@ -17,7 +17,7 @@ from backend.core.responses import FailureResponse, SuccessResponse
 perf_analysis = APIRouter()
 
 
-@perf_analysis.get("/status", summary="性能域运行态诊断", description="只读汇聚指标服务可用性/产物目录体量/报告状态分布(运维排障用)")
+@perf_analysis.get("/status", summary="查询性能域运行态诊断", description="只读汇聚指标服务可用性/产物目录体量/报告状态分布(运维排障用)")
 async def get_perf_analysis_status():
     """
     性能域只读诊断: 指标服务探活、产物根目录统计、报告状态分布与最近执行记录。

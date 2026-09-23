@@ -1462,7 +1462,7 @@ const handleDebug = async () => {
     return
   }
   if (resolveNumericCaseIdForExecuteApi() == null) {
-    window.$message?.warning?.('缺少用例 ID（case_id），请先保存用例后再调试')
+    window.$message?.warning?.('请先保存用例后再调试')
     return
   }
   const dbValidation = validateDatabaseSteps(steps.value)

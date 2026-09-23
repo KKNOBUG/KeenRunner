@@ -1168,7 +1168,7 @@ const doDebug = async (_env_name, step_exec_config_map = null) => {
   }
   const payload = buildPayload(step_exec_config_map, getDatasetPayloadPart())
   if (!payload?.case_id) {
-    window.$message?.warning?.('缺少用例 ID（case_id），请先保存用例后再调试')
+    window.$message?.warning?.('请先保存用例后再调试')
     return
   }
   debugLoading.value = true

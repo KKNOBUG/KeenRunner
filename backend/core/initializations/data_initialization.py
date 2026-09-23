@@ -381,7 +381,7 @@ async def init_database_menu():
     await Menu.bulk_create(program_children_menu)
     LOGGER.info(f"创建[应用管理]目录及子菜单成功")
 
-    # 接口管理（FastAPI 内置 Swagger / ReDoc，由前端 iframe 嵌入展示）
+    # 接口管理
     interface_parent_menu = await menu_crud.create_menu(
         MenuCreate(
             menu_type=MenuType.CATALOG,
@@ -524,48 +524,105 @@ async def init_database_menu():
             is_hidden=False,
             component="Layout",
             keepalive=False,
-            redirect="/performance/perf_case",
+            redirect="/performance/scene",
             created_user=INIT_CREATED_USER,
         ),
     )
     perf_children_menu = [
         Menu(
             menu_type=MenuType.MENU,
-            name="压测场景",
-            path="perf_case",
+            name="压测接口",
+            path="api",
             order=1,
             parent_id=perf_parent_menu.id,
             icon="mingcute:performance-line",
             is_hidden=False,
-            component="/performance/perf_case",
-            keepalive=True
-            ,
+            component="/performance/api",
+            keepalive=True,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="压测接口编辑",
+            path="api/edit",
+            order=2,
+            parent_id=perf_parent_menu.id,
+            icon="material-symbols:api",
+            is_hidden=True,
+            component="/performance/api/edit",
+            keepalive=False,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="压测场景",
+            path="scene",
+            order=3,
+            parent_id=perf_parent_menu.id,
+            icon="eos-icons:performance",
+            is_hidden=False,
+            component="/performance/scene",
+            keepalive=True,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="场景编辑",
+            path="scene/edit",
+            order=4,
+            parent_id=perf_parent_menu.id,
+            icon="eos-icons:performance",
+            is_hidden=True,
+            component="/performance/scene/edit",
+            keepalive=False,
             created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
             name="执行机器",
             path="machine",
-            order=2,
+            order=5,
             parent_id=perf_parent_menu.id,
             icon="mdi:server-network",
             is_hidden=False,
             component="/performance/machine",
-            keepalive=True
-            ,
+            keepalive=True,
             created_user=INIT_CREATED_USER
         ),
         Menu(
             menu_type=MenuType.MENU,
-            name="执行记录",
-            path="record",
-            order=3,
+            name="定时压测",
+            path="schedule",
+            order=6,
+            parent_id=perf_parent_menu.id,
+            icon="fluent:clock-alarm-24-regular",
+            is_hidden=False,
+            component="/performance/schedule",
+            keepalive=True,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="压测报告",
+            path="report",
+            order=7,
             parent_id=perf_parent_menu.id,
             icon="garden:document-search-stroke-12",
             is_hidden=False,
-            component="/performance/record",
-            keepalive=True
-            ,
+            component="/performance/report",
+            keepalive=True,
+            created_user=INIT_CREATED_USER
+        ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="压测报告详情",
+            path="report/detail",
+            order=8,
+            parent_id=perf_parent_menu.id,
+            icon="garden:document-search-stroke-12",
+            is_hidden=True,
+            component="/performance/report/detail",
+            keepalive=False,
             created_user=INIT_CREATED_USER
         ),
     ]
@@ -815,8 +872,8 @@ async def init_database_env_config():
             project_id=project_id,
             config_name="ToolBox工具箱后端1",
             env_name=env_name,
-            config_host="172.20.10.2",
-            config_port="8519",
+            config_host="192.168.245.76",
+            config_port="8518",
             config_desc="服务器1",
             created_user=INIT_CREATED_USER,
         ),
@@ -824,8 +881,8 @@ async def init_database_env_config():
             project_id=project_id,
             config_name="ToolBox工具箱后端2",
             env_name=env_name,
-            config_host="192.168.1.3",
-            config_port="8519",
+            config_host="192.168.245.77",
+            config_port="8518",
             config_desc="服务器2",
             created_user=INIT_CREATED_USER,
         ),
@@ -847,8 +904,8 @@ async def init_database_env_config():
             project_id=project_id,
             config_name="ToolBox工具箱后端2",
             env_name=env_name,
-            config_host="10.211.55.3",
-            config_port="3333",
+            config_host="10.211.55.4",
+            config_port="3306",
             database_name="tbx_runner",
             database_type="mysql",
             config_username="root",

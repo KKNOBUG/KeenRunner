@@ -233,7 +233,7 @@ async def search_perf_apis(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@perf_api.post("/copy", summary="复制压测接口", description="复制压测接口为同应用下的新资产(名称追加副本后缀, 调试结论不继承)")
+@perf_api.post("/copy", summary="新增压测接口副本", description="复制压测接口为同应用下的新资产(名称追加副本后缀, 调试结论不继承)")
 async def copy_perf_api(
         locate_in: PerfApiLocate = Body(..., description="接口定位入参"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -264,7 +264,7 @@ async def copy_perf_api(
         return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
 
 
-@perf_api.post("/debug", summary="压测接口调试", description="以一次真实请求验证已保存接口定义(口径与施压引擎一致, 回写调试结论)")
+@perf_api.post("/debug", summary="调试压测接口", description="以一次真实请求验证已保存接口定义(口径与施压引擎一致, 回写调试结论)")
 async def debug_perf_api(
         debug_in: PerfApiDebug = Body(..., description="调试入参"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -288,7 +288,7 @@ async def debug_perf_api(
         return FailureResponse(message=f"调试失败，异常描述: {str(e)}")
 
 
-@perf_api.get("/build_matrix", summary="推导数据源矩阵模板", description="按接口报文推导DataSource矩阵模板(HEAD/BODY分区预填path key, 只读不落库)")
+@perf_api.get("/build_matrix", summary="查询数据源矩阵模板", description="按接口报文推导DataSource矩阵模板(HEAD/BODY分区预填path key, 只读不落库)")
 async def build_perf_api_matrix(
         api_id: Optional[int] = Query(None, description="接口ID"),
         api_code: Optional[str] = Query(None, description="接口标识代码"),
@@ -359,7 +359,7 @@ async def download_perf_api_template(
         return FailureResponse(message=f"下载失败，异常描述: {e}")
 
 
-@perf_api.post("/import_from_case", summary="从功能资产导入压测接口", description="读取公共接口或用例步骤转为压测接口草稿(仅返回不落库, 确认后走create保存)")
+@perf_api.post("/import_from_case", summary="导入压测接口(功能资产)", description="读取公共接口或用例步骤转为压测接口草稿(仅返回不落库, 确认后走create保存)")
 async def import_perf_api_from_case(
         import_in: PerfApiImport = Body(..., description="导入入参(来源用例与步骤)"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -383,7 +383,7 @@ async def import_perf_api_from_case(
         return FailureResponse(message=f"导入失败，异常描述: {str(e)}")
 
 
-@perf_api.post("/parse_curl", summary="cURL粘贴解析压测接口", description="解析cURL命令为接口草稿(仅返回不落库, 主机地址剥离由环境承接, 确认后走create保存)")
+@perf_api.post("/parse_curl", summary="导入压测接口(cURL粘贴解析)", description="解析cURL命令为接口草稿(仅返回不落库, 主机地址剥离由环境承接, 确认后走create保存)")
 async def parse_perf_api_curl(
         parse_in: PerfApiCurlParse = Body(..., description="cURL解析入参"),
 ):
@@ -405,7 +405,7 @@ async def parse_perf_api_curl(
         return FailureResponse(message=f"解析失败，异常描述: {str(e)}")
 
 
-@perf_api.post("/parse_openapi", summary="OpenAPI/Swagger批量解析压测接口", description="解析OpenAPI 3.x/Swagger 2.0文档(json/yaml)为接口草稿列表(仅返回不落库, 逐条确认后走create保存)")
+@perf_api.post("/parse_openapi", summary="导入压测接口(OpenAPI/Swagger批量解析)", description="解析OpenAPI 3.x/Swagger 2.0文档(json/yaml)为接口草稿列表(仅返回不落库, 逐条确认后走create保存)")
 async def parse_perf_api_openapi(
         parse_in: PerfApiOpenapiParse = Body(..., description="OpenAPI解析入参"),
 ):
@@ -427,7 +427,7 @@ async def parse_perf_api_openapi(
         return FailureResponse(message=f"解析失败，异常描述: {str(e)}")
 
 
-@perf_api.post("/list_for_scene", summary="场景选择器查询压测接口", description="查询启用接口(不分页+名称搜索, 供场景编排抽屉选择; 无应用过滤, 接口名称全局唯一)")
+@perf_api.post("/list_for_scene", summary="查询场景可选压测接口", description="查询启用接口(不分页+名称搜索, 供场景编排抽屉选择; 无应用过滤, 接口名称全局唯一)")
 async def list_perf_apis_for_scene(
         select_in: PerfApiSimpleSelect = Body(..., description="选择器查询条件"),
         services: PerfServices = Depends(get_perf_api_services),

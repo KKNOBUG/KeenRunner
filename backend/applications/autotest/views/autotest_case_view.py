@@ -467,7 +467,7 @@ async def get_request_step_selected_project_ids(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_case.post("/import_template_download", summary="公共接口导入模板下载", description="公共接口数据导入模板文件xlsx下载")
+@autotest_case.post("/import_template_download", summary="下载公共接口导入模板", description="公共接口数据导入模板文件xlsx下载")
 async def public_api_import_template_download():
     """
     公共接口导入模板下载。
@@ -577,7 +577,7 @@ async def export_case_scripts_async(
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
-@autotest_case.post("/generate_case_scripts_async", summary="公共接口生成脚本(异步)", description="公共接口批量生成独立脚本用例(统一异步)")
+@autotest_case.post("/generate_case_scripts_async", summary="新增公共接口脚本(异步)", description="公共接口批量生成独立脚本用例(统一异步)")
 async def generate_case_scripts_async(
         generate_in: AutoTestCaseScriptGenerate = Body(..., description="脚本生成入参"),
         services: AutoTestServices = Depends(get_autotest_api_services),

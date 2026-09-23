@@ -396,7 +396,7 @@ async def stop_task(
         return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
-@autotest_task.post("/copy", summary="复制任务", description="根据用例id或code查询任务并复刻")
+@autotest_task.post("/copy", summary="新增任务副本", description="根据用例id或code查询任务并复刻")
 async def copy_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -439,7 +439,7 @@ async def copy_task(
         return FailureResponse(message=f"复制失败，异常描述: {e}")
 
 
-@autotest_task.post("/schedule_preview", summary="定时执行预览", description="按时效与定时表达式正推即将到来的触发日期时间(近10次)")
+@autotest_task.post("/schedule_preview", summary="查询定时执行预览", description="按时效与定时表达式正推即将到来的触发日期时间(近10次)")
 async def preview_task_schedule(
         preview_in: AutoTestTaskSchedulePreview = Body(..., description="预览条件"),
 ):

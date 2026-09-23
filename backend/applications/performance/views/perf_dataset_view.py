@@ -206,7 +206,7 @@ async def list_perf_datasets_for_api(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@perf_dataset.post("/update_fields", summary="同步接口报文字段", description="按接口当前报文同步数据源矩阵字段(新增补空/删除剔除/保留值不动)")
+@perf_dataset.post("/update_fields", summary="更新接口报文字段", description="按接口当前报文同步数据源矩阵字段(新增补空/删除剔除/保留值不动)")
 async def update_perf_dataset_fields(
         data_in: PerfDatasetUpdateFields = Body(..., description="接口定位(一个接口只能有一个数据源)"),
         services: PerfServices = Depends(get_perf_api_services),

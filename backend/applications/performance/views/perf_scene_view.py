@@ -229,7 +229,7 @@ async def search_perf_scenes(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@perf_scene.post("/precheck", summary="场景连通性预检", description="对场景内启用接口逐个发1次真实请求回显连通性与业务结论(复用调试链, 结论回写口径一致)")
+@perf_scene.post("/precheck", summary="执行场景连通性预检", description="对场景内启用接口逐个发1次真实请求回显连通性与业务结论(复用调试链, 结论回写口径一致)")
 async def precheck_perf_scene(
         precheck_in: PerfScenePrecheck = Body(..., description="场景预检入参"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -253,7 +253,7 @@ async def precheck_perf_scene(
         return FailureResponse(message=f"预检失败，异常描述: {str(e)}")
 
 
-@perf_scene.post("/pin_baseline", summary="钉选场景基线报告", description="将同场景的已完成报告钉为退化对比基线; report_code留空为取消钉选")
+@perf_scene.post("/pin_baseline", summary="更新场景基线报告钉选", description="将同场景的已完成报告钉为退化对比基线; report_code留空为取消钉选")
 async def pin_baseline_perf_scene(
         pin_in: PerfScenePinBaseline = Body(..., description="基线钉选入参"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -279,7 +279,7 @@ async def pin_baseline_perf_scene(
         return FailureResponse(message=f"钉选基线失败，异常描述: {str(e)}")
 
 
-@perf_scene.post("/copy", summary="复制压测场景", description="复制压测场景为同应用下的新场景(编排全量平移, 基线不继承)")
+@perf_scene.post("/copy", summary="新增压测场景副本", description="复制压测场景为同应用下的新场景(编排全量平移, 基线不继承)")
 async def copy_perf_scene(
         locate_in: PerfSceneLocate = Body(..., description="场景定位入参"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -310,7 +310,7 @@ async def copy_perf_scene(
         return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
 
 
-@perf_scene.post("/save_wizard", summary="一体化保存场景+负载预设", description="场景独立编辑页 4 Tab 唯一提交入口: upsert scene + diff upsert presets(新增/更新/软删)")
+@perf_scene.post("/save_wizard", summary="更新场景与负载预设(一体化保存)", description="场景独立编辑页 4 Tab 唯一提交入口: upsert scene + diff upsert presets(新增/更新/软删)")
 async def save_wizard_perf_scene(
         payload: PerfSceneWizardPayload = Body(..., description="场景 + 负载预设一体化保存入参"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -349,7 +349,7 @@ async def save_wizard_perf_scene(
         return FailureResponse(message=f"保存失败，异常描述: {str(e)}")
 
 
-@perf_scene.post("/preset/batch_duplicate", summary="批量派生负载预设档位", description="拐点测试快捷操作: 基于已有预设批量派生多个并发档位")
+@perf_scene.post("/preset/batch_duplicate", summary="新增负载预设档位(批量派生)", description="拐点测试快捷操作: 基于已有预设批量派生多个并发档位")
 async def batch_duplicate_perf_presets(
         payload: PerfPresetBatchDuplicate = Body(..., description="批量派生入参(基准预设 + 并发列表)"),
         services: PerfServices = Depends(get_perf_api_services),
@@ -385,7 +385,7 @@ async def batch_duplicate_perf_presets(
         return FailureResponse(message=f"派生失败，异常描述: {str(e)}")
 
 
-@perf_scene.post("/run_all_presets", summary="一键跑全部负载预设", description="批量下发场景下所有预设执行(锁定态跳过, 失败逐条记录不阻塞其余)")
+@perf_scene.post("/run_all_presets", summary="执行全部负载预设", description="批量下发场景下所有预设执行(锁定态跳过, 失败逐条记录不阻塞其余)")
 async def run_all_perf_scene_presets(
         locate_in: PerfSceneRunAllPresets = Body(..., description="场景定位入参"),
         services: PerfServices = Depends(get_perf_api_services),

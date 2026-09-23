@@ -47,7 +47,7 @@ COMPARISON_EXCLUDE_FIELDS = {
 COMPARISON_REPLACE_FIELDS = {"id": "comparison_id"}
 
 
-@perf_comparison.post("/create", summary="新建多记录对比/汇总", description="对2~20份已完成报告创建横向对比或同场景汇总(创建时一次性计算结果快照)")
+@perf_comparison.post("/create", summary="新增多记录对比/汇总", description="对2~20份已完成报告创建横向对比或同场景汇总(创建时一次性计算结果快照)")
 async def create_perf_comparison(
         comparison_in: PerfComparisonCreate = Body(..., description="对比记录信息"),
         services: PerfServices = Depends(get_perf_api_services),

@@ -153,7 +153,7 @@ async def get_perf_report_metrics(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@perf_report.get("/snapshot_diff", summary="对比两份压测报告", description="配置差异明细(接口项增删改/标量维度/指纹)与双侧核心指标对照(不限同场景, 差异由明细自说明)")
+@perf_report.get("/snapshot_diff", summary="查询压测报告对比", description="配置差异明细(接口项增删改/标量维度/指纹)与双侧核心指标对照(不限同场景, 差异由明细自说明)")
 async def snapshot_diff_perf_reports(
         report_code: str = Query(..., description="当前报告标识代码"),
         baseline_code: str = Query(..., description="基线报告标识代码"),
