@@ -948,41 +948,41 @@ onMounted(() => { initPage() })
   gap: 0;
   width: 100%;
   min-height: calc(100vh - 120px);
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  background: var(--n-color, #fff);
+  border-radius: var(--step-editor-card-radius, 12px);
+  box-shadow: var(--step-editor-card-shadow, 0 0 15px rgba(0, 0, 0, 0.04));
   overflow: hidden;
 }
 
 /* ===== 左侧导航面板 ===== */
 .scene-wizard__nav {
-  flex: 0 0 232px;
+  flex: 0 0 220px;
   display: flex;
   flex-direction: column;
-  background: #fafbfd;
-  border-right: 1px solid #f0f1f5;
+  background: var(--n-action-color, rgba(128, 128, 128, 0.04));
+  border-right: 1px solid var(--n-border-color, #efeff5);
 }
 
 .scene-wizard__nav-header {
-  padding: 24px 20px 16px;
-  border-bottom: 1px solid #f0f1f5;
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid var(--n-border-color, #efeff5);
 }
 
 .scene-wizard__nav-title {
-  font-size: 15px;
+  font-size: var(--font-size-huge, 15px);
   font-weight: 600;
-  color: #1d2129;
+  color: var(--n-text-color, #333);
   margin-bottom: 4px;
 }
 
 .scene-wizard__nav-progress {
-  font-size: 12px;
-  color: #86909c;
+  font-size: var(--font-size-mini, 12px);
+  color: var(--n-text-color-3, #999);
 }
 
 .scene-wizard__nav-list {
   flex: 1;
-  padding: 12px 10px;
+  padding: 10px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -991,48 +991,48 @@ onMounted(() => { initPage() })
 .scene-wizard__nav-item {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  border: 1px solid transparent;
+  border-left: 3px solid transparent;
 }
 
 .scene-wizard__nav-item:hover {
-  background: #f2f3f5;
+  background: var(--n-border-color, #efeff5);
 }
 
 .scene-wizard__nav-item.is-active {
-  background: #e8f3ff;
-  border-color: #bedaff;
+  background: color-mix(in srgb, var(--primary-color, #F4511E) 8%, transparent);
+  border-left-color: var(--primary-color, #F4511E);
 }
 
 .scene-wizard__nav-item.is-completed .scene-wizard__nav-indicator {
-  background: #00b42a;
-  border-color: #00b42a;
+  background: var(--success-color, #18A058);
+  border-color: var(--success-color, #18A058);
   color: #fff;
 }
 
 .scene-wizard__nav-item.is-active .scene-wizard__nav-indicator {
-  background: #165dff;
-  border-color: #165dff;
+  background: var(--primary-color, #F4511E);
+  border-color: var(--primary-color, #F4511E);
   color: #fff;
 }
 
 .scene-wizard__nav-indicator {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: var(--font-size-mini, 12px);
   font-weight: 600;
-  border: 2px solid #e5e6eb;
-  color: #86909c;
-  background: #fff;
+  border: 2px solid var(--n-border-color, #efeff5);
+  color: var(--n-text-color-3, #999);
+  background: var(--n-color, #fff);
   transition: all 0.2s ease;
   margin-top: 1px;
 }
@@ -1052,28 +1052,28 @@ onMounted(() => { initPage() })
 }
 
 .scene-wizard__nav-label {
-  font-size: 13px;
+  font-size: var(--font-size, 13px);
   font-weight: 500;
-  color: #1d2129;
+  color: var(--n-text-color, #333);
   line-height: 1.4;
   transition: color 0.2s;
 }
 
 .scene-wizard__nav-item.is-active .scene-wizard__nav-label {
-  color: #165dff;
+  color: var(--primary-color, #F4511E);
   font-weight: 600;
 }
 
 .scene-wizard__nav-desc {
-  font-size: 11px;
-  color: #86909c;
+  font-size: var(--font-size-mini, 12px);
+  color: var(--n-text-color-3, #999);
   line-height: 1.4;
   margin-top: 2px;
 }
 
 .scene-wizard__nav-footer {
-  padding: 12px 16px;
-  border-top: 1px solid #f0f1f5;
+  padding: 10px 14px;
+  border-top: 1px solid var(--n-border-color, #efeff5);
 }
 
 /* ===== 右侧主内容区 ===== */
@@ -1087,7 +1087,7 @@ onMounted(() => { initPage() })
 .scene-wizard__content {
   flex: 1;
   overflow-y: auto;
-  padding: 28px 32px 20px;
+  padding: 24px 28px 16px;
 }
 
 /* ===== 步骤区块 ===== */
@@ -1101,37 +1101,37 @@ onMounted(() => { initPage() })
 }
 
 .scene-wizard__section-header {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .scene-wizard__section-title {
-  margin: 0 0 6px;
-  font-size: 17px;
+  margin: 0 0 4px;
+  font-size: var(--font-size-huge, 15px);
   font-weight: 600;
-  color: #1d2129;
+  color: var(--n-text-color, #333);
   line-height: 1.4;
 }
 
 .scene-wizard__section-desc {
   margin: 0;
-  font-size: 13px;
-  color: #86909c;
-  line-height: 1.6;
+  font-size: var(--font-size-small, 13px);
+  color: var(--n-text-color-3, #999);
+  line-height: 1.5;
 }
 
 /* ===== 内容卡片 ===== */
 .scene-wizard__card {
   border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  margin-bottom: 16px;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--n-border-color, #efeff5) 60%, transparent);
+  margin-bottom: 12px;
 }
 
 .scene-wizard__card :deep(.n-card-header) {
-  padding: 14px 20px 10px;
+  padding: 12px 16px 8px;
 }
 
 .scene-wizard__card :deep(.n-card__content) {
-  padding: 12px 20px 20px;
+  padding: 10px 16px 16px;
 }
 
 .scene-wizard__card-toolbar {
@@ -1151,9 +1151,9 @@ onMounted(() => { initPage() })
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 32px;
-  border-top: 1px solid #f0f1f5;
-  background: #fafbfd;
+  padding: 12px 28px;
+  border-top: 1px solid var(--n-border-color, #efeff5);
+  background: var(--n-action-color, rgba(128, 128, 128, 0.04));
   flex-shrink: 0;
 }
 
@@ -1168,15 +1168,15 @@ onMounted(() => { initPage() })
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  background: #f7f8fa;
+  padding: 8px 12px;
+  background: var(--n-action-color, rgba(128, 128, 128, 0.04));
   border-radius: 6px;
-  border: 1px solid #f2f3f5;
+  border: 1px solid var(--n-border-color, #efeff5);
   transition: border-color 0.2s;
 }
 
 .scene-wizard__target-row:hover {
-  border-color: #e5e6eb;
+  border-color: color-mix(in srgb, var(--primary-color, #F4511E) 30%, transparent);
 }
 
 .scene-wizard__target-idx {
@@ -1184,8 +1184,8 @@ onMounted(() => { initPage() })
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #e8f3ff;
-  color: #165dff;
+  background: color-mix(in srgb, var(--info-color, #2080F0) 12%, transparent);
+  color: var(--info-color, #2080F0);
   font-size: 11px;
   font-weight: 600;
   display: flex;
@@ -1205,30 +1205,30 @@ onMounted(() => { initPage() })
 }
 
 .scene-wizard__preset-item {
-  border: 1px solid #e5e6eb;
+  border: 1px solid var(--n-border-color, #efeff5);
   border-radius: 8px;
   overflow: hidden;
   transition: all 0.2s ease;
 }
 
 .scene-wizard__preset-item:hover {
-  border-color: #bedaff;
-  box-shadow: 0 2px 8px rgba(22, 93, 255, 0.06);
+  border-color: color-mix(in srgb, var(--primary-color, #F4511E) 35%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color, #F4511E) 6%, transparent);
 }
 
 .scene-wizard__preset-item.is-deleted {
   opacity: 0.45;
   border-style: dashed;
-  border-color: #e5e6eb;
+  border-color: var(--n-border-color, #efeff5);
 }
 
 .scene-wizard__preset-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
-  background: #f7f8fa;
-  border-bottom: 1px solid #f2f3f5;
+  padding: 8px 14px;
+  background: var(--n-action-color, rgba(128, 128, 128, 0.04));
+  border-bottom: 1px solid var(--n-border-color, #efeff5);
 }
 
 .scene-wizard__preset-id {
@@ -1238,11 +1238,11 @@ onMounted(() => { initPage() })
 }
 
 .scene-wizard__preset-num {
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: #165dff;
+  background: var(--primary-color, #F4511E);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -1253,23 +1253,23 @@ onMounted(() => { initPage() })
 
 .scene-wizard__preset-name :deep(.n-input__input-el) {
   font-weight: 500;
-  font-size: 13px;
+  font-size: var(--font-size, 13px);
 }
 
 .scene-wizard__preset-name-text {
   font-weight: 500;
-  font-size: 13px;
-  color: #86909c;
+  font-size: var(--font-size, 13px);
+  color: var(--n-text-color-3, #999);
 }
 
 .scene-wizard__preset-body {
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
 
 .scene-wizard__preset-params {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed #f2f3f5;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--n-border-color, #efeff5);
 }
 
 /* ===== 表格序号 ===== */
@@ -1280,9 +1280,9 @@ onMounted(() => { initPage() })
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  background: #f2f3f5;
+  background: var(--n-border-color, #efeff5);
   font-size: 11px;
   font-weight: 500;
-  color: #4e5969;
+  color: var(--n-text-color-2, #666);
 }
 </style>

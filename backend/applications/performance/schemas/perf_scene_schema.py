@@ -18,6 +18,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.base.services.scaffold import UpperStr
 from backend.applications.performance.schemas.perf_load_preset_schema import (
+    PERF_CONCURRENT_USERS_MAX,
+    PERF_RUN_DURATION_MAX,
+    PERF_SPAWN_RATE_MAX,
+    PERF_TARGET_RPS_MAX,
     PerfLoadPresetCreate,
     PerfLoadPresetUpdate,
 )
@@ -27,6 +31,7 @@ from backend.enums import (
     PerfAssertMode,
     PerfDatasetStrategy,
     PerfDelayMode,
+    PerfLoadMode,
     PerfPhaseExecution,
     PerfRunMode,
     PerfTargetMetric,
@@ -286,6 +291,35 @@ class PerfScenePinBaseline(PerfSceneLocate):
     report_code: Optional[str] = Field(None, max_length=64, description="基线报告标识代码(空=取消钉选)")
 
 
+class PerfSceneWizardPresetCreate(BaseModel):
+    """
+    一体化保存中预设新增项(向导专用)。
+
+    与独立 PerfLoadPresetCreate 的区别: scene_code/scene_id/scene_name/preset_project 均可缺省,
+    由 save_wizard 服务层在场景落库后统一回写, 前端无需(也不应)提前猜测场景标识。
+    """
+
+    preset_name: str = Field(..., min_length=1, max_length=255, description="负载预设名称")
+    preset_desc: Optional[str] = Field(None, max_length=2048, description="负载预设描述")
+    preset_project: Optional[int] = Field(None, ge=1, description="负载预设所属应用(缺省随场景)")
+    scene_code: Optional[str] = Field(None, max_length=64, description="压测场景标识代码(缺省由服务层回写)")
+    scene_id: Optional[int] = Field(None, ge=1, description="压测场景ID(缺省由服务层回写)")
+    scene_name: Optional[str] = Field(None, max_length=255, description="压测场景名称(缺省由服务层回写)")
+    env_name: Optional[str] = Field(None, max_length=128, description="施压环境名称")
+    env_config_name: Optional[str] = Field(None, max_length=128, description="施压目标配置名称(APP节点)")
+    load_mode: PerfLoadMode = Field(default=PerfLoadMode.FIXED, description="施压模式(fixed/stepped/rps)")
+    concurrent_users: int = Field(default=1, ge=1, le=PERF_CONCURRENT_USERS_MAX, description="并发用户数")
+    spawn_rate: int = Field(default=1, ge=1, le=PERF_SPAWN_RATE_MAX, description="每秒启动用户数")
+    run_duration: int = Field(default=60, ge=1, le=PERF_RUN_DURATION_MAX, description="持续时长(秒)")
+    step_start_users: Optional[int] = Field(None, ge=1, description="阶梯起始并发(stepped专用)")
+    step_increment: Optional[int] = Field(None, ge=1, description="阶梯每档递增并发(stepped专用)")
+    step_duration: Optional[int] = Field(None, ge=1, description="阶梯每档持续秒数(stepped专用)")
+    step_max_users: Optional[int] = Field(None, ge=1, description="阶梯峰值并发(stepped专用)")
+    step_sustain_duration: Optional[int] = Field(None, ge=1, description="阶梯峰值持续秒数(stepped专用)")
+    target_rps: Optional[float] = Field(None, gt=0, le=PERF_TARGET_RPS_MAX, description="目标吞吐RPS(rps专用)")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+
+
 class PerfSceneWizardPresetDelete(BaseModel):
     """一体化保存中预设软删项(仅定位字段 + _delete 标记)。"""
 
@@ -310,7 +344,7 @@ class PerfSceneWizardPayload(BaseModel):
     """
 
     scene: Union[PerfSceneCreate, PerfSceneUpdate] = Field(..., description="场景实体(含 scene_id/scene_code 时为更新)")
-    presets: List[Union[PerfLoadPresetCreate, PerfLoadPresetUpdate, PerfSceneWizardPresetDelete]] = Field(
+    presets: List[Union[PerfLoadPresetUpdate, PerfSceneWizardPresetDelete, PerfSceneWizardPresetCreate]] = Field(
         default_factory=list, description="负载预设列表(含 preset_id/preset_code 为更新; 含 _delete=True 为软删; 其余为新增)"
     )
 
