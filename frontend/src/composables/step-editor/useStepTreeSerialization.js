@@ -13,7 +13,8 @@ const LOCAL_TYPE_TO_BACKEND = {
     if: '条件分支',
     loop: '循环结构',
     wait: '等待控制',
-    quote: '引用公共脚本/接口',
+    quote_public_script: '引用公共脚本',
+    quote_public_api: '引用公共接口',
     database: '数据库请求',
     redis: 'Redis请求',
     assert: '断言',
@@ -312,9 +313,9 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 value: item.value ?? '',
                 desc: item.desc ?? item.description ?? '',
             })))
-        } else if (step.type === 'quote') {
+        } else if (step.type === 'quote_public_script' || step.type === 'quote_public_api') {
             backendStep.quote_case_id = config.quote_case_id ?? original.quote_case_id ?? null
-            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本/接口')
+            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || (step.type === 'quote_public_api' ? '引用公共接口' : '引用公共脚本'))
         } else if (step.type === 'database') {
             backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
             backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)

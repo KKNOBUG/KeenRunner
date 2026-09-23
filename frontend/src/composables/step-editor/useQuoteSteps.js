@@ -29,7 +29,12 @@ export const getQuoteStepsFlattened = (list, depth = 0, out = []) => {
 }
 
 /**
- * 引用公共脚本/接口管理：加载、展示、暂存/恢复、删除
+ * 引用类步骤判断：引用公共脚本 / 引用公共接口（步骤编辑页与执行配置共用）
+ */
+export const isQuoteStepType = (type) => type === 'quote_public_script' || type === 'quote_public_api'
+
+/**
+ * 引用公共脚本/公共接口管理：加载、展示、暂存/恢复、删除
  *
  * @param {object} deps
  * @param {import('vue').Ref<Array>} deps.steps - 前端步骤树
@@ -58,7 +63,7 @@ export function useQuoteSteps({
         for (const step of list) {
             fn(step)
             if (step.children && step.children.length) forEachStepWithQuote(step.children, fn, { includeQuoteInner })
-            if (includeQuoteInner && step?.type === 'quote') {
+            if (includeQuoteInner && isQuoteStepType(step?.type)) {
                 const inner = quoteStepsMap.value?.[step.id] || []
                 if (Array.isArray(inner) && inner.length) {
                     forEachStepWithQuote(inner, fn, { includeQuoteInner: false })
@@ -68,7 +73,7 @@ export function useQuoteSteps({
     }
 
     const loadQuoteStepsForStep = async (step) => {
-        if (step.type !== 'quote' || !step.config?.quote_case_id) {
+        if (!isQuoteStepType(step.type) || !step.config?.quote_case_id) {
             quoteStepsMap.value = { ...quoteStepsMap.value, [step.id]: [] }
             return
         }
@@ -84,14 +89,14 @@ export function useQuoteSteps({
 
     const loadQuoteStepsForAllQuoteSteps = () => {
         forEachStep(steps.value, (step) => {
-            if (step.type === 'quote') loadQuoteStepsForStep(step)
+            if (isQuoteStepType(step.type)) loadQuoteStepsForStep(step)
         })
     }
 
     const loadQuoteStepsForAllQuoteStepsAsync = async () => {
         const quoteSteps = []
         forEachStep(steps.value, (s) => {
-            if (s?.type === 'quote' && s?.config?.quote_case_id) quoteSteps.push(s)
+            if (isQuoteStepType(s?.type) && s?.config?.quote_case_id) quoteSteps.push(s)
         })
         if (!quoteSteps.length) return
         await Promise.all(quoteSteps.map((s) => loadQuoteStepsForStep(s)))
@@ -128,7 +133,7 @@ export function useQuoteSteps({
     const removeAllQuoteSteps = () => {
         const quoteIds = []
         forEachStep(steps.value, (step) => {
-            if (step.type === 'quote' || step.type === 'quote_public_script') {
+            if (isQuoteStepType(step.type)) {
                 quoteIds.push(step.id)
             }
         })
@@ -153,7 +158,7 @@ export function useQuoteSteps({
     const collectQuoteStepsWithPosition = () => {
         const list = []
         forEachStep(steps.value, (step) => {
-            if (step.type !== 'quote' && step.type !== 'quote_public_script') return
+            if (!isQuoteStepType(step.type)) return
             const parent = findStepParent(step.id)
             const parentId = parent?.id ?? null
             const siblings = parentId === null ? steps.value : (parent?.children || [])

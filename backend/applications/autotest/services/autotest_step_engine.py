@@ -77,7 +77,7 @@ from backend.enums import (
     AutoTestStepType,
     AutoTestReportType,
     AutoTestLoopMode,
-    PUBLIC_CASE_TYPES,
+    AutoTestCaseType,
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType,
     AutoTestConfigNodeType,
@@ -2553,12 +2553,19 @@ class UserVariablesStepExecutor(BaseStepExecutor):
             raise StepExecutionError(result.error) from e
 
 
-class QuoteCaseStepExecutor(BaseStepExecutor):
+class BaseQuoteCaseStepExecutor(BaseStepExecutor):
     """
-    引用公共脚本/接口执行器：加载引用用例根步骤树，根据step_no顺序执行并挂到result.children。
+    引用类步骤执行器基类：加载被引用公共用例根步骤树，根据step_no顺序执行并挂到result.children。
 
+    子类通过quote_step_label声明日志/错误前缀、allowed_quote_case_types声明可引用的用例类型，
+    加载被引用用例时按该类型过滤，实现「引用公共脚本」「引用公共接口」两类步骤的分流。
     本步step_is_skipped时由BaseStepExecutor.execute直接返回，不会进入本执行器。
     """
+
+    # 日志/错误信息前缀（由子类覆盖）
+    quote_step_label: str = "引用公共步骤"
+    # 允许引用的用例类型集合（由子类覆盖，加载被引用用例时按此过滤）
+    allowed_quote_case_types: Tuple[AutoTestCaseType, ...] = ()
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -2567,12 +2574,13 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
         :param result: 本步执行结果，子步骤结果写入children
         :return: None
         """
+        allowed_types_desc: str = "、".join(t.value for t in self.allowed_quote_case_types)
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
-                raise StepExecutionError("【引用公共脚本/接口】缺少必要配置: quote_case_id")
+                raise StepExecutionError(f"【{self.quote_step_label}】缺少必要配置: quote_case_id")
 
             database_crud_services = await self.get_services()
             # 将当前引用的公共脚本ID在步骤执行器上下文中标记，用于判断是否来自引用链
@@ -2584,13 +2592,15 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     only_one=True,
                     on_error=True,
                     id=quote_case_id,
-                    case_type__in=[t.value for t in PUBLIC_CASE_TYPES],
+                    case_type__in=[t.value for t in self.allowed_quote_case_types],
                     state__not=1,
                 )
             except (ParameterException, NotFoundException) as e:
-                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id}不存在\n\t错误描述: {e.message}") from e
+                raise StepExecutionError(
+                    f"【{self.quote_step_label}】引用用例ID: {quote_case_id}不存在或用例类型不属于({allowed_types_desc})\n\t错误描述: {e.message}"
+                ) from e
             except Exception as e:
-                raise StepExecutionError(f"【引用公共脚本/接口】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
+                raise StepExecutionError(f"【{self.quote_step_label}】引用用例ID: {quote_case_id})查询异常\n\t错误描述: {e}") from e
 
             quote_case_dict = await quote_case_instance.to_dict(
                 include_fields={"id", "case_code", "case_name"},
@@ -2602,17 +2612,17 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 quote_roots = load.root_steps
                 if not quote_roots:
                     self.context.log(
-                        f"【引用公共脚本/接口】用例(id={quote_case_id})暂无任何可执行步骤数据",
+                        f"【{self.quote_step_label}】用例(id={quote_case_id})暂无任何可执行步骤数据",
                         step_code=self.step_code
                     )
                     return
             except Exception as e:
                 raise StepExecutionError(
-                    f"【引用公共脚本/接口】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
+                    f"【{self.quote_step_label}】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
                 ) from e
 
             self.context.log(
-                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})开始",
+                f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})开始",
                 step_code=self.step_code
             )
             ordered_steps = sorted(
@@ -2652,7 +2662,7 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                     )
                     result.append_child(failed_result)
             self.context.log(
-                f"【引用公共脚本/接口】执行用例(id={quote_case_id}, name={quote_case_name})结束",
+                f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})结束",
                 step_code=self.step_code
             )
         except StepExecutionError:
@@ -2669,6 +2679,24 @@ class QuoteCaseStepExecutor(BaseStepExecutor):
                 self.context.executing_parent_step_id = previous_parent_step_id
             except Exception:
                 pass
+
+
+class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
+    """
+    引用公共接口执行器：仅允许引用用例类型为「公共接口」的公共用例。
+    """
+
+    quote_step_label = "引用公共接口"
+    allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
+
+
+class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
+    """
+    引用公共脚本执行器：仅允许引用用例类型为「公共脚本」的公共用例。
+    """
+
+    quote_step_label = "引用公共脚本"
+    allowed_quote_case_types = (AutoTestCaseType.PUBLIC_SCRIPT,)
 
 
 class TcpStepExecutor(BaseStepExecutor):
@@ -3886,7 +3914,8 @@ class StepExecutorFactory:
         AutoTestStepType.IF: ConditionStepExecutor,
         AutoTestStepType.WAIT: WaitStepExecutor,
         AutoTestStepType.ASSERT: AssertStepExecutor,
-        AutoTestStepType.QUOTE: QuoteCaseStepExecutor,
+        AutoTestStepType.QUOTE_PUBLIC_SCRIPT: QuotePublicScriptStepExecutor,
+        AutoTestStepType.QUOTE_PUBLIC_API: QuotePublicApiStepExecutor,
         AutoTestStepType.USER_VARIABLES: UserVariablesStepExecutor,
         AutoTestStepType.DIFF: DatagramDiffStepExecutor,
     }

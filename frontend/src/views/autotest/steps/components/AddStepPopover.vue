@@ -77,6 +77,7 @@ const STEP_ICON = {
   if: 'gravity-ui:shuffle',
   loop: 'gravity-ui:arrows-rotate-right',
   quote_public_script: 'gravity-ui:link',
+  quote_public_api: 'gravity-ui:link',
 }
 
 /** 与 index.vue getStepIconClass 一致，用于图标着色 */
@@ -92,6 +93,7 @@ const STEP_ICON_CLASS = {
   if: 'icon-if',
   loop: 'icon-loop',
   quote_public_script: 'icon-quote',
+  quote_public_api: 'icon-quote',
   copy_steps: 'icon-quote',
   batch_upload_datasource: 'icon-datasource',
   summary_download_datasource: 'icon-datasource',
@@ -99,7 +101,7 @@ const STEP_ICON_CLASS = {
 }
 
 const props = defineProps({
-  /** 当前用例属于「公共家族」（公共脚本/公共接口）时禁用「引用公共脚本/接口」与数据驱动 */
+  /** 当前用例属于「公共家族」（公共脚本/公共接口）时禁用「引用公共脚本/公共接口」与数据驱动 */
   isPublicFamilyCase: { type: Boolean, default: false },
   /** 当前用例为「公共接口」时仅可添加 HTTP/TCP 请求步骤 */
   isPublicApiCase: { type: Boolean, default: false },
@@ -127,7 +129,8 @@ const buildItem = (key, { label, desc, iconName, disabled } = {}) => {
     wait: '等待控制',
     if: '条件分支',
     loop: '循环结构',
-    quote_public_script: '引用公共脚本/接口',
+    quote_public_script: '引用公共脚本',
+    quote_public_api: '引用公共接口',
     copy_steps: '复制指定脚本',
     batch_upload_datasource: '批量上传数据源',
     summary_download_datasource: '汇总下载数据源',
@@ -185,7 +188,11 @@ const menuSections = computed(() => {
       label: '复用步骤',
       items: [
         buildItem('quote_public_script', {
-          desc: '调用公共脚本/接口，复用已编写完成的测试脚本',
+          desc: '引用公共脚本，复用已编写完成的测试脚本',
+          disabled: isPublic,
+        }),
+        buildItem('quote_public_api', {
+          desc: '引用公共接口，复用已编写完成的接口用例',
           disabled: isPublic,
         }),
         buildItem('copy_steps', {

@@ -32,7 +32,8 @@ export function resolveCaseIdFromSteps(steps, fallbackCaseId) {
 }
 
 async function loadQuoteStepsForStep(step, quoteStepsMap) {
-  if (step.type !== 'quote' || !step.config?.quote_case_id) {
+  const isQuoteStep = step.type === 'quote_public_script' || step.type === 'quote_public_api'
+  if (!isQuoteStep || !step.config?.quote_case_id) {
     quoteStepsMap[step.id] = []
     return
   }
@@ -49,7 +50,7 @@ async function loadQuoteStepsForStep(step, quoteStepsMap) {
 export async function loadQuoteStepsForList(list, quoteStepsMap) {
   const quoteSteps = []
   forEachStep(list, (s) => {
-    if (s?.type === 'quote') quoteSteps.push(s)
+    if (s?.type === 'quote_public_script' || s?.type === 'quote_public_api') quoteSteps.push(s)
   })
   if (!quoteSteps.length) return
   await Promise.all(quoteSteps.map((s) => loadQuoteStepsForStep(s, quoteStepsMap)))

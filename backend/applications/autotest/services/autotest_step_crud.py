@@ -838,7 +838,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     )
                     only_step.request_project_id = case_project
         for step_data in cls._iter_tree_steps(steps_data):
-            if step_data.step_type == AutoTestStepType.QUOTE:
+            if step_data.step_type in (AutoTestStepType.QUOTE_PUBLIC_SCRIPT, AutoTestStepType.QUOTE_PUBLIC_API):
                 error_message: str = f"用例类型为({case_type.value})时不允许引用其他脚本"
                 LOGGER.error(error_message)
                 raise ParameterException(message=error_message)

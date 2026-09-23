@@ -49,8 +49,8 @@ const getStepNameAsWillPersist = (step) => {
         const v = config.step_name !== undefined ? config.step_name : (original.step_name || '')
         return String(v ?? '').trim()
     }
-    if (step.type === 'quote' || step.type === 'quote_public_script') {
-        const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '引用公共脚本/接口')
+    if (step.type === 'quote_public_script' || step.type === 'quote_public_api') {
+        const v = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || (step.type === 'quote_public_api' ? '引用公共接口' : '引用公共脚本'))
         return String(v ?? '').trim()
     }
     if (step.type === 'database') {
@@ -391,8 +391,7 @@ const validateStepNamesInSteps = (stepList, stepDefinitions) => {
     const walk = (list, usedNames) => {
         if (!Array.isArray(list)) return { valid: true }
         for (const step of list) {
-            const typeLabel = stepDefinitions[step.type]?.label
-                || (step.type === 'quote_public_script' ? '引用公共脚本/接口' : (step.type || '步骤'))
+            const typeLabel = stepDefinitions[step.type]?.label || (step.type || '步骤')
 
             if (isStepNameExplicitlyEmptyInEditor(step)) {
                 return { valid: false, message: `${typeLabel}：步骤名称不能为空，请填写后再保存` }

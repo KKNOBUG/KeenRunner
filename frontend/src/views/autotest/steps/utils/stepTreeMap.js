@@ -13,7 +13,8 @@ const stepDefinitions = {
   code: { allowChildren: false },
   database: { allowChildren: false },
   redis: { allowChildren: false },
-  quote: { allowChildren: false },
+  quote_public_script: { allowChildren: false },
+  quote_public_api: { allowChildren: false },
   assert: { allowChildren: false },
 }
 
@@ -38,8 +39,10 @@ const backendTypeToLocal = (step_type) => {
       return 'wait'
     case '循环结构':
       return 'loop'
-    case '引用公共脚本/接口':
-      return 'quote'
+    case '引用公共脚本':
+      return 'quote_public_script'
+    case '引用公共接口':
+      return 'quote_public_api'
     case '数据库请求':
       return 'database'
     case 'Redis请求':
@@ -223,10 +226,10 @@ export function mapBackendStep(step) {
       step_desc: step.step_desc || '',
       session_variables: Array.isArray(step.session_variables) ? step.session_variables : [],
     }
-  } else if (localType === 'quote') {
+  } else if (localType === 'quote_public_script' || localType === 'quote_public_api') {
     base.config = {
       quote_case_id: step.quote_case_id ?? null,
-      step_name: step.step_name || (step.quote_case?.case_name || '引用公共脚本/接口'),
+      step_name: step.step_name || (step.quote_case?.case_name || (localType === 'quote_public_api' ? '引用公共接口' : '引用公共脚本')),
     }
   } else if (localType === 'database') {
     const ops = Array.isArray(step.database_operates) ? step.database_operates : []

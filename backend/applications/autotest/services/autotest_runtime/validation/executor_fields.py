@@ -161,7 +161,7 @@ class ExecutorFieldsValidation:
                 if step.wait is None:
                     missing.append("wait")
 
-            elif step_type == AutoTestStepType.QUOTE:
+            elif step_type in (AutoTestStepType.QUOTE_PUBLIC_SCRIPT, AutoTestStepType.QUOTE_PUBLIC_API):
                 if not step.quote_case_id:
                     missing.append("quote_case_id")
 

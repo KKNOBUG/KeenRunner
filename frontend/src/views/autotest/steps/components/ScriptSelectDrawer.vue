@@ -2,7 +2,7 @@
   ScriptSelectDrawer — 脚本选择抽屉（纯 UI 壳）
 
   业务逻辑在父组件 index.vue：
-  - quote 模式：表格列 onSelect → onSelectPublicScript（单选插入引用步骤）
+  - 引用模式（quote_public_script / quote_public_api）：表格列 onSelect → onSelectPublicScript（单选插入对应类型引用步骤）
   - copy 模式：多选 selectedForCopy，底部「确定复制」→ confirmCopySteps
 
   父组件传入 columns、getData（getScriptListForDrawer），本组件只负责展示与查询。
@@ -15,7 +15,7 @@
       :trap-focus="false"
       block-scroll
   >
-    <n-drawer-content :title="scriptDrawerMode === 'copy' ? '选择复制脚本' : '选择公共脚本'" closable>
+    <n-drawer-content :title="drawerTitle" closable>
       <CrudTable
           ref="tableRef"
           v-model:query-items="queryItemsModel"
@@ -68,7 +68,7 @@
 <script setup>
 /**
  * Props（均由 index.vue 传入）：
- * - scriptDrawerMode: 'quote' | 'copy'
+ * - scriptDrawerMode: 'quote_public_script' | 'quote_public_api' | 'copy'
  * - columns: 表格列（含行点击选脚本逻辑）
  * - getData: 拉取用例列表，一般为 getScriptListForDrawer
  * - caseTypeOptionsForCopy / selectedForCopy: 仅 copy 模式使用
@@ -77,13 +77,13 @@
  *
  * defineExpose.handleSearch — 抽屉打开时父组件 nextTick 后刷新表格
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { NButton, NDrawer, NDrawerContent, NInput, NSelect } from 'naive-ui'
 import CrudTable from '@/components/table/CrudTable.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 
-defineProps({
-  scriptDrawerMode: { type: String, default: 'quote' },
+const props = defineProps({
+  scriptDrawerMode: { type: String, default: 'quote_public_script' },
   columns: { type: Array, required: true },
   getData: { type: Function, required: true },
   caseTypeOptionsForCopy: { type: Array, default: () => [] },
@@ -91,6 +91,13 @@ defineProps({
 })
 
 const emit = defineEmits(['confirm-copy'])
+
+/** 抽屉标题：按引用类型区分公共脚本/公共接口 */
+const drawerTitle = computed(() => {
+  if (props.scriptDrawerMode === 'copy') return '选择复制脚本'
+  if (props.scriptDrawerMode === 'quote_public_api') return '选择公共接口'
+  return '选择公共脚本'
+})
 
 const showModel = defineModel('show', { type: Boolean, default: false })
 const queryItemsModel = defineModel('queryItems', { type: Object, required: true })

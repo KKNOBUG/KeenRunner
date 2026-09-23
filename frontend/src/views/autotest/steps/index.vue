@@ -138,7 +138,7 @@
                         :depth="1"
                     />
                     <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存） -->
-                    <div v-if="step.type === 'quote'" class="quote-inner-steps">
+                    <div v-if="step.type === 'quote_public_script' || step.type === 'quote_public_api'" class="quote-inner-steps">
                       <div class="quote-inner-list">
                         <div
                             v-for="(item, idx) in getQuoteStepsFlattened(quoteStepsMap[step.id] || [])"
@@ -330,7 +330,8 @@ const stepDefinitions = {
   code: {label: '代码请求(Python)', allowChildren: false, icon: 'ph:file-py'},
   database: {label: '数据库请求', allowChildren: false, icon: 'ph:file-sql'},
   redis: {label: 'Redis请求', allowChildren: false, icon: 'ph:file-rs'},
-  quote: {label: '引用公共脚本/接口', allowChildren: false, icon: 'gravity-ui:link'},
+  quote_public_script: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
+  quote_public_api: {label: '引用公共接口', allowChildren: false, icon: 'gravity-ui:link'},
   assert: {label: '断言', allowChildren: false, icon: 'material-symbols:rule'},
 }
 
@@ -355,7 +356,8 @@ const editorMap = {
   if: ApiIfEditor,
   wait: ApiWaitEditor,
   user_variables: ApiUserVariablesEditor,
-  quote: ApiQuoteEditor,
+  quote_public_script: ApiQuoteEditor,
+  quote_public_api: ApiQuoteEditor,
   assert: ApiAssertEditor,
 }
 
@@ -444,14 +446,14 @@ const editorProjectLoading = computed(() => {
   return p?.value ?? p ?? false
 })
 
-/** 当前用例是否属于「公共家族」（公共脚本/公共接口：禁用树内「引用公共脚本/接口」入口、不支持数据源） */
+/** 当前用例是否属于「公共家族」（公共脚本/公共接口：禁用树内「引用公共脚本/公共接口」入口、不支持数据源） */
 const isPublicFamilyCase = computed(() => ['公共脚本', '公共接口'].includes(caseInfoPanelRef.value?.caseForm?.case_type))
 
 /** 当前用例是否为「公共接口」（仅允许 1 个 HTTP/TCP 请求步骤） */
 const isPublicApiCase = computed(() => caseInfoPanelRef.value?.caseForm?.case_type === '公共接口')
 
 
-const scriptDrawerMode = ref('quote')
+const scriptDrawerMode = ref('quote_public_script')
 const quotePublicScriptDrawerVisible = ref(false)
 const quotePublicScriptParentId = ref(null)
 const quotePublicScriptReplaceStepId = ref(null)
@@ -471,12 +473,16 @@ const caseTypeOptionsForCopy = [
   { label: '用户脚本', value: '用户脚本' }
 ]
 
-// 请求前规范化入参：quote 模式查公共家族（公共脚本+公共接口）；copy 模式支持 case_type（全部/公共/用户），并排除当前用例（不可复制自己）
+// 请求前规范化入参：引用模式按类型查公共脚本/公共接口；copy 模式支持 case_type（全部/公共/用户），并排除当前用例（不可复制自己）
 const getScriptListForDrawer = (params) => {
   const body = {...params}
-  if (scriptDrawerMode.value === 'quote') {
+  if (scriptDrawerMode.value === 'quote_public_script') {
     delete body.case_type
-    body.case_types = ['公共脚本', '公共接口']
+    body.case_types = ['公共脚本']
+  }
+  if (scriptDrawerMode.value === 'quote_public_api') {
+    delete body.case_type
+    body.case_types = ['公共接口']
   }
   if (scriptDrawerMode.value === 'copy' && caseId.value) {
     body.exclude_case_id = Number(caseId.value)
@@ -501,11 +507,11 @@ const snapshotQuoteCaseFromScriptRow = (row) => {
   }
 }
 
-/** 引用模式：选中公共脚本后插入或替换 quote 步骤 */
+/** 引用模式：选中公共脚本/公共接口后插入或替换对应类型引用步骤 */
 const onSelectPublicScript = (row) => {
   const replaceId = quotePublicScriptReplaceStepId.value
   const quoteCaseSnapshot = snapshotQuoteCaseFromScriptRow(row)
-  const config = { quote_case_id: row.case_id, step_name: row.case_name || '引用公共脚本/接口' }
+  const config = { quote_case_id: row.case_id, step_name: row.case_name || (scriptDrawerMode.value === 'quote_public_api' ? '引用公共接口' : '引用公共脚本') }
   if (replaceId) {
     updateStepConfig(replaceId, config)
     const updated = findStep(replaceId)
@@ -516,7 +522,7 @@ const onSelectPublicScript = (row) => {
     quotePublicScriptReplaceStepId.value = null
   } else {
     const parentId = quotePublicScriptParentId.value
-    const created = insertStep(parentId, 'quote', null, config)
+    const created = insertStep(parentId, scriptDrawerMode.value, null, config)
     if (created) {
       created.original = { ...(created.original || {}), quote_case: quoteCaseSnapshot }
       selectedKeys.value = [created.id]
@@ -608,7 +614,8 @@ const insertStepFromMapped = (parentId, mappedStep) => {
 /** 引用步骤「重新选择」：打开公共脚本抽屉并记录待替换步骤 id */
 const handleQuoteReselect = () => {
   if (!currentStep.value?.id) return
-  scriptDrawerMode.value = 'quote'
+  // 重新选择：抽屉模式跟随当前步骤的引用类型，仅可重选同类型公共用例
+  scriptDrawerMode.value = currentStep.value.type
   quotePublicScriptReplaceStepId.value = currentStep.value.id
   quotePublicScriptParentId.value = null
   quotePublicScriptQueryItems.value.case_type = ''
@@ -784,9 +791,9 @@ const onCaseTypeChange = ({ newType, oldType }) => {
     if (removedCount > 0) {
       if (fromUserScript) {
         stashedQuoteStepsWhenPublic.value = toStash
-        window.$message?.warning?.(`切换为公共脚本，已临时移除${removedCount}个引用公共脚本/接口步骤，若误操作可切回用户脚本恢复`)
+        window.$message?.warning?.(`切换为公共脚本，已临时移除${removedCount}个引用公共脚本/公共接口步骤，若误操作可切回用户脚本恢复`)
       } else {
-        window.$message?.warning?.(`切换为公共脚本，已自动移除${removedCount}个引用公共脚本/接口步骤，公共脚本不允许引用其他脚本`)
+        window.$message?.warning?.(`切换为公共脚本，已自动移除${removedCount}个引用公共脚本/公共接口步骤，公共脚本不允许引用其他脚本`)
       }
     } else {
       window.$message?.info?.('已切换为公共脚本')
@@ -809,7 +816,7 @@ const onCaseTypeChange = ({ newType, oldType }) => {
     const restoredCount = stashedQuoteStepsWhenPublic.value.length > 0 ? restoreStashedQuoteSteps() : 0
     restoreStashedDataSourceBindings()
     window.$message?.info?.(restoredCount > 0
-        ? `已切换为用户脚本，并恢复${restoredCount}个引用公共脚本/接口步骤`
+        ? `已切换为用户脚本，并恢复${restoredCount}个引用公共脚本/公共接口步骤`
         : '已切换为用户脚本')
   }
 }
@@ -1683,7 +1690,7 @@ watch(() => caseInfoPanelRef.value?.anyDropdownOpen, (open) => {
 
 const currentEditorNeedsProject = computed(() => {
   const t = currentStep.value?.type
-  return t === 'http' || t === 'tcp' || t === 'database' || t === 'redis' || t === 'quote'
+  return t === 'http' || t === 'tcp' || t === 'database' || t === 'redis' || t === 'quote_public_script' || t === 'quote_public_api'
 })
 
 const currentEditorNeedsVarAssist = computed(() => {
@@ -1711,7 +1718,7 @@ const editorComponentProps = computed(() => {
     assistFunctions: currentEditorNeedsVarAssist.value ? assistFunctionsList.value : [],
     readonly: !!step.isQuoteInner,
   }
-  if (step.type === 'quote' && !step.isQuoteInner) {
+  if ((step.type === 'quote_public_script' || step.type === 'quote_public_api') && !step.isQuoteInner) {
     props.reselectHandler = handleQuoteReselect
   }
   if (step.type === 'http' || step.type === 'tcp') {
@@ -1778,8 +1785,8 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
           ? {seconds: 2}
           : type === 'user_variables'
               ? {step_name: '用户定义变量'}
-              : type === 'quote'
-                  ? {quote_case_id: null, step_name: '引用公共脚本/接口'}
+              : (type === 'quote_public_script' || type === 'quote_public_api')
+                  ? {quote_case_id: null, step_name: type === 'quote_public_api' ? '引用公共接口' : '引用公共脚本'}
                   : type === 'database'
                       ? {
                         step_name: '数据库请求',
@@ -1818,18 +1825,18 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
                           ? 'Redis请求'
                           : type === 'assert'
                               ? '断言'
-                              : type === 'quote' && extraConfig?.step_name
+                              : (type === 'quote_public_script' || type === 'quote_public_api') && extraConfig?.step_name
                                   ? extraConfig.step_name
                                   : `${def.label}`
   const config = extraConfig ? {...defaultConfig, ...extraConfig} : defaultConfig
   const newStep = {
     id: genId(),
     type,
-    name: type === 'quote' && config.step_name ? config.step_name : defaultName,
+    name: (type === 'quote_public_script' || type === 'quote_public_api') && config.step_name ? config.step_name : defaultName,
     step_is_skipped: false,
     config
   }
-  if (type === 'quote') {
+  if (type === 'quote_public_script' || type === 'quote_public_api') {
     newStep.original = {
       quote_case_id: newStep.config.quote_case_id ?? null,
       step_name: newStep.config.step_name || newStep.name,
@@ -1872,8 +1879,8 @@ const insertStep = (parentId, type, index = null, extraConfig = null) => {
 
 /** 添加步骤：普通类型直接插入；引用/复制打开抽屉 */
 const handleAddStep = (type, parentId) => {
-  if (type === 'quote_public_script') {
-    scriptDrawerMode.value = 'quote'
+  if (type === 'quote_public_script' || type === 'quote_public_api') {
+    scriptDrawerMode.value = type
     quotePublicScriptParentId.value = parentId
     quotePublicScriptReplaceStepId.value = null
     quotePublicScriptQueryItems.value.case_type = ''
@@ -1913,7 +1920,7 @@ const handleAddStep = (type, parentId) => {
 }
 
 const handleAddStepToBranch = (type, parentId, branchIndex) => {
-  if (type === 'quote_public_script' || type === 'copy_steps' || type === 'batch_upload_datasource' || type === 'summary_download_datasource' || type === 'template_download_datasource') {
+  if (type === 'quote_public_script' || type === 'quote_public_api' || type === 'copy_steps' || type === 'batch_upload_datasource' || type === 'summary_download_datasource' || type === 'template_download_datasource') {
     handleAddStep(type, parentId)
     return
   }
@@ -2164,9 +2171,9 @@ const updateStepConfig = (id, config) => {
       } else if (!String(step.name || '').trim()) {
         step.name = 'Redis请求'
       }
-    } else if (step.type === 'quote' || step.type === 'quote_public_script') {
+    } else if (step.type === 'quote_public_script' || step.type === 'quote_public_api') {
       if (config.step_name !== undefined && config.step_name !== null) {
-        step.name = String(config.step_name).trim() || '引用公共脚本/接口'
+        step.name = String(config.step_name).trim() || (step.type === 'quote_public_api' ? '引用公共接口' : '引用公共脚本')
       }
     }
     // 条件分支仅改 branch_items 时左侧树展示名不变，跳过同步刷新减轻输入卡顿
@@ -2194,8 +2201,8 @@ const getStepIconClass = (type) => {
     redis: 'icon-redis',
     assert: 'icon-assert',
     user_variables: 'icon-user_variables',
-    quote: 'icon-quote',
     quote_public_script: 'icon-quote',
+    quote_public_api: 'icon-quote',
   }
   return classMap[type] || ''
 }

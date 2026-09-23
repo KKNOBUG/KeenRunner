@@ -161,13 +161,13 @@ const projectLabelMap = computed(() => {
   return m
 })
 
-/** 遍历步骤树，并在 quote 步骤下继续遍历 quoteStepsMap 内嵌步骤（执行配置聚合用） */
+/** 遍历步骤树，并在引用步骤（公共脚本/公共接口）下继续遍历 quoteStepsMap 内嵌步骤（执行配置聚合用） */
 const forEachStepWithQuote = (list, fn, quoteStepsMap, { includeQuoteInner = true } = {}) => {
   if (!list || !Array.isArray(list)) return
   for (const step of list) {
     fn(step)
     if (step.children?.length) forEachStepWithQuote(step.children, fn, quoteStepsMap, { includeQuoteInner })
-    if (includeQuoteInner && step?.type === 'quote') {
+    if (includeQuoteInner && (step?.type === 'quote_public_script' || step?.type === 'quote_public_api')) {
       const inner = quoteStepsMap?.[step.id] || []
       if (Array.isArray(inner) && inner.length) {
         forEachStepWithQuote(inner, fn, quoteStepsMap, { includeQuoteInner: false })
