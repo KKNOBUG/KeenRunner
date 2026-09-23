@@ -19,11 +19,11 @@ class AutoTestCaseMeta(BaseModel):
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
-    case_types: Optional[List[AutoTestCaseType]] = Field(None, description="用例所属类型集合")
-    case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量(含所有子级步骤)")
-    case_state: Optional[bool] = Field(None, description="用例执行状态(True:成功, False:失败)")
+    case_types: Optional[List[AutoTestCaseType]] = Field(None, description="用例所属类型列表")
+    case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量")
+    case_state: Optional[bool] = Field(None, description="用例执行状态")
     case_last_time: Optional[str] = Field(None, description="用例执行时间")
-    case_version: Optional[int] = Field(None, ge=1, description="用例更新版本(修改次数)")
+    case_version: Optional[int] = Field(None, ge=1, description="用例更新版本")
 
 
 class AutoTestCaseBase(BaseModel):
@@ -71,11 +71,11 @@ class AutoTestCaseUpdate(AutoTestCaseMeta, AutoTestCaseBase):
 class AutoTestCaseScriptGenerate(BaseModel):
     """公共接口转脚本生成入参。"""
 
-    case_ids: List[int] = Field(..., description="公共接口用例ID列表")
+    case_ids: List[int] = Field(..., description="用例ID列表")
     case_project: int = Field(..., ge=1, description="脚本所属应用")
-    case_type: AutoTestCaseType = Field(..., description="脚本类型(仅用户脚本/公共脚本)")
-    case_attr: AutoTestCaseAttr = Field(..., description="用例属性(正案例/反案例)")
-    case_tags: Optional[List[int]] = Field(None, description="脚本所属标签(用户脚本必选, 公共脚本可选)")
+    case_type: AutoTestCaseType = Field(..., description="用例所属类型")
+    case_attr: AutoTestCaseAttr = Field(..., description="用例所属属性")
+    case_tags: Optional[List[int]] = Field(None, description="脚本所属标签")
 
     @field_validator("case_type")
     @classmethod
@@ -94,9 +94,9 @@ class AutoTestCaseScriptGenerate(BaseModel):
     @classmethod
     def _empty_tags_to_none(cls, v: Any) -> Any:
         """
-        标签空数组归一为null，与用例schema标签口径保持一致。
+        case_tags字段空数组时归一为null值。
 
-        :param v: 原始标签列表
+        :param v: 原始值
         :return: 空数组时返回None，其余原样返回
         """
         if isinstance(v, list) and not v:
@@ -106,7 +106,7 @@ class AutoTestCaseScriptGenerate(BaseModel):
     @model_validator(mode="after")
     def _validate_tags_required(self) -> "AutoTestCaseScriptGenerate":
         """
-        跨字段校验：脚本类型为用户脚本时标签必选，公共脚本可选(与新增脚本表单口径一致)。
+        脚本类型为用户脚本时标签必选，公共脚本可选。
 
         :return: 校验通过的入参实例
         """
@@ -121,11 +121,11 @@ class AutoTestCaseSelect(AutoTestCaseMeta, AutoTestCaseBase):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
-    case_ids: Optional[List[int]] = Field(None, description="用例ID集合(精确过滤, 返回保持入参顺序)")
+    case_ids: Optional[List[int]] = Field(None, description="用例ID列表")
 
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
-    request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     owner_user: Optional[UpperStr] = Field(None, max_length=16, description="所属人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
+    state: Optional[int] = Field(default=0, description="状态")

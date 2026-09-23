@@ -77,8 +77,8 @@ class ConditionsBase(BaseModel):
 class BranchItem(BaseModel):
     """条件分支中的单个分支定义（if/elif/else）。"""
 
-    branch_type: str = Field(..., description="分支类型: if/elif/else")
-    branch_conditions: Optional[ConditionsBase] = Field(None, description="分支条件(else时为null)")
+    branch_type: str = Field(..., description="分支类型(IF|ELIF|ELSE)")
+    branch_conditions: Optional[ConditionsBase] = Field(None, description="分支条件")
     branch_desc: Optional[str] = Field(None, max_length=2048, description="分支描述")
     branch_children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="分支子步骤")
 
@@ -110,7 +110,7 @@ class StepsExecuteConfigBase(BaseModel):
     """步骤执行时环境配置覆盖基础字段模型。"""
 
     env_name: str = Field(..., max_length=128, description="环境名称")
-    config_type: AutoTestConfigNodeType = Field(..., description="配置类型(app/file/database/redis)")
+    config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
     config_name: str = Field(..., max_length=128, description="配置名称")
     config_host: str = Field(..., max_length=128, description="配置主机")
     config_port: str = Field(..., max_length=8, description="配置端口")
@@ -121,7 +121,7 @@ class StepExtractVariableItem(BaseModel):
     """步骤定义中的单条提取规则；scope表示ALL/SOME，对应extract_from_source的range_type参数。"""
     name: str = Field(..., max_length=256, description="提取项名称")
     source: str = Field(..., max_length=128, description="数据源")
-    expr: Optional[str] = Field(None, max_length=4096, description="提取表达式(SOME必填, ALL可省略)")
+    expr: Optional[str] = Field(None, max_length=4096, description="提取表达式")
     scope: Optional[str] = Field(None, max_length=32, description="ALL或SOME")
     index: Optional[int] = Field(None, description="多匹配时索引")
 
@@ -129,7 +129,7 @@ class StepExtractVariableItem(BaseModel):
 class StepAssertValidatorItem(BaseModel):
     """步骤定义中的单条断言，与 run_assert_validators 入参一致。"""
 
-    name: str = Field(..., max_length=256, description="断言项名称")
+    name: str = Field(..., max_length=256, description="断言名称")
     source: str = Field(..., max_length=128, description="数据源")
     expr: str = Field(..., max_length=4096, description="表达式")
     operation: str = Field(..., max_length=128, description="比较符")
@@ -154,7 +154,7 @@ class AutoTestStepReqBase(BaseModel):
 
     request_url: Optional[str] = Field(None, max_length=2048, description="请求地址")
     request_port: Optional[str] = Field(None, max_length=16, description="请求端口")
-    request_method: Optional[HTTPMethod] = Field(None, max_length=16, description="请求方法(GET/POST/PUT/DELETE等)")
+    request_method: Optional[HTTPMethod] = Field(None, max_length=16, description="请求方法")
     request_text: Optional[str] = Field(None, description="请求体数据(Text格式)")
     request_body: NON_DICT_TYPE = Field(None, description="请求体数据(Json格式)")
     request_header: NON_LIST_DICT_TYPE = Field(None, description="请求头信息")
@@ -166,13 +166,13 @@ class AutoTestStepReqBase(BaseModel):
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
     request_config_name: Optional[str] = Field(None, max_length=128, description="请求环境配置名称")
     # TCP 步骤扩展（与 TcpStepExecutor 约定一致；存库 JSON 可含下列键）
-    tcp_frame_mode: Optional[str] = Field(None, max_length=64, description="TCP 帧模式，如length_prefix_json/raw")
+    tcp_frame_mode: Optional[str] = Field(None, max_length=64, description="TCP帧模式(length_prefix_json|raw)")
     tcp_length_field_size: Optional[int] = Field(None, ge=1, le=32, description="长度前缀字段宽度")
-    tcp_encoding: Optional[str] = Field(None, max_length=32, description="文本编码，如utf-8")
-    tcp_connect_timeout: Optional[float] = Field(None, ge=0, description="连接超时（秒）")
-    tcp_read_timeout: Optional[float] = Field(None, ge=0, description="读写超时（秒）")
+    tcp_encoding: Optional[str] = Field(None, max_length=32, description="文本编码")
+    tcp_connect_timeout: Optional[float] = Field(None, ge=0, description="连接超时(单位: 秒)")
+    tcp_read_timeout: Optional[float] = Field(None, ge=0, description="读写超时(单位: 秒)")
     tcp_max_response_bytes: Optional[int] = Field(None, ge=1, description="最大读取字节数")
-    tcp_response_type: Optional[str] = Field(None, max_length=16, description="响应解析：json|xml|text|bytes")
+    tcp_response_type: Optional[str] = Field(None, max_length=16, description="响应解析(json|xml|text|bytes)")
 
     @field_validator(
         "request_header",
@@ -198,8 +198,8 @@ class AutoTestStepReqBase(BaseModel):
 class AutoTestStepDbBase(BaseModel):
     """步骤数据库操作基础字段模型。"""
 
-    database_operates: Optional[List[DataBaseOperates]] = Field(None, description="数据库请求操作列表")
     database_searched: Optional[bool] = Field(None, description="数据库请求查到即止开关")
+    database_operates: Optional[List[DataBaseOperates]] = Field(None, description="数据库请求操作列表")
 
     @field_validator("database_operates", mode="before")
     @classmethod
@@ -222,8 +222,8 @@ class AutoTestStepDbBase(BaseModel):
 class AutoTestStepRedisBase(BaseModel):
     """步骤Redis操作基础字段模型。"""
 
-    redis_operates: Optional[List[RedisOperates]] = Field(None, description="Redis请求操作列表")
     redis_searched: Optional[bool] = Field(None, description="Redis请求查到即止开关")
+    redis_operates: Optional[List[RedisOperates]] = Field(None, description="Redis请求操作列表")
 
     @field_validator("redis_operates", mode="before")
     @classmethod
@@ -317,39 +317,40 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
 
     model_config = ConfigDict(extra="ignore")
 
-    step_id: Optional[int] = Field(None, description="步骤ID(更新必填, 新增不填)")
+    step_id: Optional[int] = Field(None, description="步骤ID")
     step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
-    step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码(更新必填, 新增不填)")
+    step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_name: Optional[str] = Field(None, max_length=255, description="步骤名称")
     step_desc: Optional[str] = Field(None, description="步骤描述")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤所属类型")
 
     case_id: Optional[int] = Field(None, description="步骤所属用例")
-    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/接口ID")
+    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/引用公共接口ID")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
-    step_is_skipped: Optional[bool] = Field(False, description="是否跳过执行(注释)，默认不跳过")
+    step_is_skipped: Optional[bool] = Field(False, description="是否跳过执行")
 
     code: Optional[str] = Field(None, description="执行代码(Python)")
-    wait: Optional[float] = Field(None, ge=0, le=300, description="等待控制(正浮点数, 单位:秒)")
+    wait: Optional[float] = Field(None, ge=0, le=300, description="等待控制")
+
     loop_mode: Optional[AutoTestLoopMode] = Field(None, description="循环模式类型")
-    loop_maximums: Optional[str] = Field(None, max_length=512, description="最大循环次数(正整数或变量占位符, 执行时解析为1-100整数)")
-    loop_interval: Optional[float] = Field(None, ge=0, le=60, description="每次循环间隔时间(正浮点数)")
-    loop_iterable: Optional[str] = Field(None, max_length=512, description="循环对象来源(变量名或可迭代对象)")
+    loop_maximums: Optional[str] = Field(None, max_length=512, description="最大循环次数")
+    loop_interval: Optional[float] = Field(None, ge=0, le=60, description="每次循环间隔时间")
+    loop_iterable: Optional[str] = Field(None, max_length=512, description="循环对象来源")
     loop_on_error: Optional[AutoTestLoopErrorStrategy] = Field(None, description="循环执行失败时的处理策略")
-    loop_timeout: Optional[float] = Field(None, ge=0, le=3000, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
+    loop_timeout: Optional[float] = Field(None, ge=0, le=3000, description="条件循环超时时间")
+    loop_conditions: Optional[ConditionsBase] = Field(None, description="条件循环判断条件")
+
+    branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表")
+    branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号")
+
     data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
     data_source_name: Optional[str] = Field(None, max_length=2048, description="数据源名称")
     data_source_desc: Optional[str] = Field(None, max_length=2048, description="数据源描述")
-    loop_conditions: Optional[ConditionsBase] = Field(None, description="条件循环判断条件(仅循环结构条件循环使用)")
-    branch_items: Optional[List[BranchItem]] = Field(None, description="条件分支列表(仅条件分支步骤使用)")
-    branch_index: Optional[int] = Field(None, ge=0, description="所属分支序号(后端推断, 前端无需传递)")
 
     # 报文比对步骤：左右报文引用列表(每项自带datagram_field_ordered)
-    datagram_field_compare: Optional[List[DatagramFieldCompareItem]] = Field(
-        None, description="报文比对配置列表(每项含left_text/right_text/datagram_field_ordered)"
-    )
+    datagram_field_compare: Optional[List[DatagramFieldCompareItem]] = Field(None, description="报文比对配置列表")
 
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    state: Optional[int] = Field(default=0, description="状态")
 
     @field_validator("loop_maximums", mode="before")
     @classmethod
@@ -471,7 +472,7 @@ class AutoTestStepSelect(BaseModel):
     quote_case_id: Optional[int] = Field(None, description="引用公共脚本/接口ID")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    state: Optional[int] = Field(default=0, description="状态")
 
 
 class AutoTestStepTreeUpdateItem(AutoTestStepBase):
@@ -479,8 +480,8 @@ class AutoTestStepTreeUpdateItem(AutoTestStepBase):
 
     case: NON_DICT_TYPE = Field(None, description="用例信息")
     children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="子步骤列表")
-    quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表(与 children 同型；更新时忽略)")
-    quote_case: Optional[Any] = Field(None, description="引用公共脚本/接口信息(更新时忽略)")
+    quote_steps: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="引用步骤列表")
+    quote_case: Optional[Any] = Field(None, description="引用公共脚本/引用公共接口的用例信息")
 
 
 class StepTreeCounter(BaseModel):
@@ -530,7 +531,7 @@ class AutoTestTcpDebugRequest(AutoTestStepVarBase, AutoTestStepReqBase):
 
 
 class AutoTestPythonCodeDebugRequest(AutoTestStepVarBase):
-    """Python 代码步骤调试入参。"""
+    """Python代码步骤调试入参。"""
 
     step_name: str = Field(..., max_length=255, description="步骤名称")
     code: str = Field(..., description="执行代码(Python)")
@@ -545,7 +546,7 @@ class AutoTestRedisDebugRequest(AutoTestStepVarBase, AutoTestStepRedisBase):
     @model_validator(mode="after")
     def validate_redis_debug_request(self):
         """
-        校验 Redis 调试请求至少包含一条 redis_operates。
+        校验Redis调试请求至少包含一条redis_operates。
 
         :return: 当前模型实例
         """
@@ -555,32 +556,20 @@ class AutoTestRedisDebugRequest(AutoTestStepVarBase, AutoTestStepRedisBase):
 
 
 class AutoTestCaseRunInfo(BaseModel):
-    """执行/调试时传入引擎的用例上下文（与 ORM to_dict 的 case 摘要字段对齐）。"""
+    """执行/调试时传入引擎的用例上下文。"""
     case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     case_name: str = Field(..., max_length=255, description="用例名称")
 
 
 class AutoTestStepTreeExecute(BaseModel):
-    """步骤树执行/调试入参。无由视图根据是否携带 steps 判定运行/调试模式。"""
+    """步骤树执行/调试入参。"""
 
     case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
-    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(
-        None,
-        description="步骤树数据(调试模式必填, 运行模式不填)",
-    )
-    initial_variables: Optional[List[StepVariablesBase]] = Field(
-        None,
-        description="会话变量(初始变量池), 列表项含key、value、desc字段",
-    )
-    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(
-        default=None,
-        description="脚本执行配置作用环境",
-    )
-    selected_dataset_names: Optional[List[str]] = Field(
-        None,
-        description="选中的数据集名称列表，运行模式可选多条，调试模式仅可选1条",
-    )
+    steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
+    initial_variables: Optional[List[StepVariablesBase]] = Field(None, description="会话变量(初始变量池)")
+    steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default=None, description="脚本执行配置作用环境")
+    selected_dataset_names: Optional[List[str]] = Field(None, description="选中的数据集名称列表，运行模式可选多条，调试模式仅可选1条")
 
 
 class AutoTestBatchExecuteCases(BaseModel):
@@ -588,7 +577,7 @@ class AutoTestBatchExecuteCases(BaseModel):
 
     env_name: Optional[str] = Field(None, description="执行环境名称")
     case_ids: List[int] = Field(..., min_length=1, description="用例ID列表")
-    initial_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="初始变量池(列表项为key/value/desc)")
+    initial_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(初始变量池)")
 
 
 class AutoTestStepTreeSplice(BaseModel):

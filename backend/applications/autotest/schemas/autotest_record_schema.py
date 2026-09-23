@@ -26,31 +26,31 @@ class AutoTestRecordBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     task_id: Optional[int] = Field(None, description="任务ID")
-    task_code: Optional[str] = Field(None, max_length=64, description="任务标识(快照)")
-    task_name: Optional[str] = Field(None, max_length=255, description="任务名称(快照)")
-    task_type: Optional[AutoTestTaskType] = Field(None, description="任务类型(快照)")
-    task_project: Optional[int] = Field(None, description="所属应用(快照)")
-    trigger_type: Optional[AutoTestTaskTriggerType] = Field(None, description="触发来源(手动/定时)")
-    report_type: Optional[AutoTestReportType] = Field(None, description="报告类型(异步执行/定时执行等)")
-    batch_code: Optional[str] = Field(None, max_length=64, description="批次码(关联脚本报告)")
-    case_ids: Optional[List[int]] = Field(None, description="本次执行的用例ID列表")
-    exec_snapshot: Optional[Dict[str, Any]] = Field(None, description="执行入参与调度快照")
-    task_summary: Optional[Any] = Field(None, description="任务执行完整响应(对象)")
-    task_error: Optional[str] = Field(None, description="错误信息")
-    celery_node: Optional[str] = Field(None, max_length=512, description="Celery 任务节点名")
-    celery_trace_id: Optional[str] = Field(None, max_length=255, description="链路追踪ID")
-    celery_status: Optional[AutoTestTaskStatus] = Field(None, description="执行状态")
-    celery_start_time: Optional[datetime] = Field(None, description="开始时间")
-    celery_end_time: Optional[datetime] = Field(None, description="结束时间")
-    celery_elapsed: Optional[str] = Field(None, max_length=64, description="耗时")
+    task_code: Optional[str] = Field(None, max_length=64, description="任务标识")
+    task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
+    task_type: Optional[AutoTestTaskType] = Field(None, description="任务所属类型")
+    task_project: Optional[int] = Field(None, description="任务所属应用")
+    trigger_type: Optional[AutoTestTaskTriggerType] = Field(None, description="任务触发类型")
+    report_type: Optional[AutoTestReportType] = Field(None, description="报告所属类型")
+    batch_code: Optional[str] = Field(None, max_length=64, description="批次标识代码")
+    case_ids: Optional[List[int]] = Field(None, description="用例ID列表")
+    exec_snapshot: Optional[Dict[str, Any]] = Field(None, description="执行请求快照")
+    task_summary: Optional[Any] = Field(None, description="任务响应快照")
+    task_error: Optional[str] = Field(None, description="任务错误描述")
+    celery_node: Optional[str] = Field(None, max_length=512, description="Celery节点名称")
+    celery_trace_id: Optional[str] = Field(None, max_length=255, description="Celery回溯ID")
+    celery_status: Optional[AutoTestTaskStatus] = Field(None, description="Celery执行状态")
+    celery_start_time: Optional[datetime] = Field(None, description="Celery开始时间")
+    celery_end_time: Optional[datetime] = Field(None, description="Celery结束时间")
+    celery_elapsed: Optional[str] = Field(None, max_length=64, description="Celery执行耗时")
 
 
 class AutoTestRecordCreate(AutoTestRecordBase):
     """创建任务执行观测记录入参。"""
 
-    celery_id: str = Field(..., max_length=255, description="Celery 调度ID")
-    celery_status: AutoTestTaskStatus = Field(default=AutoTestTaskStatus.RUNNING, description="执行状态")
-    case_ids: Optional[List[int]] = Field(default_factory=list, description="本次执行的用例ID列表")
+    celery_id: str = Field(..., max_length=255, description="Celery调度ID")
+    celery_status: AutoTestTaskStatus = Field(default=AutoTestTaskStatus.RUNNING, description="Celery执行状态")
+    case_ids: Optional[List[int]] = Field(default_factory=list, description="用例ID列表")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
     def create_dict(self) -> Dict[str, Any]:
@@ -65,7 +65,7 @@ class AutoTestRecordCreate(AutoTestRecordBase):
 class AutoTestRecordUpdate(AutoTestRecordBase):
     """更新任务执行观测记录入参（根据celery_id部分更新）。"""
 
-    celery_id: Optional[str] = Field(None, max_length=255, description="Celery 调度ID")
+    celery_id: Optional[str] = Field(None, max_length=255, description="Celery调度ID")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
     def update_dict(self) -> Dict[str, Any]:
@@ -84,19 +84,20 @@ class AutoTestRecordSelect(BaseModel):
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-celery_start_time", "-id"], description="排序字段")
 
-    celery_id: Optional[str] = Field(None, max_length=255, description="调度ID")
     task_id: Optional[int] = Field(None, description="任务ID")
+    task_project: Optional[int] = Field(None, description="任务所属应用")
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
-    task_type: Optional[AutoTestTaskType] = Field(None, description="任务类型")
-    # 异步中心范围过滤：固定传入非脚本执行类任务类型集合，与task_type单项筛选叠加生效
-    task_type_in: Optional[List[AutoTestTaskType]] = Field(None, description="任务类型集合")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员(模糊匹配)")
-    task_project: Optional[int] = Field(None, description="所属应用")
-    trigger_type: Optional[AutoTestTaskTriggerType] = Field(None, description="触发来源")
-    batch_code: Optional[str] = Field(None, max_length=64, description="批次码")
-    celery_status: Optional[AutoTestTaskStatus] = Field(None, description="执行状态")
-    celery_start_time_begin: Optional[str] = Field(None, max_length=32, description="开始时间起")
-    celery_start_time_end: Optional[str] = Field(None, max_length=32, description="开始时间止")
-    celery_end_time_begin: Optional[str] = Field(None, max_length=32, description="结束时间起")
-    celery_end_time_end: Optional[str] = Field(None, max_length=32, description="结束时间止")
+    task_type: Optional[AutoTestTaskType] = Field(None, description="任务所属类型")
+    task_type_in: Optional[List[AutoTestTaskType]] = Field(None, description="任务所属类型列表")
+
+    batch_code: Optional[str] = Field(None, max_length=64, description="批次标识代码")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    trigger_type: Optional[AutoTestTaskTriggerType] = Field(None, description="任务触发类型")
+
+    celery_id: Optional[str] = Field(None, max_length=255, description="Celery调度ID")
+    celery_status: Optional[AutoTestTaskStatus] = Field(None, description="Celery执行状态")
+    celery_start_time_begin: Optional[str] = Field(None, max_length=32, description="Celery开始时间起")
+    celery_start_time_end: Optional[str] = Field(None, max_length=32, description="Celery开始时间止")
+    celery_end_time_begin: Optional[str] = Field(None, max_length=32, description="Celery结束时间起")
+    celery_end_time_end: Optional[str] = Field(None, max_length=32, description="Celery结束时间止")

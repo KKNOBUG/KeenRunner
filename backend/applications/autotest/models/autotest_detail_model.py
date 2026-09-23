@@ -30,7 +30,7 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     parent_step_id = fields.BigIntField(null=True, description="父级步骤ID")
     case_code = fields.CharField(max_length=64, index=True, description="用例标识代码")
     report_code = fields.CharField(max_length=64, index=True, description="报告标识代码")
-    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本/接口ID")
+    quote_case_id = fields.BigIntField(null=True, index=True, description="引用公共脚本/引用公共接口ID")
 
     # 步骤明细相关(指向步骤树结构中的具体步骤)
     step_id = fields.BigIntField(description="步骤ID")
@@ -38,7 +38,7 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     step_name = fields.CharField(max_length=255, description="步骤名称")
     step_code = fields.CharField(max_length=64, index=True, description="步骤标识代码")
     step_type = fields.CharEnumField(AutoTestStepType, description="步骤类型")
-    step_state = fields.BooleanField(description="步骤执行状态(True:成功, False:失败)")
+    step_state = fields.BooleanField(description="步骤执行状态")
     step_st_time = fields.CharField(max_length=255, null=True, description="步骤执行开始时间")
     step_ed_time = fields.CharField(max_length=255, null=True, description="步骤执行结束时间")
     step_elapsed = fields.CharField(max_length=16, null=True, description="步骤执行消耗时间")
@@ -48,7 +48,7 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # 请求相关(实际发出的请求快照)
     request_url = fields.CharField(max_length=2048, null=True, description="请求地址")
     request_port = fields.CharField(max_length=16, null=True, description="请求端口")
-    request_method = fields.CharField(max_length=16, null=True, description="请求方法(GET/POST/PUT/DELETE等)")
+    request_method = fields.CharField(max_length=16, null=True, description="请求方法")
     # request_header、request_params、request_form_data、request_form_urlencoded、request_form_file字段, 存储格式为列表嵌套字典, 每个元素包含key、value、desc项
     request_header = fields.JSONField(null=True, description="请求头信息")
     request_params = fields.JSONField(null=True, description="请求路径参数")

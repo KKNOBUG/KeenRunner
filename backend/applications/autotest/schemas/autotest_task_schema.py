@@ -30,8 +30,8 @@ class AutoTestTaskSchedule(BaseModel):
     """
 
     trigger_dates: Optional[List[str]] = Field(None, min_length=1, description="触发日期时间列表(YYYY-MM-DD HH:MM:SS)")
-    trigger_cycle: Optional[AutoTestTaskCycleType] = Field(None, description="调度周期(daily/weekly/monthly)")
-    trigger_weeks: Optional[List[int]] = Field(None, min_length=1, description="星期多选(1=周一~7=周日, 周期=周时必输)")
+    trigger_cycle: Optional[AutoTestTaskCycleType] = Field(None, description="调度周期(daily｜weekly｜monthly)")
+    trigger_weeks: Optional[List[int]] = Field(None, min_length=1, description="星期多选(1=周一 ～ 7=周日, 周期=周时必输)")
     trigger_month: Optional[List[int]] = Field(None, min_length=1, description="月内日期多选(1~31, 周期=月时必输)")
     trigger_times: Optional[List[str]] = Field(None, min_length=1, max_length=3, description="触发时间点列表(HH:MM:SS, 最多3个)：两种模式必输")
 
@@ -39,15 +39,15 @@ class AutoTestTaskSchedule(BaseModel):
 class AutoTestTaskSchedulePreview(BaseModel):
     """定时执行预览入参：按时效与定时表达式正推即将到来的触发日期时间。"""
 
-    task_periodic_expr: AutoTestTaskPeriodicMode = Field(..., description="周期表达式(执行1次/执行N次)")
-    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式(时效×周期×时间点)")
+    task_periodic_expr: AutoTestTaskPeriodicMode = Field(..., description="周期表达式")
+    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
 
 
 class AutoTestTaskCaseExecuteConfig(BaseModel):
     """用例级执行配置：cases_execute_config中case_id键对应对象结构。"""
 
     execute_count: int = Field(1, ge=1, le=9999, description="执行次数")
-    involve_envs: List[str] = Field(default_factory=list, description="涉及环境名称列表(用例级&去重)")
+    involve_envs: List[str] = Field(default_factory=list, description="涉及环境名称列表")
     # KEY：step_id 优先，否则@@step_name；DB/Redis多操作再拼_@@{index}
     steps_execute_config: Dict[str, StepsExecuteConfigBase] = Field(default_factory=dict, description="步骤执行环境配置")
 
@@ -57,7 +57,7 @@ class AutoTestTaskCasesExecuteConfig(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    env_mode: AutoTestEnvMode = Field(AutoTestEnvMode.SINGLE, description="环境模式(单环境/多环境)")
+    env_mode: AutoTestEnvMode = Field(AutoTestEnvMode.SINGLE, description="环境模式")
     env_name: Optional[str] = Field(None, max_length=128, description="全局环境名称")
 
     @model_validator(mode="after")
@@ -76,18 +76,20 @@ class AutoTestTaskCreate(BaseModel):
 
     task_name: str = Field(..., max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
-    task_type: Optional[AutoTestTaskType] = Field(AutoTestTaskType.MULTIPLE_CASE_EXECUTE, description="任务业务类型(扫描过滤)")
     task_project: int = Field(default=1, ge=1, description="任务所属应用")
-    task_execute_mode: AutoTestTaskExecuteMode = Field(AutoTestTaskExecuteMode.PARALLEL, description="执行模式(并行执行/串行执行)")
-    task_case_ids: Optional[List[int]] = Field(None, description="关联用例ID列表")
-    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="扩展参数(当前仅承载initial_variables)")
+    task_case_ids: Optional[List[int]] = Field(None, description="任务关联用例ID列表")
+
+    task_execute_mode: AutoTestTaskExecuteMode = Field(AutoTestTaskExecuteMode.PARALLEL, description="任务执行模式")
+    task_type: Optional[AutoTestTaskType] = Field(AutoTestTaskType.MULTIPLE_CASE_EXECUTE, description="任务业务类型")
     cases_execute_config: Optional[AutoTestTaskCasesExecuteConfig] = Field(None, description="用例执行配置")
-    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式(时效×周期×时间点)")
-    task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(AutoTestTaskPeriodicMode.UNBOUNDED, description="周期表达式(执行1次/执行N次)")
-    task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈(预留)")
-    task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员(预留)")
-    task_enabled: Optional[bool] = Field(False, description="是否启动调度(True/False)")
-    dataset_enabled: bool = Field(False, description="是否启用数据源(任务级全局控制)")
+    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
+    task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(AutoTestTaskPeriodicMode.UNBOUNDED, description="周期表达式")
+
+    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务扩展参数")
+    task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
+    task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
+    task_enabled: Optional[bool] = Field(False, description="是否启动调度")
+    dataset_enabled: bool = Field(False, description="是否启用数据源")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 
@@ -95,23 +97,25 @@ class AutoTestTaskUpdate(BaseModel):
     """更新自动化测试任务入参。"""
 
     task_id: Optional[int] = Field(None, description="任务ID")
-    task_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
-    task_type: Optional[AutoTestTaskType] = Field(None, description="任务业务类型(扫描过滤)")
+    task_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")
     task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
-    task_execute_mode: Optional[AutoTestTaskExecuteMode] = Field(None, description="执行模式(并行执行/串行执行)")
-    task_case_ids: Optional[List[int]] = Field(None, description="关联用例ID列表")
-    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="扩展参数(当前仅承载initial_variables)")
+    task_case_ids: Optional[List[int]] = Field(None, description="任务关联用例ID列表")
+
+    task_execute_mode: Optional[AutoTestTaskExecuteMode] = Field(None, description="任务执行模式")
+    task_type: Optional[AutoTestTaskType] = Field(None, description="任务业务类型")
     cases_execute_config: Optional[AutoTestTaskCasesExecuteConfig] = Field(None, description="用例执行配置")
+    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式")
+    task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(None, description="周期表达式")
+
     last_execute_time: Optional[str] = Field(None, max_length=32, description="最后执行时间")
     last_execute_state: Optional[AutoTestTaskStatus] = Field(None, description="最后执行状态")
-    task_schedule_expr: Optional[AutoTestTaskSchedule] = Field(None, description="结构化定时表达式(时效×周期×时间点)")
-    task_periodic_expr: Optional[AutoTestTaskPeriodicMode] = Field(None, description="周期表达式(执行1次/执行N次)")
-    task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈(预留)")
-    task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员(预留)")
-    task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")
-    dataset_enabled: Optional[bool] = Field(None, description="是否启用数据源(任务级全局控制)")
+    task_kwargs: Optional[Dict[str, Any]] = Field(None, description="任务扩展参数")
+    task_notify: Optional[List[str]] = Field(None, description="任务执行明细反馈")
+    task_notifier: Optional[List[str]] = Field(None, description="任务执行通知人员")
+    task_enabled: Optional[bool] = Field(None, description="是否启动调度")
+    dataset_enabled: Optional[bool] = Field(None, description="是否启用数据源")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
 
@@ -122,17 +126,17 @@ class AutoTestTaskSelect(AutoTestTaskUpdate):
     page_size: int = Field(default=10, ge=10, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-last_execute_time"], description="排序字段")
 
-    last_execute_user: Optional[str] = Field(None, max_length=16, description="最后执行人员")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
-    task_enabled: Optional[bool] = Field(None, description="是否启动调度(True/False)")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
-    date_from: Optional[str] = Field(None, description="最后执行时间-起")
-    date_to: Optional[str] = Field(None, description="最后执行时间-止")
     env_id: Optional[int] = Field(None, ge=1, description="涉及环境ID")
     env_name: Optional[str] = Field(None, max_length=64, description="涉及环境名称")
+    last_execute_user: Optional[str] = Field(None, max_length=16, description="最后执行人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    task_enabled: Optional[bool] = Field(None, description="是否启动调度")
+    date_from: Optional[str] = Field(None, description="最后执行时间-起")
+    date_to: Optional[str] = Field(None, description="最后执行时间-止")
+    state: Optional[int] = Field(default=0, description="状态")
 
 
 class AutoTestTaskId(BaseModel):
     """单任务主键入参：供执行/启动/停止/复制等单任务操作端点共用。"""
 
-    task_id: int = Field(..., ge=1, description="任务主键ID")
+    task_id: int = Field(..., ge=1, description="任务ID")

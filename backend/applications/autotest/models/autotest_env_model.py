@@ -19,8 +19,6 @@ from backend.applications.base.services.scaffold import (
 
 
 class AutoTestEnvModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """环境枚举主数据；主键对外语义为env_enum_id；仅存全局环境名。"""
-
     env_name = fields.CharField(max_length=128, unique=True, description="环境名称")
     env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境标识代码")
 

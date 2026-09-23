@@ -17,8 +17,8 @@ class AutoTestCaseTransferCreate(BaseModel):
     """转让用例入参。"""
 
     case_id: int = Field(..., ge=1, description="用例ID")
-    next_owner_user: UpperStr = Field(..., max_length=16, description="转入后所属人员")
-    transfer_desc: Optional[str] = Field(None, max_length=2048, description="操作描述")
+    next_owner_user: UpperStr = Field(..., max_length=16, description="用例转出后归属人员")
+    transfer_desc: Optional[str] = Field(None, max_length=2048, description="用例转出描述")
 
 
 class AutoTestCaseTransferSelect(BaseModel):
@@ -30,9 +30,9 @@ class AutoTestCaseTransferSelect(BaseModel):
 
     transfer_id: Optional[int] = Field(None, ge=1, description="转让记录ID")
     case_id: Optional[int] = Field(None, ge=1, description="用例ID")
-    prev_owner_user: Optional[UpperStr] = Field(None, max_length=16, description="转出前所属人员")
-    next_owner_user: Optional[UpperStr] = Field(None, max_length=16, description="转入后所属人员")
-    created_user: Optional[UpperStr] = Field(None, max_length=16, description="操作人")
-    involve_user: Optional[UpperStr] = Field(None, max_length=16, description="转让链相关人员, 匹配转出人或转入人")
+    prev_owner_user: Optional[UpperStr] = Field(None, max_length=16, description="用例转出前归属人员")
+    next_owner_user: Optional[UpperStr] = Field(None, max_length=16, description="用例转出后归属人员")
+    created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+    involve_user: Optional[UpperStr] = Field(None, max_length=16, description="用例转让链相关人员")
     created_time_begin: Optional[str] = Field(None, max_length=32, description="操作时间起")
     created_time_end: Optional[str] = Field(None, max_length=32, description="操作时间止")

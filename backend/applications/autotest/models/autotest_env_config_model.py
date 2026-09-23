@@ -20,20 +20,18 @@ from backend.enums import AutoTestConfigNodeType, AutoTestDataBaseType
 
 
 class AutoTestEnvBindModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """应用×环境枚举×节点类型的挂载点；主键对外语义为env_bind_id。"""
-
     env_enum = fields.ForeignKeyField(
         "models.AutoTestEnvModel",
         related_name="env_binds",
         on_delete=fields.RESTRICT,
         db_constraint=True,
         index=True,
-        description="环境枚举",
+        description="环境绑定枚举",
     )
-    env_type = fields.CharEnumField(AutoTestConfigNodeType, default=AutoTestConfigNodeType.APP, index=True, description="节点类型")
-    env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="绑定标识代码")
-    env_desc = fields.CharField(max_length=2048, null=True, description="绑定描述")
-    project_id = fields.BigIntField(ge=1, index=True, description="应用ID")
+    env_type = fields.CharEnumField(AutoTestConfigNodeType, default=AutoTestConfigNodeType.APP, index=True, description="环境绑定节点类型")
+    env_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="环境绑定标识代码")
+    env_desc = fields.CharField(max_length=2048, null=True, description="环境绑定描述")
+    project_id = fields.BigIntField(ge=1, index=True, description="环境绑定应用ID")
 
     class Meta:
         table = "krun_autotest_env_bind"
@@ -55,22 +53,20 @@ class AutoTestEnvBindModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMo
 
 
 class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    """挂载点下的连接明细；主键对外语义为env_config_id；project_id/env_type由绑定派生。"""
-
     env_bind = fields.ForeignKeyField(
         "models.AutoTestEnvBindModel",
         related_name="env_configs",
         on_delete=fields.RESTRICT,
         db_constraint=True,
         index=True,
-        description="环境绑定",
+        description="环境绑定枚举",
     )
     config_name = fields.CharField(max_length=128, description="配置名称")
     config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
     config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
     config_host = fields.CharField(max_length=128, description="数据库/服务器主机地址")
     config_port = fields.CharField(max_length=8, null=True, description="数据库/服务器端口")
-    database_name = fields.CharField(max_length=128, null=True, description="数据库名称")
+    database_name = fields.CharField(max_length=128, null=True, description="数据库名称/Redis库编号")
     database_type = fields.CharEnumField(AutoTestDataBaseType, default=None, null=True, description="数据库类型")
     config_username = fields.CharField(max_length=128, null=True, description="数据库/服务器用户名")
     config_password = fields.CharField(max_length=128, null=True, description="数据库/服务器密码")

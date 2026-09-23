@@ -23,8 +23,8 @@ class DataBaseOperates(BaseModel):
     """步骤执行明细中的单条数据库操作字段模型。"""
 
     index: int = Field(..., ge=0, description="数据库操作序号")
-    name: str = Field(..., max_length=128, description="数据库操作名称")
     env_name: str = Field(..., max_length=128, description="数据库操作环境名称")
+    name: str = Field(..., max_length=128, description="数据库操作名称")
     expr: str = Field(..., max_length=4096, description="数据库操作SQL语句")
     project_id: int = Field(..., ge=1, description="所属应用ID")
     project_name: str = Field(..., max_length=128, description="所属应用名称")
@@ -38,8 +38,8 @@ class RedisOperates(BaseModel):
     """步骤执行明细中的单条Redis操作字段模型。"""
 
     index: int = Field(..., ge=0, description="Redis操作序号")
-    name: str = Field(..., max_length=128, description="Redis操作名称")
     env_name: str = Field(..., max_length=128, description="Redis操作环境名称")
+    name: str = Field(..., max_length=128, description="Redis操作名称")
     expr: str = Field(..., max_length=4096, description="Redis命令")
     project_id: int = Field(..., ge=1, description="所属应用ID")
     project_name: str = Field(..., max_length=128, description="所属应用名称")
@@ -73,20 +73,22 @@ class ConditionsBase(BaseModel):
 class AutoTestDetailReqBase(BaseModel):
     """步骤执行明细请求字段基础模型。"""
 
-    request_url: Optional[str] = Field(default=None, max_length=2048, description="实际发出的请求地址")
-    request_port: Optional[str] = Field(default=None, max_length=16, description="实际发出的请求端口")
-    request_method: Optional[HTTPMethod] = Field(default=None, max_length=16, description="实际发出的请求方法")
-    request_args_type: Optional[AutoTestReqArgsType] = Field(default=None, description="实际发出的请求参数类型")
-    request_project_id: Optional[int] = Field(default=None, ge=1, description="实际发出的请求应用ID")
-    request_config_name: Optional[str] = Field(default=None, max_length=128, description="实际发出的请求环境配置名称")
-    request_env_name: Optional[str] = Field(default=None, max_length=128, description="实际发出的请求环境名称")
-    request_header: NON_DICT_TYPE = Field(default=None, description="实际发出的请求头")
-    request_params: NON_DICT_TYPE = Field(default=None, description="实际发出的请求参数")
-    request_form_data: NON_DICT_TYPE = Field(default=None, description="实际发出的表单数据")
-    request_form_urlencoded: NON_DICT_TYPE = Field(default=None, description="实际发出的 urlencoded 键值对")
-    request_form_file: NON_DICT_TYPE = Field(default=None, description="实际发出的表单文件项")
-    request_body: NON_DICT_TYPE = Field(default=None, description="实际发出的请求体(JSON)")
-    request_text: Optional[str] = Field(default=None, description="实际发出的请求体(Raw)")
+    request_url: Optional[str] = Field(default=None, max_length=2048, description="请求地址")
+    request_port: Optional[str] = Field(default=None, max_length=16, description="请求端口")
+    request_method: Optional[HTTPMethod] = Field(default=None, max_length=16, description="请求方法")
+
+    request_project_id: Optional[int] = Field(default=None, ge=1, description="请求应用ID")
+    request_args_type: Optional[AutoTestReqArgsType] = Field(default=None, description="请求参数类型")
+    request_config_name: Optional[str] = Field(default=None, max_length=128, description="请求环境配置名称")
+    request_env_name: Optional[str] = Field(default=None, max_length=128, description="请求环境名称")
+
+    request_header: NON_DICT_TYPE = Field(default=None, description="请求头信息")
+    request_params: NON_DICT_TYPE = Field(default=None, description="请求路径参数")
+    request_form_data: NON_DICT_TYPE = Field(default=None, description="请求表单数据")
+    request_form_file: NON_DICT_TYPE = Field(default=None, description="请求文件路径")
+    request_form_urlencoded: NON_DICT_TYPE = Field(default=None, description="请求键值对数据")
+    request_body: NON_DICT_TYPE = Field(default=None, description="请求体数据(JSON)")
+    request_text: Optional[str] = Field(default=None, description="请求体数据(Raw)")
 
 
 class AutoTestDetailResBase(BaseModel):
@@ -102,7 +104,8 @@ class AutoTestDetailResBase(BaseModel):
 class AutoTestDetailVarBase(BaseModel):
     """步骤执行明细变量/断言/操作快照基础字段模型。"""
 
-    loop_conditions: Optional[ConditionsBase] = Field(default=None, description="本次执行条件循环判断条件")
+    loop_conditions: Optional[ConditionsBase] = Field(default=None, description="条件循环判断条件")
+
     # 条件分支快照：仅记录本次命中的那一条（列表长度通常为1）；branch_index 给子步骤归属用
     branch_items: NON_LIST_DICT_TYPE = Field(default=None, description="本次命中的条件分支快照(仅命中项,不含子步骤)")
     branch_index: Optional[int] = Field(default=None, ge=0, description="所属分支序号快照(条件分支子步骤)")
@@ -113,8 +116,8 @@ class AutoTestDetailVarBase(BaseModel):
     assert_validators: NON_LIST_DICT_TYPE = Field(default=None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
     database_operates: Optional[List[DataBaseOperates]] = Field(default=None, description="数据库请求操作列表")
     redis_operates: Optional[List[RedisOperates]] = Field(default=None, description="Redis请求操作列表")
-    datagram_field_compare: NON_LIST_DICT_TYPE = Field(default=None, description="报文比对配置列表(快照)")
-    step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志(多行文本)")
+    datagram_field_compare: NON_LIST_DICT_TYPE = Field(default=None, description="报文比对配置列表")
+    step_exec_logger: Optional[str] = Field(default=None, description="步骤执行日志")
     step_exec_except: Optional[str] = Field(default=None, description="步骤错误描述")
 
     @field_validator(
@@ -129,7 +132,7 @@ class AutoTestDetailVarBase(BaseModel):
     @classmethod
     def _empty_list_to_none(cls, v: Any) -> Any:
         """
-        列表型快照字段空数组时归一为null值。
+        部分列表类型字段空数组时归一为null值。
 
         :param v: 原始值
         :return: 空数组时返回None，其余原样返回
@@ -155,28 +158,11 @@ class AutoTestDetailVarBase(BaseModel):
         text = str(v).strip()
         return text or None
 
-    @field_validator('database_operates', mode='before')
+    @field_validator('database_operates', 'redis_operates', mode='before')
     @classmethod
     def normalize_database_operates(cls, v):
         """
         将单条database_operates对象包装为列表。
-
-        :param v: 原始值
-        :return: 列表形式或原值
-        """
-        if v is None:
-            return None
-        if isinstance(v, dict):
-            return [v]
-        if isinstance(v, list):
-            return v or None
-        return v
-
-    @field_validator('redis_operates', mode='before')
-    @classmethod
-    def normalize_redis_operates(cls, v):
-        """
-        将单条redis_operates对象包装为列表。
 
         :param v: 原始值
         :return: 列表形式或原值
@@ -292,27 +278,27 @@ class AutoTestDetailVarBase(BaseModel):
 class AutoTestDetailBase(AutoTestDetailReqBase, AutoTestDetailVarBase, AutoTestDetailResBase):
     """步骤执行明细公共字段。"""
 
-    quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本/接口ID")
+    quote_case_id: Optional[int] = Field(default=None, ge=1, description="引用公共脚本/引用公共接口ID")
     step_st_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行开始时间")
     step_ed_time: Optional[str] = Field(default=None, max_length=255, description="步骤执行结束时间")
     step_elapsed: Optional[str] = Field(default=None, max_length=16, description="步骤执行消耗时间")
-    loop_cycles: Optional[int] = Field(default=None, le=100, description="循环执行次数(第几次)")
+    loop_cycles: Optional[int] = Field(default=None, le=100, description="循环执行圈数")
 
-    code: Optional[str] = Field(default=None, description="本次执行使用的代码(Python)")
-    wait: Optional[float] = Field(default=None, ge=0, description="本次执行等待时间")
-    loop_mode: Optional[Any] = Field(default=None, description="本次执行循环模式")
-    loop_maximums: Optional[int] = Field(default=None, ge=1, description="本次执行最大循环次数")
-    loop_interval: Optional[float] = Field(default=None, ge=0, description="本次执行循环间隔")
-    loop_iterable: Optional[str] = Field(default=None, max_length=512, description="本次执行循环对象来源")
-    loop_on_error: Optional[Any] = Field(default=None, description="本次执行循环错误策略")
-    loop_timeout: Optional[float] = Field(default=None, ge=0, description="本次执行条件循环超时")
-    database_searched: Optional[bool] = Field(default=None, description="本次执行是否启用数据库查到即止")
-    redis_searched: Optional[bool] = Field(default=None, description="本次执行是否启用Redis查到即止")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    code: Optional[str] = Field(default=None, description="执行代码(Python)")
+    wait: Optional[float] = Field(default=None, ge=0, description="等待控制")
+    loop_mode: Optional[Any] = Field(default=None, description="循环模式类型")
+    loop_maximums: Optional[int] = Field(default=None, ge=1, description="最大循环次数")
+    loop_interval: Optional[float] = Field(default=None, ge=0, description="每次循环间隔时间")
+    loop_iterable: Optional[str] = Field(default=None, max_length=512, description="循环对象来源")
+    loop_on_error: Optional[Any] = Field(default=None, description="循环执行失败时的处理策略")
+    loop_timeout: Optional[float] = Field(default=None, ge=0, description="条件循环超时时间")
+    database_searched: Optional[bool] = Field(default=None, description="数据库请求查到即止开关")
+    redis_searched: Optional[bool] = Field(default=None, description="Redis请求查到即止开关")
+    state: Optional[int] = Field(default=0, description="状态")
 
     # 参数化驱动：本步骤执行使用的数据集名称和该步骤的数据快照，记录在明细中
-    dataset_name: Optional[str] = Field(default=None, max_length=255, description="本步骤执行对应的数据集名称")
-    dataset_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="本步骤执行使用的数据快照")
+    dataset_name: Optional[str] = Field(default=None, max_length=255, description="数据源名称")
+    dataset_snapshot: Optional[Dict[str, Any]] = Field(default=None, description="数据源快照")
 
 
 class AutoTestDetailCreate(AutoTestDetailBase):
@@ -359,19 +345,19 @@ class AutoTestDetailSelect(BaseModel):
     step_no: Optional[int] = Field(None, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
-    step_state: Optional[bool] = Field(None, description="步骤执行状态(True:成功, False:失败)")
+    step_state: Optional[bool] = Field(None, description="步骤执行状态")
 
     detail_id: Optional[int] = Field(None, description="明细ID")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
+    state: Optional[int] = Field(default=0, description="状态")
 
 
 class AutoTestDetailTreeSelect(BaseModel):
     """报告明细树查询入参(不分页, 按执行时间线组装为嵌套children树)。"""
 
-    report_code: str = Field(..., description="报告标识代码(明细树为单报告维度)")
+    report_code: str = Field(..., description="报告标识代码")
     case_id: Optional[int] = Field(None, description="用例ID")
+    only_failed: bool = Field(default=False, description="仅保留失败步骤及其祖先链")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
-    state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
-    only_failed: bool = Field(default=False, description="仅保留失败步骤及其祖先链(后端裁剪)")
+    state: Optional[int] = Field(default=0, description="状态")
