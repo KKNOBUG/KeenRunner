@@ -277,7 +277,7 @@
       <n-input
           type="textarea"
           v-model:value="batchInput"
-          placeholder="按 key:value:desc 格式输入，每行一个"
+          placeholder="按 key:value:desc 格式输入，每行一个；值可含冒号，无描述时以冒号结尾"
           :rows="10"
           style="min-height: 6rem; margin-bottom: 1rem;"
           resize="vertical"
@@ -433,14 +433,9 @@ const openBatchAddModal = () => {
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
   $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
-  // 将当前的键值对信息格式化为 key:value:desc 格式，填充到批量输入框中
+  // 将当前的键值对信息格式化为 key:value:desc 格式(描述段恒输出)，填充到批量输入框中
   const nonEmptyItems = props.items.filter(item => item.key || item.value);
-  batchInput.value = nonEmptyItems.map(item => {
-    if (item.desc) {
-      return `${item.key}:${item.value}:${item.desc}`;
-    }
-    return `${item.key}:${item.value}`;
-  }).join('\n');
+  batchInput.value = nonEmptyItems.map(item => `${item.key}:${item.value}:${item.desc}`).join('\n');
   isBatchAddModalVisible.value = true;
 };
 
@@ -450,16 +445,24 @@ const handleBatchAdd = () => {
   const newItems = [];
   lines.forEach((line) => {
     const parts = line.split(':');
-    if (parts.length === 2) {
-      const key = parts[0].trim();
-      const value = parts[1].trim();
-      newItems.push({key, value, desc: '', type: "text"});
-    } else if (parts.length === 3) {
-      const key = parts[0].trim();
-      const value = parts[1].trim();
-      const desc = parts[2].trim();
-      newItems.push({key, value, desc, type: "text"});
+    if (parts.length < 2) {
+      return;
     }
+    const key = parts[0].trim();
+    if (!key) {
+      return;
+    }
+    // 首个冒号前为key，最后一个冒号后为desc，中间整体为value(值可含冒号)
+    let value;
+    let desc;
+    if (parts.length === 2) {
+      value = parts[1].trim();
+      desc = '';
+    } else {
+      value = parts.slice(1, -1).join(':').trim();
+      desc = parts[parts.length - 1].trim();
+    }
+    newItems.push({key, value, desc, type: "text"});
   });
   emit('update:items', newItems);
   emit('add');

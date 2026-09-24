@@ -9,8 +9,8 @@
 用例Excel导入导出服务，含两条独立通道：
 - 通道A(报文导出)：用例步骤的HEAD/请求体展平为JSONPath风格矩阵，仅展示用途，
   与数据源表无关联；入口prepare_export_cases → build_export_workbook
-- 通道B(脚本导出/导入)：14列文本模板，导出为key:value:desc;多行格式，
-  导入需往返安全(冒号/换行拦截)；入口prepare_script_export_rows → build_script_workbook，
+- 通道B(脚本导出/导入)：14列文本模板，导出为key:value:desc;多行格式(三段恒输出，值可含冒号)，导入按首个冒号切key、末个冒号切desc、中间整体为value；
+  入口prepare_script_export_rows → build_script_workbook，
   parse_script_workbook → import_script_rows
 
 两条通道均为同步视图与异步Celery任务双通道消费(视图预校验+任务内二次校验)，
@@ -472,11 +472,12 @@ def build_script_file_name(username: Optional[str]) -> str:
     return _file_name(username, "接口详情数据")
 
 
-def _kv_to_lines(
-        kv_list: Optional[List[Any]], *, column: str = "", problems: Optional[List[str]] = None
-) -> str:
+def _kv_to_lines(kv_list: Optional[List[Any]], *, column: str = "", problems: Optional[List[str]] = None) -> str:
     """
-    将[{key,value,desc}]转为多行key:value[:desc];文本，可选做往返安全检测。
+    将[{key,value,desc}]转为多行key:value:desc;文本(描述段恒输出)，可选做往返安全检测。
+
+    描述段恒输出保证"最后一个冒号后是描述"恒成立，值内冒号即可安全往返；
+    key含冒号/换行、值或描述含换行、描述含冒号仍无法安全往返，予以拦截。
     """
     lines: List[str] = []
     for item in kv_list or []:
@@ -488,13 +489,12 @@ def _kv_to_lines(
         desc = str(_get(item, "desc") or "").strip()
         if problems is not None:
             if ":" in key or "\n" in key:
-                problems.append(f"「{column}」键({key})含冒号或换行, 模板格式无法安全往返")
-            if ":" in value or "\n" in value:
-                problems.append(f"「{column}」键({key})的值含冒号或换行, 导出后再导入会被截断错位")
-            if "\n" in desc:
-                problems.append(f"「{column}」键({key})的描述含换行, 模板格式无法安全往返")
-        seg = f"{key}:{value}" + (f":{desc}" if desc else "")
-        lines.append(seg + ";")
+                problems.append(f"[{column}]({key})键含冒号或换行")
+            if "\n" in value:
+                problems.append(f"[{column}]({key})值含换行")
+            if "\n" in desc or ":" in desc:
+                problems.append(f"[{column}]({key})描述含冒号或换行")
+        lines.append(f"{key}:{value}:{desc};")
     return "\n".join(lines)
 
 
@@ -570,19 +570,19 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
             extract_name = str(_get(extract_item, "name") or "")
             extract_expr = str(_get(extract_item, "expr") or "")
             if ":" in extract_name or "\n" in extract_name:
-                problems.append(f"「提取」({extract_name})的变量名含冒号或换行, 模板格式无法安全往返")
+                problems.append(f"[提取]({extract_name})变量名含冒号或换行")
             if ":" in extract_expr or "\n" in extract_expr:
-                problems.append(f"「提取」({extract_name})的提取表达式含冒号或换行, 导入时无法正确解析")
+                problems.append(f"[提取]({extract_name})表达式含冒号或换行")
         for assert_item in getattr(step, "assert_validators", None) or []:
             assert_name = str(_get(assert_item, "name") or "")
             assert_expr = str(_get(assert_item, "expr") or "")
             assert_except = str(_get(assert_item, "except_value") or "")
             if ":" in assert_name or "\n" in assert_name:
-                problems.append(f"「断言」({assert_name})的断言名称含冒号或换行, 模板格式无法安全往返")
+                problems.append(f"[断言]({assert_name})名称含冒号或换行")
             if ":" in assert_expr or "\n" in assert_expr:
-                problems.append(f"「断言」({assert_name})的断言表达式含冒号或换行, 导入时无法正确解析")
+                problems.append(f"[断言]({assert_name})表达式含冒号或换行")
             if "\n" in assert_except:
-                problems.append(f"「断言」({assert_name})的预期值含换行, 模板格式无法安全往返")
+                problems.append(f"[断言]({assert_name})预期值含换行")
         if problems:
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "；".join(problems)})
             continue
@@ -646,13 +646,15 @@ def _parse_kv(text: str, errors: List[str], column: str) -> Optional[List[Dict[s
         parts = seg.split(":")
         key = parts[0].strip()
         if not key:
-            errors.append(f"「{column}」存在缺少key的行: {raw.strip()!r}")
+            errors.append(f"[{column}]存在缺少key的行: {raw.strip()!r}")
             continue
-        items.append({
-            "key": key,
-            "value": parts[1] if len(parts) >= 2 else "",
-            "desc": ":".join(parts[2:]).strip() if len(parts) >= 3 else "",
-        })
+        if len(parts) == 1:
+            value, desc = "", ""
+        elif len(parts) == 2:
+            value, desc = parts[1], ""
+        else:
+            value, desc = ":".join(parts[1:-1]), parts[-1].strip()
+        items.append({"key": key, "value": value, "desc": desc})
     return items or None
 
 
@@ -854,9 +856,7 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
     return rows, invalid
 
 
-async def import_script_rows(
-        rows: List[Dict[str, Any]], services: Any
-) -> Tuple[Dict[str, int], List[Dict[str, Any]]]:
+async def import_script_rows(rows: List[Dict[str, Any]], services: Any) -> Tuple[Dict[str, int], List[Dict[str, Any]]]:
     """
     按所属应用、接口名称、当前登录所属人匹配公共接口，含软删，存在则更新或恢复覆盖、不存在则新增，校验通过后单事务落库。
     """
