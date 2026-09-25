@@ -1,9 +1,10 @@
 <script setup>
 /**
- * 任务执行历史：
- * 1) 弹窗：POST /report/search_batches 按批次分页，后端给出执行状态
- * 2) 左侧抽屉：本批次按脚本分组（轮次 × 数据源）
- * 3) 右侧抽屉：ReportDetailDrawer 步骤执行明细
+ * 任务执行历史（三层下钻）：
+ * 1) 弹窗：POST /report/search_task_batches 按批次分页（批次行不内嵌报告明细）
+ * 2) 左侧抽屉"脚本执行信息"：POST /report/search_batch_scripts 按脚本维度分页
+ * 3) 左侧抽屉"脚本执行明细"：轮次元数据直接取自脚本行(rounds)渲染折叠菜单，
+ *    展开轮次/翻页时 POST /report/search_script_round_reports 按 (batch_code, case_id, round_no, page, page_size) 服务端分页请求，行内"查看"打开 ReportDetailDrawer 步骤明细
  */
 import { computed, h, reactive, ref, watch } from 'vue'
 import {
@@ -25,7 +26,7 @@ import api from '@/api'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
-  /** 任务行：需含 task_name / task_code / cases_execute_config */
+  /** 任务行：需含 task_name / task_code */
   taskRow: { type: Object, default: null },
 })
 
@@ -53,11 +54,25 @@ const pagination = reactive({
 })
 
 const scriptDrawerVisible = ref(false)
-const scriptGroups = ref([])
-const expandedScriptNames = ref([])
+const currentBatch = ref(null)
+const scriptLoading = ref(false)
+const scriptRows = ref([])
+const scriptPagination = reactive({
+  page: 1,
+  pageSize: 10,
+  pageSizes: [10, 20, 50, 100],
+  itemCount: 0,
+  prefix({ itemCount }) {
+    return `共 ${itemCount} 条`
+  },
+})
 
 const detailDrawerVisible = ref(false)
+const currentScript = ref(null)
+const rounds = ref([])
+const expandedRoundNames = ref([])
 const detailReportRow = ref(null)
+const reportDetailVisible = ref(false)
 
 const BATCH_RESULT_TAG_TYPE = {
   成功: 'success',
@@ -73,12 +88,31 @@ function renderBatchResultTag(row) {
   return h(
     NTag,
     {
-      type: BATCH_RESULT_TAG_TYPE[row.execute_result] || 'error',
+      type: BATCH_RESULT_TAG_TYPE[row.task_exec_status] || 'error',
       size: 'small',
       round: true,
     },
-    { default: () => row.execute_result || '失败' },
+    { default: () => row.task_exec_status || '失败' },
   )
+}
+
+function renderScriptResultTag(row) {
+  if (!row.case_execute_count) return h('span', '-')
+  const allOk = row.case_exec_passed === row.case_execute_count
+  const allFail = row.case_exec_passed === 0
+  const label = allOk ? '全部成功' : allFail ? '全部失败' : '存在失败'
+  const type = allOk ? 'success' : allFail ? 'error' : 'warning'
+  return h(NTag, { type, size: 'small', round: true }, { default: () => label })
+}
+
+function renderCaseStateTag(state) {
+  if (isCaseSuccess(state)) {
+    return h(NTag, { type: 'success', size: 'small', round: true }, { default: () => '成功' })
+  }
+  if (state === false || state === 'false') {
+    return h(NTag, { type: 'error', size: 'small', round: true }, { default: () => '失败' })
+  }
+  return h('span', '-')
 }
 
 function formatElapsed(seconds) {
@@ -89,41 +123,12 @@ function formatElapsed(seconds) {
   return `${m}m${sec.toFixed(1)}s`
 }
 
-function resolveCasesExecuteConfig(taskRow) {
-  if (!taskRow || typeof taskRow !== 'object') return {}
-  const top = taskRow.cases_execute_config
-  return top && typeof top === 'object' ? top : {}
+function joinEnvs(envs) {
+  return Array.isArray(envs) && envs.length ? envs.join('、') : '-'
 }
 
-function getCaseCfg(caseId) {
-  const cfg = resolveCasesExecuteConfig(props.taskRow)
-  const caseCfg = cfg[String(caseId)] || cfg[caseId]
-  return caseCfg && typeof caseCfg === 'object' ? caseCfg : {}
-}
-
-function resolveEnvDisplay(caseId) {
-  const cfg = resolveCasesExecuteConfig(props.taskRow)
-  const caseCfg = getCaseCfg(caseId)
-  const names = new Set()
-  // 新结构：env_name为顶层全局环境；步骤级env_name一并纳入
-  if (cfg.env_name) names.add(String(cfg.env_name).trim())
-  const steps = caseCfg.steps_execute_config
-  if (steps && typeof steps === 'object') {
-    for (const stepCfg of Object.values(steps)) {
-      if (stepCfg && typeof stepCfg === 'object' && stepCfg.env_name) {
-        names.add(String(stepCfg.env_name).trim())
-      }
-    }
-  }
-  const list = [...names].filter(Boolean)
-  return list.length ? list.join('、') : '-'
-}
-
-function enrichReportRow(report) {
-  return {
-    ...report,
-    env_display: resolveEnvDisplay(report?.case_id),
-  }
+function resolveCaseName(row) {
+  return row.case_name || `用例${row.case_id ?? '-'}`
 }
 
 async function loadHistory() {
@@ -141,20 +146,21 @@ async function loadHistory() {
       page_size: pagination.pageSize,
     })
     const list = Array.isArray(res?.data) ? res.data : []
-    batchRows.value = list.map((b, idx) => {
-      const reports = (b.reports || []).map(enrichReportRow)
-      const first = reports[0]
-      return {
-        _key: b.batch_code || `single:${first?.report_code || first?.report_id || idx}`,
-        task_name: historyTaskName.value || '-',
-        execute_result: b.execute_result,
-        pass_rate: b.pass_rate,
-        created_user: b.created_user || '-',
-        execute_time: b.execute_time || '-',
-        elapsed_display: formatElapsed(Number(b.elapsed_seconds) || 0),
-        reports,
-      }
-    })
+    batchRows.value = list.map((b, idx) => ({
+      _key: b.batch_code || `single:${idx}`,
+      batch_code: b.batch_code || null,
+      task_name: historyTaskName.value || '-',
+      task_exec_status: b.task_exec_status,
+      task_bind_script: Number(b.task_bind_script) || 0,
+      task_exec_passed: Number(b.task_exec_passed) || 0,
+      task_exec_failed: Number(b.task_exec_failed) || 0,
+      task_pass_rate: b.task_pass_rate,
+      env_display: joinEnvs(b.involve_envs),
+      task_st_time: b.task_st_time || '-',
+      task_ed_time: b.task_ed_time || '-',
+      elapsed_display: formatElapsed(Number(b.task_elapsed) || 0),
+      created_user: b.created_user || '-',
+    }))
     pagination.itemCount = Number(res?.total) || 0
   } catch (e) {
     window.$message?.error?.(e?.message || e?.data?.message || '加载执行历史失败')
@@ -165,89 +171,96 @@ async function loadHistory() {
   }
 }
 
-/**
- * 将同一脚本下的多次报告标注轮次 / 数据源。
- * 执行顺序与 batch_execute_cases 一致：外层 execute_count，内层 dataset。
- * 数据源为任务级 dataset_enabled 开关，配置中不再存场景名称列表；从报告自身收集去重场景名(保持出现顺序)。
- */
-function annotateRunsForCase(reports) {
-  const sorted = [...(reports || [])].sort((a, b) =>
-    String(a.case_st_time || '').localeCompare(String(b.case_st_time || '')),
-  )
-  const knownDatasets = []
-  const seenDs = new Set()
-  sorted.forEach((r) => {
-    const name = r.dataset_name != null && String(r.dataset_name).trim()
-      ? String(r.dataset_name).trim()
-      : null
-    if (name && !seenDs.has(name)) {
-      seenDs.add(name)
-      knownDatasets.push(name)
-    }
-  })
-
-  return sorted.map((r, index) => {
-    let datasetName = r.dataset_name != null && String(r.dataset_name).trim()
-      ? String(r.dataset_name).trim()
-      : null
-    if (!datasetName && knownDatasets.length) {
-      datasetName = knownDatasets[index % knownDatasets.length] || null
-    }
-    const dsCount = knownDatasets.length || (datasetName ? 1 : 0)
-    const roundNo = dsCount > 0 ? Math.floor(index / dsCount) + 1 : index + 1
-    return {
-      ...r,
-      run_index: index + 1,
-      round_label: `第 ${roundNo} 次`,
-      dataset_name: datasetName || null,
-    }
-  })
+async function loadScriptRows() {
+  const batchCode = currentBatch.value?.batch_code
+  if (!batchCode) {
+    scriptRows.value = []
+    scriptPagination.itemCount = 0
+    return
+  }
+  scriptLoading.value = true
+  try {
+    const res = await api.getApiReportBatchScripts({
+      batch_code: batchCode,
+      page: scriptPagination.page,
+      page_size: scriptPagination.pageSize,
+    })
+    scriptRows.value = Array.isArray(res?.data) ? res.data : []
+    scriptPagination.itemCount = Number(res?.total) || 0
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '加载脚本执行信息失败')
+    scriptRows.value = []
+    scriptPagination.itemCount = 0
+  } finally {
+    scriptLoading.value = false
+  }
 }
 
-/** 左侧抽屉：按脚本分组 */
-function buildScriptGroups(reports) {
-  const map = new Map()
-  for (const r of reports || []) {
-    const caseId = r.case_id
-    const key = caseId != null ? String(caseId) : `unknown:${r.report_code || r.id}`
-    if (!map.has(key)) map.set(key, [])
-    map.get(key).push(r)
-  }
+/** 轮次内场景行分页：展开轮次/翻页时由服务端按轮次分页返回 */
+const ROUND_PAGE_SIZE = 10
+const ROUND_PAGE_SIZES = [10, 20, 50, 100]
 
-  const groups = []
-  for (const [key, list] of map) {
-    const caseId = list[0]?.case_id
-    const runs = annotateRunsForCase(list)
-    const passCount = runs.filter((r) => isCaseSuccess(r.case_state)).length
-    const caseCfg = getCaseCfg(caseId)
-    const cfgExecCount = Math.max(1, Number(caseCfg.execute_count) || 1)
-    // 数据源为任务级 dataset_enabled 开关：场景数量执行时动态纳入，配置中不再存列表
-    const planLabel = props.taskRow?.dataset_enabled
-      ? `配置 ${cfgExecCount} 次 × 已启用数据源`
-      : `配置执行 ${cfgExecCount} 次`
+/**
+ * 打开脚本执行明细抽屉：轮次元数据直接取自脚本行(含rounds)，无需额外请求；轮次内场景行在展开轮次/翻页时按需请求。
+ */
+function openScriptDetailDrawer(scriptRow) {
+  currentScript.value = scriptRow
+  const metas = Array.isArray(scriptRow?.rounds) ? scriptRow.rounds : []
+  rounds.value = metas.map((m) => ({
+    _key: `round-${m.round_no}`,
+    round_no: m.round_no,
+    round_label: `第 ${m.round_no} 次执行`,
+    dataset_names: Array.isArray(m.dataset_names) ? m.dataset_names : [],
+    // 轮次内报告总数由 /search_script_round_reports 首次加载时按服务端total回填
+    row_count: 0,
+    page: 1,
+    pageSize: ROUND_PAGE_SIZE,
+    rows: [],
+    loaded: false,
+    loading: false,
+  }))
+  expandedRoundNames.value = []
+  detailDrawerVisible.value = true
+}
 
-    const allOk = passCount === runs.length && runs.length > 0
-    const allFail = passCount === 0 && runs.length > 0
-    groups.push({
-      _key: key,
-      case_id: caseId,
-      case_name: list[0]?.case_name || `用例${caseId ?? '-'}`,
-      env_display: resolveEnvDisplay(caseId),
-      plan_label: planLabel,
-      run_count: runs.length,
-      pass_count: passCount,
-      all_ok: allOk,
-      result_label: allOk ? '全部成功' : allFail ? '全部失败' : '存在失败',
-      runs,
+async function loadRoundRows(round) {
+  round.loading = true
+  try {
+    const res = await api.getApiReportScriptReports({
+      batch_code: currentBatch.value?.batch_code,
+      case_id: currentScript.value?.case_id,
+      round_no: round.round_no,
+      page: round.page,
+      page_size: round.pageSize,
     })
+    round.rows = Array.isArray(res?.data) ? res.data : []
+    round.row_count = Number(res?.total) || 0
+    round.loaded = true
+  } catch (e) {
+    window.$message?.error?.(e?.message || e?.data?.message || '加载轮次执行明细失败')
+    round.rows = []
+  } finally {
+    round.loading = false
   }
+}
 
-  groups.sort((a, b) => {
-    const ta = a.runs[0]?.case_st_time || ''
-    const tb = b.runs[0]?.case_st_time || ''
-    return String(ta).localeCompare(String(tb))
-  })
-  return groups
+/** 折叠菜单展开时懒加载对应轮次的首页数据 */
+watch(expandedRoundNames, (names) => {
+  for (const name of names) {
+    const round = rounds.value.find((r) => r._key === name)
+    if (round && !round.loaded && !round.loading) loadRoundRows(round)
+  }
+})
+
+function onRoundPageChange(round, page) {
+  round.page = page
+  loadRoundRows(round)
+}
+
+function onRoundPageSizeChange(round, pageSize) {
+  round.pageSize = pageSize
+  round.page = 1
+  loadRoundRows(round)
 }
 
 watch(
@@ -256,16 +269,25 @@ watch(
     if (v) {
       scriptDrawerVisible.value = false
       detailDrawerVisible.value = false
-      detailReportRow.value = null
+      currentBatch.value = null
+      currentScript.value = null
       pagination.page = 1
       loadHistory()
     } else {
       scriptDrawerVisible.value = false
       detailDrawerVisible.value = false
-      detailReportRow.value = null
+      currentBatch.value = null
+      currentScript.value = null
     }
   },
 )
+
+watch(scriptDrawerVisible, (v) => {
+  if (!v) {
+    detailDrawerVisible.value = false
+    currentScript.value = null
+  }
+})
 
 function onPageChange(page) {
   pagination.page = page
@@ -279,17 +301,32 @@ function onPageSizeChange(pageSize) {
 }
 
 function openScriptDrawer(batchRow) {
-  const groups = buildScriptGroups(batchRow?.reports || [])
-  scriptGroups.value = groups
-  expandedScriptNames.value = groups.map((g) => g._key)
+  if (!batchRow?.batch_code) {
+    window.$message?.warning?.('该批次记录缺少批次标识，无法下钻查看脚本执行信息')
+    return
+  }
+  currentBatch.value = batchRow
+  scriptPagination.page = 1
   scriptDrawerVisible.value = true
   detailDrawerVisible.value = false
-  detailReportRow.value = null
+  currentScript.value = null
+  loadScriptRows()
 }
 
-function openDetailDrawer(reportRow) {
+function onScriptPageChange(page) {
+  scriptPagination.page = page
+  loadScriptRows()
+}
+
+function onScriptPageSizeChange(pageSize) {
+  scriptPagination.pageSize = pageSize
+  scriptPagination.page = 1
+  loadScriptRows()
+}
+
+function openReportDetailDrawer(reportRow) {
   detailReportRow.value = reportRow
-  detailDrawerVisible.value = true
+  reportDetailVisible.value = true
 }
 
 function renderPassRateBar(ratioNum) {
@@ -347,112 +384,6 @@ function renderPassRateBar(ratioNum) {
   ])
 }
 
-function makeRunColumns() {
-  return [
-    {
-      title: '序号',
-      key: 'run_index',
-      width: 56,
-      align: 'center',
-    },
-    {
-      title: '执行轮次',
-      key: 'round_label',
-      width: 90,
-      align: 'center',
-      render(row) {
-        return h(NTag, { size: 'small', type: 'info', bordered: false }, { default: () => row.round_label })
-      },
-    },
-    {
-      title: '数据源',
-      key: 'dataset_name',
-      width: 140,
-      align: 'center',
-      ellipsis: { tooltip: true },
-      render(row) {
-        if (!row.dataset_name) {
-          return h('span', { style: { color: 'var(--n-text-color-3)' } }, '未使用数据源')
-        }
-        return h(NTag, { size: 'small', type: 'warning', bordered: false }, { default: () => row.dataset_name })
-      },
-    },
-    { title: '报告类型', key: 'report_type', width: 100, align: 'center', ellipsis: { tooltip: true } },
-    {
-      title: '执行结果',
-      key: 'case_state',
-      width: 90,
-      align: 'center',
-      render(row) {
-        if (isCaseSuccess(row.case_state)) {
-          return h(NTag, { type: 'success', size: 'small', round: true }, { default: () => '成功' })
-        }
-        if (row.case_state === false || row.case_state === 'false') {
-          return h(NTag, { type: 'error', size: 'small', round: true }, { default: () => '失败' })
-        }
-        return h('span', '-')
-      },
-    },
-    {
-      title: '通过率',
-      key: 'step_pass_ratio',
-      width: 160,
-      align: 'center',
-      render(row) {
-        const ratio = row.step_pass_ratio
-        if (ratio === null || ratio === undefined) return h('span', '-')
-        const ratioNum = typeof ratio === 'number' ? ratio : parseFloat(ratio)
-        if (Number.isNaN(ratioNum)) return h('span', '-')
-        return renderPassRateBar(ratioNum)
-      },
-    },
-    {
-      title: '涉及环境',
-      key: 'env_display',
-      width: 120,
-      align: 'center',
-      ellipsis: { tooltip: true },
-    },
-    {
-      title: '执行人员',
-      key: 'created_user',
-      width: 90,
-      align: 'center',
-      ellipsis: { tooltip: true },
-    },
-    {
-      title: '执行耗时',
-      key: 'case_elapsed',
-      width: 90,
-      align: 'center',
-      ellipsis: { tooltip: true },
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 90,
-      align: 'center',
-      fixed: 'right',
-      render(row) {
-        return h(
-          NButton,
-          {
-            size: 'small',
-            type: 'primary',
-            onClick: () => openDetailDrawer(row),
-          },
-          {
-            default: () => '查看',
-            icon: renderIcon('material-symbols:visibility-outline', { size: 16 }),
-          },
-        )
-      },
-    },
-  ]
-}
-
-const runColumns = makeRunColumns()
-
 const batchColumns = computed(() => [
   {
     title: '序号',
@@ -470,7 +401,7 @@ const batchColumns = computed(() => [
   },
   {
     title: '执行结果',
-    key: 'execute_result',
+    key: 'task_exec_status',
     width: 110,
     align: 'center',
     render(row) {
@@ -478,31 +409,63 @@ const batchColumns = computed(() => [
     },
   },
   {
+    title: '用例数量',
+    key: 'task_bind_script',
+    width: 90,
+    align: 'center',
+  },
+  {
+    title: '成功数量',
+    key: 'task_exec_passed',
+    width: 90,
+    align: 'center',
+  },
+  {
+    title: '失败数量',
+    key: 'task_exec_failed',
+    width: 90,
+    align: 'center',
+  },
+  {
     title: '通过率',
-    key: 'pass_rate',
+    key: 'task_pass_rate',
     width: 180,
     align: 'center',
     render(row) {
-      return renderPassRateBar(row.pass_rate == null ? null : Number(row.pass_rate))
+      return renderPassRateBar(row.task_pass_rate == null ? null : Number(row.task_pass_rate))
     },
   },
   {
-    title: '执行人员',
-    key: 'created_user',
-    width: 100,
+    title: '涉及环境',
+    key: 'env_display',
+    width: 120,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '执行时间',
-    key: 'execute_time',
-    width: 210,
+    key: 'task_st_time',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '结束时间',
+    key: 'task_ed_time',
+    width: 200,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '执行耗时',
     key: 'elapsed_display',
+    width: 100,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '执行人员',
+    key: 'created_user',
     width: 100,
     align: 'center',
     ellipsis: { tooltip: true },
@@ -530,6 +493,212 @@ const batchColumns = computed(() => [
   },
 ])
 
+const scriptColumns = [
+  {
+    title: '用例ID',
+    key: 'case_id',
+    width: 80,
+    align: 'center',
+  },
+  {
+    title: '用例名称',
+    key: 'case_name',
+    minWidth: 180,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return resolveCaseName(row)
+    },
+  },
+  {
+    title: '执行结果',
+    key: 'result',
+    width: 100,
+    align: 'center',
+    render(row) {
+      return renderScriptResultTag(row)
+    },
+  },
+  {
+    title: '执行次数',
+    key: 'case_execute_count',
+    width: 110,
+    align: 'center',
+  },
+  {
+    title: '通过率',
+    key: 'case_pass_rate',
+    width: 180,
+    align: 'center',
+    render(row) {
+      return renderPassRateBar(row.case_pass_rate == null ? null : Number(row.case_pass_rate))
+    },
+  },
+  {
+    title: '涉及环境',
+    key: 'env_display',
+    width: 120,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return joinEnvs(row.involve_envs)
+    },
+  },
+  {
+    title: '执行人员',
+    key: 'created_user',
+    width: 90,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '执行时间',
+    key: 'case_st_time',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '结束时间',
+    key: 'case_ed_time',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '执行耗时',
+    key: 'elapsed_display',
+    width: 100,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return formatElapsed(Number(row.case_elapsed) || 0)
+    },
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 90,
+    align: 'center',
+    fixed: 'right',
+    render(row) {
+      return h(
+        NButton,
+        {
+          size: 'small',
+          type: 'primary',
+          onClick: () => openScriptDetailDrawer(row),
+        },
+        {
+          default: () => '查看',
+          icon: renderIcon('material-symbols:visibility-outline', { size: 16 }),
+        },
+      )
+    },
+  },
+]
+
+const roundDetailColumns = [
+  {
+    title: '序号',
+    key: 'dataset_no',
+    width: 56,
+    align: 'center',
+  },
+  {
+    title: '场景名称',
+    key: 'dataset_name',
+    width: 140,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      if (!row.dataset_name) {
+        return h('span', { style: { color: 'var(--n-text-color-3)' } }, '未使用数据源')
+      }
+      return h(NTag, { size: 'small', type: 'warning', bordered: false }, { default: () => row.dataset_name })
+    },
+  },
+  {
+    title: '执行结果',
+    key: 'case_state',
+    width: 90,
+    align: 'center',
+    render(row) {
+      return renderCaseStateTag(row.case_state)
+    },
+  },
+  {
+    title: '步骤数量',
+    key: 'step_total',
+    width: 90,
+    align: 'center',
+  },
+  {
+    title: '成功数量',
+    key: 'step_pass_count',
+    width: 90,
+    align: 'center',
+  },
+  {
+    title: '通过率',
+    key: 'step_pass_ratio',
+    width: 160,
+    align: 'center',
+    render(row) {
+      const ratio = row.step_pass_ratio
+      if (ratio === null || ratio === undefined) return h('span', '-')
+      const ratioNum = typeof ratio === 'number' ? ratio : parseFloat(ratio)
+      if (Number.isNaN(ratioNum)) return h('span', '-')
+      return renderPassRateBar(ratioNum)
+    },
+  },
+  {
+    title: '涉及环境',
+    key: 'env_display',
+    width: 120,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render(row) {
+      return joinEnvs(row.involve_envs)
+    },
+  },
+  {
+    title: '执行时间',
+    key: 'case_st_time',
+    width: 200,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '执行耗时',
+    key: 'case_elapsed',
+    width: 90,
+    align: 'center',
+    ellipsis: { tooltip: true },
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 90,
+    align: 'center',
+    fixed: 'right',
+    render(row) {
+      return h(
+        NButton,
+        {
+          size: 'small',
+          type: 'primary',
+          onClick: () => openReportDetailDrawer(row),
+        },
+        {
+          default: () => '查看',
+          icon: renderIcon('material-symbols:visibility-outline', { size: 16 }),
+        },
+      )
+    },
+  },
+]
+
 const modalStyle = {
   width: '80%',
   marginLeft: '10%',
@@ -544,7 +713,7 @@ const modalStyle = {
 <template>
   <NModal
     v-model:show="modalVisible"
-    :title="'执行历史'"
+    :title="'任务执行历史'"
     preset="card"
     class="task-history-modal"
     :style="modalStyle"
@@ -556,7 +725,7 @@ const modalStyle = {
           :columns="batchColumns"
           :data="batchRows"
           :row-key="(row) => row._key"
-          :scroll-x="1000"
+          :scroll-x="1600"
           :single-line="true"
           size="small"
         />
@@ -578,56 +747,83 @@ const modalStyle = {
   </NModal>
 
   <NDrawer v-model:show="scriptDrawerVisible" placement="left" width="60%" :trap-focus="false">
-    <NDrawerContent title="脚本执行信息" closable :native-scrollbar="false">
-      <div v-if="scriptGroups.length" class="script-drawer-body">
-        <NCollapse v-model:expanded-names="expandedScriptNames" display-directive="show">
+    <NDrawerContent title="脚本执行列表" closable :native-scrollbar="false">
+      <NSpin :show="scriptLoading">
+        <div v-if="scriptRows.length" class="script-table-wrap">
+          <NDataTable
+            :columns="scriptColumns"
+            :data="scriptRows"
+            :row-key="(row) => row.case_id ?? row.case_name"
+            :scroll-x="1400"
+            :single-line="true"
+            size="small"
+          />
+        </div>
+        <div v-else class="history-empty">该批次暂无脚本报告</div>
+        <div v-if="scriptPagination.itemCount > 0" class="history-pagination">
+          <NPagination
+            v-model:page="scriptPagination.page"
+            :page-count="Math.max(1, Math.ceil(scriptPagination.itemCount / scriptPagination.pageSize))"
+            :page-size="scriptPagination.pageSize"
+            :page-sizes="scriptPagination.pageSizes"
+            show-size-picker
+            :prefix="scriptPagination.prefix"
+            @update:page="onScriptPageChange"
+            @update:page-size="onScriptPageSizeChange"
+          />
+        </div>
+      </NSpin>
+    </NDrawerContent>
+  </NDrawer>
+
+  <NDrawer v-model:show="detailDrawerVisible" placement="left" width="60%" :trap-focus="false">
+    <NDrawerContent :title="`脚本执行明细 - ${currentScript ? resolveCaseName(currentScript) : ''}`" closable :native-scrollbar="false">
+      <div v-if="rounds.length" class="script-drawer-body">
+        <NCollapse v-model:expanded-names="expandedRoundNames" display-directive="show">
           <NCollapseItem
-            v-for="(group, gIndex) in scriptGroups"
-            :key="group._key"
-            :name="group._key"
+            v-for="round in rounds"
+            :key="round._key"
+            :name="round._key"
           >
             <template #header>
-              <div class="script-group-header">
-                <div class="script-group-title">
-                  <span class="script-index">{{ gIndex + 1 }}</span>
-                  <span class="script-name" :title="group.case_name">{{ group.case_name }}</span>
-                  <NTag size="tiny" :bordered="false">ID {{ group.case_id ?? '-' }}</NTag>
-                </div>
-                <div class="script-group-meta" @click.stop>
-                  <NTag
-                    size="small"
-                    round
-                    :type="group.all_ok ? 'success' : 'error'"
-                  >
-                    {{ group.result_label }}
-                  </NTag>
-                  <span class="meta-text">{{ group.pass_count }}/{{ group.run_count }} 通过</span>
-                  <span class="meta-text">{{ group.plan_label }}</span>
-                  <span class="meta-text" v-if="group.env_display && group.env_display !== '-'">
-                    环境：{{ group.env_display }}
-                  </span>
-                </div>
+              <div class="round-header">
+                <NTag size="small" type="info" :bordered="false">{{ round.round_label }}</NTag>
+                <span class="meta-text">{{ round.dataset_names.length ? `数据源：${round.dataset_names.join('、')}` : '未参数化执行' }}</span>
               </div>
             </template>
             <NCard size="small" :bordered="false" class="script-run-card">
-              <NDataTable
-                :columns="runColumns"
-                :data="group.runs"
-                :row-key="(r) => r.report_code ?? r.report_id ?? r.id"
-                :scroll-x="1200"
-                :single-line="true"
-                size="small"
-              />
+              <NSpin :show="round.loading">
+                <NDataTable
+                  :columns="roundDetailColumns"
+                  :data="round.rows"
+                  :row-key="(r) => r.report_code ?? r.report_id"
+                  :scroll-x="1400"
+                  :single-line="true"
+                  size="small"
+                />
+                <div v-if="round.row_count > 0" class="history-pagination round-pagination">
+                  <NPagination
+                    :page="round.page"
+                    :page-count="Math.max(1, Math.ceil(round.row_count / round.pageSize))"
+                    :page-size="round.pageSize"
+                    :page-sizes="ROUND_PAGE_SIZES"
+                    show-size-picker
+                    :prefix="() => `共 ${round.row_count} 条`"
+                    @update:page="(page) => onRoundPageChange(round, page)"
+                    @update:page-size="(size) => onRoundPageSizeChange(round, size)"
+                  />
+                </div>
+              </NSpin>
             </NCard>
           </NCollapseItem>
         </NCollapse>
       </div>
-      <div v-else class="history-empty">该次执行暂无脚本报告</div>
+      <div v-else class="history-empty">该脚本在本批次暂无执行报告</div>
     </NDrawerContent>
   </NDrawer>
 
   <ReportDetailDrawer
-    v-model:show="detailDrawerVisible"
+    v-model:show="reportDetailVisible"
     :report-row="detailReportRow"
     title="报告明细"
   />
@@ -649,56 +845,18 @@ const modalStyle = {
   justify-content: flex-end;
 }
 
+.script-table-wrap {
+  overflow-x: auto;
+}
 .script-drawer-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.script-group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding-right: 8px;
-  min-width: 0;
-}
-.script-group-title {
+.round-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-.script-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--n-primary-color, #18a058);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-.script-name {
-  font-weight: 600;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 220px;
-}
-.script-group-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-  max-width: 58%;
 }
 .meta-text {
   font-size: 12px;
@@ -707,6 +865,9 @@ const modalStyle = {
 }
 .script-run-card {
   background: transparent;
+}
+.round-pagination {
+  margin-top: 12px;
 }
 </style>
 

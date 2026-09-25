@@ -29,6 +29,7 @@ from backend.enums import (
     AutoTestTaskStatus,
     AutoTestTaskType,
 )
+from backend.services.ctx import CTX_USERNAME
 
 _LOG_PREFIX = "【Celery-Worker】"
 
@@ -78,6 +79,9 @@ async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestRe
     task_name = getattr(task, "task_name", None)
     # 执行人归因链：手动执行取触发人；调度触发回退维护人(启停调度会刷新维护人，最近操作者即归因对象)
     last_execute_user = execute_user or getattr(task, "updated_user", None) or None
+    # Worker进程无HTTP鉴权上下文, 用执行人归因埋点, 供本次执行产生的报告/明细落库回填created_user
+    if last_execute_user:
+        CTX_USERNAME.set(str(last_execute_user).strip())
     case_ids = getattr(task, "task_case_ids", None) or []
     if not case_ids:
         task.last_execute_time = datetime.now()

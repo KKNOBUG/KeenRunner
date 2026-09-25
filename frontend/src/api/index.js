@@ -192,8 +192,12 @@ export default {
   executeStepTree: (data = {}) => request.post('/autotest/step/execute_or_debugging', data),
   // 报告相关
   getApiReportList: (data = {}) => request.post('/autotest/report/search', data),
-  /** 任务执行历史：按 batch_code 聚合，含 execute_result */
-  getApiReportBatches: (data = {}) => request.post('/autotest/report/search_batches', data),
+  /** 任务执行历史：按 task_code 聚合批次，含任务执行状态/绑定脚本数/成功失败数量/通过率(task_*字段) */
+  getApiReportBatches: (data = {}) => request.post('/autotest/report/search_task_batches', data),
+  /** 批次脚本执行信息：按 batch_code 聚合脚本维度执行信息并分页（脚本执行信息抽屉） */
+  getApiReportBatchScripts: (data = {}) => request.post('/autotest/report/search_batch_scripts', data),
+  /** 轮次执行明细：按 batch_code + case_id + round_no 分页返回该轮次内执行报告（脚本执行明细抽屉轮次内表格） */
+  getApiReportScriptReports: (data = {}) => request.post('/autotest/report/search_script_round_reports', data),
   /** 批次执行报告列表：按 batch_code 精确分页查询同批次全部数据源报告 */
   getApiReportBatchReports: (data = {}) => request.post('/autotest/report/search_batch_reports', data),
   deleteApiReport: (params = {}) => {

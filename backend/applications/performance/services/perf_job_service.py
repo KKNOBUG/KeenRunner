@@ -124,6 +124,7 @@ class PerfJobService:
                     report_type=AutoTestReportType.ASYNC_EXEC,
                     batch_code=job.job_code,
                     dataset_name=job.dataset_name,
+                    round_no=round_no,
                 )
                 last_report_code = result.get("report_code") or last_report_code
                 if not result.get("success"):

@@ -37,7 +37,8 @@ class AutoTestReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     report_type = fields.CharEnumField(AutoTestReportType, description="报告所属类型")
     task_code = fields.CharField(max_length=64, null=True, index=True, description="任务标识代码")
     dataset_name = fields.CharField(max_length=255, null=True, index=True, description="本次执行使用的数据源/场景名称")
-    involve_envs = fields.JSONField(default=list, null=True, description="用例涉及应用环境列表")
+    involve_envs = fields.JSONField(default=list, null=True, description="涉及应用环境列表")
+    round_no = fields.IntField(null=True, description="执行轮次")
 
     class Meta:
         table = "krun_autotest_report"
@@ -48,6 +49,7 @@ class AutoTestReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
             ("case_id", "state", "updated_time"),
             ("case_id", "case_state"),
             ("case_id", "created_user"),
+            ("batch_code", "case_id", "round_no"),
         )
         ordering = ["-updated_time"]
 

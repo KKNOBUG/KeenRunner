@@ -1314,6 +1314,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             task_code: Optional[str] = None,
             batch_code: Optional[str] = None,
             dataset_name: Optional[str] = None,
+            round_no: Optional[int] = None,
             preloaded_case: Optional[AutoTestCaseModel] = None,
             preloaded_tree: Optional[AutoTestCaseStepTreeLoadResult] = None,
     ) -> Dict[str, Any]:
@@ -1327,6 +1328,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :param task_code: 任务标识代码，可选
         :param batch_code: 批次标识代码，可选
         :param dataset_name: 参数化执行时本次数据集名称，写入报告；数据由HTTP步骤执行器内查表获取
+        :param round_no: 执行轮次(外层执行次数序号, 1起)，写入报告供执行历史按轮次下钻；单次执行为空
         :param preloaded_case: 调用方已查询的用例实例，传入时跳过用例查询(多轮执行复用)
         :param preloaded_tree: 调用方已加载的步骤树数据，传入时跳过步骤树查询(多轮执行复用)
         :return: 含success、步骤指标(total/success/failed_steps、passed_ratio%)、report_code等
@@ -1393,6 +1395,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             report_type=report_type,
             dataset_name=dataset_name,
         )
+        # 轮次号由调用方(批次循环)传入后补入报告快照: 引擎不感知批次轮次结构
+        if defer_create_report is not None and round_no:
+            defer_create_report.round_no = round_no
         async with in_transaction():
             report_instance = await AutoTestReportCrud().create_report(report_in=defer_create_report)
             await AutoTestDetailCrud().create_details(details_in=list(pending_create_details or []))
@@ -1597,11 +1602,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             )
             case_results: List[Dict[str, Any]] = []
             if dataset_names:
-                # 总轮次 = 执行次数 × 数据源数
-                run_idx = 0
-                for _ in range(execute_count):
+                # 总轮次 = 执行次数 × 数据源数；外层为轮次号, 与执行历史"第N次执行"下钻口径一致
+                for round_no in range(1, execute_count + 1):
                     for ds_name in dataset_names:
-                        run_idx += 1
                         one = await self.execute_single_case(
                             case_id=case_id,
                             initial_variables=initial_variables,
@@ -1610,12 +1613,13 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                             task_code=task_code,
                             batch_code=batch_code,
                             dataset_name=ds_name,
+                            round_no=round_no,
                             preloaded_case=preloaded_case,
                             preloaded_tree=preloaded_tree,
                         )
                         case_results.append(one)
                         LOGGER.info(
-                            f"用例[id={case_id}]第[{run_idx + 1}/{execute_count}]次执行完成: "
+                            f"用例[id={case_id}]第[{round_no}/{execute_count}]次执行完成: "
                             f"[dataset={ds_name}, success={one.get('success', False)}]"
                         )
                 empty_error = "未执行任何数据集"
@@ -1628,6 +1632,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                         report_type=report_type,
                         task_code=task_code,
                         batch_code=batch_code,
+                        round_no=run_idx + 1,
                         preloaded_case=preloaded_case,
                         preloaded_tree=preloaded_tree,
                     )
@@ -1645,6 +1650,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     report_type=report_type,
                     task_code=task_code,
                     batch_code=batch_code,
+                    round_no=1,
                     preloaded_case=preloaded_case,
                     preloaded_tree=preloaded_tree,
                 ))

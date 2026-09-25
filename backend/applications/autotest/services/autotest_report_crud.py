@@ -23,6 +23,10 @@ from backend.applications.autotest.schemas.autotest_report_schema import (
     AutoTestReportUpdate,
     AutoTestReportBatchSelect,
     AutoTestReportBatchItem,
+    AutoTestReportBatchScriptSelect,
+    AutoTestReportBatchScriptItem,
+    AutoTestReportScriptRoundItem,
+    AutoTestReportScriptReportSelect,
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -206,24 +210,66 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         return case_state is True or case_state == "true"
 
-    @classmethod
-    def _resolve_batch_execute_result(cls, reports: List[Dict[str, Any]]) -> AutoTestTaskStatus:
+    @staticmethod
+    def _group_rows_by_case(rows: List[Dict[str, Any]]) -> Dict[Any, List[Dict[str, Any]]]:
         """
-        按脚本维度汇总批次结果。
+        将报告行按用例维度分组，无法定位用例的行单独归组兜底。
 
-        :param reports: 报告字典列表
-        :return: 成功(各脚本全部运行均成功)、部分成功(至少一个脚本全部运行成功)或失败
+        :param rows: 报告行字典列表
+        :return: 以case_id为键的分组字典
         """
-        by_case: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        for row in reports:
+        by_case: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
+        for row in rows:
             case_id = row.get("case_id")
             key = (
-                str(case_id)
+                case_id
                 if case_id is not None
                 else f"unknown:{row.get('report_code') or row.get('report_id')}"
             )
             by_case[key].append(row)
+        return by_case
 
+    @staticmethod
+    def _merge_involve_envs(rows: List[Dict[str, Any]]) -> List[str]:
+        """
+        合并报告行涉及环境列表，保持首次出现顺序去重。
+
+        :param rows: 报告行字典列表
+        :return: 去重后的环境名称列表
+        """
+        envs: List[str] = []
+        seen: Set[str] = set()
+        for row in rows:
+            for env in (row.get("involve_envs") or []):
+                text: str = str(env).strip()
+                if text and text not in seen:
+                    seen.add(text)
+                    envs.append(text)
+        return envs
+
+    @classmethod
+    def _summarize_batch_scripts(cls, by_case: Dict[Any, List[Dict[str, Any]]]) -> Tuple[int, int]:
+        """
+        按脚本维度汇总批次脚本数量与成功数量。
+
+        :param by_case: 已按用例维度分组的批次报告行字典
+        :return: (脚本数量, 全部轮次均成功的脚本数量)
+        """
+        script_count: int = len(by_case)
+        success_script_count: int = sum(
+            1 for rows in by_case.values()
+            if rows and all(cls._is_case_success(row.get("case_state")) for row in rows)
+        )
+        return script_count, success_script_count
+
+    @classmethod
+    def _resolve_batch_execute_result(cls, by_case: Dict[Any, List[Dict[str, Any]]]) -> AutoTestTaskStatus:
+        """
+        按脚本维度汇总批次结果。
+
+        :param by_case: 已按用例维度分组的批次报告行字典
+        :return: 成功(各脚本全部运行均成功)、部分成功(至少一个脚本全部运行成功)或失败
+        """
         fully_ok = 0
         for rows in by_case.values():
             if rows and all(cls._is_case_success(r.get("case_state")) for r in rows):
@@ -236,12 +282,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             return AutoTestTaskStatus.PARTIAL_SUCCESS
         return AutoTestTaskStatus.FAILURE
 
-    async def search_batches(self, batch_in: AutoTestReportBatchSelect) -> Tuple[int, List[AutoTestReportBatchItem]]:
+    async def search_task_batches(self, batch_in: AutoTestReportBatchSelect) -> Tuple[int, List[AutoTestReportBatchItem]]:
         """
-        任务维度聚合查询：按任务标识聚合报告批次并计算执行结果/通过率/耗时, 供/search_batches接口渲染任务执行历史。
+        任务维度聚合查询：按任务标识聚合报告批次并计算执行结果/脚本维度通过率/耗时, 供/search_task_batches接口渲染任务执行历史。
 
-        两段式查询控制内存：第一段仅加载聚合所需轻量字段完成全量聚合与分页，
-        第二段仅按当前页批次的成员主键回查明细全字段，避免全量实例化与全量序列化。
+        单段查询控制内存：仅加载聚合所需轻量字段完成全量聚合与分页, 批次行不再内嵌报告明细,
+        脚本/报告维度下钻由/search_batch_scripts与/search_script_round_reports接口承担。
 
         :param batch_in: 批次查询入参
         :return: (批次总数, 当前页批次列表)
@@ -255,90 +301,198 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             task_code=task_code,
             state=state,
         ).order_by("case_st_time").values(
-            "id", "case_id", "case_state", "case_st_time",
-            "created_user", "case_elapsed", "report_code", "batch_code",
+            "id", "case_id", "case_state", "case_st_time", "case_ed_time",
+            "created_user", "case_elapsed", "report_code", "batch_code", "involve_envs",
         )
         if not aggregate_rows:
             return 0, []
 
-        case_ids: List[int] = list({row["case_id"] for row in aggregate_rows if row.get("case_id") is not None})
-        case_name_map: Dict[int, str] = {}
-        if case_ids:
-            case_name_map = dict(
-                await AutoTestCaseCrud().model.filter(
-                    id__in=case_ids,
-                    state__not=1
-                ).values_list("id", "case_name")
-            )
-
-        exclude_fields: Set[str] = {"state", "created_time", "updated_time", "reserve_1", "reserve_2", "reserve_3"}
         grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for row in aggregate_rows:
             row["report_id"] = row.pop("id")
-            row["case_name"] = case_name_map.get(row.get("case_id"), "")
             raw_batch_code: Optional[str] = row.get("batch_code")
             batch_code_text: str = (raw_batch_code or "").strip()
             group_key: str = batch_code_text or f"single:{row.get('report_code') or row.get('report_id')}"
             grouped[group_key].append(row)
 
         batches: List[AutoTestReportBatchItem] = []
-        batch_keys: List[str] = []
-        member_ids: Dict[str, List[int]] = {}
         for group_key, batch_rows in grouped.items():
-            pass_count: int = sum(1 for report_row in batch_rows if self._is_case_success(report_row.get("case_state")))
-            report_count: int = len(batch_rows)
+            # 同批行只分组一次, 供执行状态与脚本汇总两个辅助方法复用
+            by_case: Dict[Any, List[Dict[str, Any]]] = self._group_rows_by_case(batch_rows)
+            script_count: int
+            success_script_count: int
+            script_count, success_script_count = self._summarize_batch_scripts(by_case)
             execute_users: List[str] = [user for user in (row.get("created_user") for row in batch_rows) if user]
-            execute_times: List[str] = sorted(st_time for st_time in (row.get("case_st_time") for row in batch_rows) if st_time)
-            execute_result: AutoTestTaskStatus = self._resolve_batch_execute_result(batch_rows)
-            member_ids[group_key] = [report_row.get("report_id") for report_row in batch_rows]
+            st_times: List[str] = sorted(st_time for st_time in (row.get("case_st_time") for row in batch_rows) if st_time)
+            ed_times: List[str] = [ed_time for ed_time in (row.get("case_ed_time") for row in batch_rows) if ed_time]
             batches.append(
                 AutoTestReportBatchItem(
                     batch_code=None if group_key.startswith("single:") else group_key,
-                    execute_result=execute_result,
-                    pass_rate=round(pass_count / report_count * 100.0, 2) if report_count else None,
-                    pass_count=pass_count,
-                    report_count=report_count,
+                    task_exec_status=self._resolve_batch_execute_result(by_case),
+                    task_bind_script=script_count,
+                    task_exec_passed=success_script_count,
+                    task_exec_failed=script_count - success_script_count,
+                    task_pass_rate=round(success_script_count / script_count * 100.0, 2) if script_count else None,
                     created_user=str(execute_users[0]) if execute_users else None,
-                    execute_time=execute_times[0] if execute_times else None,
-                    elapsed_seconds=round(sum(self._parse_elapsed_seconds(report_row.get("case_elapsed")) for report_row in batch_rows), 3),
-                    reports=[],
+                    task_st_time=st_times[0] if st_times else None,
+                    task_ed_time=max(ed_times) if ed_times else None,
+                    task_elapsed=round(sum(self._parse_elapsed_seconds(report_row.get("case_elapsed")) for report_row in batch_rows), 3),
+                    involve_envs=self._merge_involve_envs(batch_rows),
                 )
             )
-            batch_keys.append(group_key)
 
-        ordered: List[Tuple[AutoTestReportBatchItem, str]] = list(zip(batches, batch_keys))
-        ordered.sort(key=lambda pair: pair[0].execute_time or "", reverse=True)
+        batches.sort(key=lambda item: item.task_st_time or "", reverse=True)
         start: int = (batch_in.page - 1) * batch_in.page_size
         end: int = start + batch_in.page_size
-        page_pairs: List[Tuple[AutoTestReportBatchItem, str]] = ordered[start:end]
-        page_batches: List[AutoTestReportBatchItem] = [item for item, _ in page_pairs]
+        page_batches: List[AutoTestReportBatchItem] = batches[start:end]
 
-        if page_pairs:
-            page_report_ids: List[int] = [report_id for _, group_key in page_pairs for report_id in member_ids[group_key]]
-            detail_instances: List[AutoTestReportModel] = await self.model.filter(id__in=page_report_ids).order_by("case_st_time")
-            detail_rows: List[Dict[str, Any]] = await asyncio.gather(*[
-                obj.to_dict(
-                    exclude_fields=exclude_fields,
-                    replace_fields={"id": "report_id"}
-                ) for obj in detail_instances
-            ])
-            row_map: Dict[int, Dict[str, Any]] = {}
-            for report_row in detail_rows:
-                report_row["case_name"] = case_name_map.get(report_row.get("case_id"), "")
-                row_map[report_row["report_id"]] = report_row
-            for batch_item, group_key in page_pairs:
-                batch_item.reports = [row_map[report_id] for report_id in member_ids[group_key] if report_id in row_map]
-
-        batch_total: int = len(ordered)
+        batch_total: int = len(batches)
         return batch_total, page_batches
+
+    async def search_batch_scripts(self, script_in: AutoTestReportBatchScriptSelect) -> Tuple[int, List[AutoTestReportBatchScriptItem]]:
+        """
+        批次内脚本维度下钻查询：按批次标识聚合脚本执行信息(一行=一个脚本, 含轮次元数据), 供/search_batch_scripts接口渲染“脚本执行信息”抽屉。
+
+        :param script_in: 脚本维度查询入参
+        :return: (脚本总数, 当前页脚本行列表)
+        """
+        batch_code: str = (script_in.batch_code or "").strip()
+        if not batch_code:
+            raise ParameterException(message="参数[batch_code]不允许为空")
+
+        state: int = 0 if script_in.state is None else script_in.state
+        aggregate_rows: List[Dict[str, Any]] = await self.model.filter(
+            batch_code=batch_code,
+            state=state,
+        ).order_by("case_st_time").values(
+            "case_id", "case_state", "case_st_time", "case_ed_time",
+            "created_user", "case_elapsed", "involve_envs", "round_no", "dataset_name",
+        )
+        if not aggregate_rows:
+            return 0, []
+
+        grouped: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
+        for row in aggregate_rows:
+            grouped[row.get("case_id")].append(row)
+
+        script_items: List[AutoTestReportBatchScriptItem] = []
+        for case_rows in grouped.values():
+            round_datasets: Dict[int, List[str]] = {}
+            for row in case_rows:
+                round_no_value = row.get("round_no")
+                if round_no_value is None:
+                    continue
+                dataset_names = round_datasets.setdefault(round_no_value, [])
+                dataset_name = str(row.get("dataset_name") or "").strip()
+                if dataset_name and dataset_name not in dataset_names:
+                    dataset_names.append(dataset_name)
+            if round_datasets:
+                case_execute_count: int = len(round_datasets)
+                case_exec_passed: int = sum(
+                    1 for round_no_value in round_datasets
+                    if all(
+                        self._is_case_success(row.get("case_state"))
+                        for row in case_rows if row.get("round_no") == round_no_value
+                    )
+                )
+                rounds: List[AutoTestReportScriptRoundItem] = [
+                    AutoTestReportScriptRoundItem(round_no=round_no_value, dataset_names=dataset_names)
+                    for round_no_value, dataset_names in sorted(round_datasets.items())
+                ]
+            else:
+                # 历史数据无轮次标识, 退化为报告行数口径
+                case_execute_count = len(case_rows)
+                case_exec_passed = sum(1 for row in case_rows if self._is_case_success(row.get("case_state")))
+                rounds = []
+            execute_users: List[str] = [user for user in (row.get("created_user") for row in case_rows) if user]
+            st_times: List[str] = sorted(st_time for st_time in (row.get("case_st_time") for row in case_rows) if st_time)
+            ed_times: List[str] = [ed_time for ed_time in (row.get("case_ed_time") for row in case_rows) if ed_time]
+            script_items.append(
+                AutoTestReportBatchScriptItem(
+                    case_id=case_rows[0].get("case_id"),
+                    case_name="",
+                    case_execute_count=case_execute_count,
+                    case_exec_passed=case_exec_passed,
+                    case_exec_failed=case_execute_count - case_exec_passed,
+                    case_pass_rate=round(case_exec_passed / case_execute_count * 100.0, 2) if case_execute_count else None,
+                    involve_envs=self._merge_involve_envs(case_rows),
+                    rounds=rounds,
+                    created_user=str(execute_users[0]) if execute_users else None,
+                    case_st_time=st_times[0] if st_times else None,
+                    case_ed_time=max(ed_times) if ed_times else None,
+                    case_elapsed=round(sum(self._parse_elapsed_seconds(row.get("case_elapsed")) for row in case_rows), 3),
+                )
+            )
+
+        script_items.sort(key=lambda item: item.case_st_time or "", reverse=True)
+        start: int = (script_in.page - 1) * script_in.page_size
+        end: int = start + script_in.page_size
+        page_items: List[AutoTestReportBatchScriptItem] = script_items[start:end]
+
+        page_case_ids: List[int] = [item.case_id for item in page_items if item.case_id is not None]
+        case_name_map: Dict[int, str] = {}
+        if page_case_ids:
+            case_name_map = dict(
+                await AutoTestCaseCrud().model.filter(
+                    id__in=page_case_ids,
+                    state__not=1
+                ).values_list("id", "case_name")
+            )
+        for item in page_items:
+            item.case_name = case_name_map.get(item.case_id, "")
+
+        script_total: int = len(script_items)
+        return script_total, page_items
+
+    async def search_script_round_reports(self, report_in: AutoTestReportScriptReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
+        """
+        脚本执行明细分页查询(报告维度)：按批次标识+用例ID+轮次分页返回该轮次内执行报告(一行=一次场景执行), 供/search_script_round_reports接口渲染轮次内明细表格。
+
+        :param report_in: 脚本明细查询入参
+        :return: (该轮次报告总数, 当前页报告行列表)
+        """
+        batch_code: str = (report_in.batch_code or "").strip()
+        if not batch_code:
+            raise ParameterException(message="参数[batch_code]不允许为空")
+        if not report_in.case_id:
+            raise ParameterException(message="参数[case_id]不允许为空")
+        if not report_in.round_no:
+            raise ParameterException(message="参数[round_no]不允许为空")
+
+        state: int = 0 if report_in.state is None else report_in.state
+        query: Q = Q(batch_code=batch_code) & Q(case_id=report_in.case_id) & Q(round_no=report_in.round_no) & Q(state=state)
+        total: int = await self.model.filter(query).count()
+        if not total:
+            return 0, []
+
+        instances: List[AutoTestReportModel] = await self.model.filter(query).order_by("case_st_time", "id").offset(
+            (report_in.page - 1) * report_in.page_size
+        ).limit(report_in.page_size)
+
+        data: List[Dict[str, Any]] = await asyncio.gather(*[
+            obj.to_dict(
+                exclude_fields={"state", "created_time", "reserve_1", "reserve_2", "reserve_3"},
+                replace_fields={"id": "report_id"},
+            )
+            for obj in instances
+        ])
+        case_name_map: Dict[int, str] = dict(
+            await AutoTestCaseCrud().model.filter(
+                id=report_in.case_id,
+                state__not=1
+            ).values_list("id", "case_name")
+        )
+        for index, row in enumerate(data):
+            row["case_name"] = case_name_map.get(report_in.case_id, "")
+            row["step_pass_ratio"] = round(float(row.get("step_pass_ratio") or 0), 2)
+            row["dataset_no"] = (report_in.page - 1) * report_in.page_size + index + 1
+        return total, data
 
     async def search_reports(self, search: Q, report_in: AutoTestReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        执行维度主查询：将多数据源执行(同batch_code)唯一化为一行代表行, 批次行携带has_multiple_dataset与dataset_count,
-        多数据源批次行的step_pass_ratio为批内累积通过率; 批次明细由search_batch_reports按批次标识下钻。
+        执行维度主查询：将多数据源执行(同batch_code)唯一化为一行代表行, 批次行携带has_multiple_dataset与dataset_count, 多数据源批次行的step_pass_ratio为批内累积通过率; 批次明细由search_batch_reports按批次标识下钻。
 
-        三段式查询控制资源: 段1a/1b并发聚合执行维度轻量行 → 内存合并排序分页 →
-        段2代表行按主键回查全字段。
+        三段式查询控制资源: 段1a/1b并发聚合执行维度轻量行 → 内存合并排序分页 → 段2代表行按主键回查全字段。
 
         :param search: 查询条件(view层组装, 含state过滤, 不含batch_code空值分段)
         :param report_in: 报告查询入参(分页与state)

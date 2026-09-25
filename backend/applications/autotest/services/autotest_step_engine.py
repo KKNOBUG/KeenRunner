@@ -4063,7 +4063,7 @@ class AutoTestStepExecutionEngine:
             failed_steps: int = total_steps - success_steps
             passed_ratio: float = (success_steps / total_steps * 100) if total_steps > 0 else 0.0
             case_end_time: datetime = datetime.now()
-            case_ed_time_str: str = case_end_time.strftime("%Y-%m-%d %H:%M:%S")
+            case_ed_time_str: str = case_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
             case_elapsed: str = f"{(case_end_time - case_start_time).total_seconds():.2f}"
             case_state: bool = failed_steps == 0
             defer_create_report: Optional[AutoTestReportCreate] = None
