@@ -19,6 +19,7 @@ export const VALID_STEP_TYPES = new Set([
   '引用公共脚本',
   '引用公共接口',
   '断言',
+  '提取',
 ])
 
 /** 新建/无步骤时编辑器初始模板（对齐 update_or_create_tree 新建入参） */

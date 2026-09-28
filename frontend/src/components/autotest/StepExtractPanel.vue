@@ -68,7 +68,7 @@
                 <n-form-item v-else label="提取对象" class="step-ev-fi">
                   <n-select
                       v-model:value="item.object"
-                      :options="RESPONSE_EXTRACT_OBJECT_OPTIONS"
+                      :options="objectOptions"
                       placeholder="请选择提取对象"
                       :disabled="readonly"
                   />
@@ -164,23 +164,25 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 import {
   createEmptyExtractItem,
   EXTRACT_MODE_DATABASE,
+  EXTRACT_MODE_PYTHON,
   EXTRACT_MODE_REDIS,
   EXTRACT_MODE_RESPONSE,
   formatExtractCardTitle,
   getExtractPlaceholder,
   getNextDictKey,
   isVariableNameExtractMode,
+  PYTHON_EXTRACT_OBJECT_OPTIONS,
   REDIS_JSONPATH_PLACEHOLDER,
   DB_JSONPATH_PLACEHOLDER,
   RESPONSE_EXTRACT_OBJECT_OPTIONS,
 } from '@/utils/autotestExtractAssert'
 
 const props = defineProps({
-  /** response | database | redis */
+  /** response | database | redis | python(独立提取步骤，仅变量池) */
   mode: {
     type: String,
     default: EXTRACT_MODE_RESPONSE,
-    validator: (v) => [EXTRACT_MODE_RESPONSE, EXTRACT_MODE_DATABASE, EXTRACT_MODE_REDIS].includes(v),
+    validator: (v) => [EXTRACT_MODE_RESPONSE, EXTRACT_MODE_DATABASE, EXTRACT_MODE_REDIS, EXTRACT_MODE_PYTHON].includes(v),
   },
   readonly: { type: Boolean, default: false },
   /** database 模式：请求 Tab 中的 variable_name 选项 */
@@ -190,6 +192,9 @@ const props = defineProps({
 const model = defineModel({ type: Object, default: () => ({}) })
 
 const isVariableSource = computed(() => isVariableNameExtractMode(props.mode))
+const objectOptions = computed(() =>
+    props.mode === EXTRACT_MODE_PYTHON ? PYTHON_EXTRACT_OBJECT_OPTIONS : RESPONSE_EXTRACT_OBJECT_OPTIONS
+)
 const variableScopeHint = computed(() =>
     props.mode === EXTRACT_MODE_REDIS
         ? '部分提取需填写 JSONPath（相对所选 variable_name 的 redis_data）；全部提取取该 redis_data 整项'

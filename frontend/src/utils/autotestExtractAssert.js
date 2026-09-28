@@ -6,6 +6,8 @@ export const EXTRACT_MODE_RESPONSE = 'response'
 export const EXTRACT_MODE_DATABASE = 'database'
 /** 提取：Redis 步骤，来源为请求中的 variable_name */
 export const EXTRACT_MODE_REDIS = 'redis'
+/** 提取：独立提取步骤，仅变量池 */
+export const EXTRACT_MODE_PYTHON = 'python'
 
 /** 断言：HTTP/TCP 响应 + 变量池 */
 export const ASSERT_MODE_RESPONSE = 'response'
@@ -55,6 +57,9 @@ export const RESPONSE_ASSERT_OBJECT_OPTIONS = [
 ]
 
 export const PYTHON_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
+
+/** 独立提取步骤固定对象：仅变量池 */
+export const PYTHON_EXTRACT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
 
 /** 数据库步骤断言固定对象：仅变量池 */
 export const DB_ASSERT_OBJECT_OPTIONS = [{ label: '变量池', value: '变量池' }]
@@ -128,6 +133,7 @@ export function getExtractObjectLabel(value) {
   const option =
       findSelectOptionByValue(RESPONSE_EXTRACT_OBJECT_OPTIONS, value)
       || findSelectOptionByValue(RESPONSE_ASSERT_OBJECT_OPTIONS, value)
+      || findSelectOptionByValue(PYTHON_EXTRACT_OBJECT_OPTIONS, value)
       || findSelectOptionByValue(PYTHON_ASSERT_OBJECT_OPTIONS, value)
   return option ? option.label : value || ''
 }
@@ -145,6 +151,7 @@ export function getExtractPlaceholder(object) {
     'Response XML': '请输入XPath表达式，如：/store/book[1]/title',
     'Response Headers': '请输入JSONPath表达式，如：$.Content-Type',
     'Response Cookie': '请输入JSONPath表达式，如：$.Auth',
+    '变量池': 'JSONPath，如：$.token 或 $.list[0].name',
   }
   return placeholderMap[object] || '请输入表达式'
 }
@@ -166,6 +173,16 @@ export function createEmptyExtractItem(extractMode, defaultSource = null) {
       extractScope: '部分提取',
       jsonpath: '',
       extractIndex: 0,
+      extractContinue: false,
+    }
+  }
+  if (extractMode === EXTRACT_MODE_PYTHON) {
+    return {
+      name: '',
+      object: '变量池',
+      extractScope: '部分提取',
+      jsonpath: '',
+      extractIndex: null,
       extractContinue: false,
     }
   }

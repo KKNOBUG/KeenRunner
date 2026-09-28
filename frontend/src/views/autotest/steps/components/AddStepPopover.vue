@@ -73,6 +73,7 @@ const STEP_ICON = {
   database: 'ph:file-sql',
   redis: 'ph:file-rs',
   assert: 'material-symbols:rule',
+  extract: 'material-symbols:data-object',
   wait: 'gravity-ui:stopwatch',
   if: 'gravity-ui:shuffle',
   loop: 'gravity-ui:arrows-rotate-right',
@@ -89,6 +90,7 @@ const STEP_ICON_CLASS = {
   database: 'icon-database',
   redis: 'icon-redis',
   assert: 'icon-assert',
+  extract: 'icon-extract',
   wait: 'icon-wait',
   if: 'icon-if',
   loop: 'icon-loop',
@@ -126,6 +128,7 @@ const buildItem = (key, { label, desc, iconName, disabled } = {}) => {
     database: '数据库请求',
     redis: 'Redis请求',
     assert: '断言',
+    extract: '提取',
     wait: '等待控制',
     if: '条件分支',
     loop: '循环结构',
@@ -179,6 +182,10 @@ const menuSections = computed(() => {
         }),
         buildItem('assert', {
           desc: '对变量池或响应数据进行断言校验，比较符与 HTTP 断言一致',
+          disabled: onlyHttpTcp,
+        }),
+        buildItem('extract', {
+          desc: '从变量池提取数据写入会话变量，供后续步骤以占位符引用',
           disabled: onlyHttpTcp,
         }),
       ],
@@ -324,7 +331,8 @@ const handleSelectItem = (item) => {
 .add-step-item-icon.icon-code,
 .add-step-item-icon.icon-database,
 .add-step-item-icon.icon-redis,
-.add-step-item-icon.icon-assert {
+.add-step-item-icon.icon-assert,
+.add-step-item-icon.icon-extract {
   color: #BA55D3;
 }
 

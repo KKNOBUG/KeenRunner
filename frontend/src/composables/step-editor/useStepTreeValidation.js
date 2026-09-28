@@ -261,9 +261,13 @@ const validateExtractAssertInSteps = (stepList) => {
         const config = step.config || {}
         const original = step.original || {}
         const stepName = step.name || config.step_name || original.step_name || '未命名步骤'
-        const extractResult = validateExtractList(resolveStepListField(config, original, 'extract_variables'))
+        const extractList = resolveStepListField(config, original, 'extract_variables')
+        const extractResult = validateExtractList(extractList)
         if (!extractResult.valid) {
             return { valid: false, message: `步骤：${stepName}，${extractResult.message}` }
+        }
+        if (step.type === 'extract' && (!Array.isArray(extractList) || extractList.length === 0)) {
+            return { valid: false, message: `步骤：${stepName}，提取步骤至少需要配置一条提取规则` }
         }
         const assertList = resolveStepListField(config, original, 'assert_validators')
         if (step.type === 'assert' && (!Array.isArray(assertList) || assertList.length === 0)) {

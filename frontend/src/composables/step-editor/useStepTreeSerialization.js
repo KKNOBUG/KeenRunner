@@ -18,6 +18,7 @@ const LOCAL_TYPE_TO_BACKEND = {
     database: '数据库请求',
     redis: 'Redis请求',
     assert: '断言',
+    extract: '提取',
 }
 
 export const localTypeToBackend = (localType) => LOCAL_TYPE_TO_BACKEND[localType] || '代码请求(Python)'
@@ -230,6 +231,9 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
         } else if (step.type === 'assert') {
             backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '断言')
             backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+        } else if (step.type === 'extract') {
+            backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '提取')
+            backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
         } else if (step.type === 'loop') {
             backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'
             backendStep.loop_on_error = config.loop_on_error || original.loop_on_error || '中断循环'

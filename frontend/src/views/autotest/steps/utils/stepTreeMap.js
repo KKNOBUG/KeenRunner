@@ -16,6 +16,7 @@ const stepDefinitions = {
   quote_public_script: { allowChildren: false },
   quote_public_api: { allowChildren: false },
   assert: { allowChildren: false },
+  extract: { allowChildren: false },
 }
 
 let seed = 1000
@@ -49,6 +50,8 @@ const backendTypeToLocal = (step_type) => {
       return 'redis'
     case '断言':
       return 'assert'
+    case '提取':
+      return 'extract'
     default:
       return 'code'
   }
@@ -255,6 +258,11 @@ export function mapBackendStep(step) {
     base.config = {
       step_name: step.step_name || '',
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
+    }
+  } else if (localType === 'extract') {
+    base.config = {
+      step_name: step.step_name || '',
+      extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
     }
   }
 
