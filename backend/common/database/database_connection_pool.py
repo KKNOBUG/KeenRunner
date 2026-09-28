@@ -507,7 +507,10 @@ class DBConnPoolFromConfig:
                         sql_data = {"count": sql_count}
                     return {"sql_data": sql_data, "sql_count": sql_count}
             except Exception as e:
-                await connection.rollback()
+                # 执行中断可能让连接协议流残留未读数据包，aiomysql归还连接时不校验协议态，
+                # 复用脏连接会持续抛1156"Got packets out of order"，必须关闭丢弃由池重建；
+                # autocommit=True下无显式事务，原rollback在脏连接上会先抛1156掩盖真实错误
+                connection.close()
                 error_message = f"SQL执行失败：{e}"
                 self.logger.error(f"{error_message}\n{traceback.format_exc()}")
                 raise RuntimeError(error_message) from e
