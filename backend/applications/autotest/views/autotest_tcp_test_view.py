@@ -40,8 +40,8 @@ class _TcpTestServer:
         self._json_server: Optional[asyncio.base_events.Server] = None
         self._xml_server: Optional[asyncio.base_events.Server] = None
         self._host: str = "0.0.0.0"
-        self._json_port: int = 9999
-        self._xml_port: int = 9998
+        self._json_port: int = 9991
+        self._xml_port: int = 9992
         self._is_running: bool = False
         self._json_conn_count: int = 0
         self._xml_conn_count: int = 0
