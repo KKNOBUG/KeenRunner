@@ -464,12 +464,7 @@ const handleDebug = async () => {
   padding-right: 88px;
 }
 
-.top-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-}
+/* top-bar / hint-title 公共样式见全局 autotest-theme.scss（.step-editor-card 作用域） */
 
 .python-logo {
   flex-shrink: 0;
@@ -498,12 +493,6 @@ const handleDebug = async () => {
   border-radius: 8px;
   padding: 10px 12px;
   margin-bottom: 12px;
-}
-
-.hint-title {
-  font-size: var(--step-editor-font-size, 13px);
-  font-weight: 600;
-  margin-bottom: 6px;
 }
 
 .hint-content {

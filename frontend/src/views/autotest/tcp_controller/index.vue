@@ -1456,23 +1456,11 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
   padding-right: 220px;
 }
 
-.debug-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  padding: 40px 0;
-}
-
-.response-code {
-  max-height: 400px;
-  overflow: auto;
-}
+/* debug-loading / response-code / json-editor 样式见全局 autotest-theme.scss（.step-editor-card 作用域） */
 
 .tcp-request-row {
   width: 100%;
 }
-
 /* 三列：步骤名 / 应用 /（配置名+调试）；第三列内 flex 保证下拉与按钮同一基线 */
 .tcp-request-row-top {
   display: grid;
@@ -1520,20 +1508,6 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 
 .request-toolbar-select {
   width: 100%;
-}
-
-/* 与 http_controller「请求体」json 编辑器一致 */
-.json-editor {
-  font-family: 'Fira Code', monospace;
-  font-size: 14px;
-  border-radius: 10px;
-  overflow: hidden;
-  transition: height 0.3s ease;
-}
-
-.json-editor :deep(.monaco-editor) {
-  min-height: 90px;
-  height: auto !important;
 }
 </style>
 

@@ -144,28 +144,10 @@
 .branch-tag.tag-else { background: var(--branch-color-else); }
 
 /* 工具类 */
-.autotest-muted-text {
-  color: var(--n-text-color-3);
-}
-
-.autotest-secondary-text {
-  color: var(--n-text-color-2);
-}
-
 .autotest-empty-hint {
   padding: 20px;
   text-align: center;
   color: var(--n-text-color-3);
-}
-
-.autotest-hint-text {
-  font-size: var(--autotest-font-size-mini);
-  color: var(--n-text-color-3);
-}
-
-.autotest-list-selected {
-  background-color: var(--n-color-primary-hover);
-  font-weight: 500;
 }
 
 .autotest-pre-block {
@@ -187,22 +169,6 @@
   border: 1px solid var(--n-color-error-suppl);
 }
 
-/* 报告/任务表格分组行 */
-.report-group-row,
-.report-group-row td {
-  background-color: var(--n-color-embedded) !important;
-}
-
-.report-batch-row,
-.report-batch-row td {
-  background-color: var(--n-color-target, var(--n-color-embedded)) !important;
-}
-
-/* HTTP KeyValue 锁定行 */
-.locked-keyword-row td {
-  background-color: var(--n-color-embedded) !important;
-}
-
 /* 执行日志条目统一样式：各页面执行日志 pre.log-item 均引用此类，页面内不得本地重定义 */
 pre.log-item,
 .log-item {
@@ -211,6 +177,159 @@ pre.log-item,
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
+}
+
+/* ========== 步骤调试面板通用样式（.step-editor-card 作用域） ==========
+ * http/tcp/redis 等调试面板共用；页面内不得本地重定义，页面差异化样式保留本地
+ */
+.step-editor-card .debug-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 40px 0;
+}
+
+.step-editor-card .response-code {
+  max-height: 400px;
+  overflow: auto;
+}
+
+.step-editor-card .json-editor {
+  font-family: 'Fira Code', monospace;
+  font-size: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: height 0.3s ease;
+}
+
+/* 确保编辑器容器可以自适应内容高度 */
+.step-editor-card .json-editor .monaco-editor {
+  min-height: 90px;
+  height: auto !important;
+}
+
+.step-editor-card .top-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.step-editor-card .hint-title {
+  font-size: var(--step-editor-font-size, 13px);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* ========== 数据库/Redis 多操作卡片通用样式（database/redis_controller 共用） ==========
+ * 页面私有布局（栅格列数、表达式输入等）保留页面本地定义
+ */
+.step-editor-card .db-stop-label {
+  font-size: var(--step-editor-font-size, 13px);
+  color: var(--n-text-color-2);
+}
+
+.step-editor-card .db-op-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 28px;
+  line-height: 1.5;
+}
+
+.step-editor-card .db-op-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.step-editor-card .db-op-title-row .panel-collapse-icon {
+  flex-shrink: 0;
+  color: var(--n-text-color-3);
+}
+
+.step-editor-card .db-op-title-text {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-editor-card .db-op-title-input {
+  max-width: min(100%, 280px);
+}
+
+.step-editor-card .db-op-title-edit {
+  flex-shrink: 0;
+}
+
+.step-editor-card .db-op-card-wrap {
+  width: 100%;
+}
+
+.step-editor-card .db-op-card-wrap .n-card {
+  border: 1px solid var(--n-border-color);
+  background-color: var(--n-color);
+}
+
+.step-editor-card .db-op-card-wrap .n-card-header {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  background-color: var(--n-color-embedded);
+  border-bottom: 1px solid var(--n-border-color);
+}
+
+.step-editor-card .db-op-card-wrap .n-card-header__main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.step-editor-card .db-op-card-wrap .n-card.is-item-collapsed .n-card-header {
+  border-bottom: none;
+}
+
+.step-editor-card .db-op-card-wrap .n-card.is-item-collapsed .n-card__content {
+  display: none;
+  padding: 0;
+}
+
+.step-editor-card .db-op-body .n-form-item {
+  margin-bottom: 0;
+}
+
+.step-editor-card .db-op-body .n-form-item-label {
+  padding-bottom: 0;
+}
+
+.step-editor-card .db-op-field-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.step-editor-card .db-op-field-row {
+  width: 100%;
+}
+
+.step-editor-card .db-op-fi-fill .n-input,
+.step-editor-card .db-op-fi-fill .n-select {
+  width: 100%;
 }
 
 /* ========== Luckysheet 数据表格：深色模式适配 ==========

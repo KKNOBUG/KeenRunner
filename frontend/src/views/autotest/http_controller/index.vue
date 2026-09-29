@@ -1792,33 +1792,5 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
   padding-right: 220px; /* 预留右侧 status / tip 空间 */
 }
 
-.json-editor {
-  font-family: 'Fira Code', monospace;
-  font-size: 14px;
-  border-radius: 10px;
-  overflow: hidden;
-  transition: height 0.3s ease;
-}
-
-/* 确保编辑器容器可以自适应内容高度 */
-.json-editor :deep(.monaco-editor) {
-  min-height: 90px;
-  height: auto !important;
-}
-
-
-/* 添加必要的布局样式 */
-.response-code {
-  /* HTTP 调试响应体限高；滚动条样式见全局 .overlay-scroll */
-  max-height: 400px;
-  overflow: auto;
-}
-
-.debug-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  padding: 40px 0;
-}
+/* json-editor / response-code / debug-loading 样式见全局 autotest-theme.scss（.step-editor-card 作用域） */
 </style>

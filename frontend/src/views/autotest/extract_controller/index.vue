@@ -111,15 +111,10 @@ const extractCount = computed(() => countDictKeys(form.extract_variables))
 </script>
 
 <style scoped>
+/* top-bar / hint-title 公共样式见全局 autotest-theme.scss（.step-editor-card 作用域） */
+
 .extract-container {
   width: 100%;
-}
-
-.top-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
 }
 
 .extract-name-form {
@@ -141,12 +136,6 @@ const extractCount = computed(() => countDictKeys(form.extract_variables))
   border-radius: 8px;
   background: color-mix(in srgb, var(--n-color-embedded, #fafafa) 88%, transparent);
   border: 1px solid var(--n-border-color);
-}
-
-.hint-title {
-  font-size: var(--step-editor-font-size, 13px);
-  font-weight: 600;
-  margin-bottom: 6px;
 }
 
 .hint-content {

@@ -429,110 +429,10 @@ watch(
   gap: 12px;
 }
 
-.db-stop-label {
-  font-size: var(--step-editor-font-size, 13px);
-  color: var(--n-text-color-2);
-}
-
-.db-op-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 28px;
-  line-height: 1.5;
-}
-
-.db-op-title-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  flex: 1;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  user-select: none;
-}
-
-.db-op-title-row .panel-collapse-icon {
-  flex-shrink: 0;
-  color: var(--n-text-color-3);
-}
-
-.db-op-title-text {
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.db-op-title-input {
-  max-width: min(100%, 280px);
-}
-
-.db-op-title-edit {
-  flex-shrink: 0;
-}
-
-.db-op-card-wrap {
-  width: 100%;
-}
-
-.db-op-card-wrap :deep(.n-card) {
-  border: 1px solid var(--n-border-color);
-  background-color: var(--n-color);
-}
-
-.db-op-card-wrap :deep(.n-card-header) {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 16px;
-  box-sizing: border-box;
-  background-color: var(--n-color-embedded);
-  border-bottom: 1px solid var(--n-border-color);
-}
-
-.db-op-card-wrap :deep(.n-card-header__main) {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.db-op-card-wrap :deep(.n-card.is-item-collapsed .n-card-header) {
-  border-bottom: none;
-}
+/* db-stop-label / db-op-* 公共部分样式见全局 autotest-theme.scss（.step-editor-card 作用域） */
 
 .db-op-card-wrap :deep(.n-card__content) {
   padding: 12px 16px;
-}
-
-.db-op-card-wrap :deep(.n-card.is-item-collapsed .n-card__content) {
-  display: none;
-  padding: 0;
-}
-
-.db-op-body :deep(.n-form-item) {
-  margin-bottom: 0;
-}
-
-.db-op-body :deep(.n-form-item-label) {
-  padding-bottom: 0;
-}
-
-.db-op-field-rows {
-  display: flex;
-  flex-direction: column;
-}
-
-.db-op-field-row {
-  width: 100%;
 }
 
 .db-op-field-row--cols4 {
@@ -554,16 +454,12 @@ watch(
   min-width: 0;
 }
 
-.db-op-fi-fill :deep(.n-input),
-.db-op-fi-fill :deep(.n-select) {
-  width: 100%;
-}
-
 .db-op-expr-textarea :deep(textarea) {
   resize: vertical;
   min-height: 34px;
 }
 
+/* 与 step-extract-assert-panel.scss 同名类但为本页加粗变体（28px/1.5/500），保留本地 */
 .extract-validator-list {
   width: 100%;
 }

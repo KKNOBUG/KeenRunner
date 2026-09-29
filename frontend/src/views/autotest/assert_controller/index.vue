@@ -123,15 +123,10 @@ const validatorsCount = computed(() => countDictKeys(form.assert_validators))
 </script>
 
 <style scoped>
+/* top-bar / hint-title 公共样式见全局 autotest-theme.scss（.step-editor-card 作用域） */
+
 .assert-container {
   width: 100%;
-}
-
-.top-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
 }
 
 .assert-name-form {
@@ -153,12 +148,6 @@ const validatorsCount = computed(() => countDictKeys(form.assert_validators))
   border-radius: 8px;
   background: color-mix(in srgb, var(--n-color-embedded, #fafafa) 88%, transparent);
   border: 1px solid var(--n-border-color);
-}
-
-.hint-title {
-  font-size: var(--step-editor-font-size, 13px);
-  font-weight: 600;
-  margin-bottom: 6px;
 }
 
 .hint-content {
