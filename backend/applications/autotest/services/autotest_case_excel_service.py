@@ -5,16 +5,6 @@
 @Project : Krun
 @Module  : autotest_case_excel_service.py
 @DateTime: 2026/8/1
-
-用例Excel导入导出服务，含两条独立通道：
-- 通道A(报文导出)：用例步骤的HEAD/请求体展平为JSONPath风格矩阵，仅展示用途，
-  与数据源表无关联；入口prepare_export_cases → build_export_workbook
-- 通道B(脚本导出/导入)：14列文本模板，导出为key:value:desc;多行格式(三段恒输出，值可含冒号)，导入按首个冒号切key、末个冒号切desc、中间整体为value；
-  入口prepare_script_export_rows → build_script_workbook，
-  parse_script_workbook → import_script_rows
-
-两条通道均为同步视图与异步Celery任务双通道消费(视图预校验+任务内二次校验)，
-文件名由build_export_file_name/build_script_file_name统一生成。
 """
 from __future__ import annotations
 
@@ -92,20 +82,21 @@ _DATAGRAM_SCOPE_ALL = "整个返回数据"
 _DATAGRAM_SCOPE_SOME = "提取部分"
 
 # 脚本导入校验集合
+_EXTRACT_SCOPES = frozenset({"ALL", "SOME"})
 _EXTRACT_SOURCES = frozenset({
-    "Request Form-Data", "Request Text", "Request Json", "Request XML",
-    "Request Headers", "Request Cookie",
-    "Response Text", "Response Json", "Response XML",
-    "Response Headers", "Response Cookie",
+    "Request Form-Data", "Request Text", "Request Json", "Request XML", "Request Headers", "Request Cookie",
+    "Response Text", "Response Json", "Response XML", "Response Headers", "Response Cookie",
 })
 _ASSERT_SOURCES = frozenset({
-    "Request Form-Data", "Request Text", "Request Json", "Request XML",
-    "Request Headers", "Request Cookie",
-    "Response Text", "Response Json", "Response XML",
-    "Response Headers", "Response Cookie",
-    "变量池",
+    "Request Form-Data", "Request Text", "Request Json", "Request XML", "Request Headers", "Request Cookie",
+    "Response Text", "Response Json", "Response XML", "Response Headers", "Response Cookie", "变量池",
 })
 _ASSERT_OPERATIONS = frozenset(e.value for e in AutoTestAssertionOperation)
+# 无需预期值的匹配规则，与AssertionCompare中del expected的实现保持一致：不为空/为空
+_ASSERT_NO_EXPECTED_OPERATIONS = frozenset({
+    AutoTestAssertionOperation.NOT_EMPTY.value,
+    AutoTestAssertionOperation.IS_EMPTY.value,
+})
 _HTTP_METHODS = frozenset(e.value for e in HTTPMethod)
 _REQ_ARGS_TYPE = frozenset(e.value for e in AutoTestReqArgsType)
 _TCP_ARGS_TYPE = frozenset({AutoTestReqArgsType.XML.value, AutoTestReqArgsType.JSON.value, AutoTestReqArgsType.RAW.value})
@@ -207,7 +198,7 @@ async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[Li
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "用例不存在"})
             continue
         if getattr(case, "case_type", None) != AutoTestCaseType.PUBLIC_API:
-            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "非公共接口用例"})
+            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "用例类型不被允许"})
             continue
         try:
             load = await services.step_curd.get_case_tree(case_id=case_id)
@@ -216,15 +207,12 @@ async def _load_public_api_cases(case_ids: List[int], services: Any) -> Tuple[Li
             continue
         own_steps = _collect_own_steps(getattr(load, "root_steps", None))
         if len(own_steps) != 1:
-            invalid.append({
-                "case_id": case_id, "case_name": case_name,
-                "reason": f"用例步骤数为{len(own_steps)}，需且仅需1步",
-            })
+            invalid.append({"case_id": case_id, "case_name": case_name, "reason": f"用例步骤数异常"})
             continue
         step = own_steps[0]
         step_type = getattr(step, "step_type", None)
         if step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
-            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "步骤非HTTP/TCP请求步骤"})
+            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "步骤类型不被允许"})
             continue
         if getattr(step, "data_source_id", None):
             invalid.append({"case_id": case_id, "case_name": case_name, "reason": "步骤存在数据源绑定"})
@@ -488,12 +476,16 @@ def _kv_to_lines(kv_list: Optional[List[Any]], *, column: str = "", problems: Op
         value = "" if raw_value is None else str(raw_value)
         desc = str(_get(item, "desc") or "").strip()
         if problems is not None:
-            if ":" in key or "\n" in key:
-                problems.append(f"[{column}]({key})键含冒号或换行")
+            if ":" in key:
+                problems.append(f"[{column}] {key} 的键包含冒号")
+            if "\n" in key:
+                problems.append(f"[{column}] {key} 的键包含换行")
             if "\n" in value:
-                problems.append(f"[{column}]({key})值含换行")
-            if "\n" in desc or ":" in desc:
-                problems.append(f"[{column}]({key})描述含冒号或换行")
+                problems.append(f"[{column}] {key} 的值包含换行")
+            if ":" in desc:
+                problems.append(f"[{column}] {key} 的描述包含冒号")
+            if "\n" in desc:
+                problems.append(f"[{column}] {key} 的描述包含换行")
         lines.append(f"{key}:{value}:{desc};")
     return "\n".join(lines)
 
@@ -526,9 +518,11 @@ def _assert_to_lines(assert_list: Optional[List[Any]]) -> str:
         operation = str(_get(item, "operation") or "").strip()
         if not name or not source or not expr or not operation:
             continue
-        raw_except = _get(item, "except_value")
-        except_value = "" if raw_except is None else str(raw_except)
-        lines.append(f"{name}:{source}:{expr}:{operation}:{except_value};")
+        seg = f"{name}:{source}:{expr}:{operation}"
+        if operation not in _ASSERT_NO_EXPECTED_OPERATIONS:
+            raw_except = _get(item, "except_value")
+            seg += f":{'' if raw_except is None else raw_except}"
+        lines.append(seg + ";")
     return "\n".join(lines)
 
 
@@ -553,38 +547,59 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
         method = _enum_val(getattr(step, "request_method", None))
 
         problems: List[str] = []
-        header_text = (
-            _kv_to_lines(getattr(step, "request_header", None), column="请求头", problems=problems)
-            if is_http else ""
-        )
-        variables_text = _kv_to_lines(
-            getattr(step, "defined_variables", None), column="变量", problems=problems
-        )
         form_attr = _FORM_RAGS_TYPE.get(args)
+        header_text = (_kv_to_lines(getattr(step, "request_header", None), column="请求头", problems=problems) if is_http else "")
+        variables_text = _kv_to_lines(getattr(step, "defined_variables", None), column="变量", problems=problems)
         if form_attr:
-            # 表单类请求体：检测与序列化合一；非表单类走 _step_body_cell
             body_text = _kv_to_lines(getattr(step, form_attr, None), column="请求体", problems=problems)
         else:
             body_text = _step_body_cell(step)
+
+        # 检查提取列
         for extract_item in getattr(step, "extract_variables", None) or []:
             extract_name = str(_get(extract_item, "name") or "")
+            extract_source = str(_get(extract_item, "source") or "").strip()
+            extract_scope = str(_get(extract_item, "scope") or "").strip()
             extract_expr = str(_get(extract_item, "expr") or "")
-            if ":" in extract_name or "\n" in extract_name:
-                problems.append(f"[提取]({extract_name})变量名含冒号或换行")
-            if ":" in extract_expr or "\n" in extract_expr:
-                problems.append(f"[提取]({extract_name})表达式含冒号或换行")
+            if ":" in extract_name:
+                problems.append(f"[提取] {extract_name} 的变量名包含冒号")
+            if "\n" in extract_name:
+                problems.append(f"[提取] {extract_name} 的变量名包含换行")
+            if ":" in extract_expr:
+                problems.append(f"[提取] {extract_name} 的表达式包含冒号")
+            if "\n" in extract_expr:
+                problems.append(f"[提取] {extract_name} 的表达式包含换行")
+            if extract_scope not in _EXTRACT_SCOPES:
+                problems.append(f"[提取] {extract_name} 提取范围 {extract_scope} 不被允许")
+            elif extract_scope == "SOME" and not extract_expr.strip():
+                problems.append(f"[提取] {extract_name} 提取范围为SOME时, 必须填写提取表达式")
+            if extract_source not in _EXTRACT_SOURCES:
+                problems.append(f"[提取] {extract_name} 提取来源 {extract_source} 不被允许")
+
+        # 检查断言列
         for assert_item in getattr(step, "assert_validators", None) or []:
             assert_name = str(_get(assert_item, "name") or "")
             assert_expr = str(_get(assert_item, "expr") or "")
+            assert_operation = str(_get(assert_item, "operation") or "").strip()
             assert_except = str(_get(assert_item, "except_value") or "")
-            if ":" in assert_name or "\n" in assert_name:
-                problems.append(f"[断言]({assert_name})名称含冒号或换行")
-            if ":" in assert_expr or "\n" in assert_expr:
-                problems.append(f"[断言]({assert_name})表达式含冒号或换行")
+            if ":" in assert_name:
+                problems.append(f"[断言] {assert_name} 的名称包含冒号")
+            if "\n" in assert_name:
+                problems.append(f"[断言] {assert_name} 的名称包含换行")
+            if ":" in assert_expr:
+                problems.append(f"[断言] {assert_name} 的表达式包含冒号")
+            if "\n" in assert_expr:
+                problems.append(f"[断言] {assert_name} 的表达式包含换行")
             if "\n" in assert_except:
-                problems.append(f"[断言]({assert_name})预期值含换行")
+                problems.append(f"[断言] {assert_name} 的预期值包含换行")
+            if assert_operation not in _ASSERT_OPERATIONS:
+                problems.append(f"[断言] {assert_name} 匹配规则 {assert_operation} 不被允许")
+            elif assert_operation not in _ASSERT_NO_EXPECTED_OPERATIONS and not assert_except.strip():
+                problems.append(f"[断言] {assert_name} 匹配规则 {assert_operation} 需要填写预期值")
+
+        # 拼接反馈描述
         if problems:
-            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "；".join(problems)})
+            invalid.append({"case_id": case_id, "case_name": case_name, "reason": "; ".join(problems)})
             continue
 
         rows.append({
@@ -603,27 +618,30 @@ async def prepare_script_export_rows(case_ids: List[int], services: Any) -> Tupl
             "断言": _assert_to_lines(getattr(step, "assert_validators", None)),
             "所属人员": getattr(case, "owner_user", None) or getattr(case, "created_user", None) or "",
         })
-    LOGGER.info(f"导出脚本准备完成: 有效{len(rows)}个, 不合规{len(invalid)}个")
+    LOGGER.info(f"导出脚本准备完成: 有效{len(rows)}个, 无效{len(invalid)}个")
     return rows, invalid
 
 
 def build_script_workbook(rows: List[Dict[str, str]]) -> Workbook:
     if not os.path.isfile(_SCRIPT_TEMPLATE):
         LOGGER.error(f"脚本模板文件不存在: {_SCRIPT_TEMPLATE}")
-        raise RuntimeError("脚本模板文件不存在，请联系管理员部署")
+        raise RuntimeError("脚本模板文件不存在, 请联系管理员")
+
     workbook = load_workbook(_SCRIPT_TEMPLATE)
     sheet = workbook[workbook.sheetnames[0]]
     header = [cell.value for cell in sheet[1][: len(_DATAGRAM_SECTION_COLUMNS)]]
     if header != list(_DATAGRAM_SECTION_COLUMNS):
-        LOGGER.error(f"脚本模板表头与预定义不一致: 模板={header}, 期望={list(_DATAGRAM_SECTION_COLUMNS)}")
-        raise RuntimeError("脚本模板表头已被改动，请联系管理员恢复")
+        LOGGER.error(f"脚本模板表头与预定义表头不一致: 模板={header}, 预定义={list(_DATAGRAM_SECTION_COLUMNS)}")
+        raise RuntimeError("脚本模板表头与预定义表头不一致, 请联系管理员")
+
     for row_index, row in enumerate(rows, start=_DATAGRAM_START_ROW):
         for col_index, column in enumerate(_DATAGRAM_SECTION_COLUMNS, start=1):
             sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
-    # 数据区从第 3 行起：居中 + 统一行高；列宽根据全表内容自适应
+
     if rows:
         _style_sheet_cells(sheet, start_row=_DATAGRAM_START_ROW, row_height=_MARK_ROW_HEIGHT)
     _auto_size_sheet_columns(sheet)
+
     return workbook
 
 
@@ -646,7 +664,7 @@ def _parse_kv(text: str, errors: List[str], column: str) -> Optional[List[Dict[s
         parts = seg.split(":")
         key = parts[0].strip()
         if not key:
-            errors.append(f"[{column}]存在缺少key的行: {raw.strip()!r}")
+            errors.append(f"[{column}] {raw.strip()} 缺少key")
             continue
         if len(parts) == 1:
             value, desc = "", ""
@@ -668,20 +686,18 @@ def _parse_extract(text: str, errors: List[str]) -> Optional[List[Dict[str, Any]
             seg = seg[:-1]
         parts = seg.split(":")
         if len(parts) < 3:
-            errors.append(
-                f"「提取」格式非法(应为 变量名:提取来源:整个返回数据 或 变量名:提取来源:提取部分:表达式): {raw.strip()!r}"
-            )
+            errors.append(f"[提取] {raw.strip()} 格式错误")
             continue
         name, source, scope = parts[0].strip(), parts[1].strip(), parts[2].strip()
         if not name:
-            errors.append(f"「提取」存在缺少变量名的行: {raw.strip()!r}")
+            errors.append(f"[提取] {raw.strip()} 缺少变量名")
             continue
         if source not in _EXTRACT_SOURCES:
-            errors.append(f"「提取」提取来源({source})非法, 合法集: {'/'.join(sorted(_EXTRACT_SOURCES))}")
+            errors.append(f"[提取] 提取来源 {source} 不被允许")
             continue
         if scope == _DATAGRAM_SCOPE_ALL:
             if len(parts) > 3:
-                errors.append(f"「提取」整个返回数据不应携带提取表达式: {raw.strip()!r}")
+                errors.append(f"[提取] {raw.strip()} 范围为[整个返回数据]时, 不允许填写提取表达式")
                 continue
             items.append({"name": name, "source": source, "expr": "", "scope": "ALL", "index": None})
         elif scope == _DATAGRAM_SCOPE_SOME:
@@ -692,11 +708,11 @@ def _parse_extract(text: str, errors: List[str]) -> Optional[List[Dict[str, Any]
                 tail = tail[:-1]
             expr = ":".join(tail).strip()
             if not expr:
-                errors.append(f"「提取」部分提取缺少提取表达式: {raw.strip()!r}")
+                errors.append(f"[提取] {raw.strip()} 缺少提取表达式")
                 continue
             items.append({"name": name, "source": source, "expr": expr, "scope": "SOME", "index": index_val})
         else:
-            errors.append(f"「提取」提取范围({scope})须为「{_DATAGRAM_SCOPE_ALL}」或「{_DATAGRAM_SCOPE_SOME}」")
+            errors.append(f"[提取] 提取范围 {scope} 不被允许")
     return items or None
 
 
@@ -709,50 +725,60 @@ def _parse_assert(text: str, errors: List[str]) -> Optional[List[Dict[str, Any]]
         if seg.endswith(";"):
             seg = seg[:-1]
         parts = seg.split(":")
-        if len(parts) < 5:
-            errors.append(f"「断言」格式非法(应为 断言名称:断言对象:断言表达式:匹配规则:预期值): {raw.strip()!r}")
+        if len(parts) < 4:
+            errors.append(f"[断言] {raw.strip()} 格式错误")
             continue
         name, source, expr, operation = parts[0].strip(), parts[1].strip(), parts[2].strip(), parts[3].strip()
         if not name:
-            errors.append(f"「断言」存在缺少断言名称的行: {raw.strip()!r}")
+            errors.append(f"[断言] {raw.strip()} 缺少断言名称")
             continue
         if source not in _ASSERT_SOURCES:
-            errors.append(f"「断言」断言对象({source})非法, 合法集: {'/'.join(sorted(_ASSERT_SOURCES))}")
+            errors.append(f"[断言] 断言对象 {source} 不被允许")
             continue
         if not expr:
-            errors.append(f"「断言」断言表达式不允许为空: {raw.strip()!r}")
+            errors.append(f"[断言] {raw.strip()} 缺少断言表达式")
             continue
         if operation not in _ASSERT_OPERATIONS:
-            errors.append(f"「断言」匹配规则({operation})非法, 合法集: {'/'.join(sorted(_ASSERT_OPERATIONS))}")
+            errors.append(f"[断言] 匹配规则 {operation} 不被允许")
             continue
+        # 不为空/为空忽略预期值(兼容旧格式尾冒号，统一归一为空)；其余规则预期值必填且可含冒号
+        if operation in _ASSERT_NO_EXPECTED_OPERATIONS:
+            except_value = ""
+        else:
+            except_value = ":".join(parts[4:])
+            if not except_value.strip():
+                errors.append(f"[断言] 匹配规则为[{operation}]时, 必须填写预期值")
+                continue
         items.append({
             "name": name, "source": source, "expr": expr,
-            "operation": operation, "except_value": ":".join(parts[4:]),
+            "operation": operation, "except_value": except_value,
         })
     return items or None
 
 
 def _parse_body(args_type: str, body_text: str, errors: List[str]) -> Dict[str, Any]:
     result: Dict[str, Any] = {
-        "request_body": None, "request_text": None,
-        "request_params": None, "request_form_data": None, "request_form_urlencoded": None,
+        "request_body": None,
+        "request_text": None,
+        "request_params": None,
+        "request_form_data": None,
+        "request_form_urlencoded": None,
     }
     if args_type == AutoTestReqArgsType.NONE.value:
         if body_text:
-            errors.append("请求体类型为none时「请求体」不允许填写")
-        # none类型请求体本就为空，允许空值导入，保证与导出往返一致
+            errors.append("请求体类型为[none]时, 请求体不允许填写")
         return result
     if not body_text:
-        errors.append(f"请求体类型为{args_type}时「请求体」不允许为空")
+        errors.append(f"请求体类型为[{args_type}]时, 请求体不允许为空")
         return result
     if args_type == AutoTestReqArgsType.JSON.value:
         try:
             parsed = json.loads(body_text)
         except ValueError as e:
-            errors.append(f"「请求体」JSON解析失败: {e}")
+            errors.append(f"解析[请求体]时发生错误: {e}")
             return result
         if not isinstance(parsed, dict):
-            errors.append("「请求体」JSON须为对象结构(以{开头)")
+            errors.append("解析[请求体]时发生错误: 请求体参数必须为对象结构, 不允许列表嵌套结构")
             return result
         result["request_body"] = parsed
     elif args_type in (AutoTestReqArgsType.XML.value, AutoTestReqArgsType.RAW.value):
@@ -767,10 +793,7 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
     sheet = workbook[workbook.sheetnames[0]]
     header = [_cell_text(cell.value) for cell in sheet[1][: len(_DATAGRAM_SECTION_COLUMNS)]]
     if header != list(_DATAGRAM_SECTION_COLUMNS):
-        return [], [{
-            "row": 1,
-            "reason": f"表头与模板不一致(期望前{len(_DATAGRAM_SECTION_COLUMNS)}列为: {'/'.join(_DATAGRAM_SECTION_COLUMNS)})，请使用最新模板",
-        }]
+        return [], [{"row": 1, "reason": "脚本模板表头与预定义表头不一致"}]
 
     rows: List[Dict[str, Any]] = []
     invalid: List[Dict[str, Any]] = []
@@ -787,38 +810,37 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
         protocol_raw = cells["协议类型"]
         protocol = protocol_raw.upper()
         if not case_name:
-            errors.append("「接口名称」不允许为空")
+            errors.append("接口名称不允许为空")
         if not project_name:
-            errors.append("「所属应用」不允许为空")
+            errors.append("所属应用不允许为空")
         if protocol not in (_HTTP_PROTOCOL, _TCP_PROTOCOL):
-            errors.append(f"「协议类型」({protocol_raw})须为HTTP或TCP")
+            errors.append(f"协议类型 {protocol_raw} 不被允许")
             protocol = None
 
         method, request_url, header_text = cells["请求方式"].upper(), cells["请求路径"], cells["请求头"]
         if protocol == _HTTP_PROTOCOL:
             if not method:
-                errors.append("HTTP协议时「请求方式」不允许为空")
+                errors.append("HTTP协议[请求方式]不允许为空")
             elif method not in _HTTP_METHODS:
-                errors.append(f"「请求方式」({method})非法, 合法集: {'/'.join(sorted(_HTTP_METHODS))}")
+                errors.append(f"请求方式 {method} 不被允许")
             if not request_url:
-                errors.append("HTTP协议时「请求路径」不允许为空")
+                errors.append("HTTP协议[请求路径]不允许为空")
         elif protocol == _TCP_PROTOCOL:
             if method:
-                errors.append("TCP协议时「请求方式」勿填")
+                errors.append("TCP协议不允许填写请求方式")
             if request_url:
-                errors.append("TCP协议时「请求路径」勿填")
+                errors.append("TCP协议不允许填写请求路径")
             if header_text:
-                errors.append("TCP协议时「请求头」禁止填写")
+                errors.append("TCP协议不允许填写请求头")
 
         args_type = cells["请求体类型"]
         if not args_type:
-            errors.append("「请求体类型」不允许为空")
+            errors.append("请求体类型不允许为空")
         elif args_type not in _REQ_ARGS_TYPE:
-            errors.append(f"「请求体类型」({args_type})非法, 合法集: {'/'.join(e.value for e in AutoTestReqArgsType)}")
+            errors.append(f"请求体类型 {args_type} 不被允许")
         elif protocol == _TCP_PROTOCOL and args_type not in _TCP_ARGS_TYPE:
-            errors.append(f"TCP协议时「请求体类型」({args_type})仅支持: {'/'.join(sorted(_TCP_ARGS_TYPE))}")
+            errors.append(f"TCP协议[请求体类型]仅支持 {'/'.join(sorted(_TCP_ARGS_TYPE))}")
 
-        # 协议/请求体类型非法时跳过依赖项解析；其余列继续解析，保证单行错误一次给全
         args_ok = (
                 protocol in (_HTTP_PROTOCOL, _TCP_PROTOCOL)
                 and args_type in _REQ_ARGS_TYPE
@@ -838,7 +860,6 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
             "project_name": project_name,
             "protocol": protocol,
             "case_desc": cells["接口描述"] or None,
-            # 公共接口：步骤名称与接口名称一致（前端 Request 面板同步锁定）
             "step_name": case_name,
             "request_method": method or None,
             "request_config_name": cells["配置名称"] or None,
@@ -852,7 +873,7 @@ def parse_script_workbook(content: bytes) -> Tuple[List[Dict[str, Any]], List[Di
         })
     if not rows and not invalid:
         invalid.append({"row": _DATAGRAM_START_ROW, "reason": "文件无有效数据行"})
-    LOGGER.info(f"导入脚本解析完成: 有效{len(rows)}行, 不合规{len(invalid)}行")
+    LOGGER.info(f"导入脚本解析完成: 有效{len(rows)}行, 无效{len(invalid)}行")
     return rows, invalid
 
 
@@ -872,7 +893,7 @@ async def import_script_rows(rows: List[Dict[str, Any]], services: Any) -> Tuple
         if key in seen:
             invalid.append({
                 "row": row["row_no"],
-                "reason": f"文件内与第{seen[key]}行重复(同所属应用+接口名称), 无法定位唯一目标",
+                "reason": f"与第{seen[key]}行重复, 同应用同名称只允许保留一条",
             })
             duplicates.add(row["row_no"])
         else:
@@ -888,13 +909,13 @@ async def import_script_rows(rows: List[Dict[str, Any]], services: Any) -> Tuple
             project_cache[project_name] = project.id if project else None
         project_id = project_cache[project_name]
         if project_id is None:
-            errors.append(f"所属应用({project_name})不存在")
+            errors.append(f"所属应用 {project_name} 不存在")
 
         existing_case: Optional[AutoTestCaseModel] = None
         existing_step: Optional[AutoTestStepModel] = None
         if project_id is not None:
             if not owner_user:
-                errors.append("当前登录账号为空, 无法按所属人员定位公共接口")
+                errors.append("当前登录账号为空, 无法获取登录用户并定位公共接口")
             else:
                 matched_cases = await AutoTestCaseModel.filter(
                     case_project=project_id,
@@ -903,9 +924,7 @@ async def import_script_rows(rows: List[Dict[str, Any]], services: Any) -> Tuple
                     owner_user=owner_user,
                 ).all()
                 if len(matched_cases) > 1:
-                    errors.append(
-                        f"应用({project_name})下所属人({owner_user})存在多条同名公共接口({row['case_name']}), 无法定位"
-                    )
+                    errors.append(f"应用[{project_name}]存在多条同名接口, 请先处理同名接口: {row['case_name']}")
                 elif matched_cases:
                     existing_case = matched_cases[0]
                     if existing_case.state != 1:
@@ -917,7 +936,7 @@ async def import_script_rows(rows: List[Dict[str, Any]], services: Any) -> Tuple
                             case_id=existing_case.id, parent_step_id=None
                         ).all()
                     if len(root_steps) != 1:
-                        errors.append(f"存量公共接口({row['case_name']})根步骤数为{len(root_steps)}, 形态异常")
+                        errors.append(f"接口[{row['case_name']}]步骤形态异常, 根步骤数为{len(root_steps)}")
                     else:
                         existing_step = root_steps[0]
 
