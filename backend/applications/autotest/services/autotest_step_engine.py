@@ -326,12 +326,7 @@ class StepExecutionContext:
             "session_variables": AutoTestToolService.list_to_dict(self.session_variables),
         }
 
-    def update_variables(
-            self,
-            variables: List[StepVariablesBase],
-            *,
-            scope: str = "defined_variables"
-    ) -> None:
+    def update_variables(self, variables: List[StepVariablesBase], *, scope: str = "defined_variables") -> None:
         """
         根据作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加。
 
@@ -982,6 +977,9 @@ class BaseStepExecutor:
     步骤执行器基类：持有step与context，执行后合并extract_variables到session、可选保存明细。
     """
 
+    # 是否在执行前解析本步骤defined_variables并注入变量池。
+    resolve_own_defined_variables: bool = True
+
     def __init__(self, step: AutoTestStepTreeUpdateItem, context: StepExecutionContext):
         """
         初始化步骤执行器。
@@ -1248,19 +1246,20 @@ class BaseStepExecutor:
         # 保证同名查找时用户变量优先命中（内置变量不覆盖用户主动定义的变量）
         builtin_variables: List[StepVariablesBase] = self.collect_builtin_variables()
         self.context.defined_variables = builtin_variables
-        # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
-        step_defined_variables: List[StepVariablesBase] = self.step.defined_variables
-        resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
-            variables=step_defined_variables,
-            step_code=self.step_code
-        ) or []
-        resolved_keys: Set[str] = {
-            item.key for item in resolved_defined_variables
-            if isinstance(item, StepVariablesBase) and item.key
-        }
-        self.context.defined_variables = resolved_defined_variables + [
-            item for item in builtin_variables if item.key not in resolved_keys
-        ]
+        if self.resolve_own_defined_variables:
+            # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
+            step_defined_variables: List[StepVariablesBase] = self.step.defined_variables
+            resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
+                variables=step_defined_variables,
+                step_code=self.step_code
+            ) or []
+            resolved_keys: Set[str] = {
+                item.key for item in resolved_defined_variables
+                if isinstance(item, StepVariablesBase) and item.key
+            }
+            self.context.defined_variables = resolved_defined_variables + [
+                item for item in builtin_variables if item.key not in resolved_keys
+            ]
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -2557,15 +2556,47 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
     """
     引用类步骤执行器基类：加载被引用公共用例根步骤树，根据step_no顺序执行并挂到result.children。
 
-    子类通过quote_step_label声明日志/错误前缀、allowed_quote_case_types声明可引用的用例类型，
-    加载被引用用例时按该类型过滤，实现「引用公共脚本」「引用公共接口」两类步骤的分流。
-    本步step_is_skipped时由BaseStepExecutor.execute直接返回，不会进入本执行器。
+    子类通过quote_step_label声明日志/错误前缀；allowed_quote_case_types声明可引用的用例类型，加载被引用用例时按该类型过滤，实现引用公共脚本、引用公共接口两类步骤的分流。
     """
 
-    # 日志/错误信息前缀（由子类覆盖）
+    # 日志/错误信息前缀
     quote_step_label: str = "引用公共步骤"
-    # 允许引用的用例类型集合（由子类覆盖，加载被引用用例时按此过滤）
+    # 允许引用的用例类型集合，加载被引用用例时按此变量过滤
     allowed_quote_case_types: Tuple[AutoTestCaseType, ...] = ()
+    # 引用步骤自身追加的三容器字段名，可合并并重写进内层HTTP/TCP请求步骤执行的字段集合
+    allowed_append_fields_container: Tuple[str, ...] = ("defined_variables", "extract_variables", "assert_validators")
+    # 引用步骤自身追加的三容器字段是否合并进内层HTTP/TCP请求步骤执行（引用公共接口开启：追加数据保存于引用步骤、随本次引用执行生效； 引用公共脚本关闭：被引用内容保持原样只读复用）
+    allowed_merge_and_override_fields: bool = False
+    # 容器层不解析自身defined_variables（追加数据由内层HTTP/TCP步骤合并后解析，容器层缺少SERVER_*/TARGET_*内置变量，会误报变量未定义）
+    resolve_own_defined_variables = False
+
+    def _merge_and_override_fields(self, quote_step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
+        """
+        将引用步骤自身追加的defined_variables/extract_variables/assert_validators合并进内层HTTP/TCP请求步骤。
+
+        仅merge_and_override_fields开启且步骤类型具有响应上下文（HTTP/TCP）时合并；
+        合并顺序为原数据在前、追加在后；同名变量由追加项覆盖（剔除同名原变量，避免占位符解析按列表顺序取首个命中时读到原值）；同名提取按执行先后自然覆盖。
+
+        :param quote_step: 被引用用例的待执行根步骤模型
+        :return: 合并追加字段后的步骤模型；开关关闭/类型不匹配/无可合并字段时原样返回
+        """
+        if not self.allowed_merge_and_override_fields:
+            return quote_step
+        if quote_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+            return quote_step
+        update: Dict[str, Any] = {}
+        for field_name in self.allowed_append_fields_container:
+            appended: List[Any] = list(getattr(self.step, field_name) or [])
+            if not appended:
+                continue
+            original: List[Any] = list(getattr(quote_step, field_name) or [])
+            if field_name == "defined_variables":
+                appended_keys = {v.key for v in appended if isinstance(v, StepVariablesBase) and v.key}
+                original = [v for v in original if not (isinstance(v, StepVariablesBase) and v.key in appended_keys)]
+            update[field_name] = original + appended
+        if not update:
+            return quote_step
+        return quote_step.model_copy(update=update)
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -2631,7 +2662,8 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
             )
             for quote_step in ordered_steps:
                 try:
-                    executor = StepExecutorFactory.create_executor(quote_step, self.context)
+                    merged_step = self._merge_and_override_fields(quote_step)
+                    executor = StepExecutorFactory.create_executor(merged_step, self.context)
                     child_result = await executor.execute()
                     if child_result is None:
                         continue
@@ -2683,16 +2715,18 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
 
 class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
     """
-    引用公共接口执行器：仅允许引用用例类型为「公共接口」的公共用例。
+    引用公共接口执行器：仅允许引用用例类型为公共接口的公共用例。
+    引用步骤自身追加的局部变量/提取/断言合并进内层HTTP/TCP请求步骤执行（原数据在前、追加在后）。
     """
 
     quote_step_label = "引用公共接口"
     allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
+    allowed_merge_and_override_fields = True
 
 
 class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
     """
-    引用公共脚本执行器：仅允许引用用例类型为「公共脚本」的公共用例。
+    引用公共脚本执行器：仅允许引用用例类型为公共脚本的公共用例。
     """
 
     quote_step_label = "引用公共脚本"

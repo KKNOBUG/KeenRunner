@@ -203,10 +203,14 @@
   background-color: var(--n-color-embedded) !important;
 }
 
+/* 执行日志条目统一样式：各页面执行日志 pre.log-item 均引用此类，页面内不得本地重定义 */
 pre.log-item,
 .log-item {
   background-color: var(--autotest-pre-bg-color);
   color: var(--autotest-pre-text-color);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
 }
 
 /* ========== Luckysheet 数据表格：深色模式适配 ==========

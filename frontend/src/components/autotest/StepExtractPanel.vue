@@ -28,7 +28,7 @@
                   <TheIcon icon="material-symbols:content-copy" :size="18" />
                 </template>
               </n-button>
-              <n-button text type="error" size="small" :disabled="readonly" @click="removeItem(key)">
+              <n-button text type="error" size="small" :disabled="readonly || item._locked" @click="removeItem(key)">
                 <template #icon>
                   <TheIcon icon="material-symbols:delete-outline" :size="18" />
                 </template>
@@ -51,7 +51,7 @@
                       v-model:value="item.name"
                       placeholder="请输入提取名称"
                       clearable
-                      :disabled="readonly"
+                      :disabled="readonly || item._locked"
                   />
                 </n-form-item>
 
@@ -62,7 +62,7 @@
                       placeholder="选择「请求」中配置的存储变量名（variable_name）"
                       filterable
                       clearable
-                      :disabled="readonly || !sourceOptions.length"
+                      :disabled="readonly || item._locked || !sourceOptions.length"
                   />
                 </n-form-item>
                 <n-form-item v-else label="提取对象" class="step-ev-fi">
@@ -70,7 +70,7 @@
                       v-model:value="item.object"
                       :options="objectOptions"
                       placeholder="请选择提取对象"
-                      :disabled="readonly"
+                      :disabled="readonly || item._locked"
                   />
                 </n-form-item>
               </div>
@@ -81,7 +81,7 @@
                     <n-radio-group
                         v-model:value="item.extractScope"
                         name="extractScope"
-                        :disabled="readonly"
+                        :disabled="readonly || item._locked"
                     >
                       <n-radio value="部分提取">部分提取</n-radio>
                       <n-radio value="全部提取">全部提取</n-radio>
@@ -108,7 +108,7 @@
                       v-model:value="item.jsonpath"
                       :placeholder="pathPlaceholder(item)"
                       clearable
-                      :disabled="readonly || item.extractScope !== '部分提取'"
+                      :disabled="readonly || item._locked || item.extractScope !== '部分提取'"
                   />
                 </n-form-item>
 
@@ -117,14 +117,14 @@
                     <n-switch
                         v-model:value="item.extractContinue"
                         size="small"
-                        :disabled="readonly || item.extractScope !== '部分提取'"
+                        :disabled="readonly || item._locked || item.extractScope !== '部分提取'"
                     />
                     <n-input-number
                         v-model:value="item.extractIndex"
                         :min="0"
                         size="small"
                         style="width: 80px;"
-                        :disabled="readonly || item.extractScope !== '部分提取' || !item.extractContinue"
+                        :disabled="readonly || item._locked || item.extractScope !== '部分提取' || !item.extractContinue"
                     />
                     <n-tooltip v-if="!isVariableSource" trigger="hover">
                       <template #trigger>
@@ -185,6 +185,7 @@ const props = defineProps({
     validator: (v) => [EXTRACT_MODE_RESPONSE, EXTRACT_MODE_DATABASE, EXTRACT_MODE_REDIS, EXTRACT_MODE_PYTHON].includes(v),
   },
   readonly: { type: Boolean, default: false },
+  /** model 内条目可携带 _locked: true，该卡片整体置灰只读（如引用步骤的原数据），复制/删除同样禁用 */
   /** database 模式：请求 Tab 中的 variable_name 选项 */
   sourceOptions: { type: Array, default: () => [] },
 })
@@ -257,8 +258,11 @@ function duplicateItem(key) {
   const item = model.value[key]
   if (!item) return
   const newKey = getNextDictKey(model.value)
+  // 副本剥离 _locked：锁定卡片（原数据）复制后作为可编辑追加行
+  const copy = JSON.parse(JSON.stringify(item))
+  delete copy._locked
   model.value[newKey] = {
-    ...JSON.parse(JSON.stringify(item)),
+    ...copy,
     name: item.name ? `${item.name}_副本` : '',
   }
   collapseState[newKey] = collapseState[key] ?? true

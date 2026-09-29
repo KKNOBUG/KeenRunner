@@ -35,7 +35,7 @@
                 placeholder="请输入变量名称"
                 clearable
                 style="flex: 1;"
-                :disabled="disabled"
+                :disabled="disabled || item._locked"
             />
             <!-- 如果是 form-data 模式且是请求体部分，显示下拉选择框用于选择类型 -->
             <n-space v-else align="center" :wrap-item="false" style="flex: 1;">
@@ -47,7 +47,7 @@
                   ]"
                   size="medium"
                   style="width: 80px; flex-shrink: 0;"
-                  :disabled="disabled"
+                  :disabled="disabled || item._locked"
                   @update:value="(value) => handleTypeChange(value, index)"
               />
             </n-space>
@@ -61,7 +61,7 @@
               placeholder="请输入变量数据"
               clearable
               style="flex: 1;"
-              :disabled="disabled"
+              :disabled="disabled || item._locked"
           />
         </n-gi>
 
@@ -74,7 +74,7 @@
                 placeholder="请输入变量数据"
                 clearable
                 style="flex: 1;"
-                :disabled="disabled"
+                :disabled="disabled || item._locked"
             />
             <n-popover
                 v-if="!disabled"
@@ -93,6 +93,7 @@
                         type="primary"
                         size="small"
                         class="join-button"
+                        :disabled="item._locked"
                         @click="openAssociationPopover(index)"
                     >
                       <template #icon>
@@ -216,7 +217,7 @@
                 @change="({ file }) => handleFileChange(file, index)"
                 class="file-upload"
             >
-              <n-button block class="upload-button" :disabled="disabled">
+              <n-button block class="upload-button" :disabled="disabled || item._locked">
                 <template #icon>
                   <TheIcon icon="material-symbols:upload-file" :size="18"/>
                 </template>
@@ -231,6 +232,7 @@
                 tertiary
                 type="primary"
                 size="small"
+                :disabled="item._locked"
                 @click="handleClearFile(index)"
                 class="join-button"
             >
@@ -244,21 +246,27 @@
 
         <!-- Description列 -->
         <n-gi :span="6">
-          <n-input v-model:value="item.desc" placeholder="请输入变量描述" clearable :disabled="disabled"/>
+          <n-input v-model:value="item.desc" placeholder="请输入变量描述" clearable :disabled="disabled || item._locked"/>
         </n-gi>
 
-        <!-- 删除列，显示“删除”按钮，点击后触发 handleRemove 方法 -->
+        <!-- 删除列，显示“删除”按钮，点击后触发 handleRemove 方法；锁定行/整体置灰(keepActionsDisabled)时保留置灰态 -->
         <n-gi :span="2">
-          <n-button v-if="!disabled" @click="handleRemove(index)" type="primary" tertiary>
+          <n-button
+              v-if="!disabled || keepActionsDisabled"
+              :disabled="disabled || item._locked"
+              @click="handleRemove(index)"
+              type="primary"
+              tertiary
+          >
             删除
           </n-button>
         </n-gi>
       </n-grid>
     </div>
 
-    <!-- 操作行，显示“添加”按钮，点击后触发 handleAdd 方法 -->
-    <div v-if="!disabled" class="add-button-container">
-      <n-button @click="handleAdd" type="primary" dashed block class="add-button">
+    <!-- 操作行，显示“添加”按钮，点击后触发 handleAdd 方法；整体置灰(keepActionsDisabled)时保留置灰态 -->
+    <div v-if="!disabled || keepActionsDisabled" class="add-button-container">
+      <n-button @click="handleAdd" type="primary" dashed block class="add-button" :disabled="disabled">
         添加
       </n-button>
     </div>
@@ -293,7 +301,7 @@ import TheIcon from "@/components/icon/TheIcon.vue";
 
 
 const props = defineProps({
-  // 接收一个数组，包含键值对信息
+  // 接收一个数组，包含键值对信息；元素可选 _locked: true 表示该行锁定只读（如引用步骤的原数据），且批量操作不覆盖
   items: {
     type: Array,
     required: true
@@ -325,6 +333,11 @@ const props = defineProps({
   },
   // 只读/置灰，不编辑（如引用脚本步骤查看）
   disabled: {
+    type: Boolean,
+    default: false
+  },
+  // 整体置灰时仍保留「添加/删除」按钮的置灰态展示（引用公共接口内层步骤，对齐可编辑页面布局）
+  keepActionsDisabled: {
     type: Boolean,
     default: false
   }
@@ -430,11 +443,15 @@ const handleRemove = (index) => {
 
 // 打开批量添加模态框的方法
 const openBatchAddModal = () => {
-  $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
-  $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
-  $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
-  // 将当前的键值对信息格式化为 key:value:desc 格式(描述段恒输出)，填充到批量输入框中
-  const nonEmptyItems = props.items.filter(item => item.key || item.value);
+  if (props.items.some((item) => item?._locked)) {
+    $message.warning('该动作会覆盖全部可编辑行的内容（置灰锁定行不受影响），请三思！');
+  } else {
+    $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
+    $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
+    $message.warning('该动作会覆盖原有Key-Value内容，请三思！');
+  }
+  // 将当前可编辑行的键值对信息格式化为 key:value:desc 格式(描述段恒输出)，填充到批量输入框中；锁定行(_locked)不参与
+  const nonEmptyItems = props.items.filter(item => !item._locked && (item.key || item.value));
   batchInput.value = nonEmptyItems.map(item => `${item.key}:${item.value}:${item.desc}`).join('\n');
   isBatchAddModalVisible.value = true;
 };
@@ -464,7 +481,22 @@ const handleBatchAdd = () => {
     }
     newItems.push({key, value, desc, type: "text"});
   });
-  emit('update:items', newItems);
+  // 锁定行(_locked)原位保留，未锁定行整体替换为批量解析结果，多余解析行追加到末尾
+  const mergedItems = [];
+  let parsedIndex = 0;
+  props.items.forEach((item) => {
+    if (item?._locked) {
+      mergedItems.push(item);
+      return;
+    }
+    if (parsedIndex < newItems.length) {
+      mergedItems.push(newItems[parsedIndex++]);
+    }
+  });
+  while (parsedIndex < newItems.length) {
+    mergedItems.push(newItems[parsedIndex++]);
+  }
+  emit('update:items', mergedItems);
   emit('add');
   isBatchAddModalVisible.value = false;
   batchInput.value = '';

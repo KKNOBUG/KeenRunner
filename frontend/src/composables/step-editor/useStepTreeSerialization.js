@@ -320,6 +320,12 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
         } else if (step.type === 'quote_public_script' || step.type === 'quote_public_api') {
             backendStep.quote_case_id = config.quote_case_id ?? original.quote_case_id ?? null
             backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || (step.type === 'quote_public_api' ? '引用公共接口' : '引用公共脚本'))
+            // 引用公共接口：追加的局部变量/提取/断言保存在引用步骤自身（原数据在前、追加在后的合并语义由执行引擎保证）
+            if (step.type === 'quote_public_api') {
+                backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
+                backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
+                backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+            }
         } else if (step.type === 'database') {
             backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
             backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)

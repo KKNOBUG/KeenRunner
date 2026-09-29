@@ -211,6 +211,7 @@
                 :is="editorComponent"
                 v-bind="editorComponentProps"
                 @update:config="(val) => { if (!currentStep?.isQuoteInner) updateStepConfig(currentStep.id, val) }"
+                @update:quote-overlay="updateQuoteOverlayConfig"
             />
             <n-empty v-else description="请选择左侧步骤或添加新步骤"/>
           </div>
@@ -308,7 +309,7 @@ import {
   stripIdentityFieldsForNewCase,
 } from './utils/stepSourceJson'
 import {useUserStore, useAutotestStore, useStepEditorStore, useTagsStore, useAppStore} from '@/store'
-import { useDirtyCheck, useLeftPanelResize, useStepTreeValidation, getFixedBranchStepDisplayName, useStepTreeSerialization, assignStepNumbers, mergeStepTreeWithSuccessDetail, useStepDragDrop, useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, useSourceJsonMode, useDataSourceBatch } from '@/composables/step-editor'
+import { useDirtyCheck, useLeftPanelResize, useStepTreeValidation, getFixedBranchStepDisplayName, useStepTreeSerialization, assignStepNumbers, mergeStepTreeWithSuccessDetail, useStepDragDrop, useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, parseQuoteInnerKey, useSourceJsonMode, useDataSourceBatch } from '@/composables/step-editor'
 
 const message = useMessage()
 /** 统一错误提示：优先全局 $message，否则 naive useMessage */
@@ -1628,6 +1629,36 @@ const currentStep = computed(() => {
   return findStep(key)
 })
 
+/** 引用公共接口的父引用步骤（内层步骤选中时定位）；非内层或引用公共脚本时为 null */
+const currentParentQuoteStep = computed(() => {
+  const step = currentStep.value
+  if (!step?.isQuoteInner) return null
+  const parsed = parseQuoteInnerKey(selectedKeys.value?.[0])
+  if (!parsed) return null
+  const quoteStep = findStep(parsed.quoteStepId)
+  if (!quoteStep || quoteStep.type !== 'quote_public_api') return null
+  return quoteStep
+})
+
+/** 内层步骤 Request 面板的追加数据源：父引用步骤自身保存的三容器字段（原数据在被引用用例上，天然隔离） */
+const currentQuoteOverlay = computed(() => {
+  const quoteStep = currentParentQuoteStep.value
+  if (!quoteStep) return null
+  const cfg = quoteStep.config || {}
+  return {
+    defined_variables: Array.isArray(cfg.defined_variables) ? cfg.defined_variables : [],
+    extract_variables: Array.isArray(cfg.extract_variables) ? cfg.extract_variables : [],
+    assert_validators: Array.isArray(cfg.assert_validators) ? cfg.assert_validators : [],
+  }
+})
+
+/** 内层步骤追加区编辑写回：定位父引用步骤并按 key 合并补丁到其 config */
+const updateQuoteOverlayConfig = (patch) => {
+  const quoteStep = currentParentQuoteStep.value
+  if (!quoteStep) return
+  updateStepConfig(quoteStep.id, patch)
+}
+
 /** 当前步骤类型对应的右侧编辑器组件 */
 const editorComponent = computed(() => {
   const step = currentStep.value
@@ -1723,6 +1754,9 @@ const editorComponentProps = computed(() => {
   }
   if ((step.type === 'quote_public_script' || step.type === 'quote_public_api') && !step.isQuoteInner) {
     props.reselectHandler = handleQuoteReselect
+  }
+  if (step.isQuoteInner && currentQuoteOverlay.value) {
+    props.quoteOverlay = currentQuoteOverlay.value
   }
   if (step.type === 'http' || step.type === 'tcp') {
     props.hideDataSource = isPublicFamilyCase.value

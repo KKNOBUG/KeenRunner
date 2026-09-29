@@ -28,7 +28,7 @@
                   <TheIcon icon="material-symbols:content-copy" :size="18" />
                 </template>
               </n-button>
-              <n-button text type="error" size="small" :disabled="readonly" @click="removeItem(key)">
+              <n-button text type="error" size="small" :disabled="readonly || item._locked" @click="removeItem(key)">
                 <template #icon>
                   <TheIcon icon="material-symbols:delete-outline" :size="18" />
                 </template>
@@ -51,7 +51,7 @@
                       v-model:value="item.name"
                       placeholder="请输入断言名称"
                       clearable
-                      :disabled="readonly"
+                      :disabled="readonly || item._locked"
                   />
                 </n-form-item>
 
@@ -62,7 +62,7 @@
                       :placeholder="lockSource ? '变量池' : '选择「请求」中的存储变量名（variable_name）'"
                       :filterable="!lockSource"
                       :clearable="!lockSource"
-                      :disabled="readonly || lockSource || !sourceOptions.length"
+                      :disabled="readonly || lockSource || !sourceOptions.length || item._locked"
                   />
                 </n-form-item>
                 <n-form-item v-else-if="!isPython" label="断言对象" class="step-ev-fi">
@@ -70,7 +70,7 @@
                       v-model:value="item.object"
                       :options="RESPONSE_ASSERT_OBJECT_OPTIONS"
                       placeholder="请选择断言对象"
-                      :disabled="readonly"
+                      :disabled="readonly || item._locked"
                   />
                 </n-form-item>
                 <n-form-item v-else label="断言对象" class="step-ev-fi">
@@ -78,7 +78,7 @@
                       v-model:value="item.object"
                       :options="PYTHON_ASSERT_OBJECT_OPTIONS"
                       placeholder="变量池"
-                      :disabled="readonly || lockObject"
+                      :disabled="readonly || lockObject || item._locked"
                   />
                 </n-form-item>
               </div>
@@ -89,7 +89,7 @@
                       v-model:value="item.jsonpath"
                       :placeholder="exprPlaceholder(item)"
                       clearable
-                      :disabled="readonly"
+                      :disabled="readonly || item._locked"
                   />
                 </n-form-item>
                 <n-form-item label="断言操作符" class="step-ev-fi">
@@ -97,7 +97,7 @@
                       v-model:value="item.assertion"
                       :options="assertionOptions"
                       placeholder="请选择断言方法"
-                      :disabled="readonly"
+                      :disabled="readonly || item._locked"
                   />
                 </n-form-item>
                 <n-form-item label="断言预期值" class="step-ev-fi">
@@ -105,7 +105,7 @@
                       v-model:value="item.value"
                       placeholder="请输入预期值"
                       clearable
-                      :disabled="readonly"
+                      :disabled="readonly || item._locked"
                   />
                 </n-form-item>
               </div>
@@ -153,6 +153,7 @@ const props = defineProps({
     validator: (v) => [ASSERT_MODE_RESPONSE, ASSERT_MODE_DATABASE, ASSERT_MODE_REDIS, ASSERT_MODE_PYTHON].includes(v),
   },
   readonly: { type: Boolean, default: false },
+  /** model 内条目可携带 _locked: true，该卡片整体置灰只读（如引用步骤的原数据），复制/删除同样禁用 */
   sourceOptions: { type: Array, default: () => [] },
   /** response 模式下新建断言的默认断言对象（如独立断言步骤默认「变量池」） */
   defaultObject: { type: String, default: null },
@@ -207,8 +208,11 @@ function duplicateItem(key) {
   const item = model.value[key]
   if (!item) return
   const newKey = getNextDictKey(model.value)
+  // 副本剥离 _locked：锁定卡片（原数据）复制后作为可编辑追加行
+  const copy = JSON.parse(JSON.stringify(item))
+  delete copy._locked
   model.value[newKey] = {
-    ...JSON.parse(JSON.stringify(item)),
+    ...copy,
     name: item.name ? `${item.name}_副本` : '',
   }
   collapseState[newKey] = collapseState[key] ?? true

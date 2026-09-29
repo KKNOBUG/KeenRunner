@@ -234,6 +234,12 @@ export function mapBackendStep(step) {
       quote_case_id: step.quote_case_id ?? null,
       step_name: step.step_name || (step.quote_case?.case_name || (localType === 'quote_public_api' ? '引用公共接口' : '引用公共脚本')),
     }
+    // 引用公共接口：追加的三容器字段进入 config 供编辑回显（引用公共脚本保持不可追加）
+    if (localType === 'quote_public_api') {
+      base.config.defined_variables = Array.isArray(step.defined_variables) ? step.defined_variables : []
+      base.config.extract_variables = Array.isArray(step.extract_variables) ? step.extract_variables : []
+      base.config.assert_validators = Array.isArray(step.assert_validators) ? step.assert_validators : []
+    }
   } else if (localType === 'database') {
     const ops = Array.isArray(step.database_operates) ? step.database_operates : []
     base.config = {

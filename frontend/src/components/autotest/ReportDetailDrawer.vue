@@ -1248,21 +1248,9 @@ watch(
   word-break: break-all;
 }
 
-/* 与 http_controller 执行日志 Tab 中 .log-item 一致 */
-.log-item {
-  background-color: var(--autotest-pre-bg-color);
-  color: var(--autotest-pre-text-color);
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* 错误日志红色字体 */
+/* 普通日志 pre.log-item 与错误日志 .autotest-error-log-pre 样式均由全局 autotest-theme.scss 提供，与 http_controller 执行日志一致；
+   错误日志字体固定红色（此处取不到主题的 --n-color-error 变量，需本地显式声明） */
 .autotest-error-log-pre {
-  color: #d03050 !important;
+  color: #d03050;
 }
 </style>

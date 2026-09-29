@@ -161,6 +161,7 @@
               :builtin-variable-list="props.builtinVariableList"
               :assist-functions="props.assistFunctions"
               :disabled="props.readonly"
+              :keep-actions-disabled="!!props.quoteOverlay"
           />
         </n-tab-pane>
         <n-tab-pane name="params" tab="请求体">
@@ -248,42 +249,44 @@
         </n-tab-pane>
         <n-tab-pane name="defined_variables" tab="变量">
           <template #tab>
-            <n-badge :value="state.form.defined_variables.length" :max="99" show-zero>
+            <n-badge :value="definedVariablesCount" :max="99" show-zero>
               <span>变量</span>
             </n-badge>
           </template>
+          <!-- 引用公共接口内层步骤：合并模型中原数据行 _locked 置灰，追加行可编辑并写回引用步骤；
+               面板级 readonly 关闭（锁定由行级 _locked 承担），其余入参字段仍由 readonly 置灰 -->
           <KeyValueEditor
-              v-model:items="state.form.defined_variables"
+              v-model:items="definedVariablesModel"
               :body-type="'none'"
               :is-for-body="false"
               :available-variable-list="props.availableVariableList"
               :builtin-variable-list="props.builtinVariableList"
               :assist-functions="props.assistFunctions"
-              :disabled="props.readonly"
+              :disabled="props.readonly && !props.quoteOverlay"
           />
         </n-tab-pane>
         <n-tab-pane name="extract_variables" tab="提取">
           <template #tab>
-            <n-badge :value="extractCount" :max="99" show-zero>
+            <n-badge :value="extractVariablesCount" :max="99" show-zero>
               <span>提取</span>
             </n-badge>
           </template>
           <StepExtractPanel
-              v-model="state.form.extract_variables"
+              v-model="extractVariablesModel"
               mode="response"
-              :readonly="props.readonly"
+              :readonly="props.readonly && !props.quoteOverlay"
           />
         </n-tab-pane>
         <n-tab-pane name="assert_validators" tab="断言">
           <template #tab>
-            <n-badge :value="validatorsCount" :max="99" show-zero>
+            <n-badge :value="assertValidatorsCount" :max="99" show-zero>
               <span>断言</span>
             </n-badge>
           </template>
           <StepAssertPanel
-              v-model="state.form.assert_validators"
+              v-model="assertValidatorsModel"
               mode="response"
-              :readonly="props.readonly"
+              :readonly="props.readonly && !props.quoteOverlay"
           />
         </n-tab-pane>
       </n-tabs>
@@ -614,6 +617,8 @@ const props = defineProps({
     default: () => []
   },
   readonly: {type: Boolean, default: false},
+  /** 引用公共接口内层步骤：引用步骤追加的三容器字段（原数据置灰只读，追加区可编辑并写回引用步骤） */
+  quoteOverlay: {type: Object, default: null},
   hideDataSource: {type: Boolean, default: false},
   /** 公共接口用例：Request 面板「所属应用」锁定（只读），值为用例所属应用 */
   lockProject: {type: Boolean, default: false},
@@ -628,7 +633,97 @@ const props = defineProps({
   layoutVersion: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['update:config'])
+const emit = defineEmits(['update:config', 'update:quote-overlay'])
+
+// 引用公共接口内层步骤：合并展示模型 = 原数据（_locked 置灰只读）+ 引用步骤追加数据（可编辑）。
+// 组件按步骤 key 重建，挂载时一次性水合；不监听 quoteOverlay 回灌，避免编辑中被重置。
+const mergedDefinedVariables = ref([])
+const mergedExtractVariables = ref({})
+const mergedAssertValidators = ref({})
+
+const buildMergedOverlayModels = () => {
+  if (!props.quoteOverlay) return
+  const originalDefined = Array.isArray(state.form.defined_variables) ? state.form.defined_variables : []
+  mergedDefinedVariables.value = [
+    ...originalDefined.map((item) => ({
+      key: item.key || '',
+      value: item.value ?? '',
+      desc: item.desc ?? '',
+      type: item.type || 'text',
+      _locked: true,
+    })),
+    ...(Array.isArray(props.quoteOverlay.defined_variables)
+        ? props.quoteOverlay.defined_variables.map((item) => ({
+            key: item.key || '',
+            value: item.value ?? '',
+            desc: item.desc ?? '',
+          }))
+        : []),
+  ]
+  // 提取/断言字典统一重排 key：原数据在前(_locked)，追加数据按序续号
+  const mergeDict = (originalDict, overlayList, hydrate) => {
+    const merged = {}
+    let index = 1
+    Object.values(originalDict || {}).forEach((item) => {
+      merged[String(index++)] = { ...item, _locked: true }
+    })
+    Object.values(hydrate(normalizeBackendList(overlayList))).forEach((item) => {
+      merged[String(index++)] = item
+    })
+    return merged
+  }
+  mergedExtractVariables.value = mergeDict(
+      state.form.extract_variables,
+      props.quoteOverlay.extract_variables,
+      (list) => hydrateExtractDictFromBackend(list, EXTRACT_MODE_RESPONSE),
+  )
+  mergedAssertValidators.value = mergeDict(
+      state.form.assert_validators,
+      props.quoteOverlay.assert_validators,
+      (list) => hydrateAssertDictFromBackend(list, ASSERT_MODE_RESPONSE),
+  )
+}
+
+// 面板统一绑定：普通步骤直接读写 form，引用内层步骤读写合并模型
+const makeContainerModel = (overlayRef, formField) => computed({
+  get: () => (props.quoteOverlay ? overlayRef.value : state.form[formField]),
+  set: (val) => {
+    if (props.quoteOverlay) {
+      overlayRef.value = val
+      return
+    }
+    state.form[formField] = val
+  },
+})
+const definedVariablesModel = makeContainerModel(mergedDefinedVariables, 'defined_variables')
+const extractVariablesModel = makeContainerModel(mergedExtractVariables, 'extract_variables')
+const assertValidatorsModel = makeContainerModel(mergedAssertValidators, 'assert_validators')
+
+// 徽标计数与面板同源：引用内层步骤计合并模型，普通步骤计 form
+const definedVariablesCount = computed(() => definedVariablesModel.value.length)
+const extractVariablesCount = computed(() => countDictKeys(extractVariablesModel.value))
+const assertValidatorsCount = computed(() => countDictKeys(assertValidatorsModel.value))
+
+const omitLockedEntries = (dict) => Object.fromEntries(
+    Object.entries(dict || {}).filter(([, item]) => !item._locked)
+)
+
+// 追加行编辑后写回引用步骤（仅引用公共接口内层步骤携带 quoteOverlay）；锁定行(原数据)不参与回写。
+// watch 在 buildMergedOverlayModels() 之后注册，避免初次构建触发挂载期回写。
+const emitQuoteOverlay = () => {
+  if (!props.quoteOverlay) return
+  emit('update:quote-overlay', {
+    defined_variables: mergedDefinedVariables.value
+        .filter((item) => !item._locked)
+        .map((item) => ({
+          key: item.key || '',
+          value: item.value ?? '',
+          desc: item.desc ?? '',
+        })),
+    extract_variables: buildExtractListFromDict(omitLockedEntries(mergedExtractVariables.value), EXTRACT_MODE_RESPONSE),
+    assert_validators: buildAssertListFromDict(omitLockedEntries(mergedAssertValidators.value), ASSERT_MODE_RESPONSE),
+  })
+}
 
 const formRef = ref(null);
 const route = useRoute()
@@ -853,6 +948,11 @@ const { form, isExternalUpdate, syncFromExternal } = useStepEditorForm({
 
 /** 模板与各 helper 沿用 state.form 访问方式 */
 const state = { form }
+
+// 引用公共接口内层步骤：form 水合完成后构建合并展示模型（原数据 _locked + 追加数据）
+buildMergedOverlayModels()
+
+watch([mergedDefinedVariables, mergedExtractVariables, mergedAssertValidators], emitQuoteOverlay, {deep: true})
 
 // 公共接口（lockProject）：所属应用锁定为用例所属应用，外部变化时静默回填（不触发 emit 回写循环）
 watch(
@@ -1430,9 +1530,6 @@ const doDebugRequest = async (env_name) => {
     debugLoading.value = false
   }
 };
-
-const extractCount = computed(() => countDictKeys(state.form.extract_variables))
-const validatorsCount = computed(() => countDictKeys(state.form.assert_validators))
 
 // 数据提取结果表格列定义
 const extractColumns = [
