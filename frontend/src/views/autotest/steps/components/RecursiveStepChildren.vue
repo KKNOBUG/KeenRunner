@@ -13,16 +13,6 @@
           :class="`branch-depth-${Math.min(depth, 3)}`"
       >
         <div class="branch-group-header">
-          <span
-              class="branch-collapse-btn"
-              :title="isBranchCollapsed(step.id, bi) ? '展开该分支' : '折叠该分支'"
-              @click.stop="toggleBranchCollapse(step.id, bi, $event)"
-          >
-            <TheIcon
-                :icon="isBranchCollapsed(step.id, bi) ? 'gravity-ui:chevron-down' : 'gravity-ui:chevron-up'"
-                :size="12"
-            />
-          </span>
           <span class="branch-tag" :class="`tag-${branch.branch_type}`">
             {{ branch.branch_type.toUpperCase() }}
           </span>
@@ -36,6 +26,16 @@
           <span v-if="branch.branch_type === 'else'" class="branch-else-hint">上述条件均未命中时执行</span>
           <span v-if="isBranchCollapsed(step.id, bi)" class="branch-collapsed-count">
             {{ getBranchChildren(bi).length }} 个步骤
+          </span>
+          <span
+              class="branch-collapse-btn"
+              :title="isBranchCollapsed(step.id, bi) ? '展开该分支' : '折叠该分支'"
+              @click.stop="toggleBranchCollapse(step.id, bi, $event)"
+          >
+            <TheIcon
+                :icon="isBranchCollapsed(step.id, bi) ? 'gravity-ui:chevron-down' : 'gravity-ui:chevron-up'"
+                :size="12"
+            />
           </span>
         </div>
         <div v-if="!isBranchCollapsed(step.id, bi)" class="branch-group-body">
@@ -62,6 +62,11 @@
                   <span class="step-name-text">{{ getStepDisplayName(child.name, child.id) }}</span>
                   <span class="step-actions">
                     <span class="step-number">#{{ getStepNumber(child.id) }}</span>
+                    <n-button v-if="isQuoteStepType(child.type)" text size="tiny" class="action-btn"
+                        :title="isQuoteExpanded(child.id) ? '折叠引用步骤' : '展开引用步骤'"
+                        @click.stop="toggleQuoteExpand(child.id, $event)">
+                      <template #icon><TheIcon :icon="isQuoteExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'" :size="14"/></template>
+                    </n-button>
                     <n-button text size="tiny" class="action-btn"
                         :title="child.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)'"
                         @click.stop="toggleSkipStep(child.id, $event)">
@@ -84,6 +89,36 @@
                     </n-popconfirm>
                   </span>
                 </span>
+                <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认折叠） -->
+                <div v-if="isQuoteStepType(child.type) && isQuoteExpanded(child.id)" class="quote-inner-steps">
+                  <div class="quote-inner-list">
+                    <div
+                        v-for="(item, idx) in getQuoteStepsFlattened(quoteStepsMap[child.id] || [])"
+                        :key="'quote-' + child.id + '-' + idx + '-' + (item.step.id || '')"
+                        class="step-item quote-inner-item"
+                        :class="{
+                          'is-selected': selectedKeys.includes(getQuoteInnerKey(child.id, idx)),
+                          'is-skipped': !!item.step.step_is_skipped || !!child.step_is_skipped,
+                        }"
+                        :style="{ marginLeft: (item.depth * 16) + 'px' }"
+                        @click.stop="handleSelect([getQuoteInnerKey(child.id, idx)])"
+                    >
+                      <span class="step-name">
+                        <TheIcon
+                            :icon="getStepIcon(item.step.type)"
+                            :size="16"
+                            class="step-icon"
+                            :class="getStepIconClass(item.step.type)"
+                        />
+                        <span class="step-name-text">{{ item.step.name || '步骤' }}</span>
+                        <span class="step-actions">
+                          <span class="step-number">#{{ idx + 1 }}</span>
+                        </span>
+                      </span>
+                    </div>
+                    <div v-if="!getQuoteStepsFlattened(quoteStepsMap[child.id] || []).length" class="quote-inner-empty">暂无步骤</div>
+                  </div>
+                </div>
                 <RecursiveStepChildren v-if="stepDefinitions[child.type]?.allowChildren" :step="child" :depth="depth + 1"/>
               </div>
             </div>
@@ -139,6 +174,11 @@
               <span class="step-name-text">{{ getStepDisplayName(child.name, child.id) }}</span>
               <span class="step-actions">
                 <span class="step-number">#{{ getStepNumber(child.id) }}</span>
+                <n-button v-if="isQuoteStepType(child.type)" text size="tiny" class="action-btn"
+                    :title="isQuoteExpanded(child.id) ? '折叠引用步骤' : '展开引用步骤'"
+                    @click.stop="toggleQuoteExpand(child.id, $event)">
+                  <template #icon><TheIcon :icon="isQuoteExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'" :size="14"/></template>
+                </n-button>
                 <n-button text size="tiny" class="action-btn"
                     :title="child.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)'"
                     @click.stop="toggleSkipStep(child.id, $event)">
@@ -161,6 +201,36 @@
                 </n-popconfirm>
               </span>
             </span>
+            <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认折叠） -->
+            <div v-if="isQuoteStepType(child.type) && isQuoteExpanded(child.id)" class="quote-inner-steps">
+              <div class="quote-inner-list">
+                <div
+                    v-for="(item, idx) in getQuoteStepsFlattened(quoteStepsMap[child.id] || [])"
+                    :key="'quote-' + child.id + '-' + idx + '-' + (item.step.id || '')"
+                    class="step-item quote-inner-item"
+                    :class="{
+                      'is-selected': selectedKeys.includes(getQuoteInnerKey(child.id, idx)),
+                      'is-skipped': !!item.step.step_is_skipped || !!child.step_is_skipped,
+                    }"
+                    :style="{ marginLeft: (item.depth * 16) + 'px' }"
+                    @click.stop="handleSelect([getQuoteInnerKey(child.id, idx)])"
+                >
+                  <span class="step-name">
+                    <TheIcon
+                        :icon="getStepIcon(item.step.type)"
+                        :size="16"
+                        class="step-icon"
+                        :class="getStepIconClass(item.step.type)"
+                    />
+                    <span class="step-name-text">{{ item.step.name || '步骤' }}</span>
+                    <span class="step-actions">
+                      <span class="step-number">#{{ idx + 1 }}</span>
+                    </span>
+                  </span>
+                </div>
+                <div v-if="!getQuoteStepsFlattened(quoteStepsMap[child.id] || []).length" class="quote-inner-empty">暂无步骤</div>
+              </div>
+            </div>
             <RecursiveStepChildren v-if="stepDefinitions[child.type]?.allowChildren" :step="child" :depth="depth + 1"/>
           </div>
         </div>
@@ -179,6 +249,7 @@ import { inject } from 'vue'
 import { NButton, NPopconfirm } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import AddStepPopover from './AddStepPopover.vue'
+import { isQuoteStepType } from '@/composables/step-editor'
 
 defineOptions({ name: 'RecursiveStepChildren' })
 
@@ -194,6 +265,11 @@ const {
   toggleStepExpand,
   isBranchCollapsed,
   toggleBranchCollapse,
+  isQuoteExpanded,
+  toggleQuoteExpand,
+  quoteStepsMap,
+  getQuoteStepsFlattened,
+  getQuoteInnerKey,
   selectedKeys,
   getStepIcon,
   getStepIconClass,

@@ -81,6 +81,21 @@
                     <span class="step-actions">
                       <span class="step-number">#{{ getStepNumber(step.id) }}</span>
                       <n-button
+                          v-if="step.type === 'quote_public_script' || step.type === 'quote_public_api'"
+                          text
+                          size="tiny"
+                          @click.stop="toggleQuoteExpand(step.id, $event)"
+                          class="action-btn"
+                          :title="isQuoteExpanded(step.id) ? '折叠引用步骤' : '展开引用步骤'"
+                      >
+                        <template #icon>
+                          <TheIcon
+                              :icon="isQuoteExpanded(step.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'"
+                              :size="14"
+                          />
+                        </template>
+                      </n-button>
+                      <n-button
                           v-if="stepDefinitions[step.type]?.allowChildren"
                           text
                           size="tiny"
@@ -137,8 +152,8 @@
                         :step="step"
                         :depth="1"
                     />
-                    <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存） -->
-                    <div v-if="step.type === 'quote_public_script' || step.type === 'quote_public_api'" class="quote-inner-steps">
+                    <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认折叠） -->
+                    <div v-if="(step.type === 'quote_public_script' || step.type === 'quote_public_api') && isQuoteExpanded(step.id)" class="quote-inner-steps">
                       <div class="quote-inner-list">
                         <div
                             v-for="(item, idx) in getQuoteStepsFlattened(quoteStepsMap[step.id] || [])"
@@ -159,7 +174,9 @@
                                 :class="getStepIconClass(item.step.type)"
                             />
                             <span class="step-name-text">{{ item.step.name || '步骤' }}</span>
-                            <span class="step-number">#{{ idx + 1 }}</span>
+                            <span class="step-actions">
+                              <span class="step-number">#{{ idx + 1 }}</span>
+                            </span>
                           </span>
                         </div>
                         <div v-if="!getQuoteStepsFlattened(quoteStepsMap[step.id] || []).length" class="quote-inner-empty">暂无步骤</div>
@@ -309,7 +326,7 @@ import {
   stripIdentityFieldsForNewCase,
 } from './utils/stepSourceJson'
 import {useUserStore, useAutotestStore, useStepEditorStore, useTagsStore, useAppStore} from '@/store'
-import { useDirtyCheck, useLeftPanelResize, useStepTreeValidation, getFixedBranchStepDisplayName, useStepTreeSerialization, assignStepNumbers, mergeStepTreeWithSuccessDetail, useStepDragDrop, useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, parseQuoteInnerKey, useSourceJsonMode, useDataSourceBatch } from '@/composables/step-editor'
+import { useDirtyCheck, useLeftPanelResize, useStepTreeValidation, getFixedBranchStepDisplayName, useStepTreeSerialization, assignStepNumbers, mergeStepTreeWithSuccessDetail, useStepDragDrop, useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, parseQuoteInnerKey, isQuoteStepType, useSourceJsonMode, useDataSourceBatch } from '@/composables/step-editor'
 
 const message = useMessage()
 /** 统一错误提示：优先全局 $message，否则 naive useMessage */
@@ -876,6 +893,9 @@ const toggleAllExpand = () => {
   // 批量设置所有步骤的展开状态为全局状态
   const setAllStepsExpandState = (list, state) => {
     for (const step of list) {
+      if (isQuoteStepType(step.type)) {
+        quoteExpandStates.value.set(step.id, state)
+      }
       if (stepDefinitions[step.type]?.allowChildren) {
         stepExpandStates.value.set(step.id, state)
         if (step.children && step.children.length) {
@@ -918,6 +938,16 @@ const toggleBranchCollapse = (stepId, branchIndex, event) => {
   event?.stopPropagation()
   const key = `${stepId}:${branchIndex}`
   branchCollapseStates.value.set(key, !isBranchCollapsed(stepId, branchIndex))
+}
+
+// 引用步骤（引用公共脚本/引用公共接口）的展开状态，默认折叠（未设置即视为折叠）
+const quoteExpandStates = ref(new Map())
+
+const isQuoteExpanded = (stepId) => quoteExpandStates.value.get(stepId) === true
+
+const toggleQuoteExpand = (stepId, event) => {
+  event?.stopPropagation()
+  quoteExpandStates.value.set(stepId, !isQuoteExpanded(stepId))
 }
 
 // 初始化所有允许子步骤的步骤的展开状态（默认为展开）
@@ -1626,7 +1656,14 @@ const currentStep = computed(() => {
   if (!key) return null
   const quoteInner = getQuoteInnerStep(key)
   if (quoteInner) return quoteInner
-  return findStep(key)
+  const step = findStep(key)
+  // 引用步骤折叠态点击：选中键仍为引用步骤本身（保持树高亮），但编辑区直接展示第一个内层步骤；
+  // 展开态或内层步骤未加载/为空时，仍展示引用步骤自身的「用例信息」编辑器
+  if (step && isQuoteStepType(step.type) && !isQuoteExpanded(step.id)) {
+    const inner = getQuoteStepsFlattened(quoteStepsMap.value[step.id] || [])
+    if (inner.length) return { ...inner[0].step, isQuoteInner: true, _quoteParentId: step.id }
+  }
+  return step
 })
 
 /** 引用公共接口的父引用步骤（内层步骤选中时定位）；非内层或引用公共脚本时为 null */
@@ -1634,8 +1671,10 @@ const currentParentQuoteStep = computed(() => {
   const step = currentStep.value
   if (!step?.isQuoteInner) return null
   const parsed = parseQuoteInnerKey(selectedKeys.value?.[0])
-  if (!parsed) return null
-  const quoteStep = findStep(parsed.quoteStepId)
+  // 折叠态点击引用步骤时选中键为引用步骤本身，从合成步骤携带的父引用 id 定位
+  const quoteId = parsed?.quoteStepId || step._quoteParentId
+  if (!quoteId) return null
+  const quoteStep = findStep(quoteId)
   if (!quoteStep || quoteStep.type !== 'quote_public_api') return null
   return quoteStep
 })
@@ -2414,6 +2453,11 @@ provide('stepTreeContext', {
   toggleStepExpand,
   isBranchCollapsed,
   toggleBranchCollapse,
+  isQuoteExpanded,
+  toggleQuoteExpand,
+  quoteStepsMap,
+  getQuoteStepsFlattened,
+  getQuoteInnerKey,
   selectedKeys,
   getStepIcon,
   getStepIconClass,
