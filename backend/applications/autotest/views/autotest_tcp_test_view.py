@@ -449,8 +449,8 @@ _tcp_test_server = _TcpTestServer()
 @autotest_tcp_test.post("/start", summary="启动TCP测试服务器", description="启动双端口TCP测试服务器")
 async def start_tcp_test_server(
         host: str = Body("0.0.0.0", embed=True, description="监听地址"),
-        json_port: int = Body(9999, embed=True, description="JSON请求端口(接收JSON报文，返回XML响应)"),
-        xml_port: int = Body(9998, embed=True, description="XML请求端口(接收XML报文，返回XML响应)"),
+        json_port: int = Body(9991, embed=True, description="JSON请求端口(接收JSON报文，返回XML响应)"),
+        xml_port: int = Body(9992, embed=True, description="XML请求端口(接收XML报文，返回XML响应)"),
 ):
     """
     启动TCP测试服务器，同时监听两个端口。
