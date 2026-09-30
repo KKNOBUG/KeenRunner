@@ -96,7 +96,7 @@
                   :rule="{ required: true, message: '请输入请求地址', trigger: ['blur', 'change'] }"
                   class="request-field-url"
               >
-                <n-input v-model:value="form.request_url" placeholder="支持相对路径与 ${} 占位符" clearable />
+                <n-input v-model:value="form.request_url" placeholder="请输入请求地址" clearable />
               </n-form-item>
             </div>
 
@@ -108,19 +108,27 @@
                   :rule="{ required: true, message: '请输入接口名称', trigger: ['blur', 'input'] }"
                   class="request-field-third"
               >
-                <n-input v-model:value="form.api_name" placeholder="请输入接口名称（全局唯一）" clearable />
+                <n-input v-model:value="form.api_name" placeholder="请输入接口名称" clearable />
               </n-form-item>
               <n-form-item label="所属应用" path="request_project_id" class="request-field-third">
                 <n-select
                     v-model:value="form.request_project_id"
                     :options="projectOptions"
-                    placeholder="缺省随任务施压环境"
+                    placeholder="请选择所属应用"
                     clearable
                     filterable
                 />
               </n-form-item>
               <n-form-item label="配置名称" path="request_config_name" class="request-field-third">
-                <n-input v-model:value="form.request_config_name" placeholder="APP节点配置名（缺省随任务）" clearable />
+                <n-select
+                    v-model:value="form.request_config_name"
+                    placeholder="请选择配置名称"
+                    :options="configNameOptions"
+                    :loading="configNameLoading"
+                    clearable
+                    filterable
+                    tag
+                />
               </n-form-item>
             </div>
 
@@ -129,7 +137,7 @@
               <n-input
                   type="textarea"
                   v-model:value="form.api_desc"
-                  placeholder="接口描述（可选）"
+                  placeholder="请输入接口描述"
                   :autosize="{ minRows: 1 }"
                   style="width: 100%;"
               />
@@ -245,136 +253,12 @@
       </n-card>
 
       <!-- ========== 栏目四：Response 调试回显（点击调试后出现） ========== -->
-      <n-card
+      <DebugResponsePanel
           v-if="debugLoading || debugResult"
-          :bordered="false"
-          style="width: 100%;"
-          class="step-editor-card"
-      >
-        <template #header>
-          <div class="card-header-row card-header-row--with-actions">
-            <div class="panel-title-wrap">
-              <div class="panel-title">Response</div>
-            </div>
-            <div class="card-header-actions">
-              <n-space align="center" :wrap="false">
-                <template v-if="debugResult && !debugLoading">
-                  <n-tag :type="debugResult.success ? 'success' : 'error'" round size="small">
-                    {{ debugResult.success ? '调试通过' : '调试未通过' }}
-                  </n-tag>
-                  <n-tag :type="responseStatusTagType" round size="small">
-                    Status: {{ debugResult.status_code ?? '-' }}
-                  </n-tag>
-                  <n-tag round size="small">
-                    Time: {{ debugResult.elapsed_ms != null ? `${debugResult.elapsed_ms}ms` : '-' }}
-                  </n-tag>
-                  <n-tag v-if="debugResult.response_size != null" round size="small">
-                    Size: {{ debugResult.response_size }}
-                  </n-tag>
-                </template>
-                <n-tag v-if="debugLoading" type="info" round size="small">
-                  <template #icon>
-                    <n-spin size="small" />
-                  </template>
-                  请求中...
-                </n-tag>
-              </n-space>
-            </div>
-          </div>
-        </template>
-
-        <div v-if="debugLoading" class="debug-loading">
-          <n-spin size="large" description="正在发送请求，请稍候..." />
-        </div>
-        <n-tabs v-else type="line" animated>
-          <!-- 请求信息 -->
-          <n-tab-pane name="requestInfo" tab="请求信息">
-            <n-space vertical :size="16" v-if="debugResult?.request_info">
-              <n-collapse :default-expanded-names="['requestBasic', 'requestHeaders', 'requestBody']">
-                <n-collapse-item title="Basic" name="requestBasic">
-                  <n-descriptions bordered :column="2" size="small">
-                    <n-descriptions-item label="方法">
-                      <n-tag type="info">{{ debugResult.request_info.method || '-' }}</n-tag>
-                    </n-descriptions-item>
-                    <n-descriptions-item label="URL">
-                      <n-text copyable>{{ debugResult.request_info.url || '-' }}</n-text>
-                    </n-descriptions-item>
-                  </n-descriptions>
-                </n-collapse-item>
-                <n-collapse-item title="Headers" name="requestHeaders">
-                  <pre v-if="requestHeadersText" class="headers-pre" @click="copyText(requestHeadersText)">{{ requestHeadersText }}</pre>
-                  <n-empty v-else description="无请求头" />
-                </n-collapse-item>
-                <n-collapse-item :title="`Body (${debugResult.request_info.body_type || 'none'})`" name="requestBody">
-                  <pre class="headers-pre">{{ debugResult.request_info.body || '(空)' }}</pre>
-                </n-collapse-item>
-              </n-collapse>
-            </n-space>
-            <n-empty v-else description="暂无请求信息" />
-          </n-tab-pane>
-          <!-- 响应信息 -->
-          <n-tab-pane name="responseInfo" tab="响应信息">
-            <n-space vertical :size="16" v-if="debugResult">
-              <n-text v-if="debugResult.transport_error" type="error">
-                传输异常：{{ debugResult.transport_error }}
-              </n-text>
-              <n-collapse :default-expanded-names="['responseHeaders', 'responseBody']" arrow-placement="right">
-                <n-collapse-item title="Headers" name="responseHeaders">
-                  <pre v-if="responseHeadersText" class="headers-pre" @click="copyText(responseHeadersText)">{{ responseHeadersText }}</pre>
-                  <n-empty v-else description="无响应头" />
-                </n-collapse-item>
-                <n-collapse-item :title="`Body (${debugResult.content_type || '未知类型'})`" name="responseBody">
-                  <monaco-editor
-                      v-if="responseJsonFormatted != null"
-                      :value="responseJsonFormatted"
-                      lang="json"
-                      :options="monacoReadonlyOptions"
-                      class="response-editor"
-                  />
-                  <n-input
-                      v-else
-                      :value="debugResult.response_data || ''"
-                      type="textarea"
-                      readonly
-                      :rows="10"
-                      class="response-text"
-                  />
-                </n-collapse-item>
-              </n-collapse>
-            </n-space>
-            <n-empty v-else description="暂无响应信息" />
-          </n-tab-pane>
-          <!-- 数据提取 -->
-          <n-tab-pane name="extracts" tab="数据提取">
-            <n-data-table
-                v-if="(debugResult?.extracts || []).length > 0"
-                :columns="extractColumns"
-                :data="debugResult.extracts"
-                size="small"
-                :bordered="true"
-            />
-            <n-empty v-else description="暂无数据提取结果" />
-          </n-tab-pane>
-          <!-- 断言结果 -->
-          <n-tab-pane name="assertions" tab="断言结果">
-            <n-data-table
-                v-if="(debugResult?.assertions || []).length > 0"
-                :columns="assertColumns"
-                :data="debugResult.assertions"
-                size="small"
-                :bordered="true"
-            />
-            <n-empty v-else description="暂无断言结果" />
-          </n-tab-pane>
-          <!-- 执行日志 -->
-          <n-tab-pane name="logs" tab="执行日志">
-            <n-space vertical :size="12" v-if="(debugResult?.logs || []).length > 0">
-              <pre v-for="(log, index) in debugResult.logs" :key="index" class="headers-pre">{{ log }}</pre>
-            </n-space>
-            <n-empty v-else description="暂无执行日志" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-card>
+          :protocol="form.step_type"
+          :debug-result="debugResult"
+          :loading="debugLoading"
+      />
     </n-space>
 
     <!-- 调试前选择执行环境与数据源取数（对齐 autotest 设计：一个接口绑定一个数据源） -->
@@ -423,12 +307,11 @@
 </template>
 
 <script setup>
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NAlert, NBadge, NButton, NCard, NCollapse, NCollapseItem, NCollapseTransition, NDataTable, NDescriptions,
-  NDescriptionsItem, NEmpty, NForm, NFormItem, NInput, NModal,
-  NRadio, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTabPane, NTabs, NTag, NText,
+  NAlert, NBadge, NButton, NCard, NCollapseTransition, NForm, NFormItem, NInput, NModal,
+  NRadio, NRadioGroup, NSelect, NSpace, NSwitch, NTabPane, NTabs,
 } from 'naive-ui'
 
 import AppPage from '@/components/page/AppPage.vue'
@@ -436,6 +319,7 @@ import KeyValueEditor from '@/components/common/KeyValueEditor.vue'
 import MonacoEditor from '@/components/monaco/index.vue'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import PerfApiDatasetPanel from '../components/PerfApiDatasetPanel.vue'
+import DebugResponsePanel from '@/components/perf/DebugResponsePanel.vue'
 import StepAssertPanel from '@/components/autotest/StepAssertPanel.vue'
 import StepExtractPanel from '@/components/autotest/StepExtractPanel.vue'
 
@@ -476,13 +360,6 @@ const monacoBodyOptions = {
   fontSize: 13,
   automaticLayout: true,
   tabSize: 2,
-  scrollBeyondLastLine: false,
-}
-const monacoReadonlyOptions = {
-  readOnly: true,
-  minimap: { enabled: false },
-  fontSize: 13,
-  automaticLayout: true,
   scrollBeyondLastLine: false,
 }
 
@@ -584,6 +461,42 @@ async function loadProjects() {
     projectOptions.value = []
   }
 }
+
+/** 配置名称下拉选项（对齐 http_controller / tcp_controller 联动：选应用后加载该应用下的配置名） */
+const configNameOptions = ref([])
+const configNameLoading = ref(false)
+
+async function loadConfigNames(projectId) {
+  const pid = projectId != null && projectId !== '' ? Number(projectId) : null
+  if (!pid) {
+    configNameOptions.value = []
+    return
+  }
+  configNameLoading.value = true
+  try {
+    const res = await api.getEnvConfigNameList({ project_id: pid, env_type: 'app' })
+    const list = Array.isArray(res?.data) ? res.data : []
+    configNameOptions.value = list.map((name) => ({ label: name, value: name }))
+  } catch (e) {
+    configNameOptions.value = []
+  } finally {
+    configNameLoading.value = false
+  }
+}
+
+/** 所属应用变化时联动加载配置名称选项并重置已选值（对齐步骤编辑页联动逻辑） */
+watch(
+    () => form.request_project_id,
+    (pid, prev) => {
+      void loadConfigNames(pid)
+      if (pid == null || pid === '') {
+        form.request_config_name = null
+      } else if (prev != null && Number(pid) !== Number(prev)) {
+        form.request_config_name = null
+      }
+    },
+    { immediate: true },
+)
 
 /** 后端详情/导入草稿 → 表单形态（请求体对象转 JSON 文本，提取/断言转面板字典，容器 null 归空数组） */
 function applyDetail(detail) {
@@ -797,60 +710,6 @@ const debugEnvLoading = ref(false)
 const debugSceneOptions = ref([])
 const debugSceneLoading = ref(false)
 
-/** Response 卡头部状态 tag：状态码 < 400 视为成功色 */
-const responseStatusTagType = computed(() => ((debugResult.value?.status_code ?? 500) < 400 ? 'success' : 'error'))
-
-const extractColumns = [
-  { title: '变量名', key: 'name', width: 140, ellipsis: { tooltip: true } },
-  { title: '提取值', key: 'extract_value', minWidth: 200, ellipsis: { tooltip: true } },
-  {
-    title: '结果', key: 'success', width: 80,
-    render: (row) => h(NTag, { type: row.success ? 'success' : 'error', size: 'small' },
-        { default: () => (row.success ? '成功' : '失败') }),
-  },
-  { title: '错误', key: 'error', minWidth: 140, ellipsis: { tooltip: true } },
-]
-
-const assertColumns = [
-  { title: '断言', key: 'name', width: 140, ellipsis: { tooltip: true } },
-  { title: '实际值', key: 'actual_value', minWidth: 140, ellipsis: { tooltip: true } },
-  {
-    title: '结果', key: 'success', width: 80,
-    render: (row) => h(NTag, { type: row.success ? 'success' : 'error', size: 'small' },
-        { default: () => (row.success ? '通过' : '失败') }),
-  },
-  { title: '错误', key: 'error', minWidth: 140, ellipsis: { tooltip: true } },
-]
-
-const requestHeadersText = computed(() =>
-    Object.entries(debugResult.value?.request_info?.headers || {})
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n'),
-)
-
-const responseHeadersText = computed(() =>
-    Object.entries(debugResult.value?.response_headers || {})
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n'),
-)
-
-/** 响应体 JSON 自动美化（非 JSON 回落纯文本展示） */
-const responseJsonFormatted = computed(() => {
-  const text = String(debugResult.value?.response_data || '')
-  if (!text) return ''
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2)
-  } catch (e) {
-    return null
-  }
-})
-
-function copyText(text) {
-  navigator.clipboard?.writeText(text).then(() => {
-    window.$message?.success('已复制')
-  }).catch(() => {})
-}
-
 /** 打开调试弹窗并预载环境候选 */
 function openDebugModal() {
   if (!isEdit.value) {
@@ -1025,25 +884,4 @@ async function confirmDebug() {
   padding: 40px 0;
 }
 
-.headers-pre {
-  margin: 0;
-  padding: 8px 12px;
-  font-family: 'Fira Code', monospace;
-  font-size: 13px;
-  white-space: pre-wrap;
-  word-break: break-all;
-  background: var(--n-action-color, rgba(128, 128, 128, 0.08));
-  border-radius: 6px;
-  cursor: copy;
-}
-
-.response-editor {
-  min-height: 320px;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.response-text :deep(textarea) {
-  font-family: 'Fira Code', monospace;
-}
 </style>

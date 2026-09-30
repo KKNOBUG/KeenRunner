@@ -14,7 +14,7 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['step-editor-card', { 'is-collapsed': collapsed }]"
+      :class="['step-editor-card', { 'is-collapsed': collapsed, 'is-panel-disabled': isPanelDisabled }]"
   >
     <template #header>
       <div class="card-header-row card-header-row--with-actions">
@@ -118,6 +118,9 @@ const props = defineProps({
   /** 编辑中的接口行（api_id 落库后才有值） */
   apiRow: { type: Object, default: null },
 })
+
+/** 接口未落库时整个 DataSource 卡置灰（新增模式下接口尚未保存，数据源无法归属） */
+const isPanelDisabled = computed(() => !props.apiRow?.api_id)
 
 // 分区标记与后端 autotest 四分区解析器同一套词表（施压引擎只消费 HEAD/BODY 两分区）
 const FIXED_KEYWORDS = ['HEAD', 'BODY', 'ASSERT_HEAD', 'ASSERT_BODY']
@@ -365,6 +368,7 @@ async function fetchReportOriginals() {
 }
 
 function toggleCollapsed() {
+  if (isPanelDisabled.value) return
   collapsed.value = !collapsed.value
   // 展开时加载数据源
   if (!collapsed.value && props.apiRow?.api_id) {
@@ -793,6 +797,12 @@ watch(() => props.apiRow?.api_id, (val) => {
 
 .data-source-axis-tip {
   font-size: 12px;
+}
+
+/* 接口未落库时整卡置灰：降低不透明度 + 禁止交互 */
+.is-panel-disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .luckysheet-wrap {

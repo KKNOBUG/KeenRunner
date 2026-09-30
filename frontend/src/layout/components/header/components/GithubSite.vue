@@ -6,6 +6,6 @@
 
 <script setup>
 function handleLinkClick() {
-  window.open('https://github.com/KKNOBUG/Krun')
+  window.open('https://github.com/KKNOBUG/KeenRunner')
 }
 </script>

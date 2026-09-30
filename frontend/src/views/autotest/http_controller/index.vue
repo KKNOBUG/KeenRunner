@@ -106,7 +106,7 @@
             <n-form-item label="所属应用" path="request_project_id" required class="http-field-project">
               <n-select
                   v-model:value="state.form.request_project_id"
-                  placeholder="所属应用"
+                  placeholder="请选择所属应用"
                   :options="projectOptions"
                   :loading="projectLoading"
                   clearable
@@ -118,7 +118,7 @@
             <n-form-item label="配置名称" path="request_config_name" required class="http-field-config">
               <n-select
                   v-model:value="state.form.request_config_name"
-                  placeholder="配置名称"
+                  placeholder="请选择配置名称"
                   :options="httpConfigNameOptions"
                   :loading="httpConfigNameLoading"
                   clearable
@@ -359,16 +359,10 @@
                 </n-space>
               </n-collapse-item>
               <n-collapse-item title="Headers" name="requestHeaders">
-                <n-space vertical :size="12">
-                      <pre v-if="requestHeadersText"
-                           @click="copyTextContent(requestHeadersText)">{{ requestHeadersText }}</pre>
-                </n-space>
+                <CopyablePre :content="requestHeadersText" empty-text="无请求头" />
               </n-collapse-item>
               <n-collapse-item title="Cookies" name="requestCookies">
-                <n-space vertical :size="12">
-                      <pre v-if="requestCookiesText"
-                           @click="copyTextContent(requestCookiesText)">{{ requestCookiesText }}</pre>
-                </n-space>
+                <CopyablePre :content="requestCookiesText" empty-text="无请求 Cookie" />
               </n-collapse-item>
               <n-collapse-item :title="`Body (${requestBodyType})`" name="requestBody">
                 <div v-if="isRawRequest" class="request-raw-body">
@@ -410,16 +404,10 @@
             <n-collapse :default-expanded-names="['responseHeaders', 'responseCookies', 'responseBody']"
                         arrow-placement="right">
               <n-collapse-item title="Headers" name="responseHeaders">
-                <n-space vertical :size="12">
-                      <pre v-if="responseHeadersText"
-                           @click="copyTextContent(responseHeadersText)">{{ responseHeadersText }}</pre>
-                </n-space>
+                <CopyablePre :content="responseHeadersText" empty-text="无响应头" />
               </n-collapse-item>
               <n-collapse-item title="Cookies" name="responseCookies">
-                <n-space vertical :size="12">
-                      <pre v-if="responseCookiesText"
-                           @click="copyTextContent(responseCookiesText)">{{ responseCookiesText }}</pre>
-                </n-space>
+                <CopyablePre :content="responseCookiesText" empty-text="无响应 Cookie" />
               </n-collapse-item>
               <n-collapse-item :title="`Body (${contentType})`" name="responseBody">
                 <div v-if="isJsonResponse">
@@ -546,6 +534,7 @@ import TheIcon from "@/components/icon/TheIcon.vue";
 import StepExtractPanel from '@/components/autotest/StepExtractPanel.vue'
 import StepAssertPanel from '@/components/autotest/StepAssertPanel.vue'
 import StepDataSourcePanel from '@/components/autotest/StepDataSourcePanel.vue'
+import CopyablePre from '@/components/common/CopyablePre.vue'
 import {
   ASSERT_MODE_RESPONSE,
   buildAssertListFromDict,
@@ -1261,14 +1250,6 @@ const requestHeadersText = computed(() => {
 const requestCookiesText = computed(() => {
   return Object.entries(requestInfo.value.cookies || {}).map(([name, value]) => `${name}: ${value}`).join('\n')
 })
-const copyTextContent = (text) => {
-  navigator.clipboard.writeText(text).then(() => {
-    $message.success('复制成功');
-  }).catch((err) => {
-    $message.error(`复制失败: ${err.message}`);
-  });
-}
-
 const responseStatusType = computed(() => {
   if (!response.value) return 'default'
   if (response.value.status === 200) {
