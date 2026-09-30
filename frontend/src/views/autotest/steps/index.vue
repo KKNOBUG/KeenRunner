@@ -39,7 +39,7 @@
                 >
                   <template #icon>
                     <TheIcon
-                        :icon="isAllExpanded ? 'material-symbols:keyboard-arrow-up' : 'material-symbols:keyboard-arrow-down'"/>
+                        :icon="toggleAllExpandIcon(isAllExpanded)"/>
                   </template>
                 </n-button>
               </div>
@@ -90,7 +90,7 @@
                       >
                         <template #icon>
                           <TheIcon
-                              :icon="isQuoteExpanded(step.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'"
+                              :icon="stepExpandIcon(isQuoteExpanded(step.id))"
                               :size="14"
                           />
                         </template>
@@ -105,7 +105,7 @@
                       >
                         <template #icon>
                           <TheIcon
-                              :icon="isStepExpanded(step.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'"
+                              :icon="stepExpandIcon(isStepExpanded(step.id))"
                               :size="14"
                           />
                         </template>
@@ -119,7 +119,7 @@
                       >
                         <template #icon>
                           <TheIcon
-                              :icon="step.step_is_skipped ? 'gravity-ui:eye' : 'gravity-ui:eye-slash'"
+                              :icon="stepSkipIcon(step.step_is_skipped)"
                               :size="14"
                           />
                         </template>
@@ -132,14 +132,14 @@
                           title="复制当前步骤"
                       >
                         <template #icon>
-                          <TheIcon icon="gravity-ui:square-article" :size="14"/>
+                          <TheIcon :icon="STEP_TREE_ACTION_ICONS.copy" :size="14"/>
                         </template>
                       </n-button>
                       <n-popconfirm @positive-click="handleDeleteStep(step.id)" @click.stop>
                         <template #trigger>
                           <n-button text size="tiny" type="error" class="action-btn" title="删除当前步骤">
                             <template #icon>
-                              <TheIcon icon="material-symbols:delete" :size="14"/>
+                              <TheIcon :icon="STEP_TREE_ACTION_ICONS.remove" :size="14"/>
                             </template>
                           </n-button>
                         </template>
@@ -152,7 +152,7 @@
                         :step="step"
                         :depth="1"
                     />
-                    <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认折叠） -->
+                    <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认展开） -->
                     <div v-if="(step.type === 'quote_public_script' || step.type === 'quote_public_api') && isQuoteExpanded(step.id)" class="quote-inner-steps">
                       <div class="quote-inner-list">
                         <div
@@ -327,6 +327,7 @@ import {
 } from './utils/stepSourceJson'
 import {useUserStore, useAutotestStore, useStepEditorStore, useTagsStore, useAppStore} from '@/store'
 import { useDirtyCheck, useLeftPanelResize, useStepTreeValidation, getFixedBranchStepDisplayName, useStepTreeSerialization, assignStepNumbers, mergeStepTreeWithSuccessDetail, useStepDragDrop, useQuoteSteps, getQuoteInnerKey, getQuoteStepsFlattened, parseQuoteInnerKey, isQuoteStepType, useSourceJsonMode, useDataSourceBatch } from '@/composables/step-editor'
+import { STEP_TYPE_ICONS, getStepTypeIcon, getStepTypeIconClass, STEP_TREE_ACTION_ICONS, stepExpandIcon, stepSkipIcon, toggleAllExpandIcon } from './utils/stepIcons'
 
 const message = useMessage()
 /** 统一错误提示：优先全局 $message，否则 naive useMessage */
@@ -338,21 +339,21 @@ const notifyError = (msg) => {
   }
 }
 
-// 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致
+// 顺序与 backend/enums/autotest_enum.py AutoTestStepType 一致（图标集中在 utils/stepIcons.js 维护）
 const stepDefinitions = {
-  user_variables: {label: '用户变量', allowChildren: false, icon: 'gravity-ui:magic-wand'},
-  if: {label: '条件分支', allowChildren: true, icon: 'gravity-ui:shuffle'},
-  wait: {label: '等待控制', allowChildren: false, icon: 'gravity-ui:stopwatch'},
-  loop: {label: '循环结构', allowChildren: true, icon: 'gravity-ui:arrows-rotate-right'},
-  tcp: {label: 'TCP请求', allowChildren: false, icon: 'streamline-freehand:server-api-cloud'},
-  http: {label: 'HTTP请求', allowChildren: false, icon: 'streamline-freehand:server-api-cloud'},
-  code: {label: '代码请求(Python)', allowChildren: false, icon: 'ph:file-py'},
-  database: {label: '数据库请求', allowChildren: false, icon: 'ph:file-sql'},
-  redis: {label: 'Redis请求', allowChildren: false, icon: 'ph:file-rs'},
-  quote_public_script: {label: '引用公共脚本', allowChildren: false, icon: 'gravity-ui:link'},
-  quote_public_api: {label: '引用公共接口', allowChildren: false, icon: 'gravity-ui:link'},
-  assert: {label: '断言', allowChildren: false, icon: 'material-symbols:rule'},
-  extract: {label: '提取', allowChildren: false, icon: 'material-symbols:data-object'},
+  user_variables: {label: '用户变量', allowChildren: false, icon: STEP_TYPE_ICONS.user_variables},
+  if: {label: '条件分支', allowChildren: true, icon: STEP_TYPE_ICONS.if},
+  wait: {label: '等待控制', allowChildren: false, icon: STEP_TYPE_ICONS.wait},
+  loop: {label: '循环结构', allowChildren: true, icon: STEP_TYPE_ICONS.loop},
+  tcp: {label: 'TCP请求', allowChildren: false, icon: STEP_TYPE_ICONS.tcp},
+  http: {label: 'HTTP请求', allowChildren: false, icon: STEP_TYPE_ICONS.http},
+  code: {label: '代码请求(Python)', allowChildren: false, icon: STEP_TYPE_ICONS.code},
+  database: {label: '数据库请求', allowChildren: false, icon: STEP_TYPE_ICONS.database},
+  redis: {label: 'Redis请求', allowChildren: false, icon: STEP_TYPE_ICONS.redis},
+  quote_public_script: {label: '引用公共脚本', allowChildren: false, icon: STEP_TYPE_ICONS.quote_public_script},
+  quote_public_api: {label: '引用公共接口', allowChildren: false, icon: STEP_TYPE_ICONS.quote_public_api},
+  assert: {label: '断言', allowChildren: false, icon: STEP_TYPE_ICONS.assert},
+  extract: {label: '提取', allowChildren: false, icon: STEP_TYPE_ICONS.extract},
 }
 
 const {
@@ -940,10 +941,10 @@ const toggleBranchCollapse = (stepId, branchIndex, event) => {
   branchCollapseStates.value.set(key, !isBranchCollapsed(stepId, branchIndex))
 }
 
-// 引用步骤（引用公共脚本/引用公共接口）的展开状态，默认折叠（未设置即视为折叠）
+// 引用步骤（引用公共脚本/引用公共接口）的展开状态，默认展开（未设置即视为展开）
 const quoteExpandStates = ref(new Map())
 
-const isQuoteExpanded = (stepId) => quoteExpandStates.value.get(stepId) === true
+const isQuoteExpanded = (stepId) => quoteExpandStates.value.get(stepId) !== false
 
 const toggleQuoteExpand = (stepId, event) => {
   event?.stopPropagation()
@@ -2270,30 +2271,11 @@ const updateStepConfig = (id, config) => {
   }
 }
 
-/** 步骤类型对应的图标名 */
-const getStepIcon = (type) => {
-  return stepDefinitions[type]?.icon || 'material-symbols:code'
-}
+/** 步骤类型对应的图标名（集中配置见 utils/stepIcons.js） */
+const getStepIcon = (type) => getStepTypeIcon(type)
 
-/** 步骤类型对应的图标 CSS 类名 */
-const getStepIconClass = (type) => {
-  const classMap = {
-    loop: 'icon-loop',
-    code: 'icon-code',
-    tcp: 'icon-tcp',
-    http: 'icon-http',
-    if: 'icon-if',
-    wait: 'icon-wait',
-    database: 'icon-database',
-    redis: 'icon-redis',
-    assert: 'icon-assert',
-    extract: 'icon-extract',
-    user_variables: 'icon-user_variables',
-    quote_public_script: 'icon-quote',
-    quote_public_api: 'icon-quote',
-  }
-  return classMap[type] || ''
-}
+/** 步骤类型对应的图标 CSS 类名（集中配置见 utils/stepIcons.js） */
+const getStepIconClass = (type) => getStepTypeIconClass(type)
 
 // 计算步骤编号（按深度优先遍历）
 const stepNumberMap = computed(() => {
@@ -2897,53 +2879,7 @@ provide('stepTreeContext', {
   align-items: center;
 }
 
-:deep(.step-icon.icon-user_variables) {
-  color: #FF69B4;
-}
-
-:deep(.step-icon.icon-code) {
-  color: #BA55D3;
-}
-
-:deep(.step-icon.icon-database) {
-  color: #BA55D3;
-}
-
-:deep(.step-icon.icon-redis) {
-  color: #BA55D3;
-}
-
-:deep(.step-icon.icon-assert) {
-  color: #BA55D3;
-}
-
-:deep(.step-icon.icon-extract) {
-  color: #BA55D3;
-}
-
-:deep(.step-icon.icon-tcp) {
-  color: #2080F0;
-}
-
-:deep(.step-icon.icon-http) {
-  color: #2080F0;
-}
-
-:deep(.step-icon.icon-loop) {
-  color: #F4511E;
-}
-
-:deep(.step-icon.icon-if) {
-  color: #F4511E;
-}
-
-:deep(.step-icon.icon-wait) {
-  color: #F4511E;
-}
-
-:deep(.step-icon.icon-quote) {
-  color: #F4511E;
-}
+/* step-icon 按类型着色（icon-http/icon-loop/icon-code 等）见全局 autotest-theme.scss「步骤图标着色」，本地不再定义 */
 
 :deep(.action-btn) {
   padding: 2px 1px;

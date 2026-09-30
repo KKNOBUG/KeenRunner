@@ -33,7 +33,7 @@
               @click.stop="toggleBranchCollapse(step.id, bi, $event)"
           >
             <TheIcon
-                :icon="isBranchCollapsed(step.id, bi) ? 'gravity-ui:chevron-down' : 'gravity-ui:chevron-up'"
+                :icon="stepExpandIcon(!isBranchCollapsed(step.id, bi))"
                 :size="12"
             />
           </span>
@@ -65,31 +65,31 @@
                     <n-button v-if="isQuoteStepType(child.type)" text size="tiny" class="action-btn"
                         :title="isQuoteExpanded(child.id) ? '折叠引用步骤' : '展开引用步骤'"
                         @click.stop="toggleQuoteExpand(child.id, $event)">
-                      <template #icon><TheIcon :icon="isQuoteExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'" :size="14"/></template>
+                      <template #icon><TheIcon :icon="stepExpandIcon(isQuoteExpanded(child.id))" :size="14"/></template>
                     </n-button>
                     <n-button text size="tiny" class="action-btn"
                         :title="child.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)'"
                         @click.stop="toggleSkipStep(child.id, $event)">
-                      <template #icon><TheIcon :icon="child.step_is_skipped ? 'gravity-ui:eye' : 'gravity-ui:eye-slash'" :size="14"/></template>
+                      <template #icon><TheIcon :icon="stepSkipIcon(child.step_is_skipped)" :size="14"/></template>
                     </n-button>
                     <n-button v-if="stepDefinitions[child.type]?.allowChildren" text size="tiny" class="action-btn"
                         @click.stop="toggleStepExpand(child.id, $event)">
-                      <template #icon><TheIcon :icon="isStepExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'" :size="14"/></template>
+                      <template #icon><TheIcon :icon="stepExpandIcon(isStepExpanded(child.id))" :size="14"/></template>
                     </n-button>
                     <n-button text size="tiny" class="action-btn" title="复制当前步骤" @click.stop="handleCopyStep(child.id)">
-                      <template #icon><TheIcon icon="gravity-ui:square-article" :size="14"/></template>
+                      <template #icon><TheIcon :icon="STEP_TREE_ACTION_ICONS.copy" :size="14"/></template>
                     </n-button>
                     <n-popconfirm @positive-click="handleDeleteStep(child.id)" @click.stop>
                       <template #trigger>
                         <n-button text size="tiny" type="error" class="action-btn" title="删除当前步骤">
-                          <template #icon><TheIcon icon="material-symbols:delete" :size="14"/></template>
+                          <template #icon><TheIcon :icon="STEP_TREE_ACTION_ICONS.remove" :size="14"/></template>
                         </n-button>
                       </template>
                       确认删除该步骤?
                     </n-popconfirm>
                   </span>
                 </span>
-                <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认折叠） -->
+                <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认展开） -->
                 <div v-if="isQuoteStepType(child.type) && isQuoteExpanded(child.id)" class="quote-inner-steps">
                   <div class="quote-inner-list">
                     <div
@@ -177,31 +177,31 @@
                 <n-button v-if="isQuoteStepType(child.type)" text size="tiny" class="action-btn"
                     :title="isQuoteExpanded(child.id) ? '折叠引用步骤' : '展开引用步骤'"
                     @click.stop="toggleQuoteExpand(child.id, $event)">
-                  <template #icon><TheIcon :icon="isQuoteExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'" :size="14"/></template>
+                  <template #icon><TheIcon :icon="stepExpandIcon(isQuoteExpanded(child.id))" :size="14"/></template>
                 </n-button>
                 <n-button text size="tiny" class="action-btn"
                     :title="child.step_is_skipped ? '取消注释(恢复执行)' : '注释(跳过执行)'"
                     @click.stop="toggleSkipStep(child.id, $event)">
-                  <template #icon><TheIcon :icon="child.step_is_skipped ? 'gravity-ui:eye' : 'gravity-ui:eye-slash'" :size="14"/></template>
+                  <template #icon><TheIcon :icon="stepSkipIcon(child.step_is_skipped)" :size="14"/></template>
                 </n-button>
                 <n-button v-if="stepDefinitions[child.type]?.allowChildren" text size="tiny" class="action-btn"
                     @click.stop="toggleStepExpand(child.id, $event)">
-                  <template #icon><TheIcon :icon="isStepExpanded(child.id) ? 'gravity-ui:chevron-up' : 'gravity-ui:chevron-down'" :size="14"/></template>
+                  <template #icon><TheIcon :icon="stepExpandIcon(isStepExpanded(child.id))" :size="14"/></template>
                 </n-button>
                 <n-button text size="tiny" class="action-btn" title="复制当前步骤" @click.stop="handleCopyStep(child.id)">
-                  <template #icon><TheIcon icon="gravity-ui:square-article" :size="14"/></template>
+                  <template #icon><TheIcon :icon="STEP_TREE_ACTION_ICONS.copy" :size="14"/></template>
                 </n-button>
                 <n-popconfirm @positive-click="handleDeleteStep(child.id)" @click.stop>
                   <template #trigger>
                     <n-button text size="tiny" type="error" class="action-btn" title="删除当前步骤">
-                      <template #icon><TheIcon icon="material-symbols:delete" :size="14"/></template>
+                      <template #icon><TheIcon :icon="STEP_TREE_ACTION_ICONS.remove" :size="14"/></template>
                     </n-button>
                   </template>
                   确认删除该步骤?
                 </n-popconfirm>
               </span>
             </span>
-            <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认折叠） -->
+            <!-- 引用步骤：展示公共脚本内的步骤（只读、递归子级，不参与保存；默认展开） -->
             <div v-if="isQuoteStepType(child.type) && isQuoteExpanded(child.id)" class="quote-inner-steps">
               <div class="quote-inner-list">
                 <div
@@ -250,6 +250,7 @@ import { NButton, NPopconfirm } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import AddStepPopover from './AddStepPopover.vue'
 import { isQuoteStepType } from '@/composables/step-editor'
+import { STEP_TREE_ACTION_ICONS, stepExpandIcon, stepSkipIcon } from '../utils/stepIcons'
 
 defineOptions({ name: 'RecursiveStepChildren' })
 

@@ -62,45 +62,12 @@
 import { computed, ref } from 'vue'
 import { NButton, NPopover } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
+import { STEP_TYPE_ICONS, STEP_TYPE_ICON_CLASSES, ADD_STEP_MENU_ICONS, ADD_STEP_MENU_ICON_CLASSES } from '../utils/stepIcons'
 
 
-/** 与 index.vue stepDefinitions / getStepIcon 一致 */
-const STEP_ICON = {
-  user_variables: 'gravity-ui:magic-wand',
-  http: 'streamline-freehand:server-api-cloud',
-  tcp: 'streamline-freehand:server-api-cloud',
-  code: 'ph:file-py',
-  database: 'ph:file-sql',
-  redis: 'ph:file-rs',
-  assert: 'material-symbols:rule',
-  extract: 'material-symbols:data-object',
-  wait: 'gravity-ui:stopwatch',
-  if: 'gravity-ui:shuffle',
-  loop: 'gravity-ui:arrows-rotate-right',
-  quote_public_script: 'gravity-ui:link',
-  quote_public_api: 'gravity-ui:link',
-}
-
-/** 与 index.vue getStepIconClass 一致，用于图标着色 */
-const STEP_ICON_CLASS = {
-  user_variables: 'icon-user_variables',
-  http: 'icon-http',
-  tcp: 'icon-tcp',
-  code: 'icon-code',
-  database: 'icon-database',
-  redis: 'icon-redis',
-  assert: 'icon-assert',
-  extract: 'icon-extract',
-  wait: 'icon-wait',
-  if: 'icon-if',
-  loop: 'icon-loop',
-  quote_public_script: 'icon-quote',
-  quote_public_api: 'icon-quote',
-  copy_steps: 'icon-quote',
-  batch_upload_datasource: 'icon-datasource',
-  summary_download_datasource: 'icon-datasource',
-  template_download_datasource: 'icon-datasource',
-}
+/** 步骤类型图标、菜单专属动作项图标与着色类集中在 utils/stepIcons.js 维护 */
+const STEP_ICON = {...STEP_TYPE_ICONS, ...ADD_STEP_MENU_ICONS}
+const STEP_ICON_CLASS = {...STEP_TYPE_ICON_CLASSES, ...ADD_STEP_MENU_ICON_CLASSES}
 
 const props = defineProps({
   /** 当前用例属于「公共家族」（公共脚本/公共接口）时禁用「引用公共脚本/公共接口」与数据驱动 */
@@ -204,7 +171,6 @@ const menuSections = computed(() => {
         }),
         buildItem('copy_steps', {
           desc: '复制指定脚本，快速复用并创建自定义逻辑',
-          iconName: 'material-symbols:content-copy-outline',
           disabled: onlyHttpTcp,
         }),
       ],
@@ -233,17 +199,14 @@ const menuSections = computed(() => {
       items: [
         buildItem('batch_upload_datasource', {
           desc: '为多个请求步骤上传数据源文件',
-          iconName: 'cuida:upload-outline',
           disabled: isPublic,
         }),
         buildItem('summary_download_datasource', {
           desc: '下载所有请求步骤的数据源文件',
-          iconName: 'cuida:download-outline',
           disabled: isPublic,
         }),
         buildItem('template_download_datasource', {
           desc: '下载所有请求步骤的默认数据模板',
-          iconName: 'cuida:download-outline',
           disabled: isPublic,
         }),
       ],
@@ -318,32 +281,6 @@ const handleSelectItem = (item) => {
 .add-step-item-icon {
   flex-shrink: 0;
   margin-top: 2px;
-}
-
-.add-step-item-icon.icon-loop,
-.add-step-item-icon.icon-if,
-.add-step-item-icon.icon-wait,
-.add-step-item-icon.icon-datasource,
-.add-step-item-icon.icon-quote {
-  color: #F4511E;
-}
-
-.add-step-item-icon.icon-code,
-.add-step-item-icon.icon-database,
-.add-step-item-icon.icon-redis,
-.add-step-item-icon.icon-assert,
-.add-step-item-icon.icon-extract {
-  color: #BA55D3;
-}
-
-.add-step-item-icon.icon-tcp,
-.add-step-item-icon.icon-http {
-  color: #2080F0;
-}
-
-/* 紫色：color: #BA55D3; */
-.add-step-item-icon.icon-user_variables {
-  color: #FF69B4;
 }
 
 .add-step-item-body {

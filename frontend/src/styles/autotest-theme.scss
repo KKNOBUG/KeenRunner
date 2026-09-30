@@ -122,9 +122,9 @@
  * IF=#18a058  ELIF=#f0a020  ELSE=#2080f0
  */
 :root {
-  --branch-color-if: #18a058;
-  --branch-color-elif: #f0a020;
-  --branch-color-else: #2080f0;
+  --branch-color-if: #18A058;
+  --branch-color-elif: #F0A020;
+  --branch-color-else: #2080F0;
 }
 
 .branch-tag {
@@ -142,6 +142,65 @@
 .branch-tag.tag-if { background: var(--branch-color-if); }
 .branch-tag.tag-elif { background: var(--branch-color-elif); }
 .branch-tag.tag-else { background: var(--branch-color-else); }
+
+/* ========== 步骤图标着色（单一色源） ==========
+   步骤树叶子图标（.step-icon）与「添加步骤」菜单项图标（.add-step-item-icon）共用同一色板；
+   着色类映射见 steps/utils/stepIcons.js，页面内不得本地重定义颜色 */
+:root {
+  --autotest-step-icon-variable: #FF69B4; /* 用户变量 */
+  --autotest-step-icon-request: #2080F0;  /* 请求类：HTTP / TCP */
+  --autotest-step-icon-database: #BA55D3;   /* 脚本与数据库类：代码 / 数据库 / Redis */
+  --autotest-step-icon-result: #F4511E;  /* 结果类：提取 / 断言 */
+  --autotest-step-icon-reuse-step: #BA55D3;   /* 复用步骤类：引用公共脚本 / 引用公共接口 / 复制指定脚本 */
+  --autotest-step-icon-control: #F4511E;  /* 控制类：等待控制 / 条件分支 / 循环结构 */
+  --autotest-step-icon-datasource: #F4511E;  /* 上传下载类： 数据源动作(datasource) */
+}
+
+.step-tree-container .step-icon.icon-user_variables,
+.add-step-menu .add-step-item-icon.icon-user_variables {
+  color: var(--autotest-step-icon-variable);
+}
+
+.step-tree-container .step-icon.icon-http,
+.step-tree-container .step-icon.icon-tcp,
+.add-step-menu .add-step-item-icon.icon-http,
+.add-step-menu .add-step-item-icon.icon-tcp {
+  color: var(--autotest-step-icon-request);
+}
+
+.step-tree-container .step-icon.icon-code,
+.step-tree-container .step-icon.icon-database,
+.step-tree-container .step-icon.icon-redis,
+.add-step-menu .add-step-item-icon.icon-code,
+.add-step-menu .add-step-item-icon.icon-database,
+.add-step-menu .add-step-item-icon.icon-redis {
+  color: var(--autotest-step-icon-database);
+}
+
+.step-tree-container .step-icon.icon-assert,
+.step-tree-container .step-icon.icon-extract,
+.add-step-menu .add-step-item-icon.icon-assert,
+.add-step-menu .add-step-item-icon.icon-extract  {
+  color: var(--autotest-step-icon-result);
+}
+
+.step-tree-container .step-icon.icon-quote,
+.add-step-menu .add-step-item-icon.icon-quote {
+  color: var(--autotest-step-icon-reuse-step);
+}
+
+.step-tree-container .step-icon.icon-if,
+.step-tree-container .step-icon.icon-loop,
+.step-tree-container .step-icon.icon-wait,
+.add-step-menu .add-step-item-icon.icon-loop,
+.add-step-menu .add-step-item-icon.icon-if,
+.add-step-menu .add-step-item-icon.icon-wait {
+  color: var(--autotest-step-icon-control);
+}
+
+.add-step-menu .add-step-item-icon.icon-datasource {
+  color: var(--autotest-step-icon-datasource);
+}
 
 /* 工具类 */
 .autotest-empty-hint {
