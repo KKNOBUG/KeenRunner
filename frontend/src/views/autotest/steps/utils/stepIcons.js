@@ -14,9 +14,9 @@ export const STEP_TYPE_ICONS = {
     loop: 'gravity-ui:arrows-rotate-right', // 循环结构
     tcp: 'gravity-ui:abbr-api', // TCP请求
     http: 'gravity-ui:abbr-api', // HTTP请求（与 TCP 共用同一云服务图标）
-    code: 'ph:file-py-duotone', // 代码请求(Python)
-    database: 'ph:file-sql-duotone', // 数据库请求
-    redis: 'ph:file-rs-duotone', // Redis请求
+    code: 'fluent:code-py-16-filled', // 代码请求(Python)
+    database: 'gravity-ui:abbr-sql', // 数据库请求
+    redis: 'carbon:database-redis', // Redis请求
     quote_public_script: 'gravity-ui:route', // 引用公共脚本
     quote_public_api: 'gravity-ui:plug-connection', // 引用公共接口
     assert: 'gravity-ui:list-check', // 断言

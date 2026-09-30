@@ -122,8 +122,8 @@
  * IF=#18a058  ELIF=#f0a020  ELSE=#2080f0
  */
 :root {
-  --branch-color-if: #18A058;
-  --branch-color-elif: #F0A020;
+  --branch-color-if: #BA55D3;
+  --branch-color-elif: #F4511E;
   --branch-color-else: #2080F0;
 }
 
@@ -148,11 +148,11 @@
    着色类映射见 steps/utils/stepIcons.js，页面内不得本地重定义颜色 */
 :root {
   --autotest-step-icon-variable: #FF69B4; /* 用户变量 */
-  --autotest-step-icon-request: #2080F0;  /* 请求类：HTTP / TCP */
-  --autotest-step-icon-database: #BA55D3;   /* 脚本与数据库类：代码 / 数据库 / Redis */
-  --autotest-step-icon-result: #F4511E;  /* 结果类：提取 / 断言 */
-  --autotest-step-icon-reuse-step: #BA55D3;   /* 复用步骤类：引用公共脚本 / 引用公共接口 / 复制指定脚本 */
-  --autotest-step-icon-control: #F4511E;  /* 控制类：等待控制 / 条件分支 / 循环结构 */
+  --autotest-step-icon-request: #BA55D3;  /* 请求类：HTTP / TCP */
+  --autotest-step-icon-database: #F4511E;   /* 脚本与数据库类：代码 / 数据库 / Redis */
+  --autotest-step-icon-result: #2080F0;  /* 结果类：提取 / 断言 */
+  --autotest-step-icon-reuse-step: #F4511E;   /* 复用步骤类：引用公共脚本 / 引用公共接口 / 复制指定脚本 */
+  --autotest-step-icon-control: #BA55D3;  /* 控制类：等待控制 / 条件分支 / 循环结构 */
   --autotest-step-icon-datasource: #F4511E;  /* 上传下载类： 数据源动作(datasource) */
 }
 
