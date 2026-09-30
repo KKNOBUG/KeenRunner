@@ -543,7 +543,7 @@ async def init_database_menu():
         ),
         Menu(
             menu_type=MenuType.MENU,
-            name="压测接口编辑",
+            name="接口编辑",
             path="api/edit",
             order=2,
             parent_id=perf_parent_menu.id,
