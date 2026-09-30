@@ -285,21 +285,46 @@
           />
         </div>
         <div style="display: flex; align-items: center; gap: 12px;">
-          <div style="margin-bottom: 0;">启用数据源：</div>
-          <n-switch v-model:value="debugForm.enableDataSource" @update:value="onDebugEnableDataSourceChange" />
+          <n-switch v-model:value="debugForm.enableDataSource" @update:value="onDebugEnableDataSourceChange">
+            <template #checked>请选择数据源</template>
+            <template #unchecked>未启用数据源</template>
+          </n-switch>
         </div>
-        <div v-if="debugForm.enableDataSource">
-          <div style="margin-bottom: 8px;">场景名称：</div>
-          <n-select
-              v-model:value="debugForm.sceneName"
-              :options="debugSceneOptions"
-              :loading="debugSceneLoading"
-              :disabled="!debugForm.enableDataSource"
-              placeholder="选择场景（调试只可选一个）"
-              clearable
-              filterable
-              style="width: 100%;"
-          />
+        <div v-if="debugForm.enableDataSource" class="perf-dataset-wrap">
+          <div class="perf-dataset-table">
+            <div class="perf-dataset-header">
+              <div class="col check"></div>
+              <div class="col idx">#</div>
+              <div class="col name">数据驱动场景名称</div>
+            </div>
+            <div v-if="debugSceneLoading" class="perf-dataset-empty">
+              <n-spin size="medium" description="加载数据源列表..." />
+            </div>
+            <div v-else-if="!debugDatasetRows.length" class="perf-dataset-empty">
+              <n-empty description="暂无数据, 请先确认接口已绑定数据源" />
+            </div>
+            <div v-else class="perf-dataset-body">
+              <div
+                  v-for="(row, idx) in debugDatasetRows"
+                  :key="row.name"
+                  class="perf-dataset-row"
+              >
+                <div class="col check">
+                  <n-checkbox
+                      size="small"
+                      :checked="debugForm.selectedDatasetIds.includes(row.name)"
+                      @update:checked="(v) => toggleDatasetRow(row.name, v)"
+                  />
+                </div>
+                <div class="col idx">{{ idx + 1 }}</div>
+                <div class="col name">{{ row.name }}</div>
+              </div>
+            </div>
+          </div>
+          <div class="perf-dataset-footer">
+            已选 {{ debugForm.selectedDatasetIds.length }} 项
+            <span style="margin-left: 6px; color: var(--n-text-color-3); font-size: 12px;">(调试模式仅可选 1 条)</span>
+          </div>
         </div>
       </div>
     </n-modal>
@@ -310,8 +335,8 @@
 import { computed, h, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  NAlert, NBadge, NButton, NCard, NCollapseTransition, NForm, NFormItem, NInput, NModal,
-  NRadio, NRadioGroup, NSelect, NSpace, NSwitch, NTabPane, NTabs,
+  NAlert, NBadge, NButton, NCard, NCheckbox, NCollapseTransition, NEmpty, NForm, NFormItem, NInput, NModal,
+  NRadio, NRadioGroup, NSelect, NSpace, NSpin, NSwitch, NTabPane, NTabs,
 } from 'naive-ui'
 
 import AppPage from '@/components/page/AppPage.vue'
@@ -704,10 +729,10 @@ const debugModalVisible = ref(false)
 const debugLoading = ref(false)
 const debugResult = ref(null)
 
-const debugForm = reactive({ envName: null, enableDataSource: false, sceneName: null })
+const debugForm = reactive({ envName: null, enableDataSource: false, selectedDatasetIds: [] })
 const debugEnvOptions = ref([])
 const debugEnvLoading = ref(false)
-const debugSceneOptions = ref([])
+const debugDatasetRows = ref([])
 const debugSceneLoading = ref(false)
 
 /** 打开调试弹窗并预载环境候选 */
@@ -718,9 +743,9 @@ function openDebugModal() {
   }
   debugForm.envName = null
   debugForm.enableDataSource = false
-  debugForm.sceneName = null
+  debugForm.selectedDatasetIds = []
   debugEnvOptions.value = []
-  debugSceneOptions.value = []
+  debugDatasetRows.value = []
   debugModalVisible.value = true
   loadDebugEnvs()
 }
@@ -746,22 +771,22 @@ async function loadDebugEnvs() {
 /** 加载接口绑定的数据源场景列表（一个接口只能有一个数据源） */
 async function loadDebugScenes() {
   if (!form.api_id) {
-    debugSceneOptions.value = []
+    debugDatasetRows.value = []
     return
   }
   debugSceneLoading.value = true
   try {
     const res = await api.listPerfDatasetsForApi({ api_id: form.api_id })
     const rows = (res.data || []).filter((row) => row.bind_api_id === form.api_id)
-    // 一个接口只能有一个数据源，取第一条
     const dsRow = rows.length > 0 ? rows[0] : null
     if (dsRow) {
-      debugSceneOptions.value = (dsRow.dataset_names || []).map((name) => ({ label: name, value: name }))
+      debugDatasetRows.value = (dsRow.dataset_names || []).map((name) => ({ name: String(name) }))
     } else {
-      debugSceneOptions.value = []
+      debugDatasetRows.value = []
     }
+    debugForm.selectedDatasetIds = []
   } catch (e) {
-    debugSceneOptions.value = []
+    debugDatasetRows.value = []
   } finally {
     debugSceneLoading.value = false
   }
@@ -772,15 +797,24 @@ function onDebugEnableDataSourceChange(enabled) {
   if (enabled) {
     loadDebugScenes()
   } else {
-    debugForm.sceneName = null
-    debugSceneOptions.value = []
+    debugForm.selectedDatasetIds = []
+    debugDatasetRows.value = []
+  }
+}
+
+/** 切换数据源行的选中状态（调试模式仅允许单选） */
+function toggleDatasetRow(name, checked) {
+  if (checked) {
+    debugForm.selectedDatasetIds = [name]
+  } else {
+    debugForm.selectedDatasetIds = debugForm.selectedDatasetIds.filter((id) => id !== name)
   }
 }
 
 async function confirmDebug() {
   // 启用数据源时必须选择场景
-  if (debugForm.enableDataSource && !debugForm.sceneName) {
-    window.$message?.warning('启用数据源时请选择场景名称')
+  if (debugForm.enableDataSource && !debugForm.selectedDatasetIds.length) {
+    window.$message?.warning('启用数据源时请选择数据驱动场景')
     return
   }
   debugLoading.value = true
@@ -791,7 +825,7 @@ async function confirmDebug() {
       env_name: debugForm.envName,
       // 对齐 autotest 设计：一个接口绑定一个数据源，调试时选择是否启用 + 场景名称
       enable_data_source: debugForm.enableDataSource,
-      scene_name: debugForm.enableDataSource ? debugForm.sceneName : null,
+      scene_name: debugForm.enableDataSource ? (debugForm.selectedDatasetIds[0] || null) : null,
     })
     debugResult.value = res.data
     debugModalVisible.value = false

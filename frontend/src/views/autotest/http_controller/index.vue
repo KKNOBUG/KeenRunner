@@ -319,11 +319,11 @@
         </div>
         <div class="card-header-actions">
           <n-space align="center" :wrap="false">
-            <n-space v-if="response && !debugLoading" align="center" :wrap="false">
+            <n-space v-if="response && !debugLoading" align="center" :wrap="false" class="header-tags">
               <n-tag :type="responseStatusType" round size="small">Status: {{ response.status }}</n-tag>
               <n-tag :type="durationTagType" round size="small">Time: {{ response.elapsed }}s</n-tag>
               <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
-              <n-tag round>Type: {{ contentType }}</n-tag>
+              <n-tag round size="small">Type: {{ contentType }}</n-tag>
             </n-space>
             <n-tag v-if="debugLoading" type="info" round size="small">
               <template #icon>
@@ -350,7 +350,7 @@
                 <n-space vertical :size="12">
                   <n-descriptions bordered :column="2" size="small">
                     <n-descriptions-item label="方法">
-                      <n-tag :type="methodTagType">{{ requestInfo.method }}</n-tag>
+                      <n-tag :style="{ color: methodColor, borderColor: methodColor }">{{ requestInfo.method }}</n-tag>
                     </n-descriptions-item>
                     <n-descriptions-item label="URL">
                       <n-text copyable>{{ requestInfo.url }}</n-text>
@@ -1252,31 +1252,30 @@ const requestCookiesText = computed(() => {
 })
 const responseStatusType = computed(() => {
   if (!response.value) return 'default'
-  if (response.value.status === 200) {
-    return formattedResponse.value?.status === '000000' ? 'success' : 'error';
-  }
-  return response.value.status >= 400 ? 'error' : 'success'
+  return response.value.status === 200 ? 'success' : 'error'
 })
 
 const durationTagType = computed(() => {
   if (!response.value) return 'default'
-  return parseFloat(response.value.elapsed) > 1 ? 'warning' : 'success'
+  return parseFloat(response.value.elapsed) * 1000 >= 500 ? 'warning' : 'success'
 })
 
+/** 解析后端 format_byte_size 输出（"512B" / "12.34KB"）为字节数，≥100KB 黄色 */
 const sizeTagType = computed(() => {
   if (!response.value) return 'default'
-  return parseFloat(response.value.size) > 100 ? 'warning' : 'success'
+  const raw = String(response.value.size || '')
+  const match = raw.match(/^([\d.]+)\s*(B|KB|MB|GB)$/i)
+  if (!match) return 'default'
+  const num = parseFloat(match[1])
+  const unit = match[2].toUpperCase()
+  const bytes = unit === 'B' ? num : unit === 'KB' ? num * 1024 : unit === 'MB' ? num * 1048576 : num * 1073741824
+  return bytes >= 102400 ? 'warning' : 'success'
 })
 
-// 响应-请求信息相关
-const methodTagType = computed(() => {
-  const method = requestInfo.value.method?.toUpperCase()
-  return {
-    GET: 'success',
-    POST: 'warning',
-    PUT: 'info',
-    DELETE: 'error'
-  }[method] || 'default'
+/** 方法标签颜色对齐 Request 面板请求方式下拉（methodOptions 四色口径） */
+const methodColor = computed(() => {
+  const method = (requestInfo.value.method || '').toUpperCase()
+  return { GET: '#2080F0', POST: '#18A058', PUT: '#FCA130', DELETE: '#F4511E' }[method] || '#999'
 })
 
 
@@ -1686,6 +1685,10 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 
 <style scoped>
 /* 卡片壳见 styles/autotest-theme.scss .step-editor-card */
+
+.header-tags {
+  gap: 8px;
+}
 
 /* 行间距统一由 n-form-item 自身的 margin-bottom 提供，与「步骤描述」等后续表单项保持一致 */
 .http-request-rows {

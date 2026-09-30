@@ -223,7 +223,7 @@
         </div>
         <div class="card-header-actions">
           <n-space align="center" :wrap="false">
-            <n-space v-if="response && !debugLoading" align="center" :wrap="false">
+            <n-space class="header-tags" v-if="response && !debugLoading" align="center" :wrap="false">
               <n-tag :type="durationTagType" round size="small">Time: {{ response.elapsed }}s</n-tag>
               <n-tag :type="sizeTagType" round size="small">Size: {{ response.size }}</n-tag>
               <n-tag round size="small">Type: {{ contentType }}</n-tag>
@@ -1067,23 +1067,23 @@ const formattedResponse = computed(() => {
   }
 })
 
-// 耗时标签颜色（elapsed 为秒级字符串，阈值 5s/1s）
+// 耗时标签颜色（elapsed 为秒级字符串，阈值 500ms）
 const durationTagType = computed(() => {
   const d = parseFloat(response.value?.elapsed)
   if (Number.isNaN(d)) return 'default'
-  return d >= 5 ? 'error' : d >= 1 ? 'warning' : 'success'
+  return d * 1000 >= 500 ? 'warning' : 'success'
 })
 
-// 大小标签颜色
+// 大小标签颜色（阈值 100KB）
 const sizeTagType = computed(() => {
   const s = response.value?.size
   if (!s) return 'default'
-  const match = s.match(/^([\d.]+)\s*(KB|MB|B)$/i)
+  const match = String(s).match(/^([\d.]+)\s*(B|KB|MB|GB)$/i)
   if (!match) return 'default'
-  const val = parseFloat(match[1])
+  const num = parseFloat(match[1])
   const unit = match[2].toUpperCase()
-  if (unit === 'MB' || (unit === 'KB' && val > 500)) return 'warning'
-  return 'success'
+  const bytes = unit === 'B' ? num : unit === 'KB' ? num * 1024 : unit === 'MB' ? num * 1048576 : num * 1073741824
+  return bytes >= 102400 ? 'warning' : 'success'
 })
 
 // 请求体类型
@@ -1508,6 +1508,10 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 
 .request-toolbar-select {
   width: 100%;
+}
+
+.header-tags {
+  gap: 8px;
 }
 </style>
 

@@ -213,7 +213,7 @@ const columns = [
     key: 'debug_state',
     width: 110,
     align: 'center',
-    render: (row) => h(NTag, { type: DEBUG_STATE_TAG_TYPES[row.debug_state] || 'default', size: 'small', round: true },
+    render: (row) => h(NTag, { type: DEBUG_STATE_TAG_TYPES[row.debug_state] || 'default', round: true, bordered: true },
         { default: () => DEBUG_STATE_LABELS[row.debug_state] || row.debug_state || '未调试' }),
   },
   {

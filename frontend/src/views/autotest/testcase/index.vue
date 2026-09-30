@@ -845,7 +845,7 @@ const columns = computed(() => {
       render(row) {
         // case_state: null=未执行过, true=成功, false=失败
         if (row.case_state == null) return h('span', '-')
-        return h(NTag, {type: row.case_state ? 'success' : 'error', size: 'small', round: true}, () => (row.case_state ? '成功' : '失败'))
+        return h(NTag, {type: row.case_state ? 'success' : 'error', round: true, bordered: true}, () => (row.case_state ? '成功' : '失败'))
       },
     },
 
