@@ -92,7 +92,11 @@ class KvUtils:
     @staticmethod
     def get_value_from_list(variables: Optional[Sequence[StepVariablesBase]], name: str) -> Any:
         """
-        从StepVariablesBase列表中取key为name的项的value。
+        从StepVariablesBase列表中取key为name的项的value，同名key取最后一次出现的值。
+
+        同名覆盖语义说明：列表中同名项后写覆盖先写（如追加变量覆盖原变量），
+        与 list_to_dict / convert_list_to_dict_for_http 等字典化路径的后写覆盖行为保持一致，
+        故倒序扫描返回最后一次出现的项。
 
         :param variables: 变量列表
         :param name: 变量名
@@ -100,7 +104,7 @@ class KvUtils:
         """
         if variables is None:
             return None
-        for variable in variables:
+        for variable in reversed(variables):
             if isinstance(variable, StepVariablesBase) and getattr(variable, "key", None) and variable.key == name:
                 return variable.value
         return None
