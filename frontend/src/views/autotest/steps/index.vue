@@ -216,7 +216,7 @@
         >
           <span class="steps-split-resizer__line" aria-hidden="true" />
           <span class="steps-split-resizer__handle" aria-hidden="true">
-            <TheIcon icon="mdi:drag-vertical" :size="14" />
+            <TheIcon icon="gravity-ui:arrows-expand" :size="14" />
           </span>
         </div>
         <div class="right-column steps-split-main">
@@ -240,7 +240,7 @@
             title="展开步骤树"
             @click="expandLeftPanel"
         >
-          <TheIcon icon="line-md:chevron-right" :size="16" />
+          <TheIcon icon="gravity-ui:chevron-right" :size="16" />
         </button>
       </div>
     </div>
@@ -2541,7 +2541,7 @@ provide('stepTreeContext', {
 
 .steps-split-resizer:hover .steps-split-resizer__line,
 .steps-split-resizer.is-resizing .steps-split-resizer__line {
-  width: 2px;
+  width: 1px;
   background: var(--n-primary-color, #F4511E);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--n-primary-color, #F4511E) 18%, transparent);
 }
@@ -2565,16 +2565,16 @@ provide('stepTreeContext', {
 .steps-split-expand {
   position: absolute;
   left: 0;
-  top: 50%;
+  top: 35%;
   z-index: 5;
   transform: translateY(-50%);
-  width: 18px;
-  height: 40px;
+  width: 25px;
+  height: 50px;
   padding: 0;
   margin: 0;
   border: none;
   border-radius: 0 6px 6px 0;
-  background: color-mix(in srgb, var(--n-text-color-3, #999) 12%, transparent);
+  background: color-mix(in srgb, var(--n-text-color-3, #999) 15%, transparent);
   color: var(--n-text-color-3, #999);
   cursor: pointer;
   display: flex;
