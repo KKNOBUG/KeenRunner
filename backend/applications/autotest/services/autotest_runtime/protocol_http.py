@@ -94,7 +94,7 @@ def assemble_http_body_payloads(
 
 def encode_http_header_values(headers: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """
-    对请求头字符串值做UTF-8百分号编码，避免中文等非ASCII导致发送失败。
+    对请求头字符串值做UTF-8百分号编码，避免中文等非ASCII导致发送失败；同时剔除key为空的项。
 
     :param headers: 原始请求头
     :return: 编码后的请求头；入参为空则原样返回
@@ -105,6 +105,7 @@ def encode_http_header_values(headers: Optional[Dict[str, Any]]) -> Optional[Dic
         key: quote(value, encoding="utf-8", safe=":/?#[]@!$&'()*+,;=-._~%")
         if isinstance(value, str) else value
         for key, value in headers.items()
+        if key is not None and str(key).strip()
     }
 
 

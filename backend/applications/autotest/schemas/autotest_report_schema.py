@@ -101,6 +101,7 @@ class AutoTestReportBatchDetailSelect(BaseModel):
     order: List[str] = Field(default_factory=lambda: ["case_st_time", "id"], description="排序字段")
 
     batch_code: str = Field(..., min_length=1, max_length=64, description="批次标识代码")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     state: Optional[int] = Field(default=0, description="状态")
 
 
@@ -113,18 +114,12 @@ class AutoTestReportBatchScriptSelect(BaseModel):
     state: Optional[int] = Field(default=0, description="状态")
 
 
-class AutoTestReportScriptRoundItem(BaseModel):
-    """批次内单个脚本（用例）单个执行轮次的元数据行。"""
-
-    round_no: int = Field(..., description="执行轮次序号(1起)")
-    dataset_names: List[str] = Field(default_factory=list, description="本轮次执行的数据源名称列表(未参数化执行为空)")
-
-
 class AutoTestReportBatchScriptItem(BaseModel):
     """批次内单个脚本（用例）的执行信息汇总行。"""
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_name: str = Field(default="", description="脚本(用例)名称")
+    case_exec_status: AutoTestTaskStatus = Field(..., description="用例执行结果")
     case_execute_count: int = Field(default=0, description="用例执行次数")
     case_exec_passed: int = Field(default=0, description="用例执行成功数量")
     case_exec_failed: int = Field(default=0, description="用例执行失败数量")
@@ -132,7 +127,7 @@ class AutoTestReportBatchScriptItem(BaseModel):
     case_st_time: Optional[str] = Field(None, description="用例首次开始时间")
     case_ed_time: Optional[str] = Field(None, description="用例最晚结束时间")
     case_elapsed: float = Field(default=0.0, description="用例执行耗时")
-    rounds: List[AutoTestReportScriptRoundItem] = Field(default_factory=list, description="执行轮次元数据")
+    has_multiple_dataset: bool = Field(default=False, description="是否为多数据源脚本")
     involve_envs: List[str] = Field(default_factory=list, description="涉及应用环境列表")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="执行人员")
 
@@ -152,6 +147,7 @@ class AutoTestReportBatchItem(BaseModel):
     """单次任务执行（一个 batch_code）的汇总行。"""
 
     batch_code: Optional[str] = Field(None, description="批次标识")
+    task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
     task_exec_status: AutoTestTaskStatus = Field(..., description="任务执行状态")
     task_bind_script: int = Field(default=0, description="任务绑定脚本数量")
     task_exec_passed: int = Field(default=0, description="任务执行成功数量")

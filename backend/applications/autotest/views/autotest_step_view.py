@@ -799,6 +799,8 @@ async def execute_step_tree(
                         initial_variables=initial_variables,
                         report_type=AutoTestReportType.ASYNC_EXEC,
                     )
+                    # 单次执行无"下一条数据源"，剔除变量池保持响应结构不变
+                    result_data.pop("session_variables", None)
                     total_steps: int = int(result_data.get("total_steps") or 0)
                     success_steps: int = int(result_data.get("success_steps") or 0)
                     failed_steps: int = int(result_data.get("failed_steps") or 0)

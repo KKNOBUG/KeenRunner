@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : Krun
+@Module  : autotest_step_debug_service.py
+@DateTime: 2026/1/15 10:20
+"""
 from __future__ import annotations
 
 import time
@@ -114,10 +121,10 @@ class StepDebugService:
         """
         merged: Dict[str, Any] = {}
         for item in defined_variables or []:
-            if isinstance(item, StepVariablesBase) and item.key:
+            if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged[item.key] = item.value
         for item in session_variables or []:
-            if isinstance(item, StepVariablesBase) and item.key:
+            if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged[item.key] = item.value
         initial_models = [StepVariablesBase(key=k, value=v, desc="") for k, v in merged.items()]
         return merged, initial_models
@@ -142,7 +149,7 @@ class StepDebugService:
             finished_variables={},
         )
         for item in finished_variables:
-            if isinstance(item, StepVariablesBase) and item.key:
+            if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged_lookup[item.key] = item.value
         return finished_variables
 

@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : __init__.py.py
+@Module  : __init__.py
 @DateTime: 2025/1/12 19:39
 """
 from .app_enum import Code, Message, Status
@@ -51,6 +51,7 @@ from .autotest_enum import (
     AutoTestTaskPeriodicMode,
     AutoTestTaskCycleType,
     AutoTestTaskExecuteMode,
+    AutoTestSessionTransfer,
     AutoTestEnvMode,
     AutoTestTaskStatus,
     AutoTestReqArgsType,
@@ -82,6 +83,7 @@ __all__ = (
     AutoTestTaskPeriodicMode,
     AutoTestTaskCycleType,
     AutoTestTaskExecuteMode,
+    AutoTestSessionTransfer,
     AutoTestEnvMode,
     AutoTestTaskStatus,
     AutoTestReqArgsType,

@@ -59,14 +59,14 @@ class ListVariableResolver:
         从列表中根据key取值。
 
         :param name: 变量名
-        :return: 对应value
+        :return: 对应value；null是合法变量值，仅在key不存在时抛KeyError
         """
         from backend.applications.autotest.services.autotest_runtime.util_kv import KvUtils
 
-        resolved = KvUtils.get_value_from_list(self._variables, name)
-        if resolved is None:
-            raise KeyError(f"必须是已经存在且有值的变量: {name!r}")
-        return resolved
+        item = KvUtils.get_item_from_list(self._variables, name)
+        if item is None:
+            raise KeyError(f"必须是已定义的变量: {name!r}")
+        return item.value
 
 
 def coerce_variable_resolver(

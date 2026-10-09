@@ -117,6 +117,12 @@ class AutoTestTaskExecuteMode(StringEnum):
     SERIAL = "串行执行"
 
 
+class AutoTestSessionTransfer(StringEnum):
+    """变量池传递开关：用例级全局设置，仅多条数据源执行时有意义。"""
+    DISABLE = "禁用"
+    ENABLED = "启用"
+
+
 class AutoTestEnvMode(StringEnum):
     """任务环境模式：cases_execute_config.env_mode存储枚举。"""
     SINGLE = "single"

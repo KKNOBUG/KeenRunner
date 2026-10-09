@@ -24,12 +24,11 @@ class KvUtils:
     """变量列表与HTTP键值转换、会话查找表及错误消息格式化。"""
 
     @classmethod
-    def _key_value_list_to_dict(cls, items: Sequence[StepVariablesBase], *, skip_if_no_value: bool = False) -> Dict[str, Any]:
+    def _key_value_list_to_dict(cls, items: Sequence[StepVariablesBase]) -> Dict[str, Any]:
         """
-        将StepVariablesBase列表平铺为Dict[str, Any]。
+        将StepVariablesBase列表平铺为Dict[str, Any]，value=None如实保留（null是合法变量值）。
 
         :param items: 变量项序列
-        :param skip_if_no_value: 为True时跳过value为None的项
         :return: key -> value字典
         """
         if not items:
@@ -38,23 +37,25 @@ class KvUtils:
         for item in items:
             if not isinstance(item, StepVariablesBase):
                 raise TypeError(f"变量项必须为 StepVariablesBase，得到 {type(item).__name__}")
-            if skip_if_no_value and item.value is None:
-                continue
             key: str = item.key
-            if key:
+            # 与前端保存校验同口径：key去空白后为空视为无效键
+            if key and key.strip():
                 result[key] = item.value
         return result
 
     @classmethod
     def list_to_dict(cls, variable_list: Sequence[StepVariablesBase]) -> Dict[str, Any]:
         """
-        将StepVariablesBase列表转为name -> value字典, 供Python代码命名空间使用，会跳过value为None的变量。
+        将StepVariablesBase列表转为name -> value字典（供Python代码命名空间、提取断言查找表使用）。
+
+        value=None的变量必须保留：null是合法提取结果，查找表丢失null值会导致
+        提取器/断言/Python命名空间将已定义变量误判为未定义。
 
         :param variable_list: 变量模型列表
         :return: 键为变量名、值为变量值的字典
         """
         items = list(variable_list) if variable_list is not None else []
-        return cls._key_value_list_to_dict(items, skip_if_no_value=True)
+        return cls._key_value_list_to_dict(items)
 
     @classmethod
     def convert_list_to_dict_for_http(cls, data: Any) -> Dict[str, Any]:
@@ -69,10 +70,13 @@ class KvUtils:
         result: Dict[str, Any] = {}
         for item in data:
             if isinstance(item, StepVariablesBase):
-                if item.key:
+                # 与前端保存校验同口径：key去空白后为空视为无效键，发送前剔除
+                if item.key and item.key.strip():
                     result[item.key] = item.value
-            elif isinstance(item, dict) and item.get("key") is not None:
-                result[item["key"]] = item.get("value")
+            elif isinstance(item, dict):
+                key = item.get("key")
+                if key is not None and str(key).strip():
+                    result[key] = item.get("value")
         return result
 
     @classmethod
@@ -102,11 +106,26 @@ class KvUtils:
         :param name: 变量名
         :return: 变量值；未找到时返回None
         """
+        item = KvUtils.get_item_from_list(variables, name)
+        return item.value if item is not None else None
+
+    @staticmethod
+    def get_item_from_list(variables: Optional[Sequence[StepVariablesBase]], name: str) -> Optional[StepVariablesBase]:
+        """
+        从StepVariablesBase列表中取key为name的项本身，同名key取最后一次出现的项。
+
+        与 get_value_from_list 的区别：返回项本身可区分"未定义"与"已定义但值为null"，
+        供 get_variable 等需要按存在性判断的消费方使用。
+
+        :param variables: 变量列表
+        :param name: 变量名
+        :return: 命中的StepVariablesBase项；未找到时返回None
+        """
         if variables is None:
             return None
         for variable in reversed(variables):
             if isinstance(variable, StepVariablesBase) and getattr(variable, "key", None) and variable.key == name:
-                return variable.value
+                return variable
         return None
 
     @staticmethod

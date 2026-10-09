@@ -44,7 +44,7 @@ class PlaceholderResolver:
             is_core_engine=is_core_engine,
         )
         if resolver is None:
-            raise KeyError(f"必须是已经存在且有值的变量: {inner!r}")
+            raise KeyError(f"变量({inner!r})未定义: 当前无可用变量源")
         return resolver.get_variable(inner)
 
     @classmethod

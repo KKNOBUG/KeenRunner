@@ -8,7 +8,7 @@
 """
 from typing import Optional, List, Dict, Any, Type
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
 from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from backend.applications.autotest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
@@ -44,7 +44,7 @@ class RedisOperates(BaseModel):
     """步骤定义中的单条Redis操作字段模型。"""
 
     name: str = Field(..., max_length=128, description="Redis操作名称")
-    expr: str = Field(..., max_length=4096, description="Redis命令(支持多行)")
+    expr: str = Field(..., max_length=4096, description="Redis操作命令")
     project_id: Optional[int] = Field(None, ge=1, description="所属应用ID")
     project_name: str = Field(..., max_length=128, description="所属应用名称")
     variable_name: str = Field(..., max_length=128, description="存储变量名称")
@@ -62,7 +62,7 @@ class ConditionsBase(BaseModel):
 
     @field_validator("condition_compare", mode="before")
     @classmethod
-    def validate_condition_compare(cls, v: Any) -> str:
+    def _validate_condition_compare(cls, v: Any) -> str:
         """
         校验并规范化条件比较符为AutoTestAssertionOperation枚举值。
 
@@ -84,13 +84,13 @@ class BranchItem(BaseModel):
 
     @field_validator("branch_type", mode="before")
     @classmethod
-    def validate_branch_type(cls, v: Any) -> str:
+    def _validate_branch_type(cls, v: Any) -> str:
         if v.lower() not in ("if", "elif", "else"):
             raise ValueError(f"参数[branch_type]必须为[if|elif|else], 当前: {v!r}")
         return v.lower()
 
     @model_validator(mode="after")
-    def validate_conditions_presence(self):
+    def _validate_branch_conditions(self):
         if self.branch_type in ("if", "elif") and not self.branch_conditions:
             raise ValueError(f"参数[branch_type]为[{self.branch_type}]时必须配置[branch_conditions]")
         if self.branch_type == "else" and self.branch_conditions is not None:
@@ -105,6 +105,11 @@ class StepVariablesBase(BaseModel):
     value: Optional[Any] = Field(None, description="会话变量(值)")
     desc: Optional[str] = Field(None, max_length=2048, description="会话变量(描述)")
 
+    @model_serializer(mode="plain")
+    def _serialize_variables(self) -> Dict[str, Any]:
+        # value=null是合法提取结果，外层dump带exclude_none时会递归过滤嵌套模型，导致明细快照丢失value键；用plain序列化器固化三键结构，使value=None不被剔除；
+        return {"key": self.key, "value": self.value, "desc": self.desc}
+
 
 class StepsExecuteConfigBase(BaseModel):
     """步骤执行时环境配置覆盖基础字段模型。"""
@@ -118,7 +123,8 @@ class StepsExecuteConfigBase(BaseModel):
 
 
 class StepExtractVariableItem(BaseModel):
-    """步骤定义中的单条提取规则；scope表示ALL/SOME，对应extract_from_source的range_type参数。"""
+    """步骤定义中的单条提取规则。"""
+
     name: str = Field(..., max_length=256, description="提取项名称")
     source: str = Field(..., max_length=128, description="数据源")
     expr: Optional[str] = Field(None, max_length=4096, description="提取表达式")
@@ -127,7 +133,7 @@ class StepExtractVariableItem(BaseModel):
 
 
 class StepAssertValidatorItem(BaseModel):
-    """步骤定义中的单条断言，与 run_assert_validators 入参一致。"""
+    """步骤定义中的单条断言。"""
 
     name: str = Field(..., max_length=256, description="断言名称")
     source: str = Field(..., max_length=128, description="数据源")
@@ -137,7 +143,7 @@ class StepAssertValidatorItem(BaseModel):
 
     @field_validator("operation", mode="before")
     @classmethod
-    def validate_operation(cls, v: Any) -> str:
+    def _validate_operation(cls, v: Any) -> str:
         """
         校验并规范化比较符为AutoTestAssertionOperation枚举值。
 
@@ -165,7 +171,7 @@ class AutoTestStepReqBase(BaseModel):
     request_project_id: Optional[int] = Field(None, ge=1, description="请求应用ID")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
     request_config_name: Optional[str] = Field(None, max_length=128, description="请求环境配置名称")
-    # TCP 步骤扩展（与 TcpStepExecutor 约定一致；存库 JSON 可含下列键）
+
     tcp_frame_mode: Optional[str] = Field(None, max_length=64, description="TCP帧模式(length_prefix_json|raw)")
     tcp_length_field_size: Optional[int] = Field(None, ge=1, le=32, description="长度前缀字段宽度")
     tcp_encoding: Optional[str] = Field(None, max_length=32, description="文本编码")
@@ -183,7 +189,7 @@ class AutoTestStepReqBase(BaseModel):
         mode="before"
     )
     @classmethod
-    def _empty_request_list_to_none(cls, v: Any) -> Any:
+    def _validate_empty_request_fields(cls, v: Any) -> Any:
         """
         request_header/request_params/request_form_data/request_form_urlencoded/request_form_file字段空数组时归一为null值。
 
@@ -203,7 +209,7 @@ class AutoTestStepDbBase(BaseModel):
 
     @field_validator("database_operates", mode="before")
     @classmethod
-    def normalize_database_operates(cls, v: Any) -> Any:
+    def _normalize_database_operates(cls, v: Any) -> Any:
         """
         将database_operates规范为null或对象列表；单条dict包装为列表。
 
@@ -227,7 +233,7 @@ class AutoTestStepRedisBase(BaseModel):
 
     @field_validator("redis_operates", mode="before")
     @classmethod
-    def normalize_redis_operates(cls, v: Any) -> Any:
+    def _normalize_redis_operates(cls, v: Any) -> Any:
         """
         将redis_operates规范为null或对象列表；dict取其values作为列表。
 
@@ -251,64 +257,21 @@ class AutoTestStepVarBase(BaseModel):
     extract_variables: Optional[List[StepExtractVariableItem]] = Field(default=None, description="提取变量(从请求控制器、上下文中提取、执行代码结果)")
     assert_validators: Optional[List[StepAssertValidatorItem]] = Field(default=None, description="断言规则(支持对数据对象进行不同表达式的断言验证)")
 
-    @field_validator("session_variables", mode="before")
+    @field_validator("defined_variables", "session_variables", "extract_variables", "assert_validators", mode="before")
     @classmethod
-    def _session_variables_list_shape(cls, v: Any) -> Any:
+    def _validate_fields_shape(cls, v: Any) -> Any:
         """
-        校验session_variables为数组或null；空数组归一为null。
+        校验defined_variables、session_variables、extract_variables、assert_validators字段类型。
 
         :param v: 原始值
-        :return: 原值（合法且非空时），空数组返回None
+        :return: 合法且非空时返回原值，空数组时返回None值
         """
         if v is None:
             return None
         if not isinstance(v, list):
-            raise ValueError(f"参数[session_variables]必须为null或对象列表，当前类型: {type(v).__name__}")
-        return v or None
-
-    @field_validator("defined_variables", mode="before")
-    @classmethod
-    def _defined_variables_list_shape(cls, v: Any) -> Any:
-        """
-        校验defined_variables为数组或null；空数组归一为null。
-
-        :param v: 原始值
-        :return: 原值（合法且非空时），空数组返回None
-        """
-        if v is None:
-            return None
-        if not isinstance(v, list):
-            raise ValueError(f"参数[defined_variables]必须为null或对象列表，当前类型: {type(v).__name__}")
-        return v or None
-
-    @field_validator("extract_variables", mode="before")
-    @classmethod
-    def _extract_variables_list_shape(cls, v: Any) -> Any:
-        """
-        校验 extract_variables 为数组或 null；空数组归一为 null。
-
-        :param v: 原始值
-        :return: 原值（合法且非空时），空数组返回None
-        """
-        if v is None:
-            return None
-        if not isinstance(v, list):
-            raise ValueError(f"参数[extract_variables]必须为null或对象列表，当前类型: {type(v).__name__}")
-        return v or None
-
-    @field_validator("assert_validators", mode="before")
-    @classmethod
-    def _assert_validators_list_shape(cls, v: Any) -> Any:
-        """
-        校验assert_validators为数组或null；空数组归一为null。
-
-        :param v: 原始值
-        :return: 原值（合法且非空时），空数组返回None
-        """
-        if v is None:
-            return None
-        if not isinstance(v, list):
-            raise ValueError(f"参数[assert_validators]必须为null或对象列表，当前类型: {type(v).__name__}")
+            raise ValueError(
+                f"参数[session_variables｜defined_variables｜extract_variables｜assert_validators]必须为列表或null，当前类型: {type(v).__name__}"
+            )
         return v or None
 
 
@@ -325,7 +288,7 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤所属类型")
 
     case_id: Optional[int] = Field(None, description="步骤所属用例")
-    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/引用公共接口ID")
+    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/接口ID")
     parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
     step_is_skipped: Optional[bool] = Field(False, description="是否跳过执行")
 

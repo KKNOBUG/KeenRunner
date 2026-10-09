@@ -25,10 +25,10 @@ from backend.applications.autotest.schemas.autotest_report_schema import (
     AutoTestReportBatchItem,
     AutoTestReportBatchScriptSelect,
     AutoTestReportBatchScriptItem,
-    AutoTestReportScriptRoundItem,
     AutoTestReportScriptReportSelect,
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+from backend.applications.autotest.services.autotest_task_crud import AutoTestTaskCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -307,6 +307,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         if not aggregate_rows:
             return 0, []
 
+        # 整次请求只服务一个task_code, 任务名称用一次唯一索引点查取回, 页内所有批次行共用
+        task_rows: List[str] = await AutoTestTaskCrud().model.filter(
+            task_code=task_code,
+        ).limit(1).values_list("task_name", flat=True)
+        task_name: Optional[str] = task_rows[0] if task_rows else None
+
         grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for row in aggregate_rows:
             row["report_id"] = row.pop("id")
@@ -328,6 +334,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             batches.append(
                 AutoTestReportBatchItem(
                     batch_code=None if group_key.startswith("single:") else group_key,
+                    task_name=task_name,
                     task_exec_status=self._resolve_batch_execute_result(by_case),
                     task_bind_script=script_count,
                     task_exec_passed=success_script_count,
@@ -351,7 +358,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
     async def search_batch_scripts(self, script_in: AutoTestReportBatchScriptSelect) -> Tuple[int, List[AutoTestReportBatchScriptItem]]:
         """
-        批次内脚本维度下钻查询：按批次标识聚合脚本执行信息(一行=一个脚本, 含轮次元数据), 供/search_batch_scripts接口渲染“脚本执行信息”抽屉。
+        批次内脚本维度下钻查询：按批次标识聚合脚本执行信息(一行=一个脚本), 供/search_batch_scripts接口渲染“脚本执行信息”抽屉。
+        轮次列表由前端按case_execute_count构建, 轮次内数据源名称由/search_script_round_reports按全轮次计算返回。
 
         :param script_in: 脚本维度查询入参
         :return: (脚本总数, 当前页脚本行列表)
@@ -377,33 +385,33 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         script_items: List[AutoTestReportBatchScriptItem] = []
         for case_rows in grouped.values():
-            round_datasets: Dict[int, List[str]] = {}
+            # 单次遍历完成轮次分组与数据源名称收集, 避免逐轮次重扫报告行
+            round_rows: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+            dataset_names: Set[str] = set()
             for row in case_rows:
                 round_no_value = row.get("round_no")
-                if round_no_value is None:
-                    continue
-                dataset_names = round_datasets.setdefault(round_no_value, [])
-                dataset_name = str(row.get("dataset_name") or "").strip()
-                if dataset_name and dataset_name not in dataset_names:
-                    dataset_names.append(dataset_name)
-            if round_datasets:
-                case_execute_count: int = len(round_datasets)
+                if round_no_value is not None:
+                    round_rows[round_no_value].append(row)
+                dataset_name_value = str(row.get("dataset_name") or "").strip()
+                if dataset_name_value:
+                    dataset_names.add(dataset_name_value)
+            if round_rows:
+                # 轮次口径: 执行次数=round_no去重数, 一轮内多数据源产生多条报告仅计1次; 成功数=全部报告成功的轮次数
+                case_execute_count: int = len(round_rows)
                 case_exec_passed: int = sum(
-                    1 for round_no_value in round_datasets
-                    if all(
-                        self._is_case_success(row.get("case_state"))
-                        for row in case_rows if row.get("round_no") == round_no_value
-                    )
+                    1 for rows in round_rows.values()
+                    if all(self._is_case_success(row.get("case_state")) for row in rows)
                 )
-                rounds: List[AutoTestReportScriptRoundItem] = [
-                    AutoTestReportScriptRoundItem(round_no=round_no_value, dataset_names=dataset_names)
-                    for round_no_value, dataset_names in sorted(round_datasets.items())
-                ]
             else:
                 # 历史数据无轮次标识, 退化为报告行数口径
                 case_execute_count = len(case_rows)
                 case_exec_passed = sum(1 for row in case_rows if self._is_case_success(row.get("case_state")))
-                rounds = []
+            if case_execute_count and case_exec_passed == case_execute_count:
+                case_exec_status: AutoTestTaskStatus = AutoTestTaskStatus.SUCCESS
+            elif case_exec_passed >= 1:
+                case_exec_status = AutoTestTaskStatus.PARTIAL_SUCCESS
+            else:
+                case_exec_status = AutoTestTaskStatus.FAILURE
             execute_users: List[str] = [user for user in (row.get("created_user") for row in case_rows) if user]
             st_times: List[str] = sorted(st_time for st_time in (row.get("case_st_time") for row in case_rows) if st_time)
             ed_times: List[str] = [ed_time for ed_time in (row.get("case_ed_time") for row in case_rows) if ed_time]
@@ -411,12 +419,14 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
                 AutoTestReportBatchScriptItem(
                     case_id=case_rows[0].get("case_id"),
                     case_name="",
+                    case_exec_status=case_exec_status,
                     case_execute_count=case_execute_count,
                     case_exec_passed=case_exec_passed,
                     case_exec_failed=case_execute_count - case_exec_passed,
                     case_pass_rate=round(case_exec_passed / case_execute_count * 100.0, 2) if case_execute_count else None,
+                    # 语义对齐/search_reports的has_multiple_dataset: 多数据源判定=数据源名称去重数>1
+                    has_multiple_dataset=len(dataset_names) > 1,
                     involve_envs=self._merge_involve_envs(case_rows),
-                    rounds=rounds,
                     created_user=str(execute_users[0]) if execute_users else None,
                     case_st_time=st_times[0] if st_times else None,
                     case_ed_time=max(ed_times) if ed_times else None,
@@ -482,10 +492,18 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
                 state__not=1
             ).values_list("id", "case_name")
         )
-        for index, row in enumerate(data):
+        # 同一批次必属同一任务, 任务名称用一次唯一索引点查取回, 页内所有报告行共用
+        task_code_of_batch: Optional[str] = data[0].get("task_code") if data else None
+        task_name: Optional[str] = None
+        if task_code_of_batch:
+            task_rows: List[str] = await AutoTestTaskCrud().model.filter(
+                task_code=task_code_of_batch,
+            ).limit(1).values_list("task_name", flat=True)
+            task_name = task_rows[0] if task_rows else None
+        for row in data:
+            row["task_name"] = task_name
             row["case_name"] = case_name_map.get(report_in.case_id, "")
             row["step_pass_ratio"] = round(float(row.get("step_pass_ratio") or 0), 2)
-            row["dataset_no"] = (report_in.page - 1) * report_in.page_size + index + 1
         return total, data
 
     async def search_reports(self, search: Q, report_in: AutoTestReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
@@ -562,7 +580,15 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
                 report_item["step_pass_ratio"] = f"{round(float(row['rep_pass_ratio'] or 0), 2)}%"
         return total, data
 
-    async def search_batch_reports(self, page: int, page_size: int, order: List[str], batch_code: str, state: int) -> Tuple[int, List[Dict]]:
+    async def search_batch_reports(
+            self,
+            page: int,
+            page_size: int,
+            order: List[str],
+            batch_code: str,
+            state: int,
+            case_id: Optional[int] = None,
+    ) -> Tuple[int, List[Dict]]:
         """
         报告维度下钻查询：按批次标识精确分页返回同批次全部报告(一行=一条报告, 不做批次唯一化), 供/search_batch_reports接口渲染“执行报告”抽屉。
 
@@ -571,9 +597,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param order: 排序字段列表
         :param batch_code: 批次标识代码(精确等值, 命中batch_code索引)
         :param state: 状态(0:启用, 1:禁用)
+        :param case_id: 用例ID(可选, 传入时按用例过滤, 与batch_code命中复合索引(batch_code, case_id, round_no)左前缀)
         :return: (报告总数, 当前页报告行列表)
         """
         q: Q = Q(batch_code=batch_code) & Q(state=state)
+        if case_id:
+            q &= Q(case_id=case_id)
         select_result: Tuple[int, List[AutoTestReportModel]] = await self.select_reports(
             search=q,
             page=page,

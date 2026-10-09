@@ -328,7 +328,7 @@ class StepExecutionContext:
 
     def update_variables(self, variables: List[StepVariablesBase], *, scope: str = "defined_variables") -> None:
         """
-        根据作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加。
+        根据作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加；key为空的项过滤跳过。
 
         :param variables: 待更新的变量列表
         :param scope: 目标作用域（defined_variables 或 session_variables）
@@ -349,9 +349,12 @@ class StepExecutionContext:
 
         target_update_scope: List[StepVariablesBase] = self.defined_variables if scope == "defined_variables" else self.session_variables
         for variable in variables:
-            if not isinstance(variable, StepVariablesBase) or not getattr(variable, "key", False):
+            if not isinstance(variable, StepVariablesBase):
                 raise ValueError("【更新变量】失败: 每项必须为 StepVariablesBase 类型且含非空 key")
             key: str = variable.key
+            if not key or not key.strip():
+                # 健壮性过滤：key为空的变量项不入池，不中断步骤
+                continue
             already_found: bool = False
             for existing_index, existing_item in enumerate(target_update_scope):
                 if isinstance(existing_item, StepVariablesBase) and existing_item.key == key:
@@ -383,9 +386,10 @@ class StepExecutionContext:
             ("defined_variables", self.defined_variables),
             ("session_variables", self.session_variables),
         ]:
-            value = AutoTestToolService.get_value_from_list(scope_list, name)
-            if value is not None:
-                return value
+            # 按key存在性判断而非value非空：null是合法变量值，且defined必须遮蔽同名session变量
+            item = AutoTestToolService.get_item_from_list(scope_list, name)
+            if item is not None:
+                return item.value
 
         raise KeyError(f"【获取变量】变量({name})未定义: \n\t请检查变量名是否正确, 或确认变量是否已在之前的步骤中定义")
 
@@ -1247,8 +1251,12 @@ class BaseStepExecutor:
         builtin_variables: List[StepVariablesBase] = self.collect_builtin_variables()
         self.context.defined_variables = builtin_variables
         if self.resolve_own_defined_variables:
+            # 注入前剔除key为空的变量项（与前端保存校验同口径），避免空键数据进入变量池参与发送
+            step_defined_variables: List[StepVariablesBase] = [
+                item for item in (self.step.defined_variables or [])
+                if isinstance(item, StepVariablesBase) and item.key and item.key.strip()
+            ]
             # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
-            step_defined_variables: List[StepVariablesBase] = self.step.defined_variables
             resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
                 variables=step_defined_variables,
                 step_code=self.step_code

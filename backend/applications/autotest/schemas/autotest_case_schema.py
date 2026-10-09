@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType
+from backend.enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType, AutoTestSessionTransfer
 
 
 class AutoTestCaseMeta(BaseModel):
@@ -34,6 +34,7 @@ class AutoTestCaseBase(BaseModel):
     case_type: Optional[AutoTestCaseType] = Field(None, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(None, description="用例所属属性")
     case_project: Optional[int] = Field(None, ge=1, description="用例所属应用")
+    session_transfer: Optional[AutoTestSessionTransfer] = Field(None, description="变量池传递开关")
     session_variables: Optional[List[Dict[str, Any]]] = Field(None, description="会话变量(初始变量池)")
 
     @field_validator("case_tags", "session_variables", mode="before")
@@ -58,6 +59,7 @@ class AutoTestCaseCreate(AutoTestCaseBase):
     case_type: Optional[AutoTestCaseType] = Field(default=AutoTestCaseType.PRIVATE_SCRIPT, description="用例所属类型")
     case_attr: Optional[AutoTestCaseAttr] = Field(default=None, description="用例所属属性")
     case_project: int = Field(default=1, ge=1, description="用例所属应用")
+    session_transfer: AutoTestSessionTransfer = Field(default=AutoTestSessionTransfer.DISABLE, description="变量池传递开关")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
 

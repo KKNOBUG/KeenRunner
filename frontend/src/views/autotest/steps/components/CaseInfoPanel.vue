@@ -87,20 +87,6 @@
             </n-form-item>
           </div>
 
-          <div class="case-field case-field-desc">
-            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
-              <n-input
-                  v-model:value="caseForm.case_desc"
-                  size="small"
-                  type="textarea"
-                  :resizable="false"
-                  :autosize="{ minRows: 1, maxRows: 1 }"
-                  placeholder="请输入用例描述"
-                  class="case-field-input"
-              />
-            </n-form-item>
-          </div>
-
           <div class="case-field">
             <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
               <n-select
@@ -214,6 +200,43 @@
               </n-popover>
             </n-form-item>
           </div>
+
+          <div class="case-field">
+            <n-form-item path="session_transfer" :show-feedback="false">
+              <template #label>
+                <span class="case-field-label-with-tip">
+                  变量传递
+                  <n-tooltip trigger="hover" placement="top">
+                    <template #trigger>
+                      <TheIcon class="case-field-tip-icon" icon="material-symbols:info-outline" :size="14" />
+                    </template>
+                    开启后多条数据源执行时，同轮次内下一条数据源执行前不清空变量池，前序变量累积覆盖传递
+                  </n-tooltip>
+                </span>
+              </template>
+              <n-select
+                  v-model:value="caseForm.session_transfer"
+                  :options="sessionTransferOptions"
+                  placeholder="请选择变量传递"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field case-field-desc">
+            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
+              <n-input
+                  v-model:value="caseForm.case_desc"
+                  size="small"
+                  type="textarea"
+                  :resizable="false"
+                  :autosize="{ minRows: 1, maxRows: 1 }"
+                  placeholder="请输入用例描述"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
         </div>
       </n-form>
     </n-collapse-transition>
@@ -244,6 +267,7 @@ import {
   NSelect,
   NSpace,
   NSwitch,
+  NTooltip,
 } from 'naive-ui'
 import TheIcon from '@/components/icon/TheIcon.vue'
 import api from '@/api'
@@ -283,6 +307,8 @@ const caseForm = reactive({
   case_desc: '',
   case_attr: '',
   case_type: '',
+  // 变量池传递为用例级全局设置：仅多条数据源执行时有意义，新增默认禁用
+  session_transfer: '禁用',
 })
 
 /** 标签管控：公共接口不允许打标签；用户脚本必选，公共脚本可选 */
@@ -317,6 +343,11 @@ const caseTypeOptions = [
   { label: '用户脚本', value: '用户脚本' },
   { label: '公共脚本', value: '公共脚本' },
   { label: '公共接口', value: '公共接口' },
+]
+
+const sessionTransferOptions = [
+  { label: '禁用', value: '禁用' },
+  { label: '启用', value: '启用' },
 ]
 
 const tagModeGroups = computed(() => {
@@ -356,6 +387,7 @@ const initCaseInfoFromRoute = () => {
     caseForm.case_desc = caseInfo.case_desc || ''
     caseForm.case_attr = caseInfo.case_attr || ''
     caseForm.case_type = caseInfo.case_type || ''
+    caseForm.session_transfer = caseInfo.session_transfer || '禁用'
   } catch (error) {
     console.error('解析用例信息失败:', error)
   }
@@ -477,6 +509,7 @@ const hydrateFromStepTree = (data) => {
     caseForm.case_desc = firstStepCase.case_desc || ''
     caseForm.case_attr = firstStepCase.case_attr || ''
     caseForm.case_type = firstStepCase.case_type || ''
+    caseForm.session_transfer = firstStepCase.session_transfer || '禁用'
   } else {
     // 无用例信息（新增页传入空数组等）：清空表单，避免 keep-alive 复用时残留上一用例数据
     caseForm.case_project = ''
@@ -485,6 +518,7 @@ const hydrateFromStepTree = (data) => {
     caseForm.case_desc = ''
     caseForm.case_attr = ''
     caseForm.case_type = ''
+    caseForm.session_transfer = '禁用'
   }
 }
 
@@ -504,6 +538,7 @@ const hydrateFromCasePayload = (caseInfo) => {
   if (caseInfo.case_desc != null) caseForm.case_desc = caseInfo.case_desc || ''
   if (caseInfo.case_attr != null) caseForm.case_attr = caseInfo.case_attr || ''
   if (caseInfo.case_type != null) caseForm.case_type = caseInfo.case_type || ''
+  caseForm.session_transfer = caseInfo.session_transfer || '禁用'
 }
 
 const getCasePayload = () => ({
@@ -516,6 +551,7 @@ const getCasePayload = () => ({
   case_type: caseForm.case_type || null,
   case_attr: caseForm.case_attr || null,
   case_desc: caseForm.case_desc ?? '',
+  session_transfer: caseForm.session_transfer || '禁用',
 })
 
 initCaseInfoFromRoute()
@@ -651,7 +687,7 @@ defineExpose({
 
 .case-field {
   min-width: 0;
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
 .case-field :deep(.n-form-item) {
@@ -659,7 +695,18 @@ defineExpose({
 }
 
 .case-field-desc {
-  grid-column: span 9;
+  grid-column: span 12;
+}
+
+.case-field-label-with-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.case-field-tip-icon {
+  color: var(--n-text-color-3);
+  cursor: help;
 }
 
 .case-field-desc :deep(textarea) {

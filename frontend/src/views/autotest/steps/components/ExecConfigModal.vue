@@ -1093,7 +1093,8 @@ const getDatasetPayloadPart = () => {
   if (!debugExecDataSourceEnabled.value || !debugExecDatasetSelectedIds.value.length) {
     return {}
   }
-  return { selected_dataset_names: [...debugExecDatasetSelectedIds.value] }
+  const part = { selected_dataset_names: [...debugExecDatasetSelectedIds.value] }
+  return part
 }
 
 const confirmExecConfigBeforeRun = async (actionLabel, runAction) => {

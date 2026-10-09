@@ -3,8 +3,8 @@
  * 任务执行历史（三层下钻）：
  * 1) 弹窗：POST /report/search_task_batches 按批次分页（批次行不内嵌报告明细）
  * 2) 左侧抽屉"脚本执行信息"：POST /report/search_batch_scripts 按脚本维度分页
- * 3) 左侧抽屉"脚本执行明细"：轮次元数据直接取自脚本行(rounds)渲染折叠菜单，
- *    展开轮次/翻页时 POST /report/search_script_round_reports 按 (batch_code, case_id, round_no, page, page_size) 服务端分页请求，行内"查看"打开 ReportDetailDrawer 步骤明细
+ * 3) 左侧抽屉"脚本执行明细"：轮次列表由脚本行 case_execute_count 驱动(round_no 从 1 起)，
+ *    展开轮次/翻页时 POST /report/search_script_round_reports 按 (batch_code, case_id, round_no, page, page_size) 服务端分页请求，行内携带精确 dataset_name，"查看"打开 ReportDetailDrawer 步骤明细
  */
 import { computed, h, reactive, ref, watch } from 'vue'
 import {
@@ -37,7 +37,6 @@ const modalVisible = computed({
   set: (v) => emit('update:show', v),
 })
 
-const historyTaskName = computed(() => props.taskRow?.task_name ?? '')
 const historyTaskCode = computed(() => props.taskRow?.task_code ?? '')
 
 const loading = ref(false)
@@ -97,12 +96,13 @@ function renderBatchResultTag(row) {
 }
 
 function renderScriptResultTag(row) {
-  if (!row.case_execute_count) return h('span', '-')
-  const allOk = row.case_exec_passed === row.case_execute_count
-  const allFail = row.case_exec_passed === 0
-  const label = allOk ? '全部成功' : allFail ? '全部失败' : '存在失败'
-  const type = allOk ? 'success' : allFail ? 'error' : 'warning'
-  return h(NTag, { type, size: 'small', round: true }, { default: () => label })
+  const status = row.case_exec_status
+  if (!status) return h('span', '-')
+  return h(
+    NTag,
+    { type: BATCH_RESULT_TAG_TYPE[status] || 'error', size: 'small', round: true },
+    { default: () => status },
+  )
 }
 
 function renderCaseStateTag(state) {
@@ -149,7 +149,7 @@ async function loadHistory() {
     batchRows.value = list.map((b, idx) => ({
       _key: b.batch_code || `single:${idx}`,
       batch_code: b.batch_code || null,
-      task_name: historyTaskName.value || '-',
+      task_name: b.task_name || '-',
       task_exec_status: b.task_exec_status,
       task_bind_script: Number(b.task_bind_script) || 0,
       task_exec_passed: Number(b.task_exec_passed) || 0,
@@ -201,16 +201,16 @@ const ROUND_PAGE_SIZE = 10
 const ROUND_PAGE_SIZES = [10, 20, 50, 100]
 
 /**
- * 打开脚本执行明细抽屉：轮次元数据直接取自脚本行(含rounds)，无需额外请求；轮次内场景行在展开轮次/翻页时按需请求。
+ * 打开脚本执行明细抽屉：轮次列表由 case_execute_count 驱动(round_no 从 1 起)，无需额外请求；
+ * 轮次内场景行在展开轮次/翻页时按需请求，行内携带精确 dataset_name。
  */
 function openScriptDetailDrawer(scriptRow) {
   currentScript.value = scriptRow
-  const metas = Array.isArray(scriptRow?.rounds) ? scriptRow.rounds : []
-  rounds.value = metas.map((m) => ({
-    _key: `round-${m.round_no}`,
-    round_no: m.round_no,
-    round_label: `第 ${m.round_no} 次执行`,
-    dataset_names: Array.isArray(m.dataset_names) ? m.dataset_names : [],
+  const executeCount = Number(scriptRow?.case_execute_count) || 0
+  rounds.value = Array.from({ length: executeCount }, (_, idx) => ({
+    _key: `round-${idx + 1}`,
+    round_no: idx + 1,
+    round_label: `第 ${idx + 1} 次执行`,
     // 轮次内报告总数由 /search_script_round_reports 首次加载时按服务端total回填
     row_count: 0,
     page: 1,
@@ -598,13 +598,16 @@ const scriptColumns = [
   },
 ]
 
-const roundDetailColumns = [
-  {
-    title: '序号',
-    key: 'dataset_no',
-    width: 56,
-    align: 'center',
-  },
+/** 轮次内明细列：序号按轮次分页本地计算(跨页连续)，场景名称取行内精确 dataset_name */
+function buildRoundColumns(round) {
+  return [
+    {
+      title: '序号',
+      key: '_index',
+      width: 56,
+      align: 'center',
+      render: (_, index) => (round.page - 1) * round.pageSize + index + 1,
+    },
   {
     title: '场景名称',
     key: 'dataset_name',
@@ -697,7 +700,8 @@ const roundDetailColumns = [
       )
     },
   },
-]
+  ]
+}
 
 const modalStyle = {
   width: '80%',
@@ -788,13 +792,12 @@ const modalStyle = {
             <template #header>
               <div class="round-header">
                 <NTag size="small" type="info" :bordered="false">{{ round.round_label }}</NTag>
-                <span class="meta-text">{{ round.dataset_names.length ? `数据源：${round.dataset_names.join('、')}` : '未参数化执行' }}</span>
               </div>
             </template>
             <NCard size="small" :bordered="false" class="script-run-card">
               <NSpin :show="round.loading">
                 <NDataTable
-                  :columns="roundDetailColumns"
+                  :columns="buildRoundColumns(round)"
                   :data="round.rows"
                   :row-key="(r) => r.report_code ?? r.report_id"
                   :scroll-x="1400"
@@ -857,11 +860,6 @@ const modalStyle = {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.meta-text {
-  font-size: 12px;
-  color: var(--n-text-color-3);
-  white-space: nowrap;
 }
 .script-run-card {
   background: transparent;

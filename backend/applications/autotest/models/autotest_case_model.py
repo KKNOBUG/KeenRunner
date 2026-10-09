@@ -14,10 +14,10 @@ from backend.applications.base.services.scaffold import (
     TimestampMixin,
     StateModel,
     ReserveFields,
-    unique_identify,
     UpperCharField,
+    unique_identify,
 )
-from backend.enums import AutoTestCaseType, AutoTestCaseAttr
+from backend.enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestSessionTransfer
 
 
 class AutoTestCaseModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
@@ -35,6 +35,8 @@ class AutoTestCaseModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     case_last_time = fields.DatetimeField(null=True, description="用例最后一次执行时间")
     # session_variables 存储为List[Dict[str, Any]]格式, 每个元素包含key、value、desc项
     session_variables = fields.JSONField(default=None, null=True, description="会话变量(初始变量池)")
+    # session_transfer 为用例级全局设置, 仅数据源条数>1时有意义; 启用时同一轮次内下一条数据源执行前不清空变量池, 前序变量累积覆盖传递, 跨轮次重置回初始池
+    session_transfer = fields.CharEnumField(AutoTestSessionTransfer, description="变量池传递开关")
     # owner_user 创建时等于创建人员created_user, 修改时不记录、用例转让时记录实际操作人员
     owner_user = UpperCharField(max_length=16, default=None, null=True, index=True, description="用例所属人员")
 

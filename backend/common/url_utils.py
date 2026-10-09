@@ -1,11 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-HTTP 地址拼接通用工具。
-
-原为 autotest_runtime/protocol_http.py 内部函数, 因功能用例执行、用例调试与压测
-施压三条链路均以同一口径把「环境 host/port + 相对路径」拼成绝对地址, 上移到 common
-层共用, 避免性能测试模块为两个纯函数反向依赖 autotest 业务包。
-
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
