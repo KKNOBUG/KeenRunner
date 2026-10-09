@@ -52,6 +52,13 @@ class AutoTestStepType(StringEnum):
     EXTRACT = "提取"
 
 
+class AutoTestBranchType(StringEnum):
+    """条件分支步骤branch_items[].branch_type的合法取值，存储值与存量数据小写形态保持一致。"""
+    IF = "if"
+    ELIF = "elif"
+    ELSE = "else"
+
+
 class AutoTestLoopMode(StringEnum):
     # 循环模式：次数循环(loop_mode + loop_maximums + loop_interval；loop_maximums支持正整数或变量占位符)
     COUNT = "次数循环"

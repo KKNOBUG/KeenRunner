@@ -74,7 +74,7 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     loop_conditions = fields.JSONField(null=True, description="条件循环判断条件")
 
     # IF分支相关
-    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
+    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type(AutoTestBranchType枚举: if|elif|else)、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
     branch_items = fields.JSONField(null=True, description="条件分支列表(仅条件分支步骤使用, 存储分支元数据)")
     branch_index = fields.IntField(null=True, description="所属分支序号(条件分支子步骤归属哪个分支)")
 

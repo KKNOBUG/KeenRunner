@@ -15,6 +15,7 @@ from backend.applications.autotest.schemas.autotest_datagram_diff_schema import 
 from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import (
     AutoTestStepType,
+    AutoTestBranchType,
     AutoTestLoopMode,
     AutoTestReqArgsType,
     AutoTestLoopErrorStrategy,
@@ -75,25 +76,34 @@ class ConditionsBase(BaseModel):
 
 
 class BranchItem(BaseModel):
-    """条件分支中的单个分支定义（if/elif/else）。"""
+    """条件分支中的单个分支定义。"""
 
-    branch_type: str = Field(..., description="分支类型(IF|ELIF|ELSE)")
+    branch_type: AutoTestBranchType = Field(..., description="分支类型")
     branch_conditions: Optional[ConditionsBase] = Field(None, description="分支条件")
     branch_desc: Optional[str] = Field(None, max_length=2048, description="分支描述")
     branch_children: Optional[List["AutoTestStepTreeUpdateItem"]] = Field(None, description="分支子步骤")
 
     @field_validator("branch_type", mode="before")
     @classmethod
-    def _validate_branch_type(cls, v: Any) -> str:
-        if v.lower() not in ("if", "elif", "else"):
+    def _validate_branch_type(cls, v: Any) -> AutoTestBranchType:
+        """
+        校验并规范化branch_type为AutoTestBranchType枚举值。
+
+        :param v: 原始值
+        :return: 规范化后的AutoTestBranchType枚举值
+        """
+        if not isinstance(v, str) or not str(v).strip():
             raise ValueError(f"参数[branch_type]必须为[if|elif|else], 当前: {v!r}")
-        return v.lower()
+        try:
+            return AutoTestBranchType(v.strip().lower())
+        except ValueError:
+            raise ValueError(f"参数[branch_type]必须为[if|elif|else], 当前: {v!r}")
 
     @model_validator(mode="after")
     def _validate_branch_conditions(self):
-        if self.branch_type in ("if", "elif") and not self.branch_conditions:
+        if self.branch_type in (AutoTestBranchType.IF, AutoTestBranchType.ELIF) and not self.branch_conditions:
             raise ValueError(f"参数[branch_type]为[{self.branch_type}]时必须配置[branch_conditions]")
-        if self.branch_type == "else" and self.branch_conditions is not None:
+        if self.branch_type == AutoTestBranchType.ELSE and self.branch_conditions is not None:
             raise ValueError("参数[branch_type]为[else]时不允许配置[branch_conditions]")
         return self
 

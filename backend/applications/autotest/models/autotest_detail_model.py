@@ -87,7 +87,7 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     loop_cycles = fields.IntField(null=True, description="循环执行圈数")
 
     # IF分支相关
-    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
+    # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type(AutoTestBranchType枚举: if|elif|else)、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
     branch_items = fields.JSONField(null=True, description="本次命中的条件分支快照(仅命中项,不含子步骤)")
     branch_index = fields.IntField(null=True, description="所属分支序号快照(条件分支子步骤归属)")
     branch_match = fields.IntField(null=True, description="本次命中的分支序号快照(条件分支父步骤)")
