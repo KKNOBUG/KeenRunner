@@ -53,6 +53,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
     StepExtractVariableItem,
     prepare_step_tree_item_for_execution,
+    step_variables_list_from_storage,
 )
 from backend.applications.autotest.services.autotest_runtime.sandbox import (
     RE_PLACEHOLDER,
@@ -2578,6 +2579,8 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
     allowed_merge_and_override_fields: bool = False
     # 容器层不解析自身defined_variables（追加数据由内层HTTP/TCP步骤合并后解析，容器层缺少SERVER_*/TARGET_*内置变量，会误报变量未定义）
     resolve_own_defined_variables = False
+    # 会话变量池半隔离：开启后引用域执行前以被引用用例聚合结果替换上下文变量池（独享、宿主池不可见），执行结束后整个引用池按key回灌宿主（引用覆盖宿主同名）
+    use_isolated_session_pool: bool = False
 
     def _merge_and_override_fields(self, quote_step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
         """
@@ -2607,6 +2610,36 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
             return quote_step
         return quote_step.model_copy(update=update)
 
+    def _build_quote_session_pool(self, quote_case_instance: Any, quote_roots: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
+        """
+        初始化引用域独立变量池，聚合顺序与宿主用例保持一致（用例级session_variables在前、树内用户变量在后，同名后者覆盖）。
+
+        :param quote_case_instance: 被引用用例模型实例（取其case级session_variables存储数据）
+        :param quote_roots: 被引用用例根步骤列表（收集其中用户变量步骤的产出）
+        :return: 按key去重后的引用域初始变量池
+        """
+        stored: List[StepVariablesBase] = step_variables_list_from_storage(getattr(quote_case_instance, "session_variables", None))
+        collected: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(quote_roots)
+        merged: Dict[str, StepVariablesBase] = {}
+        for item in [*stored, *collected]:
+            if item.key:
+                merged[item.key] = item
+        return list(merged.values())
+
+    def _merge_back_session_pool(self, host_pool: List[StepVariablesBase], quote_pool: List[StepVariablesBase]) -> List[StepVariablesBase]:
+        """
+        将执行后的引用池整体回灌宿主池（C2口径：整个执行后引用池按key合并，引用值覆盖宿主同名）。
+
+        :param host_pool: 引用域执行前的宿主变量池（未被引用域污染的原始引用）
+        :param quote_pool: 引用域执行结束后的完整变量池（含引用域初始变量与执行产出）
+        :return: 回灌后的宿主变量池
+        """
+        merged: Dict[str, StepVariablesBase] = {v.key: v for v in host_pool if v.key}
+        for item in quote_pool:
+            if item.key:
+                merged[item.key] = item
+        return list(merged.values())
+
     async def _execute(self, result: StepExecutionResult) -> None:
         """
         加载并执行引用用例的根步骤树；跳过的子步（execute 返回 None）不挂入children。
@@ -2617,6 +2650,8 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
         allowed_types_desc: str = "、".join(t.value for t in self.allowed_quote_case_types)
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
+        host_pool: List[StepVariablesBase] = []
+        quote_pool: Optional[List[StepVariablesBase]] = None
         try:
             quote_case_id = self.step.quote_case_id
             if not quote_case_id:
@@ -2660,6 +2695,16 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
                 raise StepExecutionError(
                     f"【{self.quote_step_label}】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
                 ) from e
+
+            if self.use_isolated_session_pool:
+                # 半隔离：整段替换变量池引用（禁止就地update_variables，否则会污染宿主池）；宿主池仅存引用，不被引用域读写
+                host_pool = self.context.session_variables
+                quote_pool = self._build_quote_session_pool(quote_case_instance, quote_roots)
+                self.context.session_variables = quote_pool
+                self.context.log(
+                    f"【{self.quote_step_label}】初始化引用域独立变量池({len(quote_pool)}项), 宿主变量池已隔离",
+                    step_code=self.step_code
+                )
 
             self.context.log(
                 f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})开始",
@@ -2714,6 +2759,16 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
             self.context.log(result.error, step_code=self.step_code)
             raise StepExecutionError(result.error) from e
         finally:
+            # 半隔离收口：整个执行后引用池按key回灌宿主（引用覆盖宿主同名），无论内层步骤成功或异常
+            if quote_pool is not None:
+                merged_host_pool: List[StepVariablesBase] = self._merge_back_session_pool(
+                    host_pool=host_pool, quote_pool=quote_pool
+                )
+                self.context.session_variables = merged_host_pool
+                self.context.log(
+                    f"【{self.quote_step_label}】引用域变量池整体回灌宿主池({len(merged_host_pool)}项), 同名变量以引用域为准",
+                    step_code=self.step_code
+                )
             # 恢复上一级引用脚本标识（支持嵌套引用时的正确回退）
             try:
                 self.context.executing_quote_case_id = previous_quote_case_id
@@ -2736,10 +2791,12 @@ class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
 class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
     """
     引用公共脚本执行器：仅允许引用用例类型为公共脚本的公共用例。
+    开启会话变量池半隔离：引用域独享被引用用例聚合出的变量池，执行后整个引用池回灌宿主池。
     """
 
     quote_step_label = "引用公共脚本"
     allowed_quote_case_types = (AutoTestCaseType.PUBLIC_SCRIPT,)
+    use_isolated_session_pool = True
 
 
 class TcpStepExecutor(BaseStepExecutor):
