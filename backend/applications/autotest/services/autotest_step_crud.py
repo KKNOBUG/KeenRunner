@@ -1378,10 +1378,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             return list(merged.values())
 
         # 3.聚合会话变量：inherited_variables(上一条数据源累积池)放末位，同名变量覆盖前序来源
+        # 任务侧task_kwargs的initial_variables为JSON字典列表，统一在此边界转StepVariablesBase；
+        # dict项对引擎按key查找不可见(isinstance过滤)，且会使变量池合并的item.key访问直接报错
         merge_all_variables: List[StepVariablesBase] = _merge_session_variables(
             step_variables_list_from_storage(getattr(case_instance, "session_variables", None)),
             AutoTestToolService.collect_session_variables(load.root_steps),
-            list(initial_variables or []),
+            step_variables_list_from_storage(initial_variables),
             list(inherited_variables or []),
         )
         LOGGER.info(f"检查用例[id={case_id}]步骤树数据规范成功, 收集会话变量成功")
