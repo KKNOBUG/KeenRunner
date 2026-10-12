@@ -222,7 +222,7 @@ const columns = computed(() => {
       title: '上次登录时间',
       key: 'last_login',
       align: 'center',
-      width: 200,
+      width: 180,
       ellipsis: {tooltip: true},
       render(row) {
         return h('span', row.last_login ? formatDateTime(row.last_login) : '-')

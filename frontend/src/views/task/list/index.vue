@@ -167,8 +167,8 @@ const logRecordColumns = [
   },
   { title: '错误信息', key: 'task_error', width: 180, ellipsis: { tooltip: true }, render: (row) => (row.task_error ? (row.task_error.length > 50 ? row.task_error.slice(0, 50) + '...' : row.task_error) : '-') },
   { title: '调度ID', key: 'celery_id', width: 200, ellipsis: { tooltip: true } },
-  { title: '开始时间', key: 'celery_start_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_start_time) || '-') },
-  { title: '结束时间', key: 'celery_end_time', width: 170, align: 'center', render: (row) => h('span', formatDateTime(row.celery_end_time) || '-') },
+  { title: '开始时间', key: 'celery_start_time', width: 180, align: 'center', render: (row) => h('span', formatDateTime(row.celery_start_time) || '-') },
+  { title: '结束时间', key: 'celery_end_time', width: 180, align: 'center', render: (row) => h('span', formatDateTime(row.celery_end_time) || '-') },
   { title: '耗时', key: 'celery_elapsed', width: 80, align: 'center', ellipsis: { tooltip: true } },
 ]
 

@@ -446,14 +446,14 @@ const batchColumns = computed(() => [
   {
     title: '执行时间',
     key: 'task_st_time',
-    width: 200,
+    width: 180,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '结束时间',
     key: 'task_ed_time',
-    width: 200,
+    width: 180,
     align: 'center',
     ellipsis: { tooltip: true },
   },
@@ -555,14 +555,14 @@ const scriptColumns = [
   {
     title: '执行时间',
     key: 'case_st_time',
-    width: 200,
+    width: 180,
     align: 'center',
     ellipsis: { tooltip: true },
   },
   {
     title: '结束时间',
     key: 'case_ed_time',
-    width: 200,
+    width: 180,
     align: 'center',
     ellipsis: { tooltip: true },
   },
@@ -669,7 +669,7 @@ function buildRoundColumns(round) {
   {
     title: '执行时间',
     key: 'case_st_time',
-    width: 200,
+    width: 180,
     align: 'center',
     ellipsis: { tooltip: true },
   },

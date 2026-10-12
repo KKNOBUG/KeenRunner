@@ -159,7 +159,7 @@ const refColumns = [
   { title: '报告编码', key: 'report_code', width: 180, ellipsis: { tooltip: true } },
   { title: '场景', key: 'scene_name', width: 140, ellipsis: { tooltip: true }, render: (row) => row.scene_name || '-' },
   { title: '并发', key: 'concurrent_users', width: 70, render: (row) => row.concurrent_users ?? '-' },
-  { title: '开始时间', key: 'started_time', width: 160, render: (row) => (row.started_time ? formatDateTime(row.started_time) : '-') },
+  { title: '开始时间', key: 'started_time', width: 180, render: (row) => (row.started_time ? formatDateTime(row.started_time) : '-') },
   {
     title: '角色',
     key: 'is_baseline',

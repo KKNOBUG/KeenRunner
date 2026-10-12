@@ -117,7 +117,7 @@ const columns = [
   {
     title: '创建时间',
     key: 'created_time',
-    width: 160,
+    width: 180,
     render: (row) => (row.created_time ? formatDateTime(row.created_time) : '-'),
   },
   {

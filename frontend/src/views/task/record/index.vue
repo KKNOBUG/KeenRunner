@@ -334,7 +334,7 @@ const columns = [
   {
     title: '开始时间',
     key: 'celery_start_time',
-    width: 170,
+    width: 180,
     align: 'center',
     render(row) {
       return h('span', row.celery_start_time ? formatDateTime(row.celery_start_time) : '-')
@@ -343,7 +343,7 @@ const columns = [
   {
     title: '结束时间',
     key: 'celery_end_time',
-    width: 170,
+    width: 180,
     align: 'center',
     render(row) {
       return h('span', row.celery_end_time ? formatDateTime(row.celery_end_time) : '-')

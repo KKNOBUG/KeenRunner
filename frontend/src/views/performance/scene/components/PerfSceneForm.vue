@@ -512,7 +512,7 @@ const itemColumns = computed(() => [
   {
     title: '思考时间',
     key: 'delay',
-    width: 300,
+    width: 180,
     render: (row) => h(NSpace, { vertical: true, size: 4 }, {
       default: () => [
         h(NSelect, {

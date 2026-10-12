@@ -168,7 +168,7 @@ const columns = [
   {
     title: '更新时间',
     key: 'updated_time',
-    width: 160,
+    width: 180,
     render: (row) => (row.updated_time ? formatDateTime(row.updated_time) : '-'),
   },
   {

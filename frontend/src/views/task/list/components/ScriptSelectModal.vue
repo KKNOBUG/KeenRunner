@@ -236,7 +236,7 @@ const columns = computed(() => {
     {
       title: '更新时间',
       key: 'updated_time',
-      width: 170,
+      width: 180,
       align: 'center',
       render(row) {
         return h('span', formatDateTime(row.updated_time) || '-')

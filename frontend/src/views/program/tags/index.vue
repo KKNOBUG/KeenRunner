@@ -15,7 +15,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import { apiPermissionKey, renderIcon } from '@/utils'
+import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
 import { useCRUD } from '@/composables'
 import api from '@/api'
 
@@ -253,13 +253,13 @@ const columns = computed(() => {
       align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
-        return projectLabel(row.tag_project)
+        return row.tag_project_name || projectLabel(row.tag_project)
       },
     },
     {
       title: '标签大类',
       key: 'tag_mode',
-      width: 100,
+      width: 150,
       align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
@@ -288,6 +288,36 @@ const columns = computed(() => {
       render(row) {
         const d = String(row.tag_desc ?? '').trim()
         return d || h(NText, { depth: 3 }, { default: () => '-' })
+      },
+    },
+    {
+      title: '更新时间',
+      key: 'updated_time',
+      width: 180,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.updated_time ? formatDateTime(row.updated_time) : '-'
+      },
+    },
+    {
+      title: '创建人员',
+      key: 'created_user',
+      width: 100,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.created_user || '-'
+      },
+    },
+    {
+      title: '维护人员',
+      key: 'updated_user',
+      width: 100,
+      align: 'center',
+      ellipsis: { tooltip: true },
+      render(row) {
+        return row.updated_user || '-'
       },
     },
     {

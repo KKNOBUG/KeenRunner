@@ -236,7 +236,7 @@ const caseColumns = [
   { type: 'selection', multiple: false },
   { title: '用例名称', key: 'case_name', minWidth: 150, ellipsis: { tooltip: true } },
   { title: '类型', key: 'case_type', width: 88 },
-  { title: '更新时间', key: 'updated_time', width: 100, render: (row) => (row.updated_time ? formatDateTime(row.updated_time).slice(0, 10) : '-') },
+  { title: '更新时间', key: 'updated_time', width: 180, render: (row) => (row.updated_time ? formatDateTime(row.updated_time).slice(0, 10) : '-') },
 ]
 
 const stepColumns = [

@@ -506,7 +506,7 @@ const artifactColumns = [
   { title: '类型', key: 'kind', width: 90 },
   { title: '文件', key: 'name', minWidth: 180, ellipsis: { tooltip: true } },
   { title: '体积', key: 'size_human', width: 90 },
-  { title: '修改时间', key: 'modified_time', width: 160 },
+  { title: '更新时间', key: 'modified_time', width: 180 },
   {
     title: '操作',
     key: 'actions',

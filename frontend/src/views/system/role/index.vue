@@ -181,6 +181,7 @@ const columns = computed(() => {
     {
       title: '创建时间',
       key: 'created_time',
+      width: 180,
       align: 'center',
       render(row) {
         return h('span', formatDateTime(row.created_time))
@@ -189,6 +190,7 @@ const columns = computed(() => {
     {
       title: '更新时间',
       key: 'updated_time',
+      width: 180,
       align: 'center',
       render(row) {
         return h('span', formatDateTime(row.updated_time))

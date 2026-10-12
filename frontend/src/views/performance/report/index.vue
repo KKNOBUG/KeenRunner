@@ -161,9 +161,18 @@ const columns = [
     align: 'center',
     render: (row) => h('span', row.started_time ? formatDateTime(row.started_time) : '-'),
   },
-  { title: '创建人员', key: 'created_user', width: 150, align: 'center', ellipsis: { tooltip: true } },
   {
-    title: '创建时间', key: 'created_time', width: 180, align: 'center',
+    title: '创建人员',
+    key: 'created_user',
+    width: 150,
+    align: 'center',
+    ellipsis: { tooltip: true }
+  },
+  {
+    title: '创建时间',
+    key: 'created_time',
+    width: 180,
+    align: 'center',
     render: (row) => h('span', row.created_time ? formatDateTime(row.created_time) : '-'),
   },
   {
