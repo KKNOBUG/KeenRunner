@@ -13,7 +13,7 @@ from typing import Optional, List, Tuple, Dict, Any, Set
 
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
-from tortoise.functions import Count, Max, Sum
+from tortoise.functions import Count, Max, Min, Sum
 from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.models.autotest_report_model import AutoTestReportModel
@@ -211,25 +211,6 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         return case_state is True or case_state == "true"
 
     @staticmethod
-    def _group_rows_by_case(rows: List[Dict[str, Any]]) -> Dict[Any, List[Dict[str, Any]]]:
-        """
-        将报告行按用例维度分组，无法定位用例的行单独归组兜底。
-
-        :param rows: 报告行字典列表
-        :return: 以case_id为键的分组字典
-        """
-        by_case: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
-        for row in rows:
-            case_id = row.get("case_id")
-            key = (
-                case_id
-                if case_id is not None
-                else f"unknown:{row.get('report_code') or row.get('report_id')}"
-            )
-            by_case[key].append(row)
-        return by_case
-
-    @staticmethod
     def _merge_involve_envs(rows: List[Dict[str, Any]]) -> List[str]:
         """
         合并报告行涉及环境列表，保持首次出现顺序去重。
@@ -248,117 +229,187 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         return envs
 
     @classmethod
-    def _summarize_batch_scripts(cls, by_case: Dict[Any, List[Dict[str, Any]]]) -> Tuple[int, int]:
+    def _assemble_batch_item(
+            cls,
+            batch_code: str,
+            task_name: Optional[str],
+            script_aggs: List[Dict[str, Any]],
+            detail_rows: List[Dict[str, Any]],
+            task_case_ids: List[int],
+            is_running: bool,
+    ) -> AutoTestReportBatchItem:
         """
-        按脚本维度汇总批次脚本数量与成功数量。
+        把一个批次的脚本汇总行和报告明细行拼成一条批次记录, 即任务执行历史列表中的一行。
 
-        :param by_case: 已按用例维度分组的批次报告行字典
-        :return: (脚本数量, 全部轮次均成功的脚本数量)
+        通过/失败数、起止时间来自脚本汇总行; 执行人/涉及环境/总耗时来自报告明细行(需按case_st_time升序传入)。
+        绑定脚本数区分口径: 运行中批次取任务当前绑定数(当批落库尚不完整), 历史批次取当批实际落库脚本数
+        (任务绑定数随后续编辑漂移, 不能回填历史行)。
+
+        :param batch_code: 批次标识
+        :param task_name: 任务名称
+        :param script_aggs: 脚本汇总行列表, 每行一个脚本, 含round_total/round_passed/first_case_st_time/last_case_ed_time
+        :param detail_rows: 批次内报告行列表(case_st_time升序)
+        :param task_case_ids: 任务当前绑定的用例ID列表, 仅运行中批次取其长度为绑定脚本数
+        :param is_running: 该批次是否为正在执行的批次
+        :return: 批次汇总数据
         """
-        script_count: int = len(by_case)
-        success_script_count: int = sum(
-            1 for rows in by_case.values()
-            if rows and all(cls._is_case_success(row.get("case_state")) for row in rows)
+        report_script_count: int = len(script_aggs)
+        success_script_count: int = sum(1 for agg in script_aggs if 0 < agg["round_total"] == agg["round_passed"])
+        if 0 < report_script_count == success_script_count:
+            exec_status: AutoTestTaskStatus = AutoTestTaskStatus.SUCCESS
+        elif success_script_count >= 1:
+            exec_status = AutoTestTaskStatus.PARTIAL_SUCCESS
+        else:
+            exec_status = AutoTestTaskStatus.FAILURE
+        st_times: List[str] = [agg["first_case_st_time"] for agg in script_aggs if agg["first_case_st_time"]]
+        ed_times: List[str] = [agg["last_case_ed_time"] for agg in script_aggs if agg["last_case_ed_time"]]
+        execute_users: List[Any] = [user for user in (row.get("created_user") for row in detail_rows) if user]
+        return AutoTestReportBatchItem(
+            batch_code=batch_code,
+            task_name=task_name,
+            task_exec_status=exec_status,
+            task_bind_script=len(task_case_ids) if is_running else report_script_count,
+            task_exec_passed=success_script_count,
+            task_exec_failed=report_script_count - success_script_count,
+            task_pass_rate=round(success_script_count / report_script_count * 100.0, 2) if report_script_count else None,
+            created_user=str(execute_users[0]) if execute_users else None,
+            task_st_time=min(st_times) if st_times else None,
+            task_ed_time=max(ed_times) if ed_times else None,
+            task_elapsed=round(sum(cls._parse_elapsed_seconds(row.get("case_elapsed")) for row in detail_rows), 3),
+            involve_envs=cls._merge_involve_envs(detail_rows),
         )
-        return script_count, success_script_count
 
-    @classmethod
-    def _resolve_batch_execute_result(cls, by_case: Dict[Any, List[Dict[str, Any]]]) -> AutoTestTaskStatus:
+    async def _acquire_task_fields(self, task_code: str) -> Tuple[Optional[str], List[int], Optional[AutoTestTaskStatus]]:
         """
-        按脚本维度汇总批次结果。
+        点查任务表取任务名称、绑定用例ID和最近一次执行状态, 一次查询供整页批次共用。
 
-        :param by_case: 已按用例维度分组的批次报告行字典
-        :return: 成功(各脚本全部运行均成功)、部分成功(至少一个脚本全部运行成功)或失败
+        :param task_code: 任务标识代码
+        :return: (任务名称, 绑定用例ID列表, 最近一次执行状态)
         """
-        fully_ok = 0
-        for rows in by_case.values():
-            if rows and all(cls._is_case_success(r.get("case_state")) for r in rows):
-                fully_ok += 1
+        task_rows: List[Dict[str, Any]] = await AutoTestTaskCrud().model.filter(
+            task_code=task_code,
+        ).limit(1).values(
+            "task_name", "task_case_ids", "last_execute_state"
+        )
+        if not task_rows:
+            raise NotFoundException(message=f"查询任务信息失败, 记录[code={task_code}]不存在")
 
-        script_count = len(by_case)
-        if 0 < script_count == fully_ok:
-            return AutoTestTaskStatus.SUCCESS
-        if fully_ok >= 1:
-            return AutoTestTaskStatus.PARTIAL_SUCCESS
-        return AutoTestTaskStatus.FAILURE
+        task_name: Optional[str] = task_rows[0].get("task_name")
+        task_case_ids: List[int] = task_rows[0].get("task_case_ids") or []
+        last_execute_state: Optional[AutoTestTaskStatus] = task_rows[0].get("last_execute_state")
+        return task_name, task_case_ids, last_execute_state
 
     async def search_task_batches(self, batch_in: AutoTestReportBatchSelect) -> Tuple[int, List[AutoTestReportBatchItem]]:
         """
-        任务维度聚合查询：按任务标识聚合报告批次并计算执行结果/脚本维度通过率/耗时, 供/search_task_batches接口渲染任务执行历史。
+        任务执行历史查询(任务维度): 按task_code把报告聚合成批次列表, 一行代表一次任务执行, 供/search_task_batches接口渲染执行历史。
 
-        单段查询控制内存：仅加载聚合所需轻量字段完成全量聚合与分页, 批次行不再内嵌报告明细,
-        脚本/报告维度下钻由/search_batch_scripts与/search_script_round_reports接口承担。
+        查询分三层, 每次只取必要数据, 翻页代价不随该任务历史报告总量增长:
+        第1层按batch_code分组取每批次的最早开始时间, 用于批次排序和分页;
+        第2、3层只查当前页批次, 分别取脚本维度的汇总(轮次数/成功数/起止时间)和执行人/环境/耗时明细。
+        绑定脚本数分口径: 运行中批次取任务当前绑定数, 历史批次取当批实际落库脚本数(任务绑定数随后续编辑漂移);
+        任务正在执行时, 最近批次的结束时间留空且状态返回"正在执行",
+        等全部绑定脚本执行完落库后自然给出结束时间和最终状态。任务执行链路的报告必然携带batch_code;
+        脚本/报告维度的下钻由/search_batch_scripts与/search_script_round_reports接口承担。
 
         :param batch_in: 批次查询入参
         :return: (批次总数, 当前页批次列表)
         """
+        batch_count: int = 0
+        batch_statement: List[AutoTestReportBatchItem] = []
         task_code: str = (batch_in.task_code or "").strip()
         if not task_code:
             raise ParameterException(message="参数[task_code]不允许为空")
 
+        # 第1层：按batch_code分组, 每个批次只取最早开始时间这一行, 行数=批次数, 用来排序和分页
         state: int = 0 if batch_in.state is None else batch_in.state
-        aggregate_rows: List[Dict[str, Any]] = await self.model.filter(
+        report_batch_statement: List[Dict[str, Any]] = await self.model.filter(
             task_code=task_code,
             state=state,
-        ).order_by("case_st_time").values(
-            "id", "case_id", "case_state", "case_st_time", "case_ed_time",
-            "created_user", "case_elapsed", "report_code", "batch_code", "involve_envs",
-        )
-        if not aggregate_rows:
-            return 0, []
+        ).annotate(
+            first_case_st_time=Min("case_st_time")
+        ).group_by("batch_code").values("batch_code", "first_case_st_time")
+        if not report_batch_statement:
+            return batch_count, batch_statement
 
-        # 整次请求只服务一个task_code, 任务名称用一次唯一索引点查取回, 页内所有批次行共用
-        task_rows: List[str] = await AutoTestTaskCrud().model.filter(
-            task_code=task_code,
-        ).limit(1).values_list("task_name", flat=True)
-        task_name: Optional[str] = task_rows[0] if task_rows else None
+        # 点查任务行一次: 任务名称给整页共用, 绑定脚本数和"正在执行"的判定要用后两个字段
+        task_name, task_case_ids, last_execute_state = await self._acquire_task_fields(task_code=task_code)
 
-        grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        for row in aggregate_rows:
-            row["report_id"] = row.pop("id")
-            raw_batch_code: Optional[str] = row.get("batch_code")
-            batch_code_text: str = (raw_batch_code or "").strip()
-            group_key: str = batch_code_text or f"single:{row.get('report_code') or row.get('report_id')}"
-            grouped[group_key].append(row)
+        # 把第1层结果整理成排序条目, 按最早开始时间倒序后内存切页; 没有batch_code的分组不属于任务执行批次, 丢弃
+        batch_sorted_statement: List[Dict[str, Any]] = [
+            {
+                "batch_code": row["batch_code"],
+                "first_case_st_time": row.get("first_case_st_time"),
+            }
+            for row in report_batch_statement if row.get("batch_code")
+        ]
+        batch_sorted_statement.sort(key=lambda item: item["first_case_st_time"], reverse=True)
+        page: int = (batch_in.page - 1) * batch_in.page_size
+        page_entries: List[Dict[str, Any]] = batch_sorted_statement[page:page + batch_in.page_size]
 
-        batches: List[AutoTestReportBatchItem] = []
-        for group_key, batch_rows in grouped.items():
-            # 同批行只分组一次, 供执行状态与脚本汇总两个辅助方法复用
-            by_case: Dict[Any, List[Dict[str, Any]]] = self._group_rows_by_case(batch_rows)
-            script_count: int
-            success_script_count: int
-            script_count, success_script_count = self._summarize_batch_scripts(by_case)
-            execute_users: List[str] = [user for user in (row.get("created_user") for row in batch_rows) if user]
-            st_times: List[str] = sorted(st_time for st_time in (row.get("case_st_time") for row in batch_rows) if st_time)
-            ed_times: List[str] = [ed_time for ed_time in (row.get("case_ed_time") for row in batch_rows) if ed_time]
-            batches.append(
-                AutoTestReportBatchItem(
-                    batch_code=None if group_key.startswith("single:") else group_key,
-                    task_name=task_name,
-                    task_exec_status=self._resolve_batch_execute_result(by_case),
-                    task_bind_script=script_count,
-                    task_exec_passed=success_script_count,
-                    task_exec_failed=script_count - success_script_count,
-                    task_pass_rate=round(success_script_count / script_count * 100.0, 2) if script_count else None,
-                    created_user=str(execute_users[0]) if execute_users else None,
-                    task_st_time=st_times[0] if st_times else None,
-                    task_ed_time=max(ed_times) if ed_times else None,
-                    task_elapsed=round(sum(self._parse_elapsed_seconds(report_row.get("case_elapsed")) for report_row in batch_rows), 3),
-                    involve_envs=self._merge_involve_envs(batch_rows),
-                )
+        # 任务正在执行时, 报告行是陆续落库的, 最近开始的批次大概率还没跑完, 记下它后面单独修正
+        running_batch_code: Optional[str] = None
+        if last_execute_state == AutoTestTaskStatus.RUNNING and task_case_ids and batch_sorted_statement:
+            running_entry: Dict[str, Any] = max(batch_sorted_statement, key=lambda item: item["first_case_st_time"])
+            running_batch_code = running_entry["batch_code"]
+
+        # 下钻只查当前页的批次, 页外的批次不浪费查询
+        page_batch_codes: List[str] = [item["batch_code"] for item in page_entries]
+        scripts_by_batch: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        details_by_batch: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        if page_batch_codes:
+            # 第2层：脚本汇总, 当前页批次内按batch_code+case_id分组, 一行=一个脚本, 轮次总数/成功轮次数/起止时间
+            script_rows: List[Dict[str, Any]] = await self.model.filter(
+                task_code=task_code,
+                state=state,
+                batch_code__in=page_batch_codes,
+            ).annotate(
+                round_total=Count("id"),
+                round_passed=Count("id", _filter=Q(case_state=True)),
+                first_case_st_time=Min("case_st_time"),
+                last_case_ed_time=Max("case_ed_time"),
+            ).group_by("batch_code", "case_id").values(
+                "batch_code", "case_id",
+                "round_total", "round_passed",
+                "first_case_st_time", "last_case_ed_time",
             )
+            for row in script_rows:
+                scripts_by_batch[row["batch_code"]].append(row)
 
-        batches.sort(key=lambda item: item.task_st_time or "", reverse=True)
-        start: int = (batch_in.page - 1) * batch_in.page_size
-        end: int = start + batch_in.page_size
-        page_batches: List[AutoTestReportBatchItem] = batches[start:end]
+            # 第3层：报告明细, 当前页批次内逐行取执行人/环境/耗时(耗时是字符串只能取回来求和), 按开始时间升序
+            detail_rows: List[Dict[str, Any]] = await self.model.filter(
+                task_code=task_code,
+                state=state,
+                batch_code__in=page_batch_codes,
+            ).order_by("case_st_time").values(
+                "batch_code",
+                "case_st_time", "case_elapsed",
+                "created_user", "involve_envs",
+            )
+            for row in detail_rows:
+                details_by_batch[row["batch_code"]].append(row)
 
-        batch_total: int = len(batches)
-        return batch_total, page_batches
+        # 把当前页批次的汇总和明细拼成最终列表; 运行中的批次结束时间留空、状态改为"正在执行", 避免误报终态
+        batches: List[AutoTestReportBatchItem] = []
+        for item in page_entries:
+            is_running: bool = item["batch_code"] == running_batch_code
+            batch: AutoTestReportBatchItem = self._assemble_batch_item(
+                batch_code=item["batch_code"],
+                task_name=task_name,
+                script_aggs=scripts_by_batch.get(item["batch_code"], []),
+                detail_rows=details_by_batch.get(item["batch_code"], []),
+                task_case_ids=task_case_ids,
+                is_running=is_running,
+            )
+            if is_running:
+                batch.task_ed_time = None
+                batch.task_exec_status = AutoTestTaskStatus.RUNNING
+            batches.append(batch)
+        return len(batch_sorted_statement), batches
 
     async def search_batch_scripts(self, script_in: AutoTestReportBatchScriptSelect) -> Tuple[int, List[AutoTestReportBatchScriptItem]]:
         """
         批次内脚本维度下钻查询：按批次标识聚合脚本执行信息(一行=一个脚本), 供/search_batch_scripts接口渲染“脚本执行信息”抽屉。
+        脚本行按最早开始时间升序排列, 自上而下即执行先后顺序: 串行模式等价于任务绑定顺序, 并行模式呈现脚本被调度的先后。
         轮次列表由前端按case_execute_count构建, 轮次内数据源名称由/search_script_round_reports按全轮次计算返回。
 
         :param script_in: 脚本维度查询入参
@@ -434,7 +485,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
                 )
             )
 
-        script_items.sort(key=lambda item: item.case_st_time or "", reverse=True)
+        # 按最早开始时间升序, 自上而下即执行先后; 空开始时间的脚本垫底, 不参与时序比较
+        script_items.sort(key=lambda item: (item.case_st_time is None, item.case_st_time or ""))
         start: int = (script_in.page - 1) * script_in.page_size
         end: int = start + script_in.page_size
         page_items: List[AutoTestReportBatchScriptItem] = script_items[start:end]

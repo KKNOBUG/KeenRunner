@@ -524,18 +524,9 @@ const columns = computed(() => {
     },
   },
   {
-    title: '任务环境',
-    key: 'task_involve_envs',
-    width: 130,
-    align: 'center',
-    render(row) {
-      return renderTaskInvolveEnvs(row)
-    },
-  },
-  {
     title: '最后执行结果',
     key: 'last_execute_state',
-    width: 100,
+    width: 110,
     align: 'center',
     render(row) {
       const v = row.last_execute_state
@@ -553,6 +544,15 @@ const columns = computed(() => {
         { type: typeMap[label] || 'default', size: 'small', round: true },
         { default: () => label },
       )
+    },
+  },
+   {
+    title: '任务环境',
+    key: 'task_involve_envs',
+    width: 130,
+    align: 'center',
+    render(row) {
+      return renderTaskInvolveEnvs(row)
     },
   },
     {

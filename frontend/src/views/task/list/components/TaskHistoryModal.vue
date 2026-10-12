@@ -77,6 +77,7 @@ const BATCH_RESULT_TAG_TYPE = {
   成功: 'success',
   部分成功: 'warning',
   失败: 'error',
+  正在执行: 'warning',
 }
 
 function isCaseSuccess(state) {
