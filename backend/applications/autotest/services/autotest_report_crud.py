@@ -508,21 +508,25 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
     async def search_script_round_reports(self, report_in: AutoTestReportScriptReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        脚本执行明细分页查询(报告维度)：按批次标识+用例ID+轮次分页返回该轮次内执行报告(一行=一次场景执行), 供/search_script_round_reports接口渲染轮次内明细表格。
+        脚本执行明细分页查询(报告维度)：按批次标识+用例ID分页返回执行报告(一行记录代表一次场景执行), 供/search_script_round_reports接口渲染明细表格。
+
+        双形态：传入round_no时按轮次过滤(轮次内明细)；缺省时返回全部轮次明细(执行次数模式无数据源场景),
+        两种形态统一按执行时间升序排列。
 
         :param report_in: 脚本明细查询入参
-        :return: (该轮次报告总数, 当前页报告行列表)
+        :return: (报告总数, 当前页报告行列表)
         """
         batch_code: str = (report_in.batch_code or "").strip()
         if not batch_code:
             raise ParameterException(message="参数[batch_code]不允许为空")
         if not report_in.case_id:
             raise ParameterException(message="参数[case_id]不允许为空")
-        if not report_in.round_no:
-            raise ParameterException(message="参数[round_no]不允许为空")
 
         state: int = 0 if report_in.state is None else report_in.state
-        query: Q = Q(batch_code=batch_code) & Q(case_id=report_in.case_id) & Q(round_no=report_in.round_no) & Q(state=state)
+        query: Q = Q(batch_code=batch_code) & Q(case_id=report_in.case_id) & Q(state=state)
+        if report_in.round_no:
+            # 轮次形态：命中复合索引(batch_code, case_id, round_no)全列
+            query &= Q(round_no=report_in.round_no)
         total: int = await self.model.filter(query).count()
         if not total:
             return 0, []

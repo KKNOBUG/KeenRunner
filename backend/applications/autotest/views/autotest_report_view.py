@@ -313,9 +313,9 @@ async def search_report_batch_scripts(
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    批次脚本维度下钻查询(脚本维度)：面向“脚本执行信息”抽屉, 按批次标识聚合脚本执行信息并分页, 一行=一个脚本(含轮次元数据rounds供“脚本执行明细”抽屉渲染折叠菜单)。
-    执行次数case_execute_count=任务配置的执行轮次数(round_no去重数, 一轮内多数据源产生多条报告仅计1次); 历史数据无round_no时为报告行数。
-    rounds元素含round_no与dataset_names(本轮次数据源名称列表); 历史数据rounds为空。
+    批次脚本维度下钻查询(脚本维度)：面向“脚本执行信息”抽屉, 按批次标识聚合脚本执行信息并分页, 一行记录代表一个脚本。
+    执行次数case_execute_count=任务配置的执行轮次数(round_no去重数, 一轮内多数据源产生多条报告仅计1次), 供前端构建轮次列表; 历史数据无round_no时为报告行数。
+    has_multiple_dataset=数据源名称去重数>1, 语义对齐/search_reports; 多数据源脚本行由前端触发报告批次下钻(/search_batch_reports)。
 
     :param script_in: 含必填batch_code；page/page_size针对脚本数
     :param services: 自动化测试CRUD依赖聚合
@@ -334,15 +334,18 @@ async def search_report_batch_scripts(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_script_round_reports", summary="查询轮次执行明细", description="按批次与轮次分页查询执行报告")
+@autotest_report.post("/search_script_round_reports", summary="查询轮次执行明细",
+                      description="按批次与用例分页查询执行报告；round_no可选：传入时按轮次过滤，缺省时返回全部轮次明细")
 async def search_script_round_reports(
         report_in: AutoTestReportScriptReportSelect = Body(..., description="轮次明细查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
 ):
     """
-    轮次执行明细分页查询(报告维度)：面向“脚本执行明细”抽屉轮次内表格, 按批次标识+用例ID+轮次分页返回执行报告, 一行=一次场景执行(含dataset_no)。
+    脚本执行明细分页查询(报告维度)：面向“脚本执行明细”抽屉, 按批次标识+用例ID分页返回执行报告, 一行=一次场景执行(含dataset_no)。
 
-    :param report_in: 含必填batch_code、case_id与round_no
+    双形态：传入round_no时按轮次过滤(轮次内明细)；缺省时返回全部轮次明细(执行次数模式无数据源场景), 统一按执行时间升序排列。
+
+    :param report_in: 含必填batch_code、case_id, 可选round_no
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
@@ -354,5 +357,5 @@ async def search_script_round_reports(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"按batch_code+case_id+round_no查询轮次执行明细失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"按batch_code+case_id查询脚本执行明细失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")

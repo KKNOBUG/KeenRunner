@@ -133,11 +133,11 @@ class AutoTestReportBatchScriptItem(BaseModel):
 
 
 class AutoTestReportScriptReportSelect(BaseModel):
-    """按批次标识+用例ID+轮次分页查询脚本执行明细入参（报告维度，一行=一次场景执行）。"""
+    """按批次标识+用例ID分页查询脚本执行明细入参（报告维度，一行记录代表一次场景执行）。"""
 
     batch_code: str = Field(..., min_length=1, max_length=64, description="批次标识代码")
     case_id: int = Field(..., ge=1, description="用例ID")
-    round_no: int = Field(..., ge=1, description="执行轮次")
+    round_no: Optional[int] = Field(None, ge=1, description="执行轮次(可选, 传入时按轮次过滤, 缺省时返回全部轮次明细)")
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=200, description="每页数量")
     state: Optional[int] = Field(default=0, description="状态")
