@@ -690,7 +690,7 @@ async def debug_tcp_request(
         return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/python_code_debugging", summary="调试Python代码请求", description="调试Python代码步骤")
+@autotest_step.post("/python_code_debugging", summary="调试Python代码", description="调试Python代码步骤")
 async def debug_python_code(
         debug_in: AutoTestPythonCodeDebugRequest = Body(..., description="Python代码步骤数据"),
 ):
@@ -742,7 +742,7 @@ async def debug_redis_request(
         return FailureResponse(message=f"Redis请求调试失败，异常描述: {e}")
 
 
-@autotest_step.post("/execute_or_debugging", summary="执行步骤树结构", description="执行或调试步骤树结构")
+@autotest_step.post("/execute_or_debugging", summary="执行或调试步骤树", description="执行或调试步骤树结构")
 async def execute_step_tree(
         exec_in: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -851,10 +851,7 @@ async def execute_step_tree(
                     f"dataset_count={len(selected_dataset_names)}"
                 )
                 return SuccessResponse(
-                    message=(
-                        f"参数化执行任务已提交后台, 共{len(selected_dataset_names)}个数据集, "
-                        f"请稍后在报告中心/执行记录查看结果"
-                    ),
+                    message="执行任务已提交后台执行，请稍后在异步中心查看结果",
                     data={
                         "parameterized": True,
                         "async": True,

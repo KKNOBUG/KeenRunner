@@ -363,8 +363,10 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
 
     async def get_all_project(self, page: int = 1, page_size: int = 10000) -> Tuple[List[Dict[str, Any]], int]:
         """
-        查询全部启用应用。
+        分页查询全部启用应用。
 
+        :param page: 页码
+        :param page_size: 每页条数
         :return: ([{project_id, project_name, project_mark}], total)；project_id为应用主键id，project_mark取project_code
         """
         query = self.model.filter(state=0)

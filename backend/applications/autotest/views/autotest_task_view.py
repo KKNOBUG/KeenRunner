@@ -322,7 +322,7 @@ async def run_task(
         return FailureResponse(message=f"执行失败，异常描述: {e}")
 
 
-@autotest_task.post("/start", summary="启动任务", description="启用任务调度")
+@autotest_task.post("/start", summary="启动任务", description="启用任务定时调度")
 async def start_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -359,7 +359,7 @@ async def start_task(
         return FailureResponse(message=f"启动失败，异常描述: {e}")
 
 
-@autotest_task.post("/stop", summary="停止任务", description="关闭任务调度")
+@autotest_task.post("/stop", summary="停止任务", description="停用任务定时调度")
 async def stop_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -396,7 +396,7 @@ async def stop_task(
         return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
-@autotest_task.post("/copy", summary="新增任务副本", description="根据用例id或code查询任务并复刻")
+@autotest_task.post("/copy", summary="新增任务副本", description="根据任务id复刻生成新任务")
 async def copy_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),

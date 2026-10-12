@@ -184,7 +184,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
 
     async def create_task(self, task_in: AutoTestTaskCreate) -> AutoTestTaskModel:
         """
-        创建应用；同名软删记录恢复并更新，活跃同名报错。
+        创建任务；同名软删记录恢复并更新，活跃同名报错。
 
         :param task_in: 任务创建schema
         :return: 创建后的任务实例

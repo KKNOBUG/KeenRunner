@@ -539,7 +539,7 @@ async def update_data_source_fields(
         return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/build", summary="查询或构建数据源矩阵", description="查询或构建数据源矩阵，并附带报文原始值映射(Body)")
+@autotest_data_source.post("/build", summary="查询或构建数据源矩阵", description="查询或构建数据源矩阵并附带报文原始值映射(Body)")
 async def build_data_source(
         build_in: AutoTestDataSourceBuild = Body(..., description="数据源矩阵构建定位条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -672,7 +672,7 @@ async def get_data_source(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_data_source.post(path="/query_dataset_names", summary="查询数据场景", description="查询案例数据场景名称")
+@autotest_data_source.post(path="/query_dataset_names", summary="查询数据场景", description="查询用例数据场景名称")
 async def get_dataset_names(
         case_id: int = Form(..., description="用例ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -799,7 +799,7 @@ async def get_data_source_by_case_step(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/scene_names_by_case", summary="查询数据源场景列名", description="根据用例查询已落库数据源场景列名")
+@autotest_data_source.get("/scene_names_by_case", summary="查询数据场景列名", description="根据用例查询已落库数据场景列名")
 async def get_scene_names_by_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
@@ -898,7 +898,7 @@ async def get_scene_names_by_case(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/dataset_scenario", summary="查询数据集场景", description="查询某步骤下单个数据集场景")
+@autotest_data_source.get("/dataset_scenario", summary="查询步骤数据场景", description="查询某步骤下单个数据场景")
 async def get_dataset_scenario(
         case_id: int = Query(..., description="用例ID"),
         step_code: str = Query(..., description="步骤标识代码"),
@@ -929,7 +929,7 @@ async def get_dataset_scenario(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/import_template_download", summary="下载数据源导入模板", description="下载请求步骤数据集导入模板xlsx")
+@autotest_data_source.get("/import_template_download", summary="下载数据源导入模板", description="下载请求步骤数据源导入模板xlsx")
 async def download_import_template():
     """
     下载请求步骤数据集导入模板xlsx。
@@ -954,7 +954,7 @@ async def download_import_template():
     )
 
 
-@autotest_data_source.post("/single_step_dataset_upload", summary="上传单步骤数据源", description="参数化驱动单步骤数据集上传")
+@autotest_data_source.post("/single_step_dataset_upload", summary="上传单步骤数据源", description="参数化驱动单步骤数据源上传")
 async def single_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         step_id: str = Form(..., description="步骤ID"),
@@ -1092,7 +1092,7 @@ async def single_step_dataset_upload(
     return SuccessResponse(message="单步骤数据集上传成功，已创建数据源并同步缓存", data=data, total=1)
 
 
-@autotest_data_source.get("/single_step_dataset_download", summary="导出步骤数据源", description="根据用例步骤导出数据源xlsx")
+@autotest_data_source.get("/single_step_dataset_download", summary="导出单步骤数据源", description="根据用例步骤导出数据源xlsx")
 async def single_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
@@ -1203,7 +1203,7 @@ async def single_step_template_download(
         return FailureResponse(message=f"下载失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/batch_step_dataset_upload", summary="上传步骤数据源", description="参数化驱动多步骤数据集批量上传")
+@autotest_data_source.post("/batch_step_dataset_upload", summary="上传多步骤数据源", description="参数化驱动多步骤数据源批量上传")
 async def batch_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
@@ -1378,7 +1378,7 @@ async def batch_step_dataset_upload(
     )
 
 
-@autotest_data_source.get("/batch_step_dataset_download", summary="导出步骤数据源汇总", description="根据用例汇总导出所有步骤数据源xlsx")
+@autotest_data_source.get("/batch_step_dataset_download", summary="导出多步骤数据源汇总", description="根据用例汇总导出所有步骤数据源xlsx")
 async def batch_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),

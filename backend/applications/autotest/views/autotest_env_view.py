@@ -277,7 +277,7 @@ async def classify_environment_configs(
         return FailureResponse(message=f"查询失败, 异常描述: {e}")
 
 
-@autotest_env.post("/list", summary="查询环境列表", description="按节点类型/应用聚合环境名称")
+@autotest_env.post("/list", summary="查询环境聚合列表", description="按节点类型/应用聚合环境名称")
 async def list_environments(
         env_in: AutoTestEnvListQuery = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -321,7 +321,7 @@ async def page_environments(
         return FailureResponse(message=f"查询失败, 错误描述: {e}")
 
 
-@autotest_env.get("/get_all_app", summary="查询全部应用", description="获取全部启用应用列表")
+@autotest_env.get("/get_all_app", summary="查询全部应用", description="查询全部启用应用列表")
 async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
         page_size: int = Query(10000, ge=1, description="每页条数"),

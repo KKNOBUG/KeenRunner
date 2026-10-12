@@ -383,7 +383,7 @@ async def delete_audits_by_time(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@audit.delete("/clear_all", summary="清空审计日志", description="清空所有审计日志(危险操作)")
+@audit.delete("/clear_all", summary="删除全部审计日志", description="删除所有审计日志(危险操作)")
 async def clear_all_audits(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):

@@ -134,7 +134,7 @@ async def delete_project(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@autotest_project.post("/delete", summary="删除应用(批量)", description="根据id或code列表删除应用信息")
+@autotest_project.post("/delete", summary="批量删除应用", description="根据id或code列表删除应用信息")
 async def batch_delete_projects(
         project_in: AutoTestProjectDelete = Body(..., description="项目信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),

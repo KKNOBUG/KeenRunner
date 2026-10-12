@@ -210,6 +210,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
         routers = await self.model.all()
         if sync_role_bindings:
-            from backend.applications.base.services.permission_rule import sync_role_permission_bindings
-            await sync_role_permission_bindings(routers=routers)
+            from backend.applications.base.services.permission_rule import PermissionRule
+            await PermissionRule.sync_role_permission_bindings(routers=routers)
         return routers

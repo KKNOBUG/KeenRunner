@@ -142,7 +142,7 @@ async def create_db_config(
         return FailureResponse(message=f"新增DB配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/redis/create", summary="新增REDIS类型环境配置", description="新增REDIS类型环境配置信息")
+@autotest_env_config.post("/redis/create", summary="新增Redis类型环境配置", description="新增Redis类型环境配置信息")
 async def create_redis_config(
         config_in: RedisEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -171,7 +171,7 @@ async def create_redis_config(
         return FailureResponse(message=f"新增Redis配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/redis/update", summary="更新REDIS类型环境配置", description="更新REDIS类型环境配置信息")
+@autotest_env_config.post("/redis/update", summary="更新Redis类型环境配置", description="更新Redis类型环境配置信息")
 async def update_redis_config(
         config_in: RedisEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -200,7 +200,7 @@ async def update_redis_config(
         return FailureResponse(message=f"修改Redis配置失败, 错误描述: {e}")
 
 
-@autotest_env_config.post("/delete", summary="删除子表环境配置", description="删除指定子表环境配置信息")
+@autotest_env_config.post("/delete", summary="删除指定类型环境配置", description="删除指定类型环境配置信息")
 async def delete_env_config(
         config_in: AutoTestEnvConfigTypedDelete = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -424,7 +424,7 @@ async def search_env_configs(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.get("/config_names", summary="查询配置名称", description="获取去重后的配置名称列表")
+@autotest_env_config.get("/config_names", summary="查询配置名称", description="查询去重后的配置名称列表")
 async def get_env_config_names(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
@@ -453,7 +453,7 @@ async def get_env_config_names(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.post("/query_assign_config_envs", summary="查询指派配置的环境名称", description="根据应用/配置名称/节点类型查询环境名称列表")
+@autotest_env_config.post("/query_assign_config_envs", summary="查询配置可指派的环境名称", description="根据应用/配置名称/节点类型查询环境名称列表")
 async def query_assign_config_envs(
         query_in: QueryAssignConfigEnv = Body(..., description="指派配置环境查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -474,7 +474,7 @@ async def query_assign_config_envs(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.get("/list", summary="查询子表环境配置列表", description="按条件分页查询子表环境配置列表")
+@autotest_env_config.get("/list", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Query)")
 async def list_env_configs(
         project_id: Optional[int] = Query(None, description="应用ID"),
         env_name: Optional[str] = Query(None, description="环境名称"),

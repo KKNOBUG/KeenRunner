@@ -71,7 +71,7 @@ async def create_step_detail(
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_detail.delete("/delete", summary="删除明细", description="根据id或code删除明细信息")
+@autotest_detail.delete("/delete", summary="删除明细", description="根据id或步骤与报告code删除明细")
 async def delete_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
@@ -147,7 +147,7 @@ async def update_step_detail(
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
-@autotest_detail.get("/get", summary="查询明细", description="根据id或code查询明细信息")
+@autotest_detail.get("/get", summary="查询明细", description="根据id或步骤与报告code查询明细")
 async def get_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),

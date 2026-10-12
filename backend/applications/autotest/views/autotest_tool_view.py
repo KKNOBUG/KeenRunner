@@ -91,7 +91,7 @@ async def list_funcs():
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_tool.get("/builtin_variables", summary="查询内置环境变量", description="查询内置变量列表")
+@autotest_tool.get("/builtin_variables", summary="查询内置变量", description="查询步骤内置变量列表")
 async def list_builtin_variables():
     """
     内置环境变量查询。

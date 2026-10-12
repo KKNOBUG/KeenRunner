@@ -455,10 +455,10 @@ async def start_tcp_test_server(
     """
     启动TCP测试服务器，同时监听两个端口。
 
-    - **JSON端口**（默认9999）：接收JSON格式请求报文（银行账户交易查询），
+    - **JSON端口**（默认9991）：接收JSON格式请求报文（银行账户交易查询），
       返回XML格式响应（含AccountInfo + TransactionList数组 + Summary，共30+字段）
 
-    - **XML端口**（默认9998）：接收XML格式请求报文（贷款申请），
+    - **XML端口**（默认9992）：接收XML格式请求报文（贷款申请），
       返回XML格式响应（含ApprovalInfo + RepaymentPlan数组 + Terms数组 + ContactInfo，共40+字段）
 
     帧协议自动检测：LENGTH_PREFIX（8位长度前缀）或RAW（无前缀）。

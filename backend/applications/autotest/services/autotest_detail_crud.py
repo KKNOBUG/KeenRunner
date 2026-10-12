@@ -126,9 +126,10 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
     async def create_details(self, details_in: List[AutoTestDetailCreate]) -> List[AutoTestDetailModel]:
         """
-        批量创建执行明细，仅供落库事务内使用(不校验用例与报告存在性，调用方(执行/调试落库事务)在调用前已完成用例校验，并在同一事务内创建了与明细)。
-        report_code同源的报告，故跳过存在性校验；唯一约束(report_code+case_code+step_code+loop_cycles)
-        冲突时整批失败，由外层事务统一回滚，与逐条创建的事务语义一致。
+        批量创建执行明细，仅供执行/调试落库事务内使用。
+        调用方已在同一事务内创建了report_code同源的报告，故跳过用例与报告存在性校验；
+        唯一约束(report_code+case_code+step_code+loop_cycles)冲突时整批失败，由外层事务统一回滚，
+        与逐条创建的事务语义一致。
 
         :param details_in: 明细创建schema列表
         :return: 创建后的明细实例列表(自增主键不回填)

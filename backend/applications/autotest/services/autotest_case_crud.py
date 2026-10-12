@@ -117,7 +117,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         :param case_id: 用例主键ID
         :param case_code: 用例标识代码
         :param kwargs: 额外过滤条件
-        :return: 数据源实例或None
+        :return: 用例实例或None
         """
         if case_id:
             return await self.get_by_id(case_id=case_id, on_error=True, **kwargs)

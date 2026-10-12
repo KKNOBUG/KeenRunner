@@ -182,7 +182,7 @@ async def get_report(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_report.post("/search", summary="查询报告列表", description="根据条件分页查询报告列表信息(Body)")
+@autotest_report.post("/search", summary="查询报告列表", description="分页查询手工执行报告列表(Body)")
 async def search_reports(
         report_in: AutoTestReportSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -282,7 +282,7 @@ async def search_batch_reports(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_task_batches", summary="查询任务执行历史", description="按task_code聚合batch_code计算状态")
+@autotest_report.post("/search_task_batches", summary="查询任务执行历史", description="按任务聚合批次执行历史并计算结果")
 async def search_task_batches(
         batch_in: AutoTestReportBatchSelect = Body(..., description="批次查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -307,7 +307,7 @@ async def search_task_batches(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_batch_scripts", summary="查询批次脚本执行信息", description="按batch_code聚合脚本维度执行信息并分页")
+@autotest_report.post("/search_batch_scripts", summary="查询批次脚本执行信息", description="按批次分页查询脚本执行信息")
 async def search_report_batch_scripts(
         script_in: AutoTestReportBatchScriptSelect = Body(..., description="批次脚本查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -334,7 +334,7 @@ async def search_report_batch_scripts(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_report.post("/search_script_round_reports", summary="查询轮次执行明细", description="按batch_code+case_id+round_no分页执行报告")
+@autotest_report.post("/search_script_round_reports", summary="查询轮次执行明细", description="按批次与轮次分页查询执行报告")
 async def search_script_round_reports(
         report_in: AutoTestReportScriptReportSelect = Body(..., description="轮次明细查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),

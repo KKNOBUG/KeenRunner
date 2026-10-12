@@ -27,13 +27,7 @@ from backend.applications.base.models.role_model import Role
 from backend.applications.base.schemas.menu_schema import MenuCreate
 from backend.applications.base.schemas.role_schema import RoleCreate
 from backend.applications.base.services.menu_crud import MenuCrud
-from backend.applications.base.services.permission_rule import (
-    ROLE_CODE_USER,
-    ROLE_CODE_GUEST,
-    ROLE_CODE_ADMIN,
-    warn_unclassified_routers,
-    filter_routers_for_role
-)
+from backend.applications.base.services.permission_rule import PermissionRule
 from backend.applications.base.services.role_crud import RoleCrud
 from backend.applications.base.services.router_crud import RouterCrud
 from backend.applications.department.models.dept_model import Department
@@ -44,7 +38,7 @@ from backend.applications.user.services.user_crud import UserCrud
 from backend.configure import LOGGER
 from backend.enums import MenuType
 
-# 初始化种子数据的创建人（管理员账号，大写）
+# 初始化种子数据的创建人
 INIT_CREATED_USER = "ADMIN"
 
 
@@ -58,7 +52,7 @@ async def init_database_role():
 
     admin_role = await role_crud.create_role(
         RoleCreate(
-            code=ROLE_CODE_ADMIN,
+            code=PermissionRule.ROLE_CODE_ADMIN,
             name="管理员",
             description="平台超管，拥有全部菜单与接口权限",
             created_user=INIT_CREATED_USER,
@@ -66,7 +60,7 @@ async def init_database_role():
     )
     user_role = await role_crud.create_role(
         RoleCreate(
-            code=ROLE_CODE_USER,
+            code=PermissionRule.ROLE_CODE_USER,
             name="标准用户",
             description="系统域只读，业务域增删改查全开；不可操作系统写操作与角色权限变更",
             created_user=INIT_CREATED_USER,
@@ -74,7 +68,7 @@ async def init_database_role():
     )
     guest_role = await role_crud.create_role(
         RoleCreate(
-            code=ROLE_CODE_GUEST,
+            code=PermissionRule.ROLE_CODE_GUEST,
             name="宾客用户",
             description="系统域只读，业务域仅查询与新增；禁止一切修改与删除",
             created_user=INIT_CREATED_USER,
@@ -92,10 +86,10 @@ async def init_database_role():
         LOGGER.info(f"三角色绑定菜单成功, 共计{len(all_menus)}个")
 
     all_routers = await Router.all()
-    warn_unclassified_routers(all_routers)
-    admin_routers = filter_routers_for_role(ROLE_CODE_ADMIN, all_routers)
-    user_routers = filter_routers_for_role(ROLE_CODE_USER, all_routers)
-    guest_routers = filter_routers_for_role(ROLE_CODE_GUEST, all_routers)
+    PermissionRule.warn_unclassified_routers(all_routers)
+    admin_routers = PermissionRule.filter_routers_for_role(PermissionRule.ROLE_CODE_ADMIN, all_routers)
+    user_routers = PermissionRule.filter_routers_for_role(PermissionRule.ROLE_CODE_USER, all_routers)
+    guest_routers = PermissionRule.filter_routers_for_role(PermissionRule.ROLE_CODE_GUEST, all_routers)
     if admin_routers:
         await admin_role.routers.add(*admin_routers)
     if user_routers:
@@ -148,9 +142,9 @@ async def init_database_user():
 
     default_dept = await Department.get_or_none(code="SYSTEM_DEPT")
     test_dept = await Department.get_or_none(code="AUTOTEST_DEPT")
-    admin_role = await Role.get_or_none(code=ROLE_CODE_ADMIN)
-    user_role = await Role.get_or_none(code=ROLE_CODE_USER)
-    guest_role = await Role.get_or_none(code=ROLE_CODE_GUEST)
+    admin_role = await Role.get_or_none(code=PermissionRule.ROLE_CODE_ADMIN)
+    user_role = await Role.get_or_none(code=PermissionRule.ROLE_CODE_USER)
+    guest_role = await Role.get_or_none(code=PermissionRule.ROLE_CODE_GUEST)
 
     if not all([default_dept, test_dept, admin_role, user_role, guest_role]):
         LOGGER.error("[用户]初始化失败: 部门或角色尚未就绪，请检查初始化顺序")

@@ -108,7 +108,7 @@ async def delete_tag(
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
 
 
-@autotest_tag.post("/delete", summary="删除标签(批量)", description="根据id或code列表删除标签信息")
+@autotest_tag.post("/delete", summary="批量删除标签", description="根据id或code列表删除标签信息")
 async def batch_delete_tags(
         tag_in: AutoTestTagDelete = Body(..., description="标签信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),

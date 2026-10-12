@@ -147,12 +147,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
     async def get_by_unique(self, step_id: int, step_code: str, **kwargs) -> Optional[AutoTestStepModel]:
         """
-        根据step_id优先、否则step_code定位启用中的用例。
+        根据step_id优先、否则step_code定位启用中的步骤。
 
         :param step_id: 步骤主键ID
         :param step_code: 步骤标识代码
         :param kwargs: 额外过滤条件
-        :return: 数据源实例或None
+        :return: 步骤实例或None
         """
         if step_id:
             return await self.get_by_id(step_id=step_id, on_error=True, **kwargs)
@@ -1446,6 +1446,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         将同一用例多轮执行结果汇总为统一字段。
 
+        :param case_id: 用例主键ID
+        :param case_results: 多轮执行结果列表
+        :param case_ok: 用例整体是否成功
+        :param empty_error: 轮次结果为空时的失败原因
+        :return: 聚合后的单用例结果字典
         """
         if not case_results:
             return {
