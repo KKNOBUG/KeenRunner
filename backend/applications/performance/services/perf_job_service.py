@@ -19,11 +19,8 @@ import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
-from backend.applications.autotest.services.autotest_data_source_parser import (
-    AXIS_VERTICAL,
-    cell_text_value,
-)
-from backend.applications.autotest.services.autotest_data_source_service import collect_step_report_original
+from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 from backend.applications.performance.models.perf_api_model import PerfApiModel
 from backend.applications.performance.models.perf_dataset_model import PerfDatasetModel
@@ -278,7 +275,7 @@ def _resolve_field_paths(api: PerfApiModel, fields: List[str]) -> Dict[str, Tupl
     :param fields: 提取列名列表
     :return: {列名: (分区, 完整路径)}, 分区取值 head|body
     """
-    originals: Dict[str, Dict[str, str]] = collect_step_report_original(api)
+    originals: Dict[str, Dict[str, str]] = DataSourceService.collect_step_report_original(api)
     section_paths: Dict[str, List[str]] = {
         "head": list(originals.get("HEAD") or {}),
         "body": list(originals.get("BODY") or {}),
@@ -327,7 +324,7 @@ def _build_job_dataframe(api: PerfApiModel, fields: List[str],
             target_section, path = resolved[field]
             if target_section != section:
                 continue
-            matrix.append([path, *(cell_text_value(row.get(field)) for row in rows)])
+            matrix.append([path, *(DataSourceMatrixParser.cell_text_value(row.get(field)) for row in rows)])
     return matrix
 
 
@@ -361,7 +358,7 @@ async def _write_back_dataset(*, job: PerfJobModel, rows: List[Dict[str, Any]],
         ds_desc=f"数据作业[{job.job_code}]产出, 执行{job.loop_times}轮, 每轮一个场景",
         bind_api_id=api.id,
         dataframe=_build_job_dataframe(api=api, fields=list(job.extract_fields or []), rows=rows),
-        axis=AXIS_VERTICAL,
+        axis=DataSourceMatrixParser.AXIS_VERTICAL,
         ds_source=PerfDatasetSource.JOB,
         created_user=created_user,
     )

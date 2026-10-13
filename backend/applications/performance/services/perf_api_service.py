@@ -27,10 +27,7 @@ import requests
 from backend.applications.autotest.dependencies import get_autotest_api_services
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
-from backend.applications.autotest.services.autotest_data_source_service import (
-    build_vertical_matrix_from_step,
-    collect_step_report_original,
-)
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.autotest.services.autotest_step_debug_service import StepDebugService
 from backend.applications.performance.locust_engine.request_executor import (
     RequestBuilder,
@@ -366,9 +363,9 @@ class PerfApiService:
             api = await PerfApiCrud().get_by_code(api_code=api_code, on_error=True, state__not=1)
         # data_original 与 autotest /build 同契约(HEAD/BODY分区->路径->原始值), 供正交易场景列回填原始值
         return {
-            "dataframe": build_vertical_matrix_from_step(api),
+            "dataframe": DataSourceService.build_vertical_matrix_from_step(api),
             "axis": 1,
-            "data_original": collect_step_report_original(api),
+            "data_original": DataSourceService.collect_step_report_original(api),
         }
 
     @staticmethod

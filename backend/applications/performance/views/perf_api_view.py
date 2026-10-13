@@ -23,7 +23,7 @@ from fastapi.responses import StreamingResponse
 from tortoise.expressions import Q
 
 from backend.applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
-from backend.applications.autotest.services.autotest_data_source_service import build_vertical_matrix_from_step
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
 from backend.applications.performance.schemas.perf_api_schema import (
     PerfApiCreate,
@@ -334,7 +334,7 @@ async def download_perf_api_template(
         else:
             api = await services.api_curd.get_by_code(api_code=api_code, on_error=True, state__not=1)
         safe_name = safe_sheet_name(api.api_name or api.api_code, set())
-        df = pd.DataFrame(build_vertical_matrix_from_step(api) or [[]])
+        df = pd.DataFrame(DataSourceService.build_vertical_matrix_from_step(api) or [[]])
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)

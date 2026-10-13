@@ -340,11 +340,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        from backend.applications.autotest.services.autotest_data_source_parser import normalize_dataset_record
+        from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 
         # 每个场景强制补齐 head/body/assert_head/assert_body 四键
         normalized_dataset = {
-            str(scene_name): normalize_dataset_record(scene_data if isinstance(scene_data, dict) else {})
+            str(scene_name): DataSourceMatrixParser.normalize_dataset_record(scene_data if isinstance(scene_data, dict) else {})
             for scene_name, scene_data in parsed_data.items()
         }
 

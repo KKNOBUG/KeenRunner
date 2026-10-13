@@ -35,27 +35,8 @@ from backend.applications.autotest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceUpdateFields,
 )
 from backend.applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
-from backend.applications.autotest.services.autotest_data_source_parser import (
-    AXIS_VERTICAL,
-    json_safe_value,
-    parse_xlsx_first_sheet_async,
-    parse_xlsx_to_parsed_data_async,
-)
-from backend.applications.autotest.services.autotest_data_source_service import (
-    apply_dataframe_payload,
-    build_blank_vertical_matrix,
-    build_vertical_matrix_from_step,
-    clear_step_data_source_meta,
-    collect_step_report_original,
-    DEFAULT_SCENE_NAMES,
-    ensure_case_allows_data_source,
-    ensure_request_step,
-    fill_create_identity,
-    resolve_case_and_step,
-    resolve_enabled_data_source,
-    sync_data_source_fields,
-    sync_step_data_source_meta,
-)
+from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import (
     NotFoundException,
@@ -94,7 +75,7 @@ async def _serialize_data_source(instance: AutoTestDataSourceModel) -> Dict[str,
         replace_fields={"id": "data_source_id"},
     )
     # Excel/pandas可能留下NaN，标准JSON无法序列化
-    return json_safe_value(data)
+    return DataSourceMatrixParser.json_safe_value(data)
 
 
 async def _remove_upload_file(file_path: str) -> None:
@@ -129,7 +110,7 @@ async def _collect_report_original(services: AutoTestServices, instance: AutoTes
         return {}
     if step is None or step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
         return {}
-    return collect_step_report_original(step)
+    return DataSourceService.collect_step_report_original(step)
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:
@@ -144,6 +125,18 @@ def _safe_sheet_name(name: Any, used: Set[str]) -> str:
         index += 1
     used.add(clean)
     return clean
+
+
+def _stream_xlsx_response(output: io.BytesIO, file_name: str) -> StreamingResponse:
+    """将已写入的BytesIO包装为xlsx文件流响应（统一seek+headers+media_type）。"""
+    output.seek(0)
+    quoted_name: str = quote(file_name)
+    headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
 @autotest_data_source.post("/create", summary="新增数据源", description="为指定用例步骤绑定一条数据源")
@@ -162,23 +155,23 @@ async def create_data_source(
     :return: 统一HTTP响应
     """
     try:
-        case, step = await resolve_case_and_step(
+        case, step = await DataSourceService.resolve_case_and_step(
             services,
             case_id=data_source_in.case_id,
             case_code=data_source_in.case_code,
             step_id=data_source_in.step_id,
             step_code=data_source_in.step_code,
         )
-        ensure_request_step(step)
-        ensure_case_allows_data_source(case)
-        parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+        DataSourceService.ensure_request_step(step)
+        DataSourceService.ensure_case_allows_data_source(case)
+        parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         effective = data_source_in
         if parsed:
             effective = data_source_in.model_copy(update=parsed)
-        effective = fill_create_identity(effective, case, step)
+        effective = DataSourceService.fill_create_identity(effective, case, step)
         async with in_transaction():
             instance = await services.data_source_curd.create_data_source(data_source_in=effective)
-            await sync_step_data_source_meta(
+            await DataSourceService.sync_step_data_source_meta(
                 services,
                 case_id=case.id,
                 step_code=step.step_code,
@@ -230,7 +223,7 @@ async def delete_data_source(
     :return: 统一HTTP响应
     """
     try:
-        instance = await resolve_enabled_data_source(
+        instance = await DataSourceService.resolve_enabled_data_source(
             services,
             data_source_id=data_source_id,
             data_source_code=data_source_code,
@@ -242,7 +235,7 @@ async def delete_data_source(
         )
         async with in_transaction():
             deleted = await services.data_source_curd.hard_delete(id=instance.id)
-            await clear_step_data_source_meta(services, case_id=instance.case_id, step_code=instance.step_code)
+            await DataSourceService.clear_step_data_source_meta(services, case_id=instance.case_id, step_code=instance.step_code)
         data = await _serialize_data_source(deleted)
         return SuccessResponse(message="删除成功", data=data, total=1)
     except NotFoundException as e:
@@ -278,7 +271,7 @@ async def unbind_case_data_source(
                 state=0,
             ).values_list("id", flat=True)
             deleted_count: int = await services.data_source_curd.hard_batch_delete(ids=list(source_ids))
-            cleared_count: int = await clear_step_data_source_meta(services, case_id=case_instance.id)
+            cleared_count: int = await DataSourceService.clear_step_data_source_meta(services, case_id=case_instance.id)
         return SuccessResponse(message="解绑成功", data={"data_source": deleted_count, "step": cleared_count})
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -302,7 +295,7 @@ async def update_data_source(
     :return: 统一HTTP响应
     """
     try:
-        existing = await resolve_enabled_data_source(
+        existing = await DataSourceService.resolve_enabled_data_source(
             services,
             data_source_id=data_source_in.data_source_id,
             data_source_code=data_source_in.data_source_code,
@@ -312,7 +305,7 @@ async def update_data_source(
             step_code=data_source_in.step_code,
             on_error=True,
         )
-        parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+        parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         updates: Dict[str, Any] = {
             "data_source_id": existing.id,
             "updated_user": get_current_username(),
@@ -322,7 +315,7 @@ async def update_data_source(
         effective = data_source_in.model_copy(update=updates)
         async with in_transaction():
             instance = await services.data_source_curd.update_data_source(data_source_in=effective)
-            await sync_step_data_source_meta(
+            await DataSourceService.sync_step_data_source_meta(
                 services,
                 case_id=instance.case_id,
                 step_code=instance.step_code,
@@ -366,7 +359,7 @@ async def save_or_update_data_source(
     try:
         has_ds_locator = bool(data_source_in.data_source_id) or bool((data_source_in.data_source_code or "").strip())
         try:
-            parsed = await apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
+            parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         except ParameterException:
             # 空表格保存视为解绑意图：软删已有数据源记录并清空步骤指针
             unbound = await _unbind_empty_data_source(services, data_source_in, has_ds_locator)
@@ -376,7 +369,7 @@ async def save_or_update_data_source(
             data_source_in = data_source_in.model_copy(update=parsed)
         async with in_transaction():
             if has_ds_locator:
-                existing = await resolve_enabled_data_source(
+                existing = await DataSourceService.resolve_enabled_data_source(
                     services,
                     data_source_id=data_source_in.data_source_id,
                     data_source_code=data_source_in.data_source_code,
@@ -389,15 +382,15 @@ async def save_or_update_data_source(
                 })
                 instance = await services.data_source_curd.update_data_source(data_source_in=update_in)
             else:
-                case, step = await resolve_case_and_step(
+                case, step = await DataSourceService.resolve_case_and_step(
                     services,
                     case_id=data_source_in.case_id,
                     case_code=data_source_in.case_code,
                     step_id=data_source_in.step_id,
                     step_code=data_source_in.step_code,
                 )
-                ensure_request_step(step)
-                ensure_case_allows_data_source(case)
+                DataSourceService.ensure_request_step(step)
+                DataSourceService.ensure_case_allows_data_source(case)
                 existing = await services.data_source_curd.get_by_case_step(
                     case_id=case.id,
                     step_code=step.step_code,
@@ -419,10 +412,10 @@ async def save_or_update_data_source(
                         "step_id": step.id,
                         "step_code": step.step_code,
                     })
-                    create_in = fill_create_identity(create_in, case, step)
+                    create_in = DataSourceService.fill_create_identity(create_in, case, step)
                     instance = await services.data_source_curd.create_data_source(data_source_in=create_in)
 
-            await sync_step_data_source_meta(
+            await DataSourceService.sync_step_data_source_meta(
                 services,
                 case_id=instance.case_id,
                 step_code=instance.step_code,
@@ -475,12 +468,12 @@ async def _unbind_empty_data_source(
             "step_id": data_source_in.step_id,
             "step_code": data_source_in.step_code,
         })
-    instance: Optional[AutoTestDataSourceModel] = await resolve_enabled_data_source(**kwargs)
+    instance: Optional[AutoTestDataSourceModel] = await DataSourceService.resolve_enabled_data_source(**kwargs)
     if instance is None:
         return False
     async with in_transaction():
         await services.data_source_curd.soft_delete(id=instance.id)
-        await clear_step_data_source_meta(
+        await DataSourceService.clear_step_data_source_meta(
             services,
             case_id=instance.case_id,
             step_code=instance.step_code,
@@ -505,15 +498,15 @@ async def update_data_source_fields(
     :return: 统一HTTP响应
     """
     try:
-        case, step = await resolve_case_and_step(
+        case, step = await DataSourceService.resolve_case_and_step(
             services,
             case_id=data_in.case_id,
             case_code=data_in.case_code,
             step_id=data_in.step_id,
             step_code=data_in.step_code,
         )
-        ensure_request_step(step)
-        instance = await resolve_enabled_data_source(
+        DataSourceService.ensure_request_step(step)
+        instance = await DataSourceService.resolve_enabled_data_source(
             services,
             data_source_id=data_in.data_source_id,
             data_source_code=data_in.data_source_code,
@@ -525,7 +518,7 @@ async def update_data_source_fields(
             return BadReqResponse(message="当前步骤无数据源, 无法完成更新字段")
         if not isinstance(instance.dataframe, list) or not instance.dataframe:
             return BadReqResponse(message="数据源矩阵为空, 无法完成更新字段")
-        updates = await sync_data_source_fields(step, instance.dataframe, instance.axis)
+        updates = await DataSourceService.sync_data_source_fields(step, instance.dataframe, instance.axis)
         async with in_transaction():
             await services.data_source_curd.update(id=instance.id, obj_in=updates)
         LOGGER.info(f"数据源[id={instance.id}]字段同步完成")
@@ -556,7 +549,7 @@ async def build_data_source(
     try:
         has_ds_locator = bool(build_in.data_source_id) or bool((build_in.data_source_code or "").strip())
         if has_ds_locator:
-            instance = await resolve_enabled_data_source(
+            instance = await DataSourceService.resolve_enabled_data_source(
                 services,
                 data_source_id=build_in.data_source_id,
                 data_source_code=build_in.data_source_code,
@@ -566,14 +559,14 @@ async def build_data_source(
             data["data_original"] = await _collect_report_original(services, instance)
             return SuccessResponse(message="查询成功", data=data, total=1)
 
-        case, step = await resolve_case_and_step(
+        case, step = await DataSourceService.resolve_case_and_step(
             services,
             case_id=build_in.case_id,
             case_code=build_in.case_code,
             step_id=build_in.step_id,
             step_code=build_in.step_code,
         )
-        ensure_request_step(step)
+        DataSourceService.ensure_request_step(step)
         existing = await services.data_source_curd.get_by_case_step(
             case_id=case.id,
             step_code=step.step_code,
@@ -585,7 +578,7 @@ async def build_data_source(
             data["data_original"] = await _collect_report_original(services, existing)
             return SuccessResponse(message="查询成功", data=data, total=1)
 
-        matrix = build_vertical_matrix_from_step(step)
+        matrix = DataSourceService.build_vertical_matrix_from_step(step)
         # 键集合与 _serialize_data_source 输出对齐(未落库字段置None)，三分支响应结构保持一致
         data = {
             "data_source_id": None,
@@ -598,12 +591,12 @@ async def build_data_source(
             "file_path": None,
             "file_desc": None,
             "dataset": {},
-            "dataset_names": list(DEFAULT_SCENE_NAMES),
+            "dataset_names": list(DataSourceService.DEFAULT_SCENE_NAMES),
             "cache_key": None,
             "dataframe": matrix,
-            "axis": AXIS_VERTICAL,
+            "axis": DataSourceMatrixParser.AXIS_VERTICAL,
             "data_source_code": None,
-            "data_original": collect_step_report_original(step),
+            "data_original": DataSourceService.collect_step_report_original(step),
         }
         return SuccessResponse(message="构建成功", data=data, total=1)
     except NotFoundException as e:
@@ -887,7 +880,7 @@ async def get_scene_names_by_case(
             "data_source_scene_name_set": seen_scenes,
         }
         if not data_source_len:
-            data_source_scenes["default"] = build_blank_vertical_matrix()
+            data_source_scenes["default"] = DataSourceService.build_blank_vertical_matrix()
         return SuccessResponse(message="查询成功", data=data_source_scenes, total=data_source_len)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -1036,7 +1029,7 @@ async def single_step_dataset_upload(
         LOGGER.warning(f"计算文件哈希失败: {e}")
 
     try:
-        step_data, dataset_names, dataframe, axis = await parse_xlsx_first_sheet_async(file_path)
+        step_data, dataset_names, dataframe, axis = await DataSourceMatrixParser.parse_xlsx_first_sheet_async(file_path)
     except FileNotFoundError as e:
         await _remove_upload_file(file_path)
         return FailureResponse(message=f"解析文件失败，异常描述: {e}")
@@ -1080,7 +1073,7 @@ async def single_step_dataset_upload(
         LOGGER.error(f"数据源保存失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"数据源保存失败，异常描述: {e}")
 
-    await sync_step_data_source_meta(
+    await DataSourceService.sync_step_data_source_meta(
         services,
         case_id=case_id,
         step_code=step_code,
@@ -1127,18 +1120,10 @@ async def single_step_dataset_download(
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-            # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
             style_data_source_sheet(writer.sheets[safe_name])
-        output.seek(0)
 
         file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-        quoted_name: str = quote(file_name)
-        headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
-        return StreamingResponse(
-            output,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers,
-        )
+        return _stream_xlsx_response(output, file_name)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -1180,24 +1165,16 @@ async def single_step_template_download(
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤下载数据源模板")
 
     try:
-        matrix = build_vertical_matrix_from_step(step_instance)
+        matrix = DataSourceService.build_vertical_matrix_from_step(step_instance)
         safe_name = _safe_sheet_name(step_instance.step_name or step_code, set())
         df = pd.DataFrame(matrix if matrix else [[]])
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-            # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
             style_data_source_sheet(writer.sheets[safe_name])
-        output.seek(0)
 
         file_name = f"数据源模板_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-        quoted_name: str = quote(file_name)
-        headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
-        return StreamingResponse(
-            output,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers,
-        )
+        return _stream_xlsx_response(output, file_name)
     except Exception as e:
         LOGGER.error(f"下载数据源模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下载失败，异常描述: {e}")
@@ -1293,7 +1270,7 @@ async def batch_step_dataset_upload(
         LOGGER.warning(f"计算文件哈希失败: {e}")
 
     try:
-        full_parsed, _, sheet_axes, sheet_dataframes = await parse_xlsx_to_parsed_data_async(file_path)
+        full_parsed, _, sheet_axes, sheet_dataframes = await DataSourceMatrixParser.parse_xlsx_to_parsed_data_async(file_path)
     except FileNotFoundError as e:
         await _remove_upload_file(file_path)
         return FailureResponse(message=f"解析文件失败，异常描述: {e}")
@@ -1353,12 +1330,12 @@ async def batch_step_dataset_upload(
                     parsed_data=step_data,
                     dataset_names=sorted(step_data.keys()),
                     dataframe=sheet_dataframes[sheet_name],
-                    axis=sheet_axes.get(sheet_name, AXIS_VERTICAL),
+                    axis=sheet_axes.get(sheet_name, DataSourceMatrixParser.AXIS_VERTICAL),
                     created_user=created_user,
                     existing=existing_map.get(step_code),
                 )
                 created.append(await _serialize_data_source(instance))
-                await sync_step_data_source_meta(
+                await DataSourceService.sync_step_data_source_meta(
                     services,
                     case_id=case_id,
                     step_code=step_code,
@@ -1420,17 +1397,10 @@ async def batch_step_dataset_download(
                 df = pd.DataFrame(dataset_dataframe if dataset_dataframe else [[]])
                 safe_name = _safe_sheet_name(step_name, used_names)
                 df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-                # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
                 style_data_source_sheet(writer.sheets[safe_name])
-        output.seek(0)
 
         file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-        headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}"}
-        return StreamingResponse(
-            output,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers,
-        )
+        return _stream_xlsx_response(output, file_name)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -1466,21 +1436,14 @@ async def batch_step_template_download(
         used_names: Set[str] = set()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             for step in request_steps:
-                matrix = build_vertical_matrix_from_step(step)
+                matrix = DataSourceService.build_vertical_matrix_from_step(step)
                 safe_name = _safe_sheet_name(step.step_name, used_names)
                 df = pd.DataFrame(matrix if matrix else [[]])
                 df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-                # 统一样式：分区标记黄底、居中换行、行高/列宽自适应（与报文导出风格一致）
                 style_data_source_sheet(writer.sheets[safe_name])
-        output.seek(0)
 
         file_name = f"数据源模板汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
-        headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}"}
-        return StreamingResponse(
-            output,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers,
-        )
+        return _stream_xlsx_response(output, file_name)
     except Exception as e:
         LOGGER.error(f"汇总下载数据源模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下载失败，异常描述: {e}")

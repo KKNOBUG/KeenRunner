@@ -23,7 +23,7 @@ from fastapi.responses import StreamingResponse
 from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
-from backend.applications.autotest.services.autotest_data_source_service import sync_data_source_fields
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
 from backend.applications.performance.services.perf_dataset_service import PerfDatasetService
 from backend.applications.performance.services.perf_asset_utils import safe_sheet_name
@@ -229,7 +229,7 @@ async def update_perf_dataset_fields(
             return BadReqResponse(message="该接口尚未绑定数据源, 无法完成字段同步")
         if not isinstance(instance.dataframe, list) or not instance.dataframe:
             return BadReqResponse(message="数据源矩阵为空, 无法完成字段同步")
-        updates = await sync_data_source_fields(api, instance.dataframe, instance.axis)
+        updates = await DataSourceService.sync_data_source_fields(api, instance.dataframe, instance.axis)
         async with in_transaction():
             await services.dataset_curd.update(id=instance.id, obj_in=updates)
         LOGGER.info(f"压测数据源[id={instance.id}]字段同步完成")

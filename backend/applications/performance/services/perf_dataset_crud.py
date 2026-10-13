@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 
-from backend.applications.autotest.services.autotest_data_source_service import apply_dataframe_payload
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.performance.models.perf_api_model import PerfApiModel
 from backend.applications.performance.models.perf_dataset_model import PerfDatasetModel
@@ -129,7 +129,7 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         :raises ParameterException: 矩阵无法识别方向或场景数据为空
         """
         try:
-            return await apply_dataframe_payload(dataframe=dataframe, axis=axis)
+            return await DataSourceService.apply_dataframe_payload(dataframe=dataframe, axis=axis)
         except ValueError as e:
             error_message: str = f"校验压测数据集失败, {e}"
             LOGGER.error(error_message)

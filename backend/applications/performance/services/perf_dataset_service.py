@@ -23,7 +23,7 @@ import aiofiles
 import aiofiles.os as aos
 from fastapi import UploadFile
 
-from backend.applications.autotest.services.autotest_data_source_parser import parse_xlsx_first_sheet_async
+from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 from backend.applications.performance.schemas.perf_dataset_schema import (
     PERF_DATASET_SCENES_MAX,
     PerfDatasetParsedPreview,
@@ -128,7 +128,7 @@ class PerfDatasetService:
         file_path: str = path_or_error
         try:
             # 四分区解析器内部把阻塞IO移入线程池, 方向自动识别, 与功能数据源同一解析链路
-            dataset, dataset_names, dataframe, axis = await parse_xlsx_first_sheet_async(file_path)
+            dataset, dataset_names, dataframe, axis = await DataSourceMatrixParser.parse_xlsx_first_sheet_async(file_path)
         except Exception as e:
             await _remove_upload_file(file_path)
             if isinstance(e, ParameterException):

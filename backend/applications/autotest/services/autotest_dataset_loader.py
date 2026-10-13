@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from backend.applications.autotest.services.autotest_data_source_parser import normalize_dataset_record
+from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 
 
 class DatasetLoader:
@@ -17,7 +17,7 @@ class DatasetLoader:
         :param step_data: 原始场景dict
         :return: 键为head、body、assert_head、assert_body的字典
         """
-        return normalize_dataset_record(step_data)
+        return DataSourceMatrixParser.normalize_dataset_record(step_data)
 
     @staticmethod
     def has_dataset_payload(step_struct: Optional[Dict[str, Any]]) -> bool:

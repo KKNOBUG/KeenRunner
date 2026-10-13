@@ -6,7 +6,7 @@
 @Module  : autotest_data_source_parser.py
 @DateTime: 2026/3/6
 
-数据源解析器：将xlsx文件或二维矩阵解析为dataset结构，供数据源落库与报文替换使用。
+数据源解析器：DataSourceMatrixParser 类将xlsx文件或二维矩阵解析为dataset结构，供数据源落库与报文替换使用。
 
 协议约定：
 - 四分区：HEAD / BODY / ASSERT_HEAD / ASSERT_BODY(大小写不敏感)，分区标记所在行/列不允许用户内容
@@ -23,12 +23,13 @@
     → dataset输出(normalize_dataset_record)
 
 对外入口(__all__)：
-- parse_xlsx_to_parsed_data_async：批量上传，解析全部sheet
-- parse_xlsx_first_sheet_async：单步骤上传，仅解析首个sheet
-- parse_dataframe_matrix_async：前端保存矩阵解析
-- json_safe_value / parse_kv_string / is_section_marker / extract_scene_names_from_matrix /
-  normalize_dataset_record / detect_matrix_axis / resolve_matrix_axis / clean_matrix_by_axis /
-  cell_text_value：视图层与数据源服务的复用工具
+- DataSourceMatrixParser.parse_xlsx_to_parsed_data_async：批量上传，解析全部sheet
+- DataSourceMatrixParser.parse_xlsx_first_sheet_async：单步骤上传，仅解析首个sheet
+- DataSourceMatrixParser.parse_dataframe_matrix_async：前端保存矩阵解析
+- DataSourceMatrixParser.json_safe_value / parse_kv_string / is_section_marker /
+  extract_scene_names_from_matrix / normalize_dataset_record / detect_matrix_axis /
+  resolve_matrix_axis / clean_matrix_by_axis / cell_text_value / dataset_cell_placeholder：
+  视图层与数据源服务的复用工具
 """
 import asyncio
 import math
@@ -41,781 +42,790 @@ import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
 
+from backend.applications.autotest.services.autotest_runtime.datagram.value_adapter import (
+    DATASET_EMPTY_TEXT,
+    DATASET_NULL_VALUE,
+    DATASET_SPACE_VALUE,
+)
 from backend.configure import LOGGER
 
-__all__ = [
-    "AXIS_HORIZONTAL",
-    "AXIS_VERTICAL",
-    "json_safe_value",
-    "parse_kv_string",
-    "is_section_marker",
-    "detect_matrix_axis",
-    "resolve_matrix_axis",
-    "normalize_dataset_record",
-    "extract_scene_names_from_matrix",
-    "clean_matrix_by_axis",
-    "cell_text_value",
-    "parse_dataframe_matrix_async",
-    "parse_xlsx_first_sheet_async",
-    "parse_xlsx_to_parsed_data_async",
-]
-
-# ---------------------------------------------------------------------------
-# 常量
-# ---------------------------------------------------------------------------
-
-# 阻塞IO/解析共用线程池
-_executor = ThreadPoolExecutor(max_workers=5)
-
-# dataset落库固定四键，也是Excel分区标签的合法集合(大小写不敏感匹配)，唯一定义源；
-_DATAGRAM_SECTION_MARKS = ("head", "body", "assert_head", "assert_body")
-
-# 数据矩阵方向：水平(场景为行) / 垂直(场景为列)
-AXIS_HORIZONTAL = 0
-AXIS_VERTICAL = 1
-
-# dataset 字段省略标记：未填写的单元格不覆盖步骤原值
-_CELL_OMIT = object()
+__all__ = ["DataSourceMatrixParser"]
 
 
-# ---------------------------------------------------------------------------
-# 对外入口
-# ---------------------------------------------------------------------------
-
-async def parse_dataframe_matrix_async(
-        matrix: List[List[Any]],
-        axis: Optional[int] = None,
-) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
+class DataSourceMatrixParser:
     """
-    将二维矩阵按方向清洗后解析为dataset结构。
+    数据源矩阵解析器：将xlsx文件或二维矩阵解析为dataset结构，供数据源落库与报文替换使用。
 
-    :param matrix: 二维列表(与单步骤xlsx首sheet、header=None结构一致)
-    :param axis: 调用方声明的方向，仅在无法从矩阵识别时回落；与矩阵结构冲突时以分区标记为准
-    :return: (step_data, dataset_names, norm_matrix, axis)，dataset_names保持矩阵中的场景顺序
+    无实例状态，常量与规则集中为类属性，调用方统一经 DataSourceMatrixParser 入口访问。
     """
-    if not isinstance(matrix, list):
-        raise ValueError("参数[dataframe]必须是List[List[Any]]类型")
-    if not matrix:
-        return {}, [], [], AXIS_VERTICAL if axis not in (AXIS_HORIZONTAL, AXIS_VERTICAL) else axis
 
-    # 全矩阵仅做一次pad(含json_safe_value全量转换)，方向识别与清洗共用，避免重复消耗
-    padded = _pad_matrix(matrix)
-    axis = _axis_from_padded(padded, declared_axis=axis)
-    norm_matrix = _clean_padded_matrix(padded, axis)
-    if not norm_matrix:
-        return {}, [], [], axis
-    # 分区标记所在行/列不允许用户内容（防粘贴等绕过前端拦截的脏值），先剔除再做空白保护
-    norm_matrix = _clear_section_marker_cells(norm_matrix)
-    norm_matrix = _trim_matrix_strings(norm_matrix)
+    # ==================== 常量 ====================
 
-    df = pd.DataFrame(norm_matrix, dtype=object)
-    if df.empty:
-        return {}, [], [], axis
+    # dataset落库固定四键，也是Excel分区标签的合法集合(大小写不敏感匹配)，唯一定义源；
+    SECTION_MARKS: Tuple[str, ...] = ("head", "body", "assert_head", "assert_body")
 
-    parsed = await _parse_sheet_async(df, axis)
-    ordered_names = extract_scene_names_from_matrix(norm_matrix, axis)
-    step_data: Dict[str, Dict[str, Any]] = {}
-    dataset_names: List[str] = []
-    for scene_name in ordered_names:
-        record = parsed.get(scene_name)
-        if not record:
-            continue
-        step_data[scene_name] = normalize_dataset_record(record)
-        dataset_names.append(scene_name)
-    for scene_name, record in parsed.items():
-        if scene_name not in step_data:
-            step_data[scene_name] = normalize_dataset_record(record)
+    # 数据矩阵方向：水平(场景为行) / 垂直(场景为列)
+    AXIS_HORIZONTAL: int = 0
+    AXIS_VERTICAL: int = 1
+
+    # dataset 字段省略标记：未填写的单元格不覆盖步骤原值
+    _CELL_OMIT: object = object()
+
+    # 阻塞IO/解析共用线程池
+    _executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=5)
+
+    # ==================== 对外入口 ====================
+
+    @classmethod
+    async def parse_dataframe_matrix_async(
+            cls,
+            matrix: List[List[Any]],
+            axis: Optional[int] = None,
+    ) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
+        """
+        将二维矩阵按方向清洗后解析为dataset结构。
+
+        :param matrix: 二维列表(与单步骤xlsx首sheet、header=None结构一致)
+        :param axis: 调用方声明的方向，仅在无法从矩阵识别时回落；与矩阵结构冲突时以分区标记为准
+        :return: (step_data, dataset_names, norm_matrix, axis)，dataset_names保持矩阵中的场景顺序
+        """
+        if not isinstance(matrix, list):
+            raise ValueError("参数[dataframe]必须是List[List[Any]]类型")
+        if not matrix:
+            return {}, [], [], cls.AXIS_VERTICAL if axis not in (cls.AXIS_HORIZONTAL, cls.AXIS_VERTICAL) else axis
+
+        # 全矩阵仅做一次pad(含json_safe_value全量转换)，方向识别与清洗共用，避免重复消耗
+        padded = cls._pad_matrix(matrix)
+        axis = cls._axis_from_padded(padded, declared_axis=axis)
+        norm_matrix = cls._clean_padded_matrix(padded, axis)
+        if not norm_matrix:
+            return {}, [], [], axis
+        # 分区标记所在行/列不允许用户内容（防粘贴等绕过前端拦截的脏值），先剔除再做空白保护
+        norm_matrix = cls._clear_section_marker_cells(norm_matrix)
+        norm_matrix = cls._trim_matrix_strings(norm_matrix)
+
+        df = pd.DataFrame(norm_matrix, dtype=object)
+        if df.empty:
+            return {}, [], [], axis
+
+        parsed = await cls._parse_sheet_async(df, axis)
+        ordered_names = cls.extract_scene_names_from_matrix(norm_matrix, axis)
+        step_data: Dict[str, Dict[str, Any]] = {}
+        dataset_names: List[str] = []
+        for scene_name in ordered_names:
+            record = parsed.get(scene_name)
+            if not record:
+                continue
+            step_data[scene_name] = cls.normalize_dataset_record(record)
             dataset_names.append(scene_name)
-    return step_data, dataset_names, norm_matrix, axis
+        for scene_name, record in parsed.items():
+            if scene_name not in step_data:
+                step_data[scene_name] = cls.normalize_dataset_record(record)
+                dataset_names.append(scene_name)
+        return step_data, dataset_names, norm_matrix, axis
 
+    @classmethod
+    async def parse_xlsx_first_sheet_async(cls, file_path: str) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
+        """
+        仅解析xlsx首个sheet，自动识别矩阵方向。
 
-async def parse_xlsx_first_sheet_async(file_path: str) -> Tuple[Dict[str, Dict[str, Any]], List[str], List[List[Any]], int]:
-    """
-    仅解析xlsx首个sheet，自动识别矩阵方向。
+        :param file_path: xlsx文件路径
+        :return: (step_data, dataset_names, dataframe, axis)，dataframe为原始二维矩阵，axis为矩阵方向
+        """
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError(f"文件不存在: {file_path}")
+        # 只读第一个 sheet，阻塞IO移入线程池避免卡住事件循环
+        loop = asyncio.get_running_loop()
+        df = await loop.run_in_executor(cls._executor, cls._read_excel_first_sheet, file_path)
+        if df.empty:
+            return {}, [], [], cls.AXIS_VERTICAL
+        axis = cls.detect_matrix_axis(df.values)
+        step_data = await cls._parse_sheet_async(df, axis)
+        dataset_names = sorted(step_data.keys()) if step_data else []
+        dataframe = cls._dataframe_to_matrix(df)
+        LOGGER.info(f"解析 xlsx 首 sheet 完成: {file_path}, axis={axis}, dataset_names={dataset_names}")
+        return step_data, dataset_names, dataframe, axis
 
-    :param file_path: xlsx文件路径
-    :return: (step_data, dataset_names, dataframe, axis)，dataframe为原始二维矩阵，axis为矩阵方向
-    """
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(f"文件不存在: {file_path}")
-    # 只读第一个 sheet，阻塞IO移入线程池避免卡住事件循环
-    loop = asyncio.get_running_loop()
-    df = await loop.run_in_executor(_executor, _read_excel_first_sheet, file_path)
-    if df.empty:
-        return {}, [], [], AXIS_VERTICAL
-    axis = detect_matrix_axis(df.values)
-    step_data = await _parse_sheet_async(df, axis)
-    dataset_names = sorted(step_data.keys()) if step_data else []
-    dataframe = _dataframe_to_matrix(df)
-    LOGGER.info(f"解析 xlsx 首 sheet 完成: {file_path}, axis={axis}, dataset_names={dataset_names}")
-    return step_data, dataset_names, dataframe, axis
+    @classmethod
+    async def parse_xlsx_to_parsed_data_async(cls, file_path: str) -> Tuple[Dict[str, Any], List[str], Dict[str, int], Dict[str, List[List[Any]]]]:
+        """
+        解析xlsx全部sheet为约定结构并提取数据集名称列表。
 
+        :param file_path: xlsx文件路径
+        :return: (parsed_data, dataset_names, sheet_axes, sheet_matrices)，dataset_names为去重排序后的场景名列表
+        """
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError(f"文件不存在: {file_path}")
 
-async def parse_xlsx_to_parsed_data_async(file_path: str) -> Tuple[Dict[str, Any], List[str], Dict[str, int], Dict[str, List[List[Any]]]]:
-    """
-    解析xlsx全部sheet为约定结构并提取数据集名称列表。
+        parsed_data, sheet_axes, sheet_matrices = await cls._excel_to_json_async(file_path)
+        all_dataset_names: Set[str] = set()
+        for sheet_data in parsed_data.values():
+            all_dataset_names.update(sheet_data.keys())
+        dataset_names = sorted(all_dataset_names)
+        LOGGER.info(f"解析 xlsx 完成: {file_path}, sheets={len(parsed_data)}, dataset_names={dataset_names}")
+        return parsed_data, dataset_names, sheet_axes, sheet_matrices
 
-    :param file_path: xlsx文件路径
-    :return: (parsed_data, dataset_names, sheet_axes, sheet_matrices)，dataset_names为去重排序后的场景名列表
-    """
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(f"文件不存在: {file_path}")
+    # ==================== Excel读取 ====================
 
-    parsed_data, sheet_axes, sheet_matrices = await _excel_to_json_async(file_path)
-    all_dataset_names: Set[str] = set()
-    for sheet_data in parsed_data.values():
-        all_dataset_names.update(sheet_data.keys())
-    dataset_names = sorted(all_dataset_names)
-    LOGGER.info(f"解析 xlsx 完成: {file_path}, sheets={len(parsed_data)}, dataset_names={dataset_names}")
-    return parsed_data, dataset_names, sheet_axes, sheet_matrices
+    @classmethod
+    def _read_excel_all_sheets(cls, file_path: str) -> Dict[str, pd.DataFrame]:
+        """读取xlsx全部sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
+        sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
+        workbook = load_workbook(file_path)
+        try:
+            for sheet in workbook.worksheets:
+                df = sheets.get(sheet.title)
+                if df is not None and not df.empty:
+                    sheets[sheet.title] = cls._restore_quote_prefix_marks(df, sheet)
+        finally:
+            workbook.close()
+        return sheets
 
+    @classmethod
+    def _read_excel_first_sheet(cls, file_path: str) -> pd.DataFrame:
+        """读取xlsx首个sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
+        df = pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
+        workbook = load_workbook(file_path)
+        try:
+            if not df.empty:
+                df = cls._restore_quote_prefix_marks(df, workbook.worksheets[0])
+        finally:
+            workbook.close()
+        return df
 
-# ---------------------------------------------------------------------------
-# Excel读取
-# ---------------------------------------------------------------------------
+    @staticmethod
+    def _restore_quote_prefix_marks(df: pd.DataFrame, sheet) -> pd.DataFrame:
+        """
+        还原quotePrefix单元格的前导'标记，与数据源表格保存格式对齐。
 
-def _read_excel_all_sheets(file_path: str) -> Dict[str, pd.DataFrame]:
-    """读取xlsx全部sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
-    sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
-    workbook = load_workbook(file_path)
-    try:
-        for sheet in workbook.worksheets:
-            df = sheets.get(sheet.title)
-            if df is not None and not df.empty:
-                sheets[sheet.title] = _restore_quote_prefix_marks(df, sheet)
-    finally:
-        workbook.close()
-    return sheets
+        导出时前导'协议标记被转为Excel原生quotePrefix形态，pandas读取不感知该样式位，
+        此处逐格还原，否则强制文本语义丢失（如'1被误转数字、空格保护失效）。
 
-
-def _read_excel_first_sheet(file_path: str) -> pd.DataFrame:
-    """读取xlsx首个sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
-    df = pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
-    workbook = load_workbook(file_path)
-    try:
-        if not df.empty:
-            df = _restore_quote_prefix_marks(df, workbook.worksheets[0])
-    finally:
-        workbook.close()
-    return df
-
-
-def _restore_quote_prefix_marks(df: pd.DataFrame, sheet) -> pd.DataFrame:
-    """
-    还原quotePrefix单元格的前导'标记，与数据源表格保存格式对齐。
-
-    导出时前导'协议标记被转为Excel原生quotePrefix形态，pandas读取不感知该样式位，
-    此处逐格还原，否则强制文本语义丢失（如'1被误转数字、空格保护失效）。
-
-    :param df: header=None读入的sheet DataFrame
-    :param sheet: 同一sheet页的openpyxl worksheet对象
-    :return: 还原后的DataFrame，含非object列时返回astype副本
-    """
-    max_row, max_col = df.shape
-    # 统一object dtype，避免纯数字列写字符串报dtype不兼容
-    if df.dtypes.ne(object).any():
-        df = df.astype(object)
-    for row in sheet.iter_rows(max_row=max_row, max_col=max_col):
-        for cell in row:
-            if not cell.quotePrefix:
-                continue
-            value = df.iat[cell.row - 1, cell.column - 1]
-            if value is None or pd.isna(value):
-                continue
-            # float值优先取单元格内部XML文本，避免'200被pandas读成200.0后还原为'200.0
-            raw_text = getattr(cell, "_value", None)
-            if isinstance(value, float) and isinstance(raw_text, str) and raw_text:
-                text = raw_text
-            else:
-                text = str(value)
-            if not text.startswith("'"):
-                df.iat[cell.row - 1, cell.column - 1] = f"'{text}"
-    return df
-
-
-async def _excel_to_json_async(file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int], Dict[str, List[List[Any]]]]:
-    """
-    读取xlsx全部sheet，逐sheet检测方向并异步解析。
-
-    :param file_path: xlsx文件路径
-    :return: (parsed_data, sheet_axes, sheet_matrices)，分别为各sheet场景数据、方向与原始二维矩阵
-    """
-    loop = asyncio.get_running_loop()
-    sheets: Dict[str, pd.DataFrame] = await loop.run_in_executor(_executor, _read_excel_all_sheets, file_path)
-    sheet_items: List[Tuple[str, pd.DataFrame]] = [(name, df) for name, df in sheets.items() if not df.empty]
-
-    async def _parse_one(df: pd.DataFrame) -> Tuple[Dict[str, Dict[str, Any]], int]:
-        axis = detect_matrix_axis(df.values)
-        data = await _parse_sheet_async(df, axis)
-        return data, axis
-
-    results = await asyncio.gather(*[_parse_one(df) for _, df in sheet_items])
-    parsed_data: Dict[str, Any] = {name: data for (name, _), (data, _) in zip(sheet_items, results)}
-    sheet_axes: Dict[str, int] = {name: axis for (name, _), (_, axis) in zip(sheet_items, results)}
-    sheet_matrices: Dict[str, List[List[Any]]] = {name: _dataframe_to_matrix(df) for name, df in sheet_items}
-    return parsed_data, sheet_axes, sheet_matrices
-
-
-# ---------------------------------------------------------------------------
-# 方向识别
-# ---------------------------------------------------------------------------
-
-def is_section_marker(value: Any) -> bool:
-    """
-    判断单元格是否为分区标记。
-
-    :param value: 单元格值
-    :return: HEAD/BODY/ASSERT_HEAD/ASSERT_BODY(大小写不敏感)返回True
-    """
-    return isinstance(value, str) and value.strip().lower() in _DATAGRAM_SECTION_MARKS
-
-
-def _row_has_section_marker(cells: Any) -> bool:
-    """
-    判断一组单元格中是否包含分区标记。
-
-    :param cells: 单元格序列(如某一行或某一列)
-    :return: 含HEAD/BODY/ASSERT_HEAD/ASSERT_BODY(大小写不敏感)返回True，否则False
-    """
-    for cell in cells:
-        if isinstance(cell, str) and cell.strip().lower() in _DATAGRAM_SECTION_MARKS:
-            return True
-    return False
-
-
-def detect_matrix_axis(values: Any) -> int:
-    """
-    检测二维矩阵方向并校验合法性。
-
-    :param values: 二维矩阵(DataFrame.values)
-    :return: 方向，水平模式(第0行含分区标记)返回AXIS_HORIZONTAL，垂直模式(第0列含分区标记)返回AXIS_VERTICAL
-    """
-    if values.size == 0:
-        raise ValueError("数据矩阵为空，无法识别方向")
-    if _row_has_section_marker(values[0]):
-        return AXIS_HORIZONTAL
-    first_col = values[1:, 0] if values.shape[0] > 1 else np.array([])
-    if _row_has_section_marker(first_col):
-        return AXIS_VERTICAL
-    raise ValueError("无法识别数据矩阵方向：第0行/列未识别到[HEAD/BODY/ASSERT_HEAD/ASSERT_BODY]分区标记")
-
-
-def resolve_matrix_axis(matrix: List[List[Any]], declared_axis: Optional[int] = None) -> int:
-    """
-    按分区标记识别矩阵方向；识别失败时回落到调用方声明的 axis。
-
-    客户端/库中的 axis 可能与矩阵结构不一致（例如模型默认 0，实际为垂直矩阵），
-    清洗与解析必须以矩阵本身为准。
-
-    :param matrix: 二维矩阵
-    :param declared_axis: 调用方声明的方向
-    :return: 实际使用的方向
-    """
-    padded = _pad_matrix(matrix)
-    if not padded:
-        return declared_axis if declared_axis in (AXIS_HORIZONTAL, AXIS_VERTICAL) else AXIS_VERTICAL
-    return _axis_from_padded(padded, declared_axis=declared_axis)
-
-
-def _axis_from_padded(padded: List[List[Any]], declared_axis: Optional[int]) -> int:
-    """对已对齐矩阵识别方向；识别失败回落declared_axis，无回落时抛出。"""
-    try:
-        return detect_matrix_axis(pd.DataFrame(padded).values)
-    except ValueError:
-        if declared_axis in (AXIS_HORIZONTAL, AXIS_VERTICAL):
-            return declared_axis
-        raise
-
-
-# ---------------------------------------------------------------------------
-# 矩阵清洗
-# ---------------------------------------------------------------------------
-
-def _pad_matrix(matrix: List[List[Any]]) -> List[List[Any]]:
-    """
-    将不规则二维列表补齐为矩形矩阵。
-
-    :param matrix: 原始二维列表
-    :return: 列宽对齐后的矩阵，短行右侧补None
-    """
-    if not matrix:
-        return []
-    width = 0
-    for row in matrix:
-        if isinstance(row, list) and len(row) > width:
-            width = len(row)
-    padded: List[List[Any]] = []
-    for row in matrix:
-        cells = list(row) if isinstance(row, list) else []
-        if len(cells) < width:
-            cells.extend([None] * (width - len(cells)))
-        padded.append([json_safe_value(c) for c in cells[:width]])
-    return padded
-
-
-def clean_matrix_by_axis(matrix: List[List[Any]], axis: int) -> List[List[Any]]:
-    """
-    按矩阵方向剔除空白字段行/列，以及无数据的场景行/列；分区标记始终保留。
-
-    水平模式(axis=0)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY列以外的整列为空列，
-    再剔除第0行以外、第0列以外全部为空的场景行。
-    垂直模式(axis=1)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY行以外的整行为空行，
-    再剔除第0列以外、第0行以外全部为空的场景列。
-    第0列(垂直字段名 / 水平场景名)与第0行始终保留。
-
-    :param matrix: 原始二维矩阵
-    :param axis: 0水平 / 1垂直
-    :return: 清洗后的二维矩阵
-    """
-    return _clean_padded_matrix(_pad_matrix(matrix), axis)
-
-
-def _clean_padded_matrix(padded: List[List[Any]], axis: int) -> List[List[Any]]:
-    """对已对齐(含json_safe_value)的矩阵执行方向清洗；与resolve_matrix_axis共用pad结果。"""
-    if not padded:
-        return []
-    row_count = len(padded)
-    col_count = len(padded[0])
-
-    if axis == AXIS_HORIZONTAL:
-        keep_cols: List[int] = []
-        for col_idx in range(col_count):
-            if col_idx == 0:
-                keep_cols.append(col_idx)
-                continue
-            header_cell = padded[0][col_idx] if row_count else None
-            if is_section_marker(header_cell):
-                keep_cols.append(col_idx)
-                continue
-            column_cells = [padded[row_idx][col_idx] for row_idx in range(row_count)]
-            if not all(_cell_is_blank(cell) for cell in column_cells):
-                keep_cols.append(col_idx)
-        trimmed = [[row[col_idx] for col_idx in keep_cols] for row in padded]
-        return _drop_empty_scene_rows(trimmed)
-
-    kept_rows: List[List[Any]] = []
-    for row_idx, row in enumerate(padded):
-        if row_idx == 0:
-            kept_rows.append(row)
-            continue
-        if row and is_section_marker(row[0]):
-            kept_rows.append(row)
-            continue
-        if not all(_cell_is_blank(cell) for cell in row):
-            kept_rows.append(row)
-    return _drop_empty_scene_cols(kept_rows)
-
-
-def _drop_empty_scene_rows(padded: List[List[Any]]) -> List[List[Any]]:
-    """
-    水平模式：剔除第0行以外、第0列以外全部为空的场景行。
-
-    :param padded: 已对齐的矩形矩阵
-    :return: 去掉空场景行后的矩阵，第0行始终保留
-    """
-    if not padded:
-        return padded
-    kept: List[List[Any]] = [padded[0]]
-    for row in padded[1:]:
-        if not all(_cell_is_blank(cell) for cell in row[1:]):
-            kept.append(row)
-    return kept
-
-
-def _drop_empty_scene_cols(padded: List[List[Any]]) -> List[List[Any]]:
-    """
-    垂直模式：剔除第0列以外、第0行以外全部为空的场景列。
-
-    :param padded: 已对齐的矩形矩阵
-    :return: 去掉空场景列后的矩阵，第0列始终保留
-    """
-    if not padded:
-        return padded
-    col_count = len(padded[0])
-    row_count = len(padded)
-    keep_cols: List[int] = [0]
-    for col_idx in range(1, col_count):
-        if not all(_cell_is_blank(padded[row_idx][col_idx]) for row_idx in range(1, row_count)):
-            keep_cols.append(col_idx)
-    return [[row[col_idx] for col_idx in keep_cols] for row in padded]
-
-
-def _clear_section_marker_cells(matrix: List[List[Any]]) -> List[List[Any]]:
-    """
-    分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行/列不允许任何用户内容，
-    后端保存时统一剔除（与前端拦截双保险）：
-    - 垂直模式：第0列为分区标记的行，剔除第0列以外的全部单元格内容
-    - 水平模式：第0行为分区标记的列，剔除第0行以外的全部单元格内容
-    两个方向同时处理（不依赖 axis），标记单元格本身始终保留。
-
-    :param matrix: 已对齐的矩形矩阵
-    :return: 剔除后的矩阵（原地修改）
-    """
-    if not matrix:
-        return matrix
-    header = matrix[0] if isinstance(matrix[0], list) else []
-    marker_cols = {c for c in range(1, len(header)) if is_section_marker(header[c])}
-    for row_idx, row in enumerate(matrix):
-        if not isinstance(row, list):
-            continue
-        row_is_marker = row_idx > 0 and row and is_section_marker(row[0])
-        if not row_is_marker and not marker_cols:
-            continue
-        for col_idx in range(1, len(row)):
-            if row_is_marker or (col_idx in marker_cols and row_idx > 0):
-                row[col_idx] = ''
-    return matrix
-
-
-def _trim_matrix_strings(matrix: List[List[Any]]) -> List[List[Any]]:
-    """
-    对矩阵中每个字符串值执行清洗：
-    - 前导 ' 的值：强制文本标记，保持不变（不做 trim、不做类型推断）
-    - 非空纯空白字符串（如 "   "）：添加前导 ' 保护，避免空格丢失
-    - 空串：保持空串（空单元格无需保护，避免产生裸 ' 脏值）
-    - 其他字符串：去除首尾空白
-    - 非字符串值：保持不变
-    """
-    result = []
-    for row in matrix:
-        new_row = []
-        for cell in row:
-            if isinstance(cell, str):
-                if cell.startswith("'"):
-                    # 强制文本标记，保持不变
-                    new_row.append(cell)
-                elif cell == '':
-                    # 空串保持原样
-                    new_row.append(cell)
-                elif cell.strip() == '':
-                    # 非空纯空白值，添加 ' 保护
-                    new_row.append(f"'{cell}")
+        :param df: header=None读入的sheet DataFrame
+        :param sheet: 同一sheet页的openpyxl worksheet对象
+        :return: 还原后的DataFrame，含非object列时返回astype副本
+        """
+        max_row, max_col = df.shape
+        # 统一object dtype，避免纯数字列写字符串报dtype不兼容
+        if df.dtypes.ne(object).any():
+            df = df.astype(object)
+        for row in sheet.iter_rows(max_row=max_row, max_col=max_col):
+            for cell in row:
+                if not cell.quotePrefix:
+                    continue
+                value = df.iat[cell.row - 1, cell.column - 1]
+                if value is None or pd.isna(value):
+                    continue
+                # float值优先取单元格内部XML文本，避免'200被pandas读成200.0后还原为'200.0
+                raw_text = getattr(cell, "_value", None)
+                if isinstance(value, float) and isinstance(raw_text, str) and raw_text:
+                    text = raw_text
                 else:
-                    # 普通字符串，trim
-                    new_row.append(cell.strip())
-            else:
-                new_row.append(cell)
-        result.append(new_row)
-    return result
+                    text = str(value)
+                if not text.startswith("'"):
+                    df.iat[cell.row - 1, cell.column - 1] = f"'{text}"
+        return df
 
+    @classmethod
+    async def _excel_to_json_async(cls, file_path: str) -> Tuple[Dict[str, Dict[str, Dict[str, Any]]], Dict[str, int], Dict[str, List[List[Any]]]]:
+        """
+        读取xlsx全部sheet，逐sheet检测方向并异步解析。
 
-# ---------------------------------------------------------------------------
-# sheet解析
-# ---------------------------------------------------------------------------
+        :param file_path: xlsx文件路径
+        :return: (parsed_data, sheet_axes, sheet_matrices)，分别为各sheet场景数据、方向与原始二维矩阵
+        """
+        loop = asyncio.get_running_loop()
+        sheets: Dict[str, pd.DataFrame] = await loop.run_in_executor(cls._executor, cls._read_excel_all_sheets, file_path)
+        sheet_items: List[Tuple[str, pd.DataFrame]] = [(name, df) for name, df in sheets.items() if not df.empty]
 
-async def _parse_sheet_async(df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
-    """
-    在线程池中按方向解析单个sheet：AXIS_HORIZONTAL走水平解析，否则走垂直解析。
+        async def _parse_one(df: pd.DataFrame) -> Tuple[Dict[str, Dict[str, Any]], int]:
+            axis = cls.detect_matrix_axis(df.values)
+            data = await cls._parse_sheet_async(df, axis)
+            return data, axis
 
-    :param df: 无表头(header=None)的sheet DataFrame
-    :param axis: 矩阵方向
-    :return: { 场景名: { head, body, assert_head, assert_body } }
-    """
-    loop = asyncio.get_running_loop()
-    parse_fn = _parse_sheet_horizontal if axis == AXIS_HORIZONTAL else _parse_sheet_fast
-    return await loop.run_in_executor(_executor, parse_fn, df)
+        results = await asyncio.gather(*[_parse_one(df) for _, df in sheet_items])
+        parsed_data: Dict[str, Any] = {name: data for (name, _), (data, _) in zip(sheet_items, results)}
+        sheet_axes: Dict[str, int] = {name: axis for (name, _), (_, axis) in zip(sheet_items, results)}
+        sheet_matrices: Dict[str, List[List[Any]]] = {name: cls._dataframe_to_matrix(df) for name, df in sheet_items}
+        return parsed_data, sheet_axes, sheet_matrices
 
+    # ==================== 方向识别 ====================
 
-def _parse_sheet_fast(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
-    """
-    垂直模式解析单个sheet(第0行为场景名，第0列为分区标签/字段名)。
+    @classmethod
+    def is_section_marker(cls, value: Any) -> bool:
+        """
+        判断单元格是否为分区标记。
 
-    :param df: 无表头(header=None)的sheet DataFrame
-    :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
-    """
-    values = df.values
-    if values.size == 0:
-        return {}
+        :param value: 单元格值
+        :return: HEAD/BODY/ASSERT_HEAD/ASSERT_BODY(大小写不敏感)返回True
+        """
+        return isinstance(value, str) and value.strip().lower() in cls.SECTION_MARKS
 
-    scene_names = values[0, 1:]
-    first_col = values[1:, 0]
-    data_values = values[1:, 1:]
+    @classmethod
+    def _row_has_section_marker(cls, cells: Any) -> bool:
+        """
+        判断一组单元格中是否包含分区标记。
 
-    sections: Dict[str, List[int]] = {k: [] for k in _DATAGRAM_SECTION_MARKS}
-    # HEAD/BODY 标签行自身可能带 KV 文本块
-    section_row_index: Dict[str, Any] = {"head": None, "body": None}
-    current_section = None
+        :param cells: 单元格序列(如某一行或某一列)
+        :return: 含HEAD/BODY/ASSERT_HEAD/ASSERT_BODY(大小写不敏感)返回True，否则False
+        """
+        for cell in cells:
+            if isinstance(cell, str) and cell.strip().lower() in cls.SECTION_MARKS:
+                return True
+        return False
 
-    for i, cell in enumerate(first_col):
-        if not isinstance(cell, str):
-            continue
-        text = cell.strip().lower()
-        section_key = text if text in _DATAGRAM_SECTION_MARKS else None
-        if section_key is not None:
-            current_section = section_key
-            if section_key in ("head", "body"):
-                section_row_index[section_key] = i
-            continue
-        if current_section:
-            sections[current_section].append(i)
+    @classmethod
+    def detect_matrix_axis(cls, values: Any) -> int:
+        """
+        检测二维矩阵方向并校验合法性。
 
-    result: Dict[str, Dict[str, Any]] = {}
-    col_count = data_values.shape[1]
+        :param values: 二维矩阵(DataFrame.values)
+        :return: 方向，水平模式(第0行含分区标记)返回AXIS_HORIZONTAL，垂直模式(第0列含分区标记)返回AXIS_VERTICAL
+        """
+        if values.size == 0:
+            raise ValueError("数据矩阵为空，无法识别方向")
+        if cls._row_has_section_marker(values[0]):
+            return cls.AXIS_HORIZONTAL
+        first_col = values[1:, 0] if values.shape[0] > 1 else np.array([])
+        if cls._row_has_section_marker(first_col):
+            return cls.AXIS_VERTICAL
+        raise ValueError("无法识别数据矩阵方向：第0行/列未识别到[HEAD/BODY/ASSERT_HEAD/ASSERT_BODY]分区标记")
 
-    for col_idx in range(col_count):
-        scene_name = scene_names[col_idx]
-        if pd.isna(scene_name) or not str(scene_name).strip():
-            continue
-        scene_name = str(scene_name).strip()
-        record = {k: {} for k in _DATAGRAM_SECTION_MARKS}
-        has_data = False
+    @classmethod
+    def resolve_matrix_axis(cls, matrix: List[List[Any]], declared_axis: Optional[int] = None) -> int:
+        """
+        按分区标记识别矩阵方向；识别失败时回落到调用方声明的 axis。
 
-        for section in ("head", "body"):
-            row_idx = section_row_index.get(section)
-            if row_idx is not None:
-                raw_text = data_values[row_idx, col_idx]
-                if pd.notna(raw_text):
-                    parsed_dict = parse_kv_string(str(raw_text))
-                    if parsed_dict:
-                        record[section].update(parsed_dict)
-                        has_data = True
+        客户端/库中的 axis 可能与矩阵结构不一致（例如模型默认 0，实际为垂直矩阵），
+        清洗与解析必须以矩阵本身为准。
 
-        for section, rows in sections.items():
-            for r in rows:
-                key = first_col[r]
-                if not key:
+        :param matrix: 二维矩阵
+        :param declared_axis: 调用方声明的方向
+        :return: 实际使用的方向
+        """
+        padded = cls._pad_matrix(matrix)
+        if not padded:
+            return declared_axis if declared_axis in (cls.AXIS_HORIZONTAL, cls.AXIS_VERTICAL) else cls.AXIS_VERTICAL
+        return cls._axis_from_padded(padded, declared_axis=declared_axis)
+
+    @classmethod
+    def _axis_from_padded(cls, padded: List[List[Any]], declared_axis: Optional[int]) -> int:
+        """对已对齐矩阵识别方向；识别失败回落declared_axis，无回落时抛出。"""
+        try:
+            return cls.detect_matrix_axis(pd.DataFrame(padded).values)
+        except ValueError:
+            if declared_axis in (cls.AXIS_HORIZONTAL, cls.AXIS_VERTICAL):
+                return declared_axis
+            raise
+
+    # ==================== 矩阵清洗 ====================
+
+    @classmethod
+    def _pad_matrix(cls, matrix: List[List[Any]]) -> List[List[Any]]:
+        """
+        将不规则二维列表补齐为矩形矩阵。
+
+        :param matrix: 原始二维列表
+        :return: 列宽对齐后的矩阵，短行右侧补None
+        """
+        if not matrix:
+            return []
+        width = 0
+        for row in matrix:
+            if isinstance(row, list) and len(row) > width:
+                width = len(row)
+        padded: List[List[Any]] = []
+        for row in matrix:
+            cells = list(row) if isinstance(row, list) else []
+            if len(cells) < width:
+                cells.extend([None] * (width - len(cells)))
+            padded.append([cls.json_safe_value(c) for c in cells[:width]])
+        return padded
+
+    @classmethod
+    def clean_matrix_by_axis(cls, matrix: List[List[Any]], axis: int) -> List[List[Any]]:
+        """
+        按矩阵方向剔除空白字段行/列，以及无数据的场景行/列；分区标记始终保留。
+
+        水平模式(axis=0)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY列以外的整列为空列，
+        再剔除第0行以外、第0列以外全部为空的场景行。
+        垂直模式(axis=1)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY行以外的整行为空行，
+        再剔除第0列以外、第0行以外全部为空的场景列。
+        第0列(垂直字段名 / 水平场景名)与第0行始终保留。
+
+        :param matrix: 原始二维矩阵
+        :param axis: 0水平 / 1垂直
+        :return: 清洗后的二维矩阵
+        """
+        return cls._clean_padded_matrix(cls._pad_matrix(matrix), axis)
+
+    @classmethod
+    def _clean_padded_matrix(cls, padded: List[List[Any]], axis: int) -> List[List[Any]]:
+        """对已对齐(含json_safe_value)的矩阵执行方向清洗；与resolve_matrix_axis共用pad结果。"""
+        if not padded:
+            return []
+        row_count = len(padded)
+        col_count = len(padded[0])
+
+        if axis == cls.AXIS_HORIZONTAL:
+            keep_cols: List[int] = []
+            for col_idx in range(col_count):
+                if col_idx == 0:
+                    keep_cols.append(col_idx)
                     continue
-                typed = _dataset_field_value(data_values[r, col_idx])
-                if typed is _CELL_OMIT:
+                header_cell = padded[0][col_idx] if row_count else None
+                if cls.is_section_marker(header_cell):
+                    keep_cols.append(col_idx)
                     continue
-                record[section][str(key).strip()] = typed
+                column_cells = [padded[row_idx][col_idx] for row_idx in range(row_count)]
+                if not all(cls._cell_is_blank(cell) for cell in column_cells):
+                    keep_cols.append(col_idx)
+            trimmed = [[row[col_idx] for col_idx in keep_cols] for row in padded]
+            return cls._drop_empty_scene_rows(trimmed)
+
+        kept_rows: List[List[Any]] = []
+        for row_idx, row in enumerate(padded):
+            if row_idx == 0:
+                kept_rows.append(row)
+                continue
+            if row and cls.is_section_marker(row[0]):
+                kept_rows.append(row)
+                continue
+            if not all(cls._cell_is_blank(cell) for cell in row):
+                kept_rows.append(row)
+        return cls._drop_empty_scene_cols(kept_rows)
+
+    @classmethod
+    def _drop_empty_scene_rows(cls, padded: List[List[Any]]) -> List[List[Any]]:
+        """
+        水平模式：剔除第0行以外、第0列以外全部为空的场景行。
+
+        :param padded: 已对齐的矩形矩阵
+        :return: 去掉空场景行后的矩阵，第0行始终保留
+        """
+        if not padded:
+            return padded
+        kept: List[List[Any]] = [padded[0]]
+        for row in padded[1:]:
+            if not all(cls._cell_is_blank(cell) for cell in row[1:]):
+                kept.append(row)
+        return kept
+
+    @classmethod
+    def _drop_empty_scene_cols(cls, padded: List[List[Any]]) -> List[List[Any]]:
+        """
+        垂直模式：剔除第0列以外、第0行以外全部为空的场景列。
+
+        :param padded: 已对齐的矩形矩阵
+        :return: 去掉空场景列后的矩阵，第0列始终保留
+        """
+        if not padded:
+            return padded
+        col_count = len(padded[0])
+        row_count = len(padded)
+        keep_cols: List[int] = [0]
+        for col_idx in range(1, col_count):
+            if not all(cls._cell_is_blank(padded[row_idx][col_idx]) for row_idx in range(1, row_count)):
+                keep_cols.append(col_idx)
+        return [[row[col_idx] for col_idx in keep_cols] for row in padded]
+
+    @classmethod
+    def _clear_section_marker_cells(cls, matrix: List[List[Any]]) -> List[List[Any]]:
+        """
+        分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行/列不允许任何用户内容，
+        后端保存时统一剔除（与前端拦截双保险）：
+        - 垂直模式：第0列为分区标记的行，剔除第0列以外的全部单元格内容
+        - 水平模式：第0行为分区标记的列，剔除第0行以外的全部单元格内容
+        两个方向同时处理（不依赖 axis），标记单元格本身始终保留。
+
+        :param matrix: 已对齐的矩形矩阵
+        :return: 剔除后的矩阵（原地修改）
+        """
+        if not matrix:
+            return matrix
+        header = matrix[0] if isinstance(matrix[0], list) else []
+        marker_cols = {c for c in range(1, len(header)) if cls.is_section_marker(header[c])}
+        for row_idx, row in enumerate(matrix):
+            if not isinstance(row, list):
+                continue
+            row_is_marker = row_idx > 0 and row and cls.is_section_marker(row[0])
+            if not row_is_marker and not marker_cols:
+                continue
+            for col_idx in range(1, len(row)):
+                if row_is_marker or (col_idx in marker_cols and row_idx > 0):
+                    row[col_idx] = ''
+        return matrix
+
+    @staticmethod
+    def _trim_matrix_strings(matrix: List[List[Any]]) -> List[List[Any]]:
+        """
+        对矩阵中每个字符串值执行清洗：
+        - 前导 ' 的值：强制文本标记，保持不变（不做 trim、不做类型推断）
+        - 非空纯空白字符串（如 "   "）：添加前导 ' 保护，避免空格丢失
+        - 空串：保持空串（空单元格无需保护，避免产生裸 ' 脏值）
+        - 其他字符串：去除首尾空白
+        - 非字符串值：保持不变
+        """
+        result = []
+        for row in matrix:
+            new_row = []
+            for cell in row:
+                if isinstance(cell, str):
+                    if cell.startswith("'"):
+                        # 强制文本标记，保持不变
+                        new_row.append(cell)
+                    elif cell == '':
+                        # 空串保持原样
+                        new_row.append(cell)
+                    elif cell.strip() == '':
+                        # 非空纯空白值，添加 ' 保护
+                        new_row.append(f"'{cell}")
+                    else:
+                        # 普通字符串，trim
+                        new_row.append(cell.strip())
+                else:
+                    new_row.append(cell)
+            result.append(new_row)
+        return result
+
+    # ==================== sheet解析 ====================
+
+    @classmethod
+    async def _parse_sheet_async(cls, df: pd.DataFrame, axis: int) -> Dict[str, Dict[str, Any]]:
+        """
+        在线程池中按方向解析单个sheet：AXIS_HORIZONTAL走水平解析，否则走垂直解析。
+
+        :param df: 无表头(header=None)的sheet DataFrame
+        :param axis: 矩阵方向
+        :return: { 场景名: { head, body, assert_head, assert_body } }
+        """
+        loop = asyncio.get_running_loop()
+        parse_fn = cls._parse_sheet_horizontal if axis == cls.AXIS_HORIZONTAL else cls._parse_sheet_fast
+        return await loop.run_in_executor(cls._executor, parse_fn, df)
+
+    @classmethod
+    def _parse_sheet_fast(cls, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+        """
+        垂直模式解析单个sheet(第0行为场景名，第0列为分区标签/字段名)。
+
+        :param df: 无表头(header=None)的sheet DataFrame
+        :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
+        """
+        values = df.values
+        if values.size == 0:
+            return {}
+
+        scene_names = values[0, 1:]
+        first_col = values[1:, 0]
+        data_values = values[1:, 1:]
+
+        sections: Dict[str, List[int]] = {k: [] for k in cls.SECTION_MARKS}
+        # HEAD/BODY 标签行自身可能带 KV 文本块
+        section_row_index: Dict[str, Any] = {"head": None, "body": None}
+        current_section = None
+
+        for i, cell in enumerate(first_col):
+            if not isinstance(cell, str):
+                continue
+            text = cell.strip().lower()
+            section_key = text if text in cls.SECTION_MARKS else None
+            if section_key is not None:
+                current_section = section_key
+                if section_key in ("head", "body"):
+                    section_row_index[section_key] = i
+                continue
+            if current_section:
+                sections[current_section].append(i)
+
+        result: Dict[str, Dict[str, Any]] = {}
+        col_count = data_values.shape[1]
+
+        for col_idx in range(col_count):
+            scene_name = scene_names[col_idx]
+            if pd.isna(scene_name) or not str(scene_name).strip():
+                continue
+            scene_name = str(scene_name).strip()
+            record = {k: {} for k in cls.SECTION_MARKS}
+            has_data = False
+
+            for section in ("head", "body"):
+                row_idx = section_row_index.get(section)
+                if row_idx is not None:
+                    raw_text = data_values[row_idx, col_idx]
+                    if pd.notna(raw_text):
+                        parsed_dict = cls.parse_kv_string(str(raw_text))
+                        if parsed_dict:
+                            record[section].update(parsed_dict)
+                            has_data = True
+
+            for section, rows in sections.items():
+                for r in rows:
+                    key = first_col[r]
+                    if not key:
+                        continue
+                    typed = cls._dataset_field_value(data_values[r, col_idx])
+                    if typed is cls._CELL_OMIT:
+                        continue
+                    record[section][str(key).strip()] = typed
+                    has_data = True
+
+            if has_data:
+                # 即使某分区无字段，四键已由记录初始化补齐
+                result[scene_name] = record
+
+        return result
+
+    @classmethod
+    def _parse_sheet_horizontal(cls, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
+        """
+        水平模式解析单个sheet：第0行为分区标记与字段名，第0列为场景名。
+
+        :param df: 无表头(header=None)的sheet DataFrame
+        :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
+        """
+        values = df.values
+        if values.size == 0:
+            return {}
+
+        header = values[0, 1:]  # 第 0 行 col1+：分区标记 + 字段名
+        scene_col = values[1:, 0]  # col0 row1+：场景名
+        data_values = values[1:, 1:]  # 数据块
+
+        # 为每个字段列确定 (数据列下标, 分区, 字段名)；分区标记列仅作切换，不作为字段
+        field_columns: List[Tuple[int, str, str]] = []
+        current_section = None
+        for col_idx, cell in enumerate(header):
+            if not isinstance(cell, str) or not cell.strip():
+                continue
+            text = cell.strip().lower()
+            section_key = text if text in cls.SECTION_MARKS else None
+            if section_key is not None:
+                current_section = section_key
+                continue
+            if current_section:
+                field_columns.append((col_idx, current_section, cell.strip()))
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for row_idx, scene_name in enumerate(scene_col):
+            if pd.isna(scene_name) or not str(scene_name).strip():
+                continue
+            scene_name = str(scene_name).strip()
+            record = {k: {} for k in cls.SECTION_MARKS}
+            has_data = False
+            for col_idx, section, field_key in field_columns:
+                typed = cls._dataset_field_value(data_values[row_idx, col_idx])
+                if typed is cls._CELL_OMIT:
+                    continue
+                record[section][field_key] = typed
                 has_data = True
+            if has_data:
+                result[scene_name] = record
+        return result
 
-        if has_data:
-            # 即使某分区无字段，四键已由记录初始化补齐
-            result[scene_name] = record
+    # ==================== 单元格转换 ====================
 
-    return result
+    @staticmethod
+    def json_safe_value(value: Any) -> Any:
+        """
+        将单元格/字段值递归转为JSON可序列化类型。
 
-
-def _parse_sheet_horizontal(df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
-    """
-    水平模式解析单个sheet：第0行为分区标记与字段名，第0列为场景名。
-
-    :param df: 无表头(header=None)的sheet DataFrame
-    :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
-    """
-    values = df.values
-    if values.size == 0:
-        return {}
-
-    header = values[0, 1:]  # 第 0 行 col1+：分区标记 + 字段名
-    scene_col = values[1:, 0]  # col0 row1+：场景名
-    data_values = values[1:, 1:]  # 数据块
-
-    # 为每个字段列确定 (数据列下标, 分区, 字段名)；分区标记列仅作切换，不作为字段
-    field_columns: List[Tuple[int, str, str]] = []
-    current_section = None
-    for col_idx, cell in enumerate(header):
-        if not isinstance(cell, str) or not cell.strip():
-            continue
-        text = cell.strip().lower()
-        section_key = text if text in _DATAGRAM_SECTION_MARKS else None
-        if section_key is not None:
-            current_section = section_key
-            continue
-        if current_section:
-            field_columns.append((col_idx, current_section, cell.strip()))
-
-    result: Dict[str, Dict[str, Any]] = {}
-    for row_idx, scene_name in enumerate(scene_col):
-        if pd.isna(scene_name) or not str(scene_name).strip():
-            continue
-        scene_name = str(scene_name).strip()
-        record = {k: {} for k in _DATAGRAM_SECTION_MARKS}
-        has_data = False
-        for col_idx, section, field_key in field_columns:
-            typed = _dataset_field_value(data_values[row_idx, col_idx])
-            if typed is _CELL_OMIT:
-                continue
-            record[section][field_key] = typed
-            has_data = True
-        if has_data:
-            result[scene_name] = record
-    return result
-
-
-# ---------------------------------------------------------------------------
-# 单元格类型转换
-# ---------------------------------------------------------------------------
-
-def json_safe_value(value: Any) -> Any:
-    """
-    将单元格/字段值递归转为JSON可序列化类型。
-
-    :param value: 原始值(可能为NaN/Inf/NaT/numpy类型或嵌套结构)
-    :return: JSON可序列化值，NaN/Inf/NaT转为None
-    """
-    if value is None:
-        return None
-    try:
-        if value is pd.NA or value is pd.NaT:
+        :param value: 原始值(可能为NaN/Inf/NaT/numpy类型或嵌套结构)
+        :return: JSON可序列化值，NaN/Inf/NaT转为None
+        """
+        if value is None:
             return None
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
+        try:
+            if value is pd.NA or value is pd.NaT:
+                return None
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
 
-    if isinstance(value, (np.bool_,)):
-        return bool(value)
-    if isinstance(value, (np.integer,)):
-        return int(value)
-    if isinstance(value, (np.floating, float)):
-        f = float(value)
-        if math.isnan(f) or math.isinf(f):
-            return None
-        return f
-    if isinstance(value, np.ndarray):
-        return [json_safe_value(v) for v in value.tolist()]
-    if isinstance(value, dict):
-        return {str(k): json_safe_value(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [json_safe_value(v) for v in value]
-    return value
+        if isinstance(value, (np.bool_,)):
+            return bool(value)
+        if isinstance(value, (np.integer,)):
+            return int(value)
+        if isinstance(value, (np.floating, float)):
+            f = float(value)
+            if math.isnan(f) or math.isinf(f):
+                return None
+            return f
+        if isinstance(value, np.ndarray):
+            return [DataSourceMatrixParser.json_safe_value(v) for v in value.tolist()]
+        if isinstance(value, dict):
+            return {str(k): DataSourceMatrixParser.json_safe_value(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [DataSourceMatrixParser.json_safe_value(v) for v in value]
+        return value
 
+    @staticmethod
+    def parse_kv_string(text: str) -> Dict[str, str]:
+        """
+        将多行key:value文本解析为字典(去除_x000D_回车符)。
 
-def parse_kv_string(text: str) -> Dict[str, str]:
-    """
-    将多行key:value文本解析为字典(去除_x000D_回车符)。
+        :param text: 形如 "Ammy:7860000182_x000D_\nCcy:CNY" 的多行文本
+        :return: 解析后的字典，如 {"Ammy": "7860000182", "Ccy": "CNY"}；非字符串入参返回 {}
+        """
+        if not isinstance(text, str):
+            return {}
 
-    :param text: 形如 "Ammy:7860000182_x000D_\nCcy:CNY" 的多行文本
-    :return: 解析后的字典，如 {"Ammy": "7860000182", "Ccy": "CNY"}；非字符串入参返回 {}
-    """
-    if not isinstance(text, str):
-        return {}
+        text = text.replace("_x000D_", "").strip()
+        result = {}
+        for line in re.split(r"[\n\r]+", text):
+            if ":" in line:
+                k, v = line.split(":", 1)
+                result[k.strip()] = v.strip()
+        return result
 
-    text = text.replace("_x000D_", "").strip()
-    result = {}
-    for line in re.split(r"[\n\r]+", text):
-        if ":" in line:
-            k, v = line.split(":", 1)
-            result[k.strip()] = v.strip()
-    return result
+    @staticmethod
+    def _cell_is_blank(value: Any) -> bool:
+        """
+        判断单元格是否未填写。
 
+        None/NaN/空串视为未填；单空格、0、False 视为已填写。
 
-def _cell_is_blank(value: Any) -> bool:
-    """
-    判断单元格是否未填写。
-
-    None/NaN/空串视为未填；单空格、0、False 视为已填写。
-
-    :param value: 单元格值
-    :return: 未填写返回True
-    """
-    if value is None:
-        return True
-    try:
-        if pd.isna(value):
+        :param value: 单元格值
+        :return: 未填写返回True
+        """
+        if value is None:
             return True
-    except (TypeError, ValueError):
-        pass
-    return isinstance(value, str) and value == ""
+        try:
+            if pd.isna(value):
+                return True
+        except (TypeError, ValueError):
+            pass
+        return isinstance(value, str) and value == ""
 
+    @staticmethod
+    def cell_text_value(value: Any) -> str:
+        """
+        将报文原始值转为单元格文本（dataframe/data_original统一字符串协议）。
 
-def cell_text_value(value: Any) -> str:
-    """
-    将报文原始值转为单元格文本（dataframe/data_original统一字符串协议）。
+        :param value: 报文原始值(bool/int/float/str/None等)
+        :return: 文本形态：bool为true/false、整值浮点去除.0、None为空串、其余str()
+        """
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        return str(value)
 
-    :param value: 报文原始值(bool/int/float/str/None等)
-    :return: 文本形态：bool为true/false、整值浮点去除.0、None为空串、其余str()
-    """
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    return str(value)
+    @staticmethod
+    def dataset_cell_placeholder(value: Any) -> str:
+        """
+        将报文原始值转为data_original单元格文本，特殊值反向映射为占位符。
 
+        与value_adapter占位符协议对齐：None→#NULL、空串→#空字符串、单空格→#单个空格；
+        bool写true/false小写、整值浮点去除.0、其余str()。
+        供/build接口构建data_original时消费，前端插入正交易场景时单元格显示占位符而非空白。
 
-def _dataset_field_value(value: Any) -> Any:
-    """
-    将单元格转为 dataset 字段值；存储层统一字符串化，不做类型推断。
+        :param value: 报文原始值(bool/int/float/str/None等)
+        :return: 含占位符的单元格文本
+        """
+        if value is None:
+            return DATASET_NULL_VALUE
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        if isinstance(value, str):
+            if value == "":
+                return DATASET_EMPTY_TEXT
+            if value == " ":
+                return DATASET_SPACE_VALUE
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        return str(value)
 
-    类型语义移交执行注入侧：datagram/value_adapter 按请求报文原字段类型适配。
-    存量兼容：前导'为旧版强制文本协议标记，读取时剥去引号；
-    Excel原生数值/布尔单元格转文本（true/false小写、整值浮点去除.0），保持书写值形态。
+    @classmethod
+    def _dataset_field_value(cls, value: Any) -> Any:
+        """
+        将单元格转为 dataset 字段值；存储层统一字符串化，不做类型推断。
 
-    :param value: 原始单元格
-    :return: _CELL_OMIT 表示省略；否则为字符串形态字段值
-    """
-    safe = json_safe_value(value)
-    if _cell_is_blank(safe):
-        return _CELL_OMIT
-    if isinstance(safe, str):
-        return safe[1:] if safe.startswith("'") else safe
-    return cell_text_value(safe)
+        类型语义移交执行注入侧：datagram/value_adapter 按请求报文原字段类型适配。
+        存量兼容：前导'为旧版强制文本协议标记，读取时剥去引号；
+        Excel原生数值/布尔单元格转文本（true/false小写、整值浮点去除.0），保持书写值形态。
 
+        :param value: 原始单元格
+        :return: _CELL_OMIT 表示省略；否则为字符串形态字段值
+        """
+        safe = cls.json_safe_value(value)
+        if cls._cell_is_blank(safe):
+            return cls._CELL_OMIT
+        if isinstance(safe, str):
+            return safe[1:] if safe.startswith("'") else safe
+        return cls.cell_text_value(safe)
 
-# ---------------------------------------------------------------------------
-# 矩阵输出
-# ---------------------------------------------------------------------------
+    # ==================== 矩阵输出 ====================
 
-def normalize_dataset_record(step_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    """
-    规范化单场景结构，仅保留head/body/assert_head/assert_body，缺失键补 {}。
+    @classmethod
+    def normalize_dataset_record(cls, step_data: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """
+        规范化单场景结构，仅保留head/body/assert_head/assert_body，缺失键补 {}。
 
-    :param step_data: 单场景原始数据(可能非dict)
-    :return: 含四个分区键的规范化字典
-    """
-    src = step_data if isinstance(step_data, dict) else {}
-    return {
-        key: dict(src[key]) if isinstance(src.get(key), dict) else {}
-        for key in _DATAGRAM_SECTION_MARKS
-    }
+        :param step_data: 单场景原始数据(可能非dict)
+        :return: 含四个分区键的规范化字典
+        """
+        src = step_data if isinstance(step_data, dict) else {}
+        return {
+            key: dict(src[key]) if isinstance(src.get(key), dict) else {}
+            for key in cls.SECTION_MARKS
+        }
 
+    @classmethod
+    def extract_scene_names_from_matrix(cls, matrix: List[List[Any]], axis: int) -> List[str]:
+        """
+        按矩阵方向提取场景名，保留出现顺序，不去重、不排序。
 
-def extract_scene_names_from_matrix(matrix: List[List[Any]], axis: int) -> List[str]:
-    """
-    按矩阵方向提取场景名，保留出现顺序，不去重、不排序。
-
-    :param matrix: 已对齐的二维矩阵
-    :param axis: 0水平(第0列场景名) / 1垂直(第0行场景名)
-    :return: 非空场景名列表
-    """
-    names: List[str] = []
-    if not matrix:
-        return names
-    if axis == AXIS_HORIZONTAL:
-        for row in matrix[1:]:
-            if not row:
-                continue
-            text = "" if row[0] is None else str(row[0]).strip()
+        :param matrix: 已对齐的二维矩阵
+        :param axis: 0水平(第0列场景名) / 1垂直(第0行场景名)
+        :return: 非空场景名列表
+        """
+        names: List[str] = []
+        if not matrix:
+            return names
+        if axis == cls.AXIS_HORIZONTAL:
+            for row in matrix[1:]:
+                if not row:
+                    continue
+                text = "" if row[0] is None else str(row[0]).strip()
+                if text:
+                    names.append(text)
+            return names
+        header = matrix[0] if matrix else []
+        for cell in header[1:]:
+            text = "" if cell is None else str(cell).strip()
             if text:
                 names.append(text)
         return names
-    header = matrix[0] if matrix else []
-    for cell in header[1:]:
-        text = "" if cell is None else str(cell).strip()
-        if text:
-            names.append(text)
-    return names
 
+    @classmethod
+    def _dataframe_to_matrix(cls, df: pd.DataFrame) -> List[List[Any]]:
+        """
+        将DataFrame转为二维矩阵，剔除全空白(None/NaN/空串)的行与列(第0列始终保留)。
 
-def _dataframe_to_matrix(df: pd.DataFrame) -> List[List[Any]]:
-    """
-    将DataFrame转为二维矩阵，剔除全空白(None/NaN/空串)的行与列(第0列始终保留)。
+        :param df: sheet DataFrame
+        :return: 二维列表，NaN/NaT/Inf置为None
+        """
+        if df is None or df.empty:
+            return []
+        safe_df = df.where(pd.notna(df), None)
+        col_count = len(safe_df.columns)
 
-    :param df: sheet DataFrame
-    :return: 二维列表，NaN/NaT/Inf置为None
-    """
-    if df is None or df.empty:
-        return []
-    safe_df = df.where(pd.notna(df), None)
-    col_count = len(safe_df.columns)
+        # 剔除全空白列（第 0 列始终保留）
+        blank_cols: Set[int] = set()
+        for col_idx in range(1, col_count):
+            col_values = safe_df.iloc[:, col_idx]
+            if all(cls._cell_is_blank(cls.json_safe_value(c)) for c in col_values):
+                blank_cols.add(col_idx)
+        keep_cols = [i for i in range(col_count) if i not in blank_cols]
 
-    # 剔除全空白列（第 0 列始终保留）
-    blank_cols: Set[int] = set()
-    for col_idx in range(1, col_count):
-        col_values = safe_df.iloc[:, col_idx]
-        if all(_cell_is_blank(json_safe_value(c)) for c in col_values):
-            blank_cols.add(col_idx)
-    keep_cols = [i for i in range(col_count) if i not in blank_cols]
-
-    rows: List[List[Any]] = []
-    for row in safe_df.values.tolist():
-        cleaned = [json_safe_value(c) for c in row]
-        projected = [cleaned[i] for i in keep_cols]
-        if not all(_cell_is_blank(c) for c in projected):
-            rows.append(projected)
-    return rows
+        rows: List[List[Any]] = []
+        for row in safe_df.values.tolist():
+            cleaned = [cls.json_safe_value(c) for c in row]
+            projected = [cleaned[i] for i in keep_cols]
+            if not all(cls._cell_is_blank(c) for c in projected):
+                rows.append(projected)
+        return rows

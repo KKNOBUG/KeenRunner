@@ -35,10 +35,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     StepsExecuteConfigBase,
 )
 from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
-from backend.applications.autotest.services.autotest_data_source_service import (
-    data_source_duplicate_scene_names,
-    data_source_scene_names,
-)
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.autotest.services.autotest_step_debug_service import StepDebugService, StepDebugException
 from backend.applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
@@ -431,7 +428,7 @@ async def batch_update_steps_tree(
                 for s in http_tcp_steps if s.data_source_id
             }
             for ds in ds_records:
-                current_names = data_source_scene_names(ds)
+                current_names = DataSourceService.data_source_scene_names(ds)
                 if current_names is None:
                     continue
                 step_label = (
@@ -440,7 +437,7 @@ async def batch_update_steps_tree(
                         or f"步骤ID:{ds.step_id}"
                 )
                 # 同一数据源内场景列名称重复：先拒绝，再做跨步骤一致性比对
-                duplicate_names = data_source_duplicate_scene_names(ds)
+                duplicate_names = DataSourceService.data_source_duplicate_scene_names(ds)
                 if duplicate_names:
                     error_detail = (
                         f"步骤[{step_label}]的数据源场景名称重复: {duplicate_names}"
