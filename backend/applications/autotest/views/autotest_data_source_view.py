@@ -162,7 +162,7 @@ async def create_data_source(
             step_id=data_source_in.step_id,
             step_code=data_source_in.step_code,
         )
-        DataSourceService.ensure_request_step(step)
+        DataSourceService.ensure_request_step(step, case=case)
         DataSourceService.ensure_case_allows_data_source(case)
         parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         effective = data_source_in
@@ -247,7 +247,7 @@ async def delete_data_source(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@autotest_data_source.post("/unbind_case", summary="更新数据源(解绑)", description="解绑用例下全部HTTP/TCP步骤数据源")
+@autotest_data_source.post("/unbind_case", summary="更新数据源(解绑)", description="解绑用例下全部HTTP/TCP请求步骤及引用公共接口步骤的数据源")
 async def unbind_case_data_source(
         data_in: AutoTestDataSourceUnbindCase = Body(..., description="用例定位"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -389,7 +389,7 @@ async def save_or_update_data_source(
                     step_id=data_source_in.step_id,
                     step_code=data_source_in.step_code,
                 )
-                DataSourceService.ensure_request_step(step)
+                DataSourceService.ensure_request_step(step, case=case)
                 DataSourceService.ensure_case_allows_data_source(case)
                 existing = await services.data_source_curd.get_by_case_step(
                     case_id=case.id,
@@ -505,7 +505,7 @@ async def update_data_source_fields(
             step_id=data_in.step_id,
             step_code=data_in.step_code,
         )
-        DataSourceService.ensure_request_step(step)
+        DataSourceService.ensure_request_step(step, case=case)
         instance = await DataSourceService.resolve_enabled_data_source(
             services,
             data_source_id=data_in.data_source_id,
@@ -518,7 +518,8 @@ async def update_data_source_fields(
             return BadReqResponse(message="当前步骤无数据源, 无法完成更新字段")
         if not isinstance(instance.dataframe, list) or not instance.dataframe:
             return BadReqResponse(message="数据源矩阵为空, 无法完成更新字段")
-        updates = await DataSourceService.sync_data_source_fields(step, instance.dataframe, instance.axis)
+        datagram_step = await DataSourceService.resolve_datagram_source_step(services, step)
+        updates = await DataSourceService.sync_data_source_fields(datagram_step, instance.dataframe, instance.axis)
         async with in_transaction():
             await services.data_source_curd.update(id=instance.id, obj_in=updates)
         LOGGER.info(f"数据源[id={instance.id}]字段同步完成")
@@ -566,7 +567,7 @@ async def build_data_source(
             step_id=build_in.step_id,
             step_code=build_in.step_code,
         )
-        DataSourceService.ensure_request_step(step)
+        DataSourceService.ensure_request_step(step, case=case)
         existing = await services.data_source_curd.get_by_case_step(
             case_id=case.id,
             step_code=step.step_code,
@@ -578,7 +579,9 @@ async def build_data_source(
             data["data_original"] = await _collect_report_original(services, existing)
             return SuccessResponse(message="查询成功", data=data, total=1)
 
-        matrix = DataSourceService.build_vertical_matrix_from_step(step)
+        # 引用公共接口步骤是壳：矩阵与报文原始值取自被引用用例的请求步骤，step_id/step_code仍指向引用步骤（保存定位上下文）
+        datagram_step = await DataSourceService.resolve_datagram_source_step(services, step)
+        matrix = DataSourceService.build_vertical_matrix_from_step(datagram_step)
         # 键集合与 _serialize_data_source 输出对齐(未落库字段置None)，三分支响应结构保持一致
         data = {
             "data_source_id": None,
@@ -596,7 +599,7 @@ async def build_data_source(
             "dataframe": matrix,
             "axis": DataSourceMatrixParser.AXIS_VERTICAL,
             "data_source_code": None,
-            "data_original": DataSourceService.collect_step_report_original(step),
+            "data_original": DataSourceService.collect_step_report_original(datagram_step),
         }
         return SuccessResponse(message="构建成功", data=data, total=1)
     except NotFoundException as e:
@@ -987,7 +990,8 @@ async def single_step_dataset_upload(
         LOGGER.error(f"查询步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询步骤失败，异常描述: {e}")
 
-    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
+    # 引用公共接口步骤放行上传：数据源挂载在用户脚本宿主的引用步骤上，公共宿主由下方用例类型检查拒绝
+    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value, AutoTestStepType.QUOTE_PUBLIC_API.value):
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤上传数据驱动文件")
 
     try:
@@ -1161,11 +1165,13 @@ async def single_step_template_download(
         return FailureResponse(message=f"查询步骤失败，异常描述: {e}")
     if not step_instance:
         return NotFoundResponse(message="查询步骤失败, 记录不存在")
-    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value):
+    # 引用公共接口步骤放行：模板矩阵取自被引用用例的请求步骤报文（引用壳本身无报文）
+    if step_instance.step_type not in (AutoTestStepType.HTTP.value, AutoTestStepType.TCP.value, AutoTestStepType.QUOTE_PUBLIC_API.value):
         return ParameterResponse(message="仅支持对HTTP/TCP请求步骤下载数据源模板")
 
     try:
-        matrix = DataSourceService.build_vertical_matrix_from_step(step_instance)
+        datagram_step = await DataSourceService.resolve_datagram_source_step(services, step_instance)
+        matrix = DataSourceService.build_vertical_matrix_from_step(datagram_step)
         safe_name = _safe_sheet_name(step_instance.step_name or step_code, set())
         df = pd.DataFrame(matrix if matrix else [[]])
         output = io.BytesIO()
