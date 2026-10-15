@@ -214,6 +214,29 @@ class Extractors:
             raise ValueError(str(e) or miss_message) from e
 
     @classmethod
+    def _quote_non_ascii_identifiers(cls, expr: str) -> str:
+        """
+        将点号子段中的非ASCII键名改写为['键名']括号字符串形式。
+
+        jsonpath-ng词法器的标识符规则仅接受ASCII字母/下划线，中文等键名（如 $.部门名称）
+        在词法阶段即被拒绝；括号字符串形式为标准JSONPath写法且可正常解析。
+        字符串字面量（如过滤器中的比较值）不参与改写，避免破坏原语义。
+
+        :param expr: 原始JSONPath表达式
+        :return: 改写后的表达式
+        """
+        parts = re.split(r"('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")", expr)
+        for i in range(0, len(parts), 2):
+            parts[i] = re.sub(
+                r"(\.{1,2})(\w+)",
+                lambda m: m.group(0) if m.group(2).isascii() else (
+                    f"{m.group(1)}['{m.group(2)}']" if m.group(1) == ".." else f"['{m.group(2)}']"
+                ),
+                parts[i],
+            )
+        return "".join(parts)
+
+    @classmethod
     def _resolve_json_path(cls, data: Any, expr: str) -> Any:
         """
         使用JSONPath表达式从data中取值，支持标准JSONPath(如$.data[0].id、$.list[*].name)。
@@ -232,8 +255,12 @@ class Extractors:
 
         try:
             json_path_expr = jsonpath_parse(expr)
-        except Exception as e:
-            raise ValueError(f"【JSONPath表达式】执行失败, {e}") from e
+        except Exception as first_error:
+            # 中文等非ASCII键名被jsonpath-ng词法器拒绝时，改写为['键名']后重试；仍失败按原错误抛出
+            try:
+                json_path_expr = jsonpath_parse(cls._quote_non_ascii_identifiers(expr))
+            except Exception:
+                raise ValueError(f"【JSONPath表达式】执行失败, {first_error}") from first_error
 
         json_path_matches = json_path_expr.find(data)
         if not json_path_matches:
