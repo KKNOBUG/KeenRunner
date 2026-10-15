@@ -184,3 +184,32 @@ class AutoTestConfigNodeType(StringEnum):
     DB = "database"
     REDIS = "redis"
     FILE = "file"
+
+
+# ==================== TCP 请求步骤 ====================
+class AutoTestTcpRadix(StringEnum):
+    """TCP报文头(长度位)进制数；不使用表示不追加长度前缀。"""
+    NONE = "不使用"
+    DECIMAL = "十进制"
+    HEX = "十六进制"
+
+
+class AutoTestTcpDatagramLength(StringEnum):
+    """TCP报文总长度口径；包含长度位时长度值需加上长度位自身宽度。"""
+    INCLUDE = "包含长度位"
+    EXCLUDE = "不包含长度位"
+
+
+class AutoTestTcpConnectType(StringEnum):
+    """TCP连接方式；长连接暂未实现，执行与调试时按短连接降级。"""
+    LONG = "长连接"
+    SHORT = "短连接"
+    SEND_ONLY = "只发不收(长连接)"
+
+
+class AutoTestTcpEndSymbol(StringEnum):
+    """TCP收发结束符；值为转义展示文本，发送/匹配时映射为真实字节序列。"""
+    NONE = "无"
+    CRLF = "\\r\\n"
+    CR = "\\r"
+    LF = "\\n"

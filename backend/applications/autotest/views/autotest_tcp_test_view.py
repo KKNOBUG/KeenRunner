@@ -9,14 +9,22 @@
 import asyncio
 import datetime
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import orjson
 from fastapi import APIRouter, Body
 from lxml import etree
+from pydantic import BaseModel, Field, model_validator
 
+from backend.applications.autotest.services.autotest_runtime.protocol_tcp import (
+    TCP_MAX_RESPONSE_BYTES,
+    resolve_tcp_frame_config,
+    tcp_enum_value,
+)
+from backend.common import TcpFrameMode
 from backend.configure import LOGGER
 from backend.core.responses import SuccessResponse, FailureResponse
+from backend.enums import AutoTestTcpDatagramLength, AutoTestTcpEndSymbol, AutoTestTcpRadix
 
 autotest_tcp_test = APIRouter()
 
@@ -442,18 +450,102 @@ class _TcpTestServer:
 _tcp_test_server = _TcpTestServer()
 
 
+class _TcpFrameServerStartIn(BaseModel):
+    """
+    TCP帧协议诊断服务器启动入参。
+
+    tcp_*字段取值与步骤schema完全一致，帧模式复用 resolve_tcp_frame_config 推导，
+    互斥校验规则与 AutoTestStepReqBase._validate_tcp_frame_fields 相同。
+    """
+
+    port: int = Field(default=9993, ge=1, le=65535, description="监听端口（监听地址与外层host一致，不单独配置）")
+    tcp_radix: Optional[AutoTestTcpRadix] = Field(default=None, description="TCP报文头进制数")
+    tcp_radix_length: Optional[int] = Field(default=None, ge=2, le=10, description="TCP长度位宽度")
+    tcp_datagram_length: Optional[AutoTestTcpDatagramLength] = Field(default=None, description="TCP报文总长度")
+    tcp_request_end_symbol: Optional[AutoTestTcpEndSymbol] = Field(default=None, description="TCP请求报文结束符")
+    tcp_response_end_symbol: Optional[str] = Field(default=None, max_length=64, description="TCP响应报文结束符(自定义文本, 无或空=不使用)")
+    tcp_hex_string: Optional[bool] = Field(default=None, description="TCP HEX报文开关")
+    tcp_encoding: Optional[str] = Field(default=None, max_length=32, description="TCP文本编码")
+    response_text: Optional[str] = Field(default=None, max_length=65536, description="响应报文内容；缺省回显请求内容")
+
+    @model_validator(mode="after")
+    def _validate_frame_mutex(self) -> "_TcpFrameServerStartIn":
+        """
+        校验帧配置互斥关系：长度位参数仅在与结束符二选一时有效。
+
+        :return: 当前模型实例
+        """
+        if self.tcp_radix in (None, AutoTestTcpRadix.NONE):
+            if self.tcp_radix_length is not None or self.tcp_datagram_length is not None:
+                raise ValueError("参数[tcp_radix_length|tcp_datagram_length]仅在进制数非「不使用」时允许配置")
+        else:
+            # 响应结束符为自定义文本：无/空视为未配置（与步骤schema互斥校验同源）
+            response_symbol_text = (self.tcp_response_end_symbol or "").strip()
+            if (self.tcp_request_end_symbol not in (None, AutoTestTcpEndSymbol.NONE)
+                    or response_symbol_text not in ("", AutoTestTcpEndSymbol.NONE.value)):
+                raise ValueError("参数[tcp_request_end_symbol|tcp_response_end_symbol]仅在进制数为「不使用」时允许配置")
+        return self
+
+
+# 帧诊断端口内置组合：一键启动即覆盖用例帧链路验收所需的全部配置组合（端口与"TCP帧诊断*"环境配置对应）
+_DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
+    # 十进制/8位/不包含长度位
+    _TcpFrameServerStartIn(
+        port=9993,
+        tcp_radix=AutoTestTcpRadix.DECIMAL,
+        tcp_radix_length=8,
+        tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE
+    ),
+    # 十六进制/4位/包含长度位
+    _TcpFrameServerStartIn(
+        port=9994,
+        tcp_radix=AutoTestTcpRadix.HEX,
+        tcp_radix_length=4,
+        tcp_datagram_length=AutoTestTcpDatagramLength.INCLUDE
+    ),
+    # 不使用+请求/响应\r\n
+    _TcpFrameServerStartIn(
+        port=9995,
+        tcp_radix=AutoTestTcpRadix.NONE,
+        tcp_request_end_symbol=AutoTestTcpEndSymbol.CRLF,
+        tcp_response_end_symbol="\\r\\n"
+    ),
+    # 十进制/8位+HEX开启
+    _TcpFrameServerStartIn(
+        port=9996,
+        tcp_radix=AutoTestTcpRadix.DECIMAL,
+        tcp_radix_length=8,
+        tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
+        tcp_hex_string=True
+    ),
+    # 十进制/8位+GBK编码
+    _TcpFrameServerStartIn(
+        port=9997,
+        tcp_radix=AutoTestTcpRadix.DECIMAL,
+        tcp_radix_length=8,
+        tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
+        tcp_encoding="GBK"
+    ),
+    # 不使用/无结束符(RAW)
+    _TcpFrameServerStartIn(
+        port=9998,
+        tcp_radix=AutoTestTcpRadix.NONE
+    ),
+]
+
+
 # ---------------------------------------------------------------------------
 # 路由（仅用于启动/停止/状态/获取示例，实际 TCP 通信不走 HTTP）
 # ---------------------------------------------------------------------------
 
-@autotest_tcp_test.post("/start", summary="启动TCP测试服务器", description="启动双端口TCP测试服务器")
+@autotest_tcp_test.post("/start", summary="启动TCP测试服务器", description="统一启动双端口TCP测试服务器与TCP帧协议诊断服务器")
 async def start_tcp_test_server(
         host: str = Body("0.0.0.0", embed=True, description="监听地址"),
         json_port: int = Body(9991, embed=True, description="JSON请求端口(接收JSON报文，返回XML响应)"),
         xml_port: int = Body(9992, embed=True, description="XML请求端口(接收XML报文，返回XML响应)"),
 ):
     """
-    启动TCP测试服务器，同时监听两个端口。
+    统一启动TCP测试服务器（双端口mock）与TCP帧协议诊断服务器。
 
     - **JSON端口**（默认9991）：接收JSON格式请求报文（银行账户交易查询），
       返回XML格式响应（含AccountInfo + TransactionList数组 + Summary，共30+字段）
@@ -463,15 +555,22 @@ async def start_tcp_test_server(
 
     帧协议自动检测：LENGTH_PREFIX（8位长度前缀）或RAW（无前缀）。
 
-    :param host: 监听地址
+    - **帧诊断端口**（内置组合9993~9998）：一次启动全部帧配置组合
+      （十进制8位/十六进制4位包含/结束符/HEX/GBK/RAW），按各端口配置组帧/解帧并回显；
+      监听地址统一使用外层host。
+
+    :param host: 监听地址（所有端口共用）
     :param json_port: JSON请求端口
     :param xml_port: XML请求端口
-    :return: 统一HTTP响应
+    :return: 统一HTTP响应，data含 tcp_test 状态快照与 frame 各端口状态快照列表
     """
     try:
         await _tcp_test_server.start(host=host, json_port=json_port, xml_port=xml_port)
-        status = _tcp_test_server.status()
-        return SuccessResponse(message="启动成功", data=status)
+        frame_statuses = await _tcp_frame_servers.start(host, _DEFAULT_FRAME_CONFIGS)
+        return SuccessResponse(message="启动成功", data={
+            "tcp_test": _tcp_test_server.status(),
+            "frame": frame_statuses,
+        })
     except OSError as e:
         LOGGER.error(f"启动TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"启动失败，异常描述: {e}")
@@ -480,31 +579,36 @@ async def start_tcp_test_server(
         return FailureResponse(message=f"启动失败，异常描述: {e}")
 
 
-@autotest_tcp_test.post("/stop", summary="停止TCP测试服务器", description="停止双端口TCP测试服务器")
+@autotest_tcp_test.post("/stop", summary="停止TCP测试服务器", description="统一停止双端口TCP测试服务器与TCP帧协议诊断服务器")
 async def stop_tcp_test_server():
     """
-    停止TCP测试服务器的两个端口。
+    统一停止TCP测试服务器的两个端口与全部帧协议诊断端口。
 
-    :return: 统一HTTP响应
+    :return: 统一HTTP响应，data含 tcp_test 状态快照与 frame 各端口状态快照列表
     """
     try:
         await _tcp_test_server.stop()
-        status = _tcp_test_server.status()
-        return SuccessResponse(message="停止成功", data=status)
+        frame_statuses = await _tcp_frame_servers.stop()
+        return SuccessResponse(message="停止成功", data={
+            "tcp_test": _tcp_test_server.status(),
+            "frame": frame_statuses,
+        })
     except Exception as e:
         LOGGER.error(f"停止TCP测试服务器失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"停止失败，异常描述: {e}")
 
 
-@autotest_tcp_test.get("/status", summary="查询TCP测试服务器状态", description="查询双端口运行状态与连接计数")
+@autotest_tcp_test.get("/status", summary="查询TCP测试服务器状态", description="统一查询双端口运行状态、连接计数与各帧诊断端口状态")
 async def get_tcp_test_server_status():
     """
-    查询两个TCP端口的运行状态和连接计数。
+    统一查询两个TCP端口与全部帧协议诊断端口的运行状态。
 
-    :return: 统一HTTP响应
+    :return: 统一HTTP响应，data含 tcp_test 状态快照与 frame 各端口状态快照列表
     """
-    status = _tcp_test_server.status()
-    return SuccessResponse(message="查询成功", data=status)
+    return SuccessResponse(message="查询成功", data={
+        "tcp_test": _tcp_test_server.status(),
+        "frame": _tcp_frame_servers.status(),
+    })
 
 
 @autotest_tcp_test.get("/sample/json", summary="查询JSON请求示例报文", description="获取JSON端口银行账户交易查询请求示例")
@@ -624,3 +728,256 @@ async def get_xml_response_preview():
   </Body>
 </Request>"""
     return SuccessResponse(message="查询成功", data=_tcp_test_server._build_xml_response(sample))
+
+
+# ---------------------------------------------------------------------------
+# TCP 帧协议诊断服务器（验证步骤TCP帧配置：进制数/位数/总长度/结束符/HEX/编码）
+# ---------------------------------------------------------------------------
+
+class _TcpFrameTestServer:
+    """
+    按帧配置收发的TCP诊断服务器：读取侧镜像客户端（AioTcpClient）的组帧逻辑，
+    每次收发记录诊断快照（前缀文本/声明长度/实际长度/结束符/HEX/错误），供统一 /status 查询比对。
+
+    用于验证TCP步骤帧配置的字段组合是否产生预期报文、响应侧解析是否按同一配置工作。
+    """
+
+    _READ_TIMEOUT = 10.0
+    _IDLE_TIMEOUT = 1.0
+
+    def __init__(self) -> None:
+        self._server: Optional[asyncio.base_events.Server] = None
+        self._host: str = ""
+        self._port: int = 0
+        self._frame_config: Any = None
+        self._frame_desc: Dict[str, Any] = {}
+        self._response_text: Optional[str] = None
+        self._is_running: bool = False
+        self._exchange_count: int = 0
+        self._last_report: Dict[str, Any] = {}
+
+    # -- 生命周期 ----------------------------------------------------------
+
+    async def start(self, req: _TcpFrameServerStartIn, host: str) -> Dict[str, Any]:
+        """
+        按帧配置启动诊断服务器（已运行时先停旧实例）。
+
+        :param req: 启动入参（tcp_*字段语义与步骤schema一致）
+        :param host: 监听地址（与双端口mock服务器共用外层host）
+        :return: 服务器状态快照
+        """
+        await self.stop()
+        self._frame_config = resolve_tcp_frame_config(req)
+        self._response_text = req.response_text
+        self._host = host
+        self._port = req.port
+        self._exchange_count = 0
+        self._last_report = {}
+        self._frame_desc = {
+            "frame_mode": self._frame_config.frame_mode.value,
+            "tcp_radix": tcp_enum_value(req.tcp_radix) or "十进制",
+            "tcp_radix_length": int(req.tcp_radix_length or 8),
+            "tcp_datagram_length": tcp_enum_value(req.tcp_datagram_length) or "不包含长度位",
+            "tcp_request_end_symbol": tcp_enum_value(req.tcp_request_end_symbol) or "无",
+            "tcp_response_end_symbol": (req.tcp_response_end_symbol or "").strip() or "无",
+            "tcp_hex_string": bool(req.tcp_hex_string),
+            "tcp_encoding": self._frame_config.encoding,
+            "response_mode": "回显请求" if req.response_text is None else "固定内容",
+        }
+        self._server = await asyncio.start_server(
+            self._handle_client, host, req.port,
+            limit=max(TCP_MAX_RESPONSE_BYTES, 65536),
+        )
+        self._is_running = True
+        LOGGER.info(f"TCP帧诊断服务器启动: {host}:{req.port}, 帧配置: {self._frame_desc}")
+        return self.status()
+
+    async def stop(self) -> None:
+        if self._server is not None:
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+            LOGGER.info("TCP帧诊断服务器已停止")
+        self._is_running = False
+
+    def status(self) -> Dict[str, Any]:
+        return {
+            "is_running": self._is_running,
+            "host": self._host,
+            "port": self._port,
+            "frame_config": self._frame_desc,
+            "exchange_count": self._exchange_count,
+            "last_report": self._last_report,
+        }
+
+    # -- 收发处理 ----------------------------------------------------------
+
+    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self._exchange_count += 1
+        cfg = self._frame_config
+        report: Dict[str, Any] = {
+            "exchange_no": self._exchange_count,
+            "peer": str(writer.get_extra_info("peername")),
+            "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "frame_mode": cfg.frame_mode.value,
+            "radix": cfg.radix,
+            "radix_length": cfg.radix_length,
+            "include_length_prefix": cfg.include_length_prefix,
+            "hex_string": cfg.hex_string,
+            "encoding": cfg.encoding,
+            "success": False,
+            "errors": [],
+        }
+        self._last_report = report
+        LOGGER.info(f"TCP帧诊断服务器收到连接: {report['peer']}, 第{self._exchange_count}次")
+        try:
+            body_bytes = await self._read_request(reader, report)
+            report["request_bytes"] = len(body_bytes)
+            report["request_hex"] = body_bytes.hex().upper()
+            report["request_text"] = body_bytes.decode(cfg.encoding, errors="replace")[:4096]
+            response_bytes = self._build_response(body_bytes, report)
+            writer.write(response_bytes)
+            await writer.drain()
+            report["success"] = True
+        except asyncio.IncompleteReadError as e:
+            report["errors"].append(f"请求体不完整: 前缀声明的字节数不足, 已收到{len(e.partial)}字节")
+        except asyncio.TimeoutError:
+            report["errors"].append(f"读请求超时({self._READ_TIMEOUT}s)")
+        except asyncio.LimitOverrunError:
+            report["errors"].append("请求数据超过流上限仍未读到结束符")
+        except ValueError as e:
+            report["errors"].append(str(e))
+        except Exception as e:
+            report["errors"].append(f"处理异常: {type(e).__name__}: {e}")
+            LOGGER.error(f"TCP帧诊断服务器处理异常: {e}\n{traceback.format_exc()}")
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+    async def _read_request(self, reader: asyncio.StreamReader, report: Dict[str, Any]) -> bytes:
+        """
+        按帧配置读取请求正文，逻辑镜像 AioTcpClient._build_payload 的组帧规则。
+
+        :param reader: 流读取器
+        :param report: 诊断快照（就地写入读取过程信息）
+        :return: 请求正文字节
+        """
+        cfg = self._frame_config
+        if cfg.frame_mode == TcpFrameMode.LENGTH_PREFIX:
+            prefix_bytes = await asyncio.wait_for(reader.readexactly(cfg.radix_length), timeout=self._READ_TIMEOUT)
+            prefix_text = prefix_bytes.decode("ascii", errors="replace")
+            report["prefix_text"] = prefix_text
+            try:
+                declared = int(prefix_text, cfg.radix)
+            except ValueError:
+                raise ValueError(f"长度前缀[{prefix_text}]不是合法的{cfg.radix}进制数字")
+            report["declared_length"] = declared
+            if cfg.include_length_prefix and declared < cfg.radix_length:
+                raise ValueError(f"声明长度[{declared}]小于长度位宽度[{cfg.radix_length}]")
+            body_length = declared - cfg.radix_length if cfg.include_length_prefix else declared
+            report["expect_body_length"] = body_length
+            body = await asyncio.wait_for(reader.readexactly(body_length), timeout=self._READ_TIMEOUT) if body_length else b""
+            report["length_match"] = True
+            return body
+        if cfg.frame_mode == TcpFrameMode.TERMINATOR:
+            symbol = cfg.request_end_symbol
+            if symbol is None:
+                raise ValueError("结束符模式缺少请求结束符配置")
+            data = await asyncio.wait_for(reader.readuntil(symbol), timeout=self._READ_TIMEOUT)
+            report["terminator_found"] = True
+            return data[:-len(symbol)]
+        # RAW请求无显式边界；客户端保持连接等待响应不会主动EOF，按静默窗口收尾
+        chunks = []
+        while True:
+            try:
+                chunk = await asyncio.wait_for(reader.read(65536), timeout=self._IDLE_TIMEOUT)
+            except asyncio.TimeoutError:
+                break
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+    def _build_response(self, body_bytes: bytes, report: Dict[str, Any]) -> bytes:
+        """
+        按帧配置组装响应报文（客户端响应读取依赖同一帧规则）。
+
+        :param body_bytes: 请求正文（response_text未配置时用于回显）
+        :param report: 诊断快照（就地写入响应信息）
+        :return: 响应报文字节
+        """
+        cfg = self._frame_config
+        out = body_bytes if self._response_text is None else self._response_text.encode(cfg.encoding, errors="replace")
+        report["response_bytes"] = len(out)
+        if cfg.frame_mode == TcpFrameMode.LENGTH_PREFIX:
+            value = len(out) + cfg.radix_length if cfg.include_length_prefix else len(out)
+            prefix = format(value, "d" if cfg.radix == 10 else "x").zfill(cfg.radix_length).encode("ascii")
+            report["response_prefix"] = prefix.decode("ascii")
+            return prefix + out
+        if cfg.frame_mode == TcpFrameMode.TERMINATOR and cfg.response_end_symbol:
+            return out + cfg.response_end_symbol
+        return out
+
+
+class _TcpFrameServerManager:
+    """
+    帧诊断服务器管理器：按端口维护多实例，支持一次启动多种帧配置组合的接收服务端口。
+
+    声明式语义：每次start后运行中的帧诊断端口与传入配置一一对应，未列出的存量端口将被停止；
+    启动中途失败时回停本次已启动的实例，避免残留半可用状态。
+    """
+
+    def __init__(self) -> None:
+        self._servers: Dict[int, _TcpFrameTestServer] = {}
+
+    async def start(self, host: str, configs: List[_TcpFrameServerStartIn]) -> List[Dict[str, Any]]:
+        """
+        按传入配置列表启动帧诊断端口集合。
+
+        :param host: 统一监听地址（外层host）
+        :param configs: 帧配置列表，每项一个端口
+        :return: 各端口状态快照列表
+        """
+        target_ports = {cfg.port for cfg in configs}
+        for port in list(self._servers):
+            if port not in target_ports:
+                await self._servers.pop(port).stop()
+        statuses: List[Dict[str, Any]] = []
+        started: List[_TcpFrameTestServer] = []
+        try:
+            for cfg in configs:
+                server = self._servers.get(cfg.port)
+                if server is None:
+                    server = _TcpFrameTestServer()
+                    self._servers[cfg.port] = server
+                started.append(server)
+                statuses.append(await server.start(cfg, host))
+        except Exception:
+            for server in started:
+                await server.stop()
+            raise
+        return statuses
+
+    async def stop(self) -> List[Dict[str, Any]]:
+        """
+        停止全部帧诊断端口（保留实例以供状态查询）。
+
+        :return: 各端口状态快照列表
+        """
+        for server in self._servers.values():
+            await server.stop()
+        return self.status()
+
+    def status(self) -> List[Dict[str, Any]]:
+        """
+        查询全部帧诊断端口状态快照。
+
+        :return: 各端口状态快照列表（含端口、帧配置、诊断快照）
+        """
+        return [server.status() for server in self._servers.values()]
+
+
+_tcp_frame_servers = _TcpFrameServerManager()

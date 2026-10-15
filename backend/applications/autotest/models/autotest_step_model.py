@@ -22,6 +22,10 @@ from backend.enums import (
     AutoTestLoopMode,
     AutoTestLoopErrorStrategy,
     AutoTestReqArgsType,
+    AutoTestTcpRadix,
+    AutoTestTcpDatagramLength,
+    AutoTestTcpConnectType,
+    AutoTestTcpEndSymbol,
 )
 
 
@@ -58,6 +62,17 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     request_project_id = fields.BigIntField(null=True, description="请求应用ID")
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
     request_config_name = fields.CharField(max_length=128, null=True, description="请求环境配置名称")
+
+    # TCP请求帧配置（仅TCP步骤使用）；全为null时引擎按默认值执行：十进制/8位/不包含长度位/无结束符/短连接/utf-8
+    tcp_radix = fields.CharEnumField(AutoTestTcpRadix, default=None, null=True, description="TCP报文头进制数")
+    tcp_radix_length = fields.IntField(null=True, ge=2, le=10, description="TCP报文头长位数")
+    tcp_datagram_length = fields.CharEnumField(AutoTestTcpDatagramLength, default=None, null=True, description="TCP报文总长度")
+    tcp_request_end_symbol = fields.CharEnumField(AutoTestTcpEndSymbol, default=None, null=True, description="TCP请求报文结束符")
+    tcp_response_end_symbol = fields.CharField(max_length=64, default=None, null=True, description="TCP响应报文结束符")
+    tcp_connect_type = fields.CharEnumField(AutoTestTcpConnectType, default=None, null=True, description="TCP连接方式")
+    tcp_encoding = fields.CharField(max_length=32, null=True, description="TCP文本编码")
+    tcp_hex_string = fields.BooleanField(null=True, description="TCP HEX报文开关")
+    tcp_response_timeout = fields.FloatField(null=True, ge=0, description="TCP响应接收超时")
 
     # 逻辑相关
     code = fields.TextField(null=True, description="执行代码(Python)")

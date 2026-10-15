@@ -43,10 +43,12 @@ from backend.applications.autotest.services.autotest_runtime.protocol_tcp import
     parse_tcp_response,
     parse_tcp_timeouts,
     resolve_tcp_debug_request_extract_sources,
+    resolve_tcp_frame_config,
     select_tcp_debug_payload,
+    TCP_MAX_RESPONSE_BYTES,
 )
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
-from backend.common import AioTcpClient, TcpFrameMode
+from backend.common import AioTcpClient
 from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.common.url_utils import build_absolute_http_url, is_absolute_http_url
 from backend.configure import LOGGER
@@ -386,11 +388,7 @@ class StepDebugService:
         }
 
     @classmethod
-    async def debug_http(
-            cls,
-            debug_in: AutoTestHttpDebugRequest,
-            services: AutoTestServices,
-    ) -> Dict[str, Any]:
+    async def debug_http(cls, debug_in: AutoTestHttpDebugRequest, services: AutoTestServices) -> Dict[str, Any]:
         """
         调试HTTP请求步骤。
 
@@ -628,11 +626,7 @@ class StepDebugService:
         return result
 
     @classmethod
-    async def debug_tcp(
-            cls,
-            debug_in: AutoTestTcpDebugRequest,
-            services: AutoTestServices,
-    ) -> Dict[str, Any]:
+    async def debug_tcp(cls, debug_in: AutoTestTcpDebugRequest, services: AutoTestServices) -> Dict[str, Any]:
         """
         调试TCP请求步骤。
 
@@ -729,30 +723,39 @@ class StepDebugService:
         payload = select_tcp_debug_payload(
             request_args_type, request_text=request_text, request_body=request_body
         )
-        tcp_frame_mode = (debug_in.tcp_frame_mode or "length_prefix_json").strip().lower()
-        frame_mode = TcpFrameMode.RAW if tcp_frame_mode == "raw" else TcpFrameMode.LENGTH_PREFIX_JSON
-        length_field_size = debug_in.tcp_length_field_size or 8
-        encoding = debug_in.tcp_encoding or "utf-8"
-        max_response_bytes = debug_in.tcp_max_response_bytes or (10 * 1024 * 1024)
-        response_type = (debug_in.tcp_response_type or "text").strip().lower()
-        connect_td, read_td = parse_tcp_timeouts(
-            debug_in.tcp_connect_timeout, debug_in.tcp_read_timeout
+        frame_config = resolve_tcp_frame_config(debug_in)
+        connect_td, read_td = parse_tcp_timeouts(None, debug_in.tcp_response_timeout)
+        log(
+            f"TCP帧配置: 帧模式={frame_config.frame_mode.value}, 进制={frame_config.radix}, "
+            f"长度位宽度={frame_config.radix_length}, 总长度口径={'包含长度位' if frame_config.include_length_prefix else '不包含长度位'}, "
+            f"连接方式={'只发不收' if frame_config.send_only else ('长连接' if frame_config.long_connection else '短连接')}, "
+            f"Hex报文={'启用' if frame_config.hex_string else '禁用'}, 编码={frame_config.encoding}"
         )
+        if frame_config.long_connection:
+            # 长连接暂未实现：调试为单次收发，按短连接降级
+            log("TCP调试: 连接方式为长连接, 暂未实现, 已按短连接降级执行")
 
         start_time = time.time()
         async with AioTcpClient(
                 timeout=read_td or timedelta(seconds=30),
                 connect_timeout=connect_td,
-                length_field_size=int(length_field_size),
-                max_response_bytes=int(max_response_bytes),
+                length_field_size=frame_config.radix_length,
+                max_response_bytes=TCP_MAX_RESPONSE_BYTES,
         ) as client:
             try:
                 utils: AsyncTcpUtils = await client.tcp(
                     host=host,
                     port=int(port),
                     data=payload,
-                    frame_mode=frame_mode,
-                    encoding=encoding,
+                    frame_mode=frame_config.frame_mode,
+                    length_field_size=frame_config.radix_length,
+                    radix=frame_config.radix,
+                    include_length_prefix=frame_config.include_length_prefix,
+                    request_end_symbol=frame_config.request_end_symbol,
+                    response_end_symbol=frame_config.response_end_symbol,
+                    hex_string=frame_config.hex_string,
+                    send_only=frame_config.send_only,
+                    encoding=frame_config.encoding,
                     connect_timeout=connect_td,
                     read_timeout=read_td,
                 )
@@ -771,7 +774,11 @@ class StepDebugService:
 
         elapsed = f"{time.time() - start_time:.2f}"
         log(f"TCP请求调试完成: 耗时: {elapsed}s")
-        parsed = parse_tcp_response(raw_bytes, encoding=encoding, response_type=response_type)
+        parsed = parse_tcp_response(
+            raw_bytes,
+            encoding=frame_config.encoding,
+            hex_string=frame_config.hex_string,
+        )
         request_json_for_extract, request_text_for_extract = resolve_tcp_debug_request_extract_sources(
             request_body=request_body, request_text=request_text
         )
@@ -909,11 +916,7 @@ class StepDebugService:
                 raise StepDebugException(message="Python代码调试失败", data=debugging_return) from e
 
     @classmethod
-    async def debug_redis(
-            cls,
-            debug_in: AutoTestRedisDebugRequest,
-            services: AutoTestServices,
-    ) -> Dict[str, Any]:
+    async def debug_redis(cls, debug_in: AutoTestRedisDebugRequest, services: AutoTestServices) -> Dict[str, Any]:
         """
         调试Redis请求步骤；查到即止语义与RedisStepExecutor对齐。
 
