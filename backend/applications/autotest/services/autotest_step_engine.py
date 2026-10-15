@@ -4205,10 +4205,13 @@ class AutoTestStepExecutionEngine:
                     if root_step_code is not None:
                         self.aggregate_root_step_logs(context, result, root_step_code)
 
-            # 统计（根据 step_code 去重合并）
+            # 统计（根据 step_code 去重合并）；引用壳步骤执行的是被引用用例的内部步骤(children已逐项计数)，
             all_results: List[StepExecutionResult] = self.collect_all_results(results)
+            quote_shell_types: Tuple[AutoTestStepType, ...] = (AutoTestStepType.QUOTE_PUBLIC_SCRIPT, AutoTestStepType.QUOTE_PUBLIC_API)
             unique_states: Dict[str, bool] = {}
             for r in all_results:
+                if r.step_type in quote_shell_types and r.children:
+                    continue
                 key: str = r.step_code
                 if key not in unique_states:
                     unique_states[key] = True
