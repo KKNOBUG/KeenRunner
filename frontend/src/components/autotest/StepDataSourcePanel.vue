@@ -129,6 +129,8 @@ const props = defineProps({
   dataSourceDesc: { type: String, default: '' },
   /** 外部布局变化触发器（如步骤树折叠/展开），用于通知表格重新计算尺寸 */
   resizeTrigger: { type: Number, default: 0 },
+  /** 引用步骤复用开关：宿主「引用公共接口」步骤自身挂数据源时开启，绕过「仅HTTP/TCP请求步骤」类型限制 */
+  enableForQuoteStep: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:dataSourceId', 'update:dataSourceName', 'update:dataSourceDesc'])
@@ -165,8 +167,8 @@ const isRequestStepType = computed(() => {
   return REQUEST_STEP_TYPES.has(typeValue)
 })
 
-/** 仅已落库的 HTTP/TCP 请求步骤可展开 DataSource */
-const canUseDataSource = computed(() => isStepPersisted.value && isRequestStepType.value)
+/** 已落库的 HTTP/TCP 请求步骤（或开启复用开关的引用步骤）可展开 DataSource */
+const canUseDataSource = computed(() => isStepPersisted.value && (isRequestStepType.value || props.enableForQuoteStep))
 
 /** 只读或未落库时，面板内操作均不可用 */
 const panelReadonly = computed(() => props.readonly || !canUseDataSource.value)
@@ -178,7 +180,7 @@ const dataSourceTipText = computed(() => {
   if (!isStepPersisted.value) {
     return `${stepName}(本步骤) - 请先保存步骤后再使用数据源`
   }
-  if (!isRequestStepType.value) {
+  if (!isRequestStepType.value && !props.enableForQuoteStep) {
     return `${stepName}(本步骤) - 仅HTTP/TCP请求步骤可使用数据源`
   }
   const dsName = String(dataSourceName.value || '').trim()

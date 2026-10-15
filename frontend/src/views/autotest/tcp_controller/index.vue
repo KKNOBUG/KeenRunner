@@ -2,14 +2,15 @@
   <StepDataSourcePanel
       v-if="!props.hideDataSource"
       ref="dataSourcePanelRef"
-      :step="props.step"
-      :readonly="props.readonly"
-      :step-name="state.form.step_name"
+      :step="props.quoteOverlay?.dsStep || props.step"
+      :readonly="props.readonly && !props.quoteOverlay"
+      :step-name="props.quoteOverlay?.dsStep?.name || state.form.step_name"
       step-type-label="TCP请求"
+      :enable-for-quote-step="!!props.quoteOverlay"
       :resize-trigger="props.layoutVersion"
-      v-model:data-source-id="state.form.data_source_id"
-      v-model:data-source-name="state.form.data_source_name"
-      v-model:data-source-desc="state.form.data_source_desc"
+      v-model:data-source-id="dsIdModel"
+      v-model:data-source-name="dsNameModel"
+      v-model:data-source-desc="dsDescModel"
   />
 
   <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': requestCardCollapsed }]">
@@ -89,6 +90,87 @@
                 调试
               </n-button>
             </div>
+          </n-form-item>
+        </div>
+
+        <!-- TCP帧配置两行共用 4 列网格，保证列宽严格对齐：
+             第一行 连接方式/编码格式/响应超时/Hex String；第二行 报文头(长度位)跨前两列 + 请求结束符 + 响应结束符 -->
+        <div class="tcp-request-row tcp-request-grid">
+          <n-form-item label="连接方式" path="tcp_connect_type">
+            <n-select
+                v-model:value="state.form.tcp_connect_type"
+                :options="TCP_CONNECT_TYPE_OPTIONS"
+                placeholder="连接方式"
+                :disabled="props.readonly"
+            />
+          </n-form-item>
+          <n-form-item label="编码格式" path="tcp_encoding">
+            <n-select
+                v-model:value="state.form.tcp_encoding"
+                :options="TCP_ENCODING_OPTIONS"
+                placeholder="编码格式"
+                tag
+                filterable
+                :disabled="props.readonly"
+            />
+          </n-form-item>
+          <n-form-item label="响应超时" path="tcp_response_timeout">
+            <n-input-number
+                v-model:value="state.form.tcp_response_timeout"
+                :min="0"
+                :step="1"
+                placeholder="默认30"
+                clearable
+                style="width: 100%;"
+                :disabled="props.readonly"
+            />
+          </n-form-item>
+          <n-form-item label="Hex String" path="tcp_hex_string">
+            <n-switch v-model:value="state.form.tcp_hex_string" :disabled="props.readonly" />
+          </n-form-item>
+          <n-form-item class="tcp-frame-cell" label="报文长度" path="tcp_radix">
+            <div class="tcp-frame-inline">
+              <n-select
+                  v-model:value="state.form.tcp_radix"
+                  :options="TCP_RADIX_OPTIONS"
+                  placeholder="进制数"
+                  class="tcp-frame-select"
+                  :disabled="props.readonly"
+              />
+              <n-select
+                  v-model:value="state.form.tcp_radix_length"
+                  :options="TCP_RADIX_LENGTH_OPTIONS"
+                  placeholder="位数"
+                  class="tcp-frame-select"
+                  :disabled="props.readonly || tcpLengthDisabled"
+              />
+              <n-select
+                  v-model:value="state.form.tcp_datagram_length"
+                  :options="TCP_DATAGRAM_LENGTH_OPTIONS"
+                  placeholder="总长度"
+                  class="tcp-frame-select"
+                  :disabled="props.readonly || tcpLengthDisabled"
+              />
+            </div>
+          </n-form-item>
+          <n-form-item label="请求结束符" path="tcp_request_end_symbol">
+            <n-select
+                v-model:value="state.form.tcp_request_end_symbol"
+                :options="TCP_END_SYMBOL_OPTIONS"
+                placeholder="请求结束符"
+                :disabled="props.readonly || tcpEndSymbolDisabled"
+            />
+          </n-form-item>
+          <!-- 响应结束符对齐JMeter EOL为自定义输入：可选预设也允许输入任意转义序列文本 -->
+          <n-form-item label="响应结束符" path="tcp_response_end_symbol">
+            <n-select
+                v-model:value="state.form.tcp_response_end_symbol"
+                :options="TCP_END_SYMBOL_OPTIONS"
+                placeholder="响应结束符(可自定义, 如\r\n)"
+                :disabled="props.readonly || tcpEndSymbolDisabled"
+                filterable
+                tag
+            />
           </n-form-item>
         </div>
 
@@ -423,6 +505,29 @@ const props = defineProps({
   assistFunctions: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:config', 'update:quote-overlay'])
+
+// 引用公共接口内层步骤：DataSource面板绑定引用步骤自身挂载的数据源（编辑经update:quote-overlay写回引用步骤，保存落宿主case_id+引用步骤step_code）；普通步骤绑定本步骤表单
+const dsIdModel = computed({
+  get: () => (props.quoteOverlay ? (props.quoteOverlay.data_source_id ?? null) : state.form.data_source_id),
+  set: (v) => {
+    if (props.quoteOverlay) emit('update:quote-overlay', { data_source_id: v })
+    else state.form.data_source_id = v
+  },
+})
+const dsNameModel = computed({
+  get: () => (props.quoteOverlay ? (props.quoteOverlay.data_source_name || '') : state.form.data_source_name),
+  set: (v) => {
+    if (props.quoteOverlay) emit('update:quote-overlay', { data_source_name: v })
+    else state.form.data_source_name = v
+  },
+})
+const dsDescModel = computed({
+  get: () => (props.quoteOverlay ? (props.quoteOverlay.data_source_desc || '') : state.form.data_source_desc),
+  set: (v) => {
+    if (props.quoteOverlay) emit('update:quote-overlay', { data_source_desc: v })
+    else state.form.data_source_desc = v
+  },
+})
 
 // 引用公共接口内层步骤：合并展示模型 = 原数据（_locked 置灰只读）+ 引用步骤追加数据（可编辑）。
 // 组件按步骤 key 重建，挂载时一次性水合；不监听 quoteOverlay 回灌，避免编辑中被重置。
@@ -760,6 +865,17 @@ const buildConfigFromState = () => {
     data_source_id: state.form.data_source_id ?? null,
     data_source_name: state.form.data_source_name || '',
     data_source_desc: state.form.data_source_desc || '',
+    // TCP帧配置：value 与后端枚举展示值同源，后端按进制数与结束符组合推导帧模式。
+    // 互斥约束与后端 schema 校验一致：进制数=不使用时长度位参数必须为空；进制数非不使用时结束符必须为「无」
+    tcp_radix: state.form.tcp_radix || '不使用',
+    tcp_radix_length: state.form.tcp_radix === '不使用' ? null : (state.form.tcp_radix_length ?? 8),
+    tcp_datagram_length: state.form.tcp_radix === '不使用' ? null : (state.form.tcp_datagram_length || '不包含长度位'),
+    tcp_request_end_symbol: state.form.tcp_radix !== '不使用' ? '无' : (state.form.tcp_request_end_symbol || '无'),
+    tcp_response_end_symbol: state.form.tcp_radix !== '不使用' ? '无' : (state.form.tcp_response_end_symbol || '无'),
+    tcp_response_timeout: state.form.tcp_response_timeout ?? null,
+    tcp_connect_type: state.form.tcp_connect_type || '短连接',
+    tcp_encoding: state.form.tcp_encoding || 'UTF-8',
+    tcp_hex_string: !!state.form.tcp_hex_string,
     defined_variables: Array.isArray(state.form.defined_variables) ? state.form.defined_variables : [],
     extract_variables: buildExtractForBackend(),
     assert_validators: buildValidatorsForBackend(),
@@ -770,6 +886,8 @@ const buildConfigFromState = () => {
 const hydrateTcpForm = (p) => {
   const cfg = p.config || {}
   const original = p.step?.original || {}
+  // 是否已落库的后端步骤：区分新增默认值与修改回显
+  const hasSavedTcpStep = p.step?.original?.id != null
 
   const argsType = normalizeBodyType(cfg.request_args_type ?? original.request_args_type ?? 'xml')
   const backendText = cfg.request_text ?? original.request_text ?? ''
@@ -824,6 +942,17 @@ const hydrateTcpForm = (p) => {
     data_source_id: cfg.data_source_id ?? original.data_source_id ?? null,
     data_source_name: cfg.data_source_name ?? original.data_source_name ?? '',
     data_source_desc: cfg.data_source_desc ?? original.data_source_desc ?? '',
+    // TCP帧配置：修改时直接显示已保存数据(cfg优先、original兜底)；仅新增(无后端original.id)用新步骤默认值。
+    // 存量步骤(NULL)回退引擎实际生效默认（十进制/8位/30s），保证所见=所执行
+    tcp_radix: cfg.tcp_radix ?? original.tcp_radix ?? (hasSavedTcpStep ? '十进制' : '不使用'),
+    tcp_radix_length: cfg.tcp_radix_length ?? original.tcp_radix_length ?? null,
+    tcp_datagram_length: cfg.tcp_datagram_length ?? original.tcp_datagram_length ?? '不包含长度位',
+    tcp_request_end_symbol: cfg.tcp_request_end_symbol ?? original.tcp_request_end_symbol ?? '无',
+    tcp_response_end_symbol: cfg.tcp_response_end_symbol ?? original.tcp_response_end_symbol ?? '无',
+    tcp_response_timeout: cfg.tcp_response_timeout ?? original.tcp_response_timeout ?? (hasSavedTcpStep ? null : 10),
+    tcp_connect_type: cfg.tcp_connect_type ?? original.tcp_connect_type ?? '短连接',
+    tcp_encoding: cfg.tcp_encoding ?? original.tcp_encoding ?? 'UTF-8',
+    tcp_hex_string: cfg.tcp_hex_string ?? original.tcp_hex_string ?? false,
     // defined_variables 必须是列表格式，每个元素包含 key、value、desc，不再兼容字典格式
     defined_variables: Array.isArray(cfg.defined_variables) ? cfg.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []),
     extract_variables: hydrateExtractDictFromBackend(
@@ -852,6 +981,16 @@ const { form, syncFromExternal } = useStepEditorForm({
     data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
+    // TCP帧配置：新增默认值（不使用=RAW/响应超时10s）；修改场景由 hydrate 按已保存数据回显
+    tcp_radix: '不使用',
+    tcp_radix_length: null,
+    tcp_datagram_length: '不包含长度位',
+    tcp_request_end_symbol: '无',
+    tcp_response_end_symbol: '无',
+    tcp_response_timeout: 10,
+    tcp_connect_type: '短连接',
+    tcp_encoding: 'UTF-8',
+    tcp_hex_string: false,
     defined_variables: [],
     extract_variables: {},
     assert_validators: {},
@@ -863,6 +1002,9 @@ const { form, syncFromExternal } = useStepEditorForm({
     f.request_project_id, f.request_config_name,
     f.bodyType, f.xmlBody, f.jsonBody, f.rawBody,
     f.data_source_id, f.data_source_name, f.data_source_desc,
+    f.tcp_radix, f.tcp_radix_length, f.tcp_datagram_length,
+    f.tcp_request_end_symbol, f.tcp_response_end_symbol,
+    f.tcp_response_timeout, f.tcp_connect_type, f.tcp_encoding, f.tcp_hex_string,
     f.defined_variables, f.extract_variables, f.assert_validators
   ],
   debounceMs: 300,
@@ -967,6 +1109,49 @@ watch(
 
 const tcpConfigNameOptions = ref([])
 const tcpConfigNameLoading = ref(false)
+
+/* =================== TCP帧配置选项（value 与后端枚举展示值同源，落库即展示值） =================== */
+const TCP_RADIX_OPTIONS = [
+  { label: '十进制', value: '十进制' },
+  { label: '十六进制', value: '十六进制' },
+  { label: '不使用', value: '不使用' },
+]
+const TCP_RADIX_LENGTH_OPTIONS = Array.from({length: 9}, (_, i) => ({label: String(i + 2), value: i + 2}))
+const TCP_DATAGRAM_LENGTH_OPTIONS = [
+  { label: '包含长度位', value: '包含长度位' },
+  { label: '不包含长度位', value: '不包含长度位' },
+]
+const TCP_END_SYMBOL_OPTIONS = [
+  { label: '无', value: '无' },
+  { label: '\\r\\n', value: '\\r\\n' },
+  { label: '\\r', value: '\\r' },
+  { label: '\\n', value: '\\n' },
+]
+const TCP_CONNECT_TYPE_OPTIONS = [
+  { label: '短连接', value: '短连接' },
+  { label: '长连接', value: '长连接' },
+  { label: '只发不收(长连接)', value: '只发不收(长连接)' },
+]
+const TCP_ENCODING_OPTIONS = [
+  { label: 'UTF-8', value: 'UTF-8' },
+  { label: 'GBK', value: 'GBK' },
+  { label: 'GB18030', value: 'GB18030' },
+  { label: 'ISO-8859-1', value: 'ISO-8859-1' },
+  { label: 'ASCII', value: 'ASCII' },
+]
+
+// 互斥联动（对齐JMeter帧模式推导）：进制数≠不使用 → 长度前缀模式（位数/总长度可配，结束符禁用）；
+// 进制数=不使用 → 长度位参数禁用，结束符可配
+const tcpLengthDisabled = computed(() => state.form.tcp_radix === '不使用')
+const tcpEndSymbolDisabled = computed(() => state.form.tcp_radix !== '不使用')
+watch(() => state.form.tcp_radix, (radix) => {
+  if (radix !== '不使用') {
+    // 切回长度前缀模式时复位结束符，避免与后端互斥校验冲突
+    state.form.tcp_request_end_symbol = '无'
+    state.form.tcp_response_end_symbol = '无'
+  }
+})
+
 const loadTcpConfigNames = async (projectId) => {
   const pid = projectId != null && projectId !== '' ? Number(projectId) : null
   if (!pid) {
@@ -1006,6 +1191,9 @@ watch(
       state.form.request_project_id, state.form.request_config_name,
       state.form.bodyType, state.form.xmlBody, state.form.jsonBody, state.form.rawBody,
       state.form.data_source_id, state.form.data_source_name, state.form.data_source_desc,
+      state.form.tcp_radix, state.form.tcp_radix_length, state.form.tcp_datagram_length,
+      state.form.tcp_request_end_symbol, state.form.tcp_response_end_symbol,
+      state.form.tcp_response_timeout, state.form.tcp_connect_type, state.form.tcp_encoding, state.form.tcp_hex_string,
       state.form.extract_variables, state.form.assert_validators
     ],
     () => {
@@ -1420,6 +1608,24 @@ const doDebugRequest = async (env_name) => {
     if (av.length > 0) {
       debugPayload.assert_validators = av
     }
+    // TCP帧配置：与保存链路同源（cfg 优先、original 兜底），保证调试与执行行为一致
+    const tcpFrameFields = [
+      'tcp_radix', 'tcp_radix_length', 'tcp_datagram_length',
+      'tcp_request_end_symbol', 'tcp_response_end_symbol',
+      'tcp_response_timeout', 'tcp_connect_type', 'tcp_encoding', 'tcp_hex_string',
+    ]
+    tcpFrameFields.forEach((field) => {
+      const value = cfg[field] ?? original[field]
+      if (value != null) debugPayload[field] = value
+    })
+    // 与后端互斥校验一致：进制数=不使用不带长度位参数，非不使用强制结束符为「无」（防 original 旧值残留）
+    if ((debugPayload.tcp_radix ?? '十进制') === '不使用') {
+      delete debugPayload.tcp_radix_length
+      delete debugPayload.tcp_datagram_length
+    } else {
+      debugPayload.tcp_request_end_symbol = '无'
+      debugPayload.tcp_response_end_symbol = '无'
+    }
 
     const res = await api.tcpRequestDebugging(debugPayload)
     if (res.code === '000000') {
@@ -1472,6 +1678,40 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 }
 
 .tcp-request-row-top :deep(.n-form-item) {
+  min-width: 0;
+}
+
+/* TCP帧配置两行共用同一 4 列网格，列宽严格对齐：
+   第二行「报文头(长度位)」跨前两列 = 连接方式+编码格式等宽；请求结束符对齐响应超时列，响应结束符对齐 Hex String 列 */
+.tcp-request-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tcp-request-grid :deep(.n-form-item) {
+  min-width: 0;
+}
+
+.tcp-frame-cell {
+  grid-column: 1 / 3;
+}
+
+.tcp-frame-inline {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.tcp-frame-select {
+  flex: 1 1 0;
   min-width: 0;
 }
 

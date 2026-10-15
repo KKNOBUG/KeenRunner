@@ -151,6 +151,17 @@ export function mapBackendStep(step) {
       data: normalizeRequestBody(step.request_body),
       extract_variables: Array.isArray(step.extract_variables) ? step.extract_variables : [],
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
+      // TCP帧配置：value 与后端枚举展示值同源，缺省与后端引擎默认行为一致。
+      // 位数回显已保存值；未保存(NULL)时按进制数回退：非「不使用」显示引擎生效默认8，「不使用」显示空
+      tcp_radix: step.tcp_radix || '十进制',
+      tcp_radix_length: step.tcp_radix_length ?? ((step.tcp_radix ?? '十进制') !== '不使用' ? 8 : null),
+      tcp_datagram_length: step.tcp_datagram_length || '不包含长度位',
+      tcp_request_end_symbol: step.tcp_request_end_symbol || '无',
+      tcp_response_end_symbol: step.tcp_response_end_symbol || '无',
+      tcp_response_timeout: step.tcp_response_timeout ?? null,
+      tcp_connect_type: step.tcp_connect_type || '短连接',
+      tcp_encoding: step.tcp_encoding || 'UTF-8',
+      tcp_hex_string: step.tcp_hex_string ?? false,
     }
   } else if (localType === 'http') {
     base.config = {
@@ -239,6 +250,10 @@ export function mapBackendStep(step) {
       base.config.defined_variables = Array.isArray(step.defined_variables) ? step.defined_variables : []
       base.config.extract_variables = Array.isArray(step.extract_variables) ? step.extract_variables : []
       base.config.assert_validators = Array.isArray(step.assert_validators) ? step.assert_validators : []
+      // 宿主侧挂载在引用步骤上的数据源绑定（数据落 krun_autotest_data_source，键位为宿主case_id+引用步骤step_code）
+      base.config.data_source_id = step.data_source_id ?? null
+      base.config.data_source_name = step.data_source_name || ''
+      base.config.data_source_desc = step.data_source_desc || ''
     }
   } else if (localType === 'database') {
     const ops = Array.isArray(step.database_operates) ? step.database_operates : []

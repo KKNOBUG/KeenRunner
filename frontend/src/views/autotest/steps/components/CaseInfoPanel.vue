@@ -126,7 +126,7 @@
                   :loading="projectLoading"
                   clearable
                   filterable
-                  placeholder="所属应用"
+                  placeholder="请选择所属应用"
                   size="small"
                   class="case-field-input"
                   @update:value="onCaseProjectUserChange"
@@ -297,16 +297,16 @@ const onCaseTypeSelectChange = (newType) => {
 
 const route = useRoute()
 
-/** 与步骤子页 Request 卡片一致的收起状态 */
-const caseInfoCollapsed = ref(false)
+/** 与步骤子页 Request 卡片一致的收起状态：进入页面时默认折叠，由用户手动控制 */
+const caseInfoCollapsed = ref(true)
 
 const caseForm = reactive({
-  case_project: '',
+  case_project: null,
   case_name: '',
   case_tags: [],
   case_desc: '',
-  case_attr: '',
-  case_type: '',
+  case_attr: '正案例',
+  case_type: '用户脚本',
   // 变量池传递为用例级全局设置：仅多条数据源执行时有意义，新增默认禁用
   session_transfer: '禁用',
 })
@@ -385,8 +385,8 @@ const initCaseInfoFromRoute = () => {
       caseForm.case_tags = []
     }
     caseForm.case_desc = caseInfo.case_desc || ''
-    caseForm.case_attr = caseInfo.case_attr || ''
-    caseForm.case_type = caseInfo.case_type || ''
+    caseForm.case_attr = caseInfo.case_attr || '正案例'
+    caseForm.case_type = caseInfo.case_type || '用户脚本'
     caseForm.session_transfer = caseInfo.session_transfer || '禁用'
   } catch (error) {
     console.error('解析用例信息失败:', error)
@@ -503,21 +503,21 @@ const validateCaseForm = () => {
 const hydrateFromStepTree = (data) => {
   const firstStepCase = data?.[0]?.case
   if (firstStepCase) {
-    caseForm.case_project = firstStepCase.case_project || ''
+    caseForm.case_project = firstStepCase.case_project || null
     caseForm.case_name = firstStepCase.case_name || ''
     caseForm.case_tags = firstStepCase.case_tags ?? []
     caseForm.case_desc = firstStepCase.case_desc || ''
-    caseForm.case_attr = firstStepCase.case_attr || ''
-    caseForm.case_type = firstStepCase.case_type || ''
+    caseForm.case_attr = firstStepCase.case_attr || '正案例'
+    caseForm.case_type = firstStepCase.case_type || '用户脚本'
     caseForm.session_transfer = firstStepCase.session_transfer || '禁用'
   } else {
-    // 无用例信息（新增页传入空数组等）：清空表单，避免 keep-alive 复用时残留上一用例数据
-    caseForm.case_project = ''
+    // 无用例信息（新增页传入空数组等）：使用默认值，避免 keep-alive 复用时残留上一用例数据
+    caseForm.case_project = null
     caseForm.case_name = ''
     caseForm.case_tags = []
     caseForm.case_desc = ''
-    caseForm.case_attr = ''
-    caseForm.case_type = ''
+    caseForm.case_attr = '正案例'
+    caseForm.case_type = '用户脚本'
     caseForm.session_transfer = '禁用'
   }
 }
@@ -536,8 +536,8 @@ const hydrateFromCasePayload = (caseInfo) => {
         : []
   }
   if (caseInfo.case_desc != null) caseForm.case_desc = caseInfo.case_desc || ''
-  if (caseInfo.case_attr != null) caseForm.case_attr = caseInfo.case_attr || ''
-  if (caseInfo.case_type != null) caseForm.case_type = caseInfo.case_type || ''
+  if (caseInfo.case_attr != null) caseForm.case_attr = caseInfo.case_attr || '正案例'
+  if (caseInfo.case_type != null) caseForm.case_type = caseInfo.case_type || '用户脚本'
   caseForm.session_transfer = caseInfo.session_transfer || '禁用'
 }
 

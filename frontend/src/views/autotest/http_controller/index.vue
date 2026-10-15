@@ -2,14 +2,15 @@
   <StepDataSourcePanel
       v-if="!props.hideDataSource"
       ref="dataSourcePanelRef"
-      :step="props.step"
-      :readonly="props.readonly"
-      :step-name="state.form.step_name"
+      :step="props.quoteOverlay?.dsStep || props.step"
+      :readonly="props.readonly && !props.quoteOverlay"
+      :step-name="props.quoteOverlay?.dsStep?.name || state.form.step_name"
       step-type-label="HTTP请求"
+      :enable-for-quote-step="!!props.quoteOverlay"
       :resize-trigger="props.layoutVersion"
-      v-model:data-source-id="state.form.data_source_id"
-      v-model:data-source-name="state.form.data_source_name"
-      v-model:data-source-desc="state.form.data_source_desc"
+      v-model:data-source-id="dsIdModel"
+      v-model:data-source-name="dsNameModel"
+      v-model:data-source-desc="dsDescModel"
   />
 
   <n-card :bordered="false" style="width: 100%;" :class="['step-editor-card', { 'is-collapsed': requestCardCollapsed }]">
@@ -623,6 +624,29 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:config', 'update:quote-overlay'])
+
+// 引用公共接口内层步骤：DataSource面板绑定引用步骤自身挂载的数据源（编辑经update:quote-overlay写回引用步骤，保存落宿主case_id+引用步骤step_code）；普通步骤绑定本步骤表单
+const dsIdModel = computed({
+  get: () => (props.quoteOverlay ? (props.quoteOverlay.data_source_id ?? null) : state.form.data_source_id),
+  set: (v) => {
+    if (props.quoteOverlay) emit('update:quote-overlay', { data_source_id: v })
+    else state.form.data_source_id = v
+  },
+})
+const dsNameModel = computed({
+  get: () => (props.quoteOverlay ? (props.quoteOverlay.data_source_name || '') : state.form.data_source_name),
+  set: (v) => {
+    if (props.quoteOverlay) emit('update:quote-overlay', { data_source_name: v })
+    else state.form.data_source_name = v
+  },
+})
+const dsDescModel = computed({
+  get: () => (props.quoteOverlay ? (props.quoteOverlay.data_source_desc || '') : state.form.data_source_desc),
+  set: (v) => {
+    if (props.quoteOverlay) emit('update:quote-overlay', { data_source_desc: v })
+    else state.form.data_source_desc = v
+  },
+})
 
 // 引用公共接口内层步骤：合并展示模型 = 原数据（_locked 置灰只读）+ 引用步骤追加数据（可编辑）。
 // 组件按步骤 key 重建，挂载时一次性水合；不监听 quoteOverlay 回灌，避免编辑中被重置。

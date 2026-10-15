@@ -1,6 +1,6 @@
 <template>
   <AppPage>
-    <div ref="caseInfoWrapRef">
+    <div>
       <CaseInfoPanel
           ref="caseInfoPanelRef"
           :debug-loading="debugLoading"
@@ -280,7 +280,6 @@
 defineOptions({ name: '步骤编辑' })
 import {computed, h, nextTick, onActivated, onMounted, provide, ref, watch} from 'vue'
 import {useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router'
-import {useElementHover} from '@vueuse/core'
 import {
   NButton,
   NCard,
@@ -425,10 +424,6 @@ const loadedCaseInfo = ref(undefined)
 
 /** 用例信息子组件 ref：表单、校验、项目列表 */
 const caseInfoPanelRef = ref(null)
-/** 用例信息面板包裹容器 ref：用于检测鼠标是否悬停在面板区域 */
-const caseInfoWrapRef = ref(null)
-/** 鼠标是否悬停在「用例信息」面板区域 */
-const hoveringCaseInfo = useElementHover(caseInfoWrapRef)
 /** 当前步骤编辑器 ref：用于保存步骤树前先保存数据源 */
 const activeStepEditorRef = ref(null)
 /** 执行/调试环境配置弹窗 ref */
@@ -1596,8 +1591,6 @@ const loadSteps = async ({ force = false } = {}) => {
     selectedKeys.value = []
     appliedCaseMeta.value = { case_id: null, case_code: null }
     caseInfoPanelRef.value?.hydrateFromStepTree?.([])
-    // 新增页展开用例信息面板，便于填写（覆盖上一用例自动折叠后的收起状态）
-    if (caseInfoPanelRef.value) caseInfoPanelRef.value.caseInfoCollapsed = false
     nextTick(() => markDirtyLoaded())
     return
   }
@@ -1680,7 +1673,8 @@ const currentParentQuoteStep = computed(() => {
   return quoteStep
 })
 
-/** 内层步骤 Request 面板的追加数据源：父引用步骤自身保存的三容器字段（原数据在被引用用例上，天然隔离） */
+/** 内层步骤 Request 面板的追加数据源：父引用步骤自身保存的三容器字段（原数据在被引用用例上，天然隔离）；
+ *  数据源三元组同样挂在引用步骤上，随 overlay 下发，由内层页面的 DataSource 面板展示编辑（保存落宿主引用步骤） */
 const currentQuoteOverlay = computed(() => {
   const quoteStep = currentParentQuoteStep.value
   if (!quoteStep) return null
@@ -1689,6 +1683,11 @@ const currentQuoteOverlay = computed(() => {
     defined_variables: Array.isArray(cfg.defined_variables) ? cfg.defined_variables : [],
     extract_variables: Array.isArray(cfg.extract_variables) ? cfg.extract_variables : [],
     assert_validators: Array.isArray(cfg.assert_validators) ? cfg.assert_validators : [],
+    data_source_id: cfg.data_source_id ?? null,
+    data_source_name: cfg.data_source_name || '',
+    data_source_desc: cfg.data_source_desc || '',
+    // 数据源面板的落库上下文：宿主引用步骤本身（case_id/step_code取自original，保存落宿主用例）
+    dsStep: quoteStep,
   }
 })
 
@@ -1704,62 +1703,6 @@ const editorComponent = computed(() => {
   const step = currentStep.value
   if (!step) return null
   return editorMap[step.type] || null
-})
-
-/**
- * 自动折叠「用例信息」面板。
- * 四个条件需同时满足：用例信息已全部填写完成、用户已激活其他操作（选中了步骤/进入子页面）、
- * 鼠标不在用例信息面板区域、面板内没有展开的选择弹层（下拉菜单 teleport 到 body，
- * 鼠标移入菜单时会离开面板区域，若此时折叠会导致无法继续选择）。
- */
-const tryAutoCollapseCaseInfo = () => {
-  if (!caseInfoPanelRef.value) return
-  const complete = caseInfoPanelRef.value.validateCaseForm?.().valid === true
-  const activated = selectedKeys.value.length > 0
-  const dropdownOpen = caseInfoPanelRef.value.anyDropdownOpen === true
-  if (complete && activated && !hoveringCaseInfo.value && !dropdownOpen) {
-    caseInfoPanelRef.value.caseInfoCollapsed = true
-  }
-}
-
-/** 自动折叠延迟（毫秒）：避免鼠标短暂离开面板时立即折叠 */
-const AUTO_COLLAPSE_DELAY = 500
-let collapseTimer = null
-const scheduleAutoCollapse = () => {
-  if (collapseTimer) clearTimeout(collapseTimer)
-  collapseTimer = setTimeout(() => {
-    collapseTimer = null
-    tryAutoCollapseCaseInfo()
-  }, AUTO_COLLAPSE_DELAY)
-}
-const cancelScheduledCollapse = () => {
-  if (collapseTimer) {
-    clearTimeout(collapseTimer)
-    collapseTimer = null
-  }
-}
-
-/** 选中步骤变化（点击步骤树/进入子页面）时延时尝试自动折叠用例信息面板 */
-watch(currentStep, () => {
-  scheduleAutoCollapse()
-})
-
-/** 鼠标移出用例信息面板时延时尝试折叠；鼠标移回则取消（覆盖「先选中步骤、鼠标随后移出面板」的场景） */
-watch(hoveringCaseInfo, (hovering) => {
-  if (hovering) {
-    cancelScheduledCollapse()
-  } else {
-    scheduleAutoCollapse()
-  }
-})
-
-/** 选择弹层展开时取消折叠；关闭后延时补一次折叠判定（弹层展开期间鼠标已移出面板） */
-watch(() => caseInfoPanelRef.value?.anyDropdownOpen, (open) => {
-  if (open) {
-    cancelScheduledCollapse()
-  } else {
-    scheduleAutoCollapse()
-  }
 })
 
 const currentEditorNeedsProject = computed(() => {

@@ -196,6 +196,22 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.data_source_desc = config.data_source_desc !== undefined
                 ? (config.data_source_desc || null)
                 : (original.data_source_desc || null)
+
+            // TCP帧配置：value 与后端枚举展示值同源（进制数与结束符互斥由后端 schema 校验）。
+            // 长度位参数需尊重 config 显式 null（进制数=不使用时必须为空，不可回退 original 旧值）
+            backendStep.tcp_radix = config.tcp_radix ?? original.tcp_radix ?? '十进制'
+            backendStep.tcp_radix_length = config.tcp_radix_length !== undefined
+                ? config.tcp_radix_length
+                : (original.tcp_radix_length ?? 8)
+            backendStep.tcp_datagram_length = config.tcp_datagram_length !== undefined
+                ? config.tcp_datagram_length
+                : (original.tcp_datagram_length ?? '不包含长度位')
+            backendStep.tcp_request_end_symbol = config.tcp_request_end_symbol ?? original.tcp_request_end_symbol ?? '无'
+            backendStep.tcp_response_end_symbol = config.tcp_response_end_symbol ?? original.tcp_response_end_symbol ?? '无'
+            backendStep.tcp_response_timeout = config.tcp_response_timeout ?? original.tcp_response_timeout ?? null
+            backendStep.tcp_connect_type = config.tcp_connect_type ?? original.tcp_connect_type ?? '短连接'
+            backendStep.tcp_encoding = config.tcp_encoding ?? original.tcp_encoding ?? 'UTF-8'
+            backendStep.tcp_hex_string = config.tcp_hex_string ?? original.tcp_hex_string ?? false
         }
         if (step.type === 'http') {
             backendStep.request_method = config.method || original.request_method || 'POST'
@@ -325,6 +341,10 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 backendStep.defined_variables = filterKeyValueList(Array.isArray(config.defined_variables) ? config.defined_variables : (Array.isArray(original.defined_variables) ? original.defined_variables : []))
                 backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
                 backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
+                // 宿主侧挂载在引用步骤上的数据源绑定（数据落 krun_autotest_data_source，键位为宿主case_id+引用步骤step_code）
+                backendStep.data_source_id = config.data_source_id !== undefined ? (config.data_source_id || null) : (original.data_source_id || null)
+                backendStep.data_source_name = config.data_source_name !== undefined ? (config.data_source_name || null) : (original.data_source_name || null)
+                backendStep.data_source_desc = config.data_source_desc !== undefined ? (config.data_source_desc || null) : (original.data_source_desc || null)
             }
         } else if (step.type === 'database') {
             backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '')
