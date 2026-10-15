@@ -233,8 +233,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         # 步骤计数器：用于统计该用例拥有的步骤总数
         # direct_steps: 直接属于该用例的步骤数（根步骤, parent_step_id为None）
         # child_steps: 所有子步骤数（递归统计, 不包括根步骤, parent_step_id不为None）
-        # quote_steps: 引用脚本的步骤数
-        # total_step: 总步骤数（direct_steps + child_steps + quote_steps）
+        # quote_steps: 引用步骤(被引用用例内部步骤)的步骤数
+        # total_step: 总步骤数（direct_steps + child_steps + quote_steps；引用壳步骤不计数，实际执行的是被引用的内部步骤）
         step_counter = {
             "direct_steps": 0,
             "child_steps": 0,
@@ -245,13 +245,15 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         # 递归构建步骤树
         async def build_step_tree(step: AutoTestStepModel, is_quote: bool = False) -> Dict[str, Any]:
             """递归构建单步及其子步骤、引用脚本步骤的树形字典并统计各类步骤数量。"""
-            step_counter["total_steps"] += 1
-            if is_quote:
-                step_counter["quote_steps"] += 1
-            elif step.parent_step_id is None:
-                step_counter["direct_steps"] += 1
-            else:
-                step_counter["child_steps"] += 1
+            # 引用壳步骤不计数：壳在用户侧不可执行，实际执行的是被引用用例的内部步骤(quote_steps)，避免双重计数
+            if not step.quote_case_id:
+                step_counter["total_steps"] += 1
+                if is_quote:
+                    step_counter["quote_steps"] += 1
+                elif step.parent_step_id is None:
+                    step_counter["direct_steps"] += 1
+                else:
+                    step_counter["child_steps"] += 1
 
             # 获取步骤基本信息(内存序列化, 无DB查询)
             step_dict = await step.to_dict(
