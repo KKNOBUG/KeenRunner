@@ -48,15 +48,15 @@ class _TcpTestServer:
         self._json_server: Optional[asyncio.base_events.Server] = None
         self._xml_server: Optional[asyncio.base_events.Server] = None
         self._host: str = "0.0.0.0"
-        self._json_port: int = 9991
-        self._xml_port: int = 9992
+        self._json_port: int = 9091
+        self._xml_port: int = 9092
         self._is_running: bool = False
         self._json_conn_count: int = 0
         self._xml_conn_count: int = 0
 
     # -- 生命周期 ----------------------------------------------------------
 
-    async def start(self, host: str = "0.0.0.0", json_port: int = 9999, xml_port: int = 9998) -> None:
+    async def start(self, host: str = "0.0.0.0", json_port: int = 9091, xml_port: int = 9092) -> None:
         if self._is_running:
             await self.stop()
         self._host = host
@@ -458,7 +458,7 @@ class _TcpFrameServerStartIn(BaseModel):
     互斥校验规则与 AutoTestStepReqBase._validate_tcp_frame_fields 相同。
     """
 
-    port: int = Field(default=9993, ge=1, le=65535, description="监听端口（监听地址与外层host一致，不单独配置）")
+    port: int = Field(default=9093, ge=1, le=65535, description="监听端口（监听地址与外层host一致，不单独配置）")
     tcp_radix: Optional[AutoTestTcpRadix] = Field(default=None, description="TCP报文头进制数")
     tcp_radix_length: Optional[int] = Field(default=None, ge=2, le=10, description="TCP长度位宽度")
     tcp_datagram_length: Optional[AutoTestTcpDatagramLength] = Field(default=None, description="TCP报文总长度")
@@ -489,46 +489,46 @@ class _TcpFrameServerStartIn(BaseModel):
 
 # 帧诊断端口内置组合：一键启动即覆盖用例帧链路验收所需的全部配置组合（端口与"TCP帧诊断*"环境配置对应）
 _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
-    # 十进制/8位/不包含长度位
+    # TCP协议：十进制/8位长度位/不包含长度位/无结束符
     _TcpFrameServerStartIn(
-        port=9993,
+        port=9093,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
         tcp_radix_length=8,
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE
     ),
-    # 十六进制/4位/包含长度位
+    # TCP协议：十六进制/4位长度位/包含长度位
     _TcpFrameServerStartIn(
-        port=9994,
+        port=9094,
         tcp_radix=AutoTestTcpRadix.HEX,
         tcp_radix_length=4,
         tcp_datagram_length=AutoTestTcpDatagramLength.INCLUDE
     ),
-    # 不使用+请求/响应\r\n
+    # TCP协议：进制数不使用，请求/响应结束符\r\n
     _TcpFrameServerStartIn(
-        port=9995,
+        port=9095,
         tcp_radix=AutoTestTcpRadix.NONE,
         tcp_request_end_symbol=AutoTestTcpEndSymbol.CRLF,
         tcp_response_end_symbol="\\r\\n"
     ),
-    # 十进制/8位+HEX开启
+    # TCP协议：十进制/8位/不包含长度位/HEX开启
     _TcpFrameServerStartIn(
-        port=9996,
+        port=9096,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
         tcp_radix_length=8,
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
         tcp_hex_string=True
     ),
-    # 十进制/8位+GBK编码
+    # TCP协议：十进制/8位/不包含长度位/GBK编码
     _TcpFrameServerStartIn(
-        port=9997,
+        port=9097,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
         tcp_radix_length=8,
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
         tcp_encoding="GBK"
     ),
-    # 不使用/无结束符(RAW)
+    # TCP协议：进制数不使用且无结束符，报文原样收发
     _TcpFrameServerStartIn(
-        port=9998,
+        port=9098,
         tcp_radix=AutoTestTcpRadix.NONE
     ),
 ]
@@ -541,21 +541,21 @@ _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
 @autotest_tcp_test.post("/start", summary="启动TCP测试服务器", description="统一启动双端口TCP测试服务器与TCP帧协议诊断服务器")
 async def start_tcp_test_server(
         host: str = Body("0.0.0.0", embed=True, description="监听地址"),
-        json_port: int = Body(9991, embed=True, description="JSON请求端口(接收JSON报文，返回XML响应)"),
-        xml_port: int = Body(9992, embed=True, description="XML请求端口(接收XML报文，返回XML响应)"),
+        json_port: int = Body(9091, embed=True, description="JSON请求端口(接收JSON报文，返回XML响应)"),
+        xml_port: int = Body(9092, embed=True, description="XML请求端口(接收XML报文，返回XML响应)"),
 ):
     """
     统一启动TCP测试服务器（双端口mock）与TCP帧协议诊断服务器。
 
-    - **JSON端口**（默认9991）：接收JSON格式请求报文（银行账户交易查询），
+    - **JSON端口**（默认9091）：接收JSON格式请求报文（银行账户交易查询），
       返回XML格式响应（含AccountInfo + TransactionList数组 + Summary，共30+字段）
 
-    - **XML端口**（默认9992）：接收XML格式请求报文（贷款申请），
+    - **XML端口**（默认9092）：接收XML格式请求报文（贷款申请），
       返回XML格式响应（含ApprovalInfo + RepaymentPlan数组 + Terms数组 + ContactInfo，共40+字段）
 
     帧协议自动检测：LENGTH_PREFIX（8位长度前缀）或RAW（无前缀）。
 
-    - **帧诊断端口**（内置组合9993~9998）：一次启动全部帧配置组合
+    - **帧诊断端口**（内置组合9093~9098）：一次启动全部帧配置组合
       （十进制8位/十六进制4位包含/结束符/HEX/GBK/RAW），按各端口配置组帧/解帧并回显；
       监听地址统一使用外层host。
 
@@ -616,7 +616,7 @@ async def get_json_sample():
     """
     获取JSON端口的请求报文示例（银行账户交易查询）。
 
-    将此报文通过TCP连接发送到JSON端口（默认9999），
+    将此报文通过TCP连接发送到JSON端口（默认9091），
     服务器将返回XML格式的交易明细响应。
 
     :return: 统一HTTP响应
@@ -653,7 +653,7 @@ async def get_xml_sample():
     """
     获取XML端口的请求报文示例（贷款申请）。
 
-    将此报文通过TCP连接发送到XML端口（默认9998），
+    将此报文通过TCP连接发送到XML端口（默认9092），
     服务器将返回XML格式的贷款审批结果。
 
     :return: 统一HTTP响应

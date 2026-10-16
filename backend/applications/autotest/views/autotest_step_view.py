@@ -386,24 +386,24 @@ async def batch_update_steps_tree(
             LOGGER.error(error_message)
             return BadReqResponse(message=f"步骤树结构校验失败", data=error_msg)
 
-        # 1.5 校验HTTP/TCP步骤的数据源场景列名一致性（含树上尚未带回 data_source_id、但库中已落库的数据源）
-        def _walk_http_tcp_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
-            """收集步骤树中全部HTTP/TCP步骤，含 children 与条件分支子步骤。"""
+        # 1.5 校验数据源场景列名一致性（HTTP/TCP步骤 + 引用公共接口壳上挂载的数据源；含树上尚未带回 data_source_id、但库中已落库的数据源）
+        def _walk_data_source_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
+            """收集步骤树中携带数据源的步骤：HTTP/TCP步骤与挂载数据源的引用壳等，含 children 与条件分支子步骤。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
             for s in steps or []:
-                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP) or s.data_source_id:
                     collected.append(s)
                 if s.children:
-                    collected.extend(_walk_http_tcp_steps(s.children))
+                    collected.extend(_walk_data_source_steps(s.children))
                 for branch in s.branch_items or []:
                     if branch.branch_children:
-                        collected.extend(_walk_http_tcp_steps(branch.branch_children))
+                        collected.extend(_walk_data_source_steps(branch.branch_children))
             return collected
 
-        http_tcp_steps = _walk_http_tcp_steps(steps_data)
-        if http_tcp_steps:
-            ds_ids = list({s.data_source_id for s in http_tcp_steps if s.data_source_id})
-            step_codes = {s.step_code for s in http_tcp_steps if (s.step_code or "").strip()}
+        ds_steps = _walk_data_source_steps(steps_data)
+        if ds_steps:
+            ds_ids = list({s.data_source_id for s in ds_steps if s.data_source_id})
+            step_codes = {s.step_code for s in ds_steps if (s.step_code or "").strip()}
             case_id = getattr(case_data, "case_id", None)
             ds_records = []
             if case_id:
@@ -421,11 +421,11 @@ async def batch_update_steps_tree(
             baseline_step_label: Optional[str] = None
             step_label_by_code = {
                 s.step_code: (s.step_name or s.step_code or f"步骤ID:{s.step_id}")
-                for s in http_tcp_steps if s.step_code
+                for s in ds_steps if s.step_code
             }
             step_label_by_ds_id = {
                 s.data_source_id: (s.step_name or s.step_code or f"步骤ID:{s.step_id}")
-                for s in http_tcp_steps if s.data_source_id
+                for s in ds_steps if s.data_source_id
             }
             for ds in ds_records:
                 current_names = DataSourceService.data_source_scene_names(ds)
