@@ -121,10 +121,10 @@ class PlaceholderResolver:
             try:
                 calculated_result: Union[int, float] = PlaceholderArithmetic._safe_calculation_expr(merged)
                 formatted_result: str = PlaceholderArithmetic._formatter_calculated_result(calculated_result)
-                logger_object(f"【变量运算】算式求值成功\n\t: {content} >>>>> {merged} >>>>> {formatted_result}")
+                logger_object(f"【变量运算】算式求值成功: \n\t{content} >>>>> {merged} >>>>> {formatted_result}")
                 return formatted_result
             except Exception as e:
-                logger_object(f"【变量运算】算式求值失败\n\t: {content} >>>>> {merged} >>>>> {e}, 改为根据字符串拼接")
+                logger_object(f"【变量运算】算式求值失败: \n\t{content} >>>>> {merged} >>>>> {e}, 改为根据字符串拼接")
 
         return PlaceholderArithmetic._split_placeholders(
             content=content,

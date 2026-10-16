@@ -62,14 +62,10 @@ class AssertPipeline:
         if not assert_validators:
             return validator_results
         if not isinstance(assert_validators, (list, tuple)):
-            raise TypeError(
-                f"参数[assert_validators]必须为StepAssertValidatorItem对象，当前: {type(assert_validators).__name__}"
-            )
+            raise TypeError(f"参数[assert_validators]必须为StepAssertValidatorItem对象，当前: {type(assert_validators).__name__}")
         for validator_config in assert_validators:
             if not isinstance(validator_config, StepAssertValidatorItem):
-                raise TypeError(
-                    f"参数[assert_validators]子项必须为StepAssertValidatorItem对象，当前: {type(validator_config).__name__}"
-                )
+                raise TypeError(f"参数[assert_validators]子项必须为StepAssertValidatorItem对象，当前: {type(validator_config).__name__}")
             name = validator_config.name
             expr = validator_config.expr
             operation = validator_config.operation

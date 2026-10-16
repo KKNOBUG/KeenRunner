@@ -148,7 +148,7 @@ class AioHttpClient:
     def __init__(
             self,
             headers: Optional[Dict] = None,
-            timeout: timedelta = timedelta(seconds=300),
+            timeout: timedelta = timedelta(seconds=30),
             concurrency_limit: int = 10,
             **kwargs
     ):
