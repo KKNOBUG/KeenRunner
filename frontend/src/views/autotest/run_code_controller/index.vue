@@ -6,7 +6,6 @@
           <div class="panel-title">Python 代码</div>
           <div class="card-header-actions">
             <n-button
-                v-if="!props.readonly"
                 type="primary"
                 size="small"
                 :loading="debugLoading"

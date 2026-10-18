@@ -119,16 +119,16 @@
                     <div class="step-info-value">{{ currentDetail.loop_iterable || '-' }}</div>
                   </div>
                   <div class="step-info-row">
-                    <div class="step-info-label">循环索引（固定）：</div>
-                    <div class="step-info-value">loop_index</div>
+                    <div class="step-info-label">循环索引变量：</div>
+                    <div class="step-info-value">{{ currentDetail.loop_index || 'loop_index' }}</div>
                   </div>
                   <div class="step-info-row">
-                    <div class="step-info-label">循环键名（固定，字典循环）：</div>
-                    <div class="step-info-value">loop_key</div>
+                    <div class="step-info-label">循环键名变量（字典循环）：</div>
+                    <div class="step-info-value">{{ currentDetail.loop_key || 'loop_key' }}</div>
                   </div>
                   <div class="step-info-row">
-                    <div class="step-info-label">循环数据（固定）：</div>
-                    <div class="step-info-value">loop_value</div>
+                    <div class="step-info-label">循环数据变量：</div>
+                    <div class="step-info-value">{{ currentDetail.loop_value || 'loop_value' }}</div>
                   </div>
                   <div class="step-info-row">
                     <div class="step-info-label">错误处理策略：</div>

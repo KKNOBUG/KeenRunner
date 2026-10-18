@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import { useStepEditorStore } from '@/store'
 
 /**
- * 步骤编辑页脏检测
+ * 用例编辑页脏检测
  *
  * 原理：将当前步骤树序列化为 JSON 快照，与 Store 中保存/加载时的基准快照对比。
  * - 保存成功 → markSaved()

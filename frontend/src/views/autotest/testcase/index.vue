@@ -242,7 +242,7 @@ async function submitImportScript() {
   try {
     const res = await api.importCaseScriptsAsync(formData)
     window.$message?.success?.(res?.message || '导入任务已提交后台执行，请稍后在异步中心查看结果')
-    // 导入为后台任务：清步骤树缓存并为仍打开的步骤编辑页签标记强制重载（KeepAlive 内存态不会仅靠清缓存失效），任务完成后重进页面可见最新数据
+    // 导入为后台任务：清步骤树缓存并为仍打开的用例编辑页签标记强制重载（KeepAlive 内存态不会仅靠清缓存失效），任务完成后重进页面可见最新数据
     const autotestStore = useAutotestStore()
     autotestStore.clearAllStepTreeCache()
     for (const tag of tagsStore.tags || []) {
@@ -281,7 +281,7 @@ const generateTypeOptions = [
 const generateTagRequired = computed(() => generateForm.value.case_type === '用户脚本')
 // 弹窗内已选公共接口数量(入口已保证非空，此处仅作只读展示)
 const generateSelectedCount = computed(() => (checkedRowKeys.value || []).length)
-// 弹窗内标签二级面板状态(与查询区/步骤编辑面板同构，选中态独立于查询区)
+// 弹窗内标签二级面板状态(与查询区/用例编辑面板同构，选中态独立于查询区)
 const generateTagPopoverShow = ref(false)
 const generateSelectedTagMode = ref(null)
 const generateCurrentTagNames = computed(() => {
@@ -407,7 +407,7 @@ function parseCaseFromPath(path) {
   }
 }
 
-// 执行用例：与步骤编辑页一致，拉取已保存步骤树并打开「脚本执行配置」弹窗
+// 执行用例：与用量编辑页一致，拉取已保存步骤树并打开「脚本执行配置」弹窗
 const execConfigModalRef = ref(null)
 const runLoading = ref(false)
 const runningCaseId = ref(null)

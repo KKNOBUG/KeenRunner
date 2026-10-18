@@ -29,7 +29,7 @@ export const getQuoteStepsFlattened = (list, depth = 0, out = []) => {
 }
 
 /**
- * 引用类步骤判断：引用公共脚本 / 引用公共接口（步骤编辑页与执行配置共用）
+ * 引用类步骤判断：引用公共脚本 / 引用公共接口（用例编辑页与执行配置共用）
  */
 export const isQuoteStepType = (type) => type === 'quote_public_script' || type === 'quote_public_api'
 

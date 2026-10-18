@@ -1,6 +1,6 @@
 <script setup>
 /**
- * 添加脚本面板（可折叠 Card，样式对齐步骤编辑 Request/Response）：展开后查询并勾选，勾选即添加
+ * 添加脚本面板（可折叠 Card，样式对齐用例编辑 Request/Response）：展开后查询并勾选，勾选即添加
  */
 import { computed, h, nextTick, ref, watch } from 'vue'
 import {

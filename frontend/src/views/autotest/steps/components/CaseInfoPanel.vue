@@ -1,5 +1,5 @@
 <!--
-  CaseInfoPanel — 步骤编辑页顶部「用例信息」区
+  CaseInfoPanel — 用例编辑页顶部「用例信息」区
 
   与步骤子页（HTTP/TCP Request 等）同一实现：n-card + 左侧红边卡片样式。
   职责：维护 caseForm；调试/保存/历史/模式切换通过 emit 交给 index.vue。

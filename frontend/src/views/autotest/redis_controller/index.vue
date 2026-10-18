@@ -37,7 +37,6 @@
                 :disabled="props.readonly"
             />
             <n-button
-                v-if="!props.readonly"
                 type="primary"
                 :loading="debugLoading"
                 @click="debugging"

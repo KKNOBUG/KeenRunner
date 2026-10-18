@@ -3,7 +3,7 @@
 
   由父页面调用：
   - openRun(ctx)  — 使用已保存步骤树（用例列表「执行」等入口）
-  - openDebug(ctx) — 使用当前编辑中的 steps（步骤编辑页 handleDebug）
+  - openDebug(ctx) — 使用当前编辑中的 steps（用例编辑页 handleDebug）
 
   运行确认后调用 api.executeStepTree；execute_type 由 openRun(ctx).executeType 传入（用例列表：定时执行）。
 -->

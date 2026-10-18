@@ -768,7 +768,7 @@ const importNormalSceneStepData = () => {
 }
 
 /* ========================= 步骤切换自动保存 ========================= */
-// 注意：步骤编辑页右侧编辑器使用 :key="currentStep.id"，切换步骤会销毁整棵子树。
+// 注意：用例编辑页右侧编辑器使用 :key="currentStep.id"，切换步骤会销毁整棵子树。
 // props.step.id 的 watch 往往来不及触发；实际走 onBeforeUnmount，且子组件 Luckysheet 会先销毁，
 // 因此必须依赖编辑过程中的 cachedMatrix，而不能再临时 getDataForSave()。
 watch(

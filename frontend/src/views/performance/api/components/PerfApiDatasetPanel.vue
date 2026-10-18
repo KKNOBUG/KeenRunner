@@ -132,7 +132,7 @@ const AXIS_VERTICAL = 1
 const loading = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
-// 默认折叠（对齐步骤编辑页 DataSource 卡），展开时才按需加载数据源
+// 默认折叠（对齐用例编辑页 DataSource 卡），展开时才按需加载数据源
 const collapsed = ref(true)
 /** 接口绑定的数据源（一个接口只能有一个数据源） */
 const dataSource = ref(null)

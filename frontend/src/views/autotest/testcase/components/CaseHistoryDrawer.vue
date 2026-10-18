@@ -32,7 +32,7 @@ const props = defineProps({
   /** 用例行：需含 case_id */
   caseRow: { type: Object, default: null },
   /**
-   * 步骤编辑页：不进入「执行报告」多数据源层，批次内始终直接打开报告详情
+   * 用例编辑页：不进入「执行报告」多数据源层，批次内始终直接打开报告详情
    * （调试只允许选一条数据源）
    */
   singleDatasetOnly: { type: Boolean, default: false },

@@ -58,7 +58,6 @@
             </n-form-item>
             <div class="http-url-debug-slot">
               <n-form-item
-                  v-if="!props.readonly"
                   label="请求地址"
                   path="url"
                   required
@@ -76,21 +75,6 @@
                     调试
                   </n-button>
                 </div>
-              </n-form-item>
-              <n-form-item
-                  v-else
-                  label="请求地址"
-                  path="url"
-                  required
-                  class="http-field-url"
-              >
-                <n-input
-                    v-model:value="state.form.url"
-                    placeholder="请输入请求地址"
-                    clearable
-                    class="request-toolbar-input-fill"
-                    :disabled="props.readonly"
-                />
               </n-form-item>
             </div>
           </div>
@@ -1097,22 +1081,24 @@ const buildConfigFromState = () => {
 
   // JSON 报文：无论当前请求体类型为何都尽量保留，避免切换类型后保存导致 JSON 数据丢失
   // 空文本/纯空白归一为null：只有用户显式输入的JSON（含"{}"）才会落库
+  // 非法JSON归一为null：避免产出{}与null交替出现的多形态
   let jsonBodyText = state.form.jsonBody ?? ''
   if (state.form.jsonBody && state.form.jsonBody.trim()) {
     try {
       data = JSON.parse(state.form.jsonBody)
     } catch {
-      data = {}
+      data = null
     }
   }
 
   // XML / raw 报文：当前类型优先；切换到其它类型（json、form-data 等）时保留已填写的报文，避免保存后丢失
+  // 空字符串归一为null：与后端「有数据或NULL」两态语义对齐
   if (state.form.bodyType === 'xml') {
-    request_text = state.form.xmlBody ?? ''
+    request_text = state.form.xmlBody?.trim() ? state.form.xmlBody : null
   } else if (state.form.bodyType === 'raw') {
-    request_text = state.form.rawBody ?? ''
+    request_text = state.form.rawBody?.trim() ? state.form.rawBody : null
   } else {
-    request_text = state.form.xmlBody || state.form.rawBody || null
+    request_text = state.form.xmlBody?.trim() || state.form.rawBody?.trim() || null
   }
 
   return {
@@ -1714,10 +1700,17 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
   gap: 8px;
 }
 
-/* 行间距统一由 n-form-item 自身的 margin-bottom 提供，与「步骤描述」等后续表单项保持一致 */
+/* 行间距统一与用例信息面板 8px 行距对齐 */
 .http-request-rows {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* 移除 n-form-item 默认下边距，由容器 gap 统一控制行距 */
+.http-request-rows .n-form-item {
+  margin-bottom: 0;
 }
 
 .http-request-row {

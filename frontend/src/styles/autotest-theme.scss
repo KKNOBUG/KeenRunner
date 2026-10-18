@@ -15,7 +15,7 @@
   --autotest-font-size-huge: var(--font-size-huge);
 
   /*
-   * 步骤编辑器（右侧子页）设计令牌
+   * 用例编辑器（右侧子页）设计令牌
    * 基准：左侧步骤树 .left-column = 13px / 400
    */
   --step-editor-font-size: 13px;
@@ -28,7 +28,7 @@
   --step-editor-gap: 8px;
 }
 
-/* ========== 步骤编辑器：统一卡片壳 ========== */
+/* ========== 用例编辑器：统一卡片壳 ========== */
 .step-editor-card {
   width: 100%;
   margin: var(--step-editor-card-margin);

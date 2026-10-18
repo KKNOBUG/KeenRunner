@@ -4,7 +4,7 @@
  * 周期模式：仅执行一次(默认)/永久有效；
  * 仅执行一次：触发日期(每月1~31号多选)×触发时间；永久有效：周期类型(日/周/月)×(触发星期/触发日期)×触发时间(最多3个)；
  * 执行预览(近10次)调用后端 /autotest/task/schedule_preview，与落库契约同源。
- * 卡片壳与折叠交互对齐步骤编辑器 .step-editor-card（参考 database_controller 请求配置项）。
+ * 卡片壳与折叠交互对齐用例编辑器 .step-editor-card（参考 database_controller 请求配置项）。
  */
 import { computed, ref, watch } from 'vue'
 import { NButton, NCard, NCollapseTransition, NRadio, NRadioGroup, NTimePicker } from 'naive-ui'

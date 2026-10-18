@@ -6,7 +6,7 @@
   <n-card
       :bordered="false"
       style="width: 100%;"
-      :class="['step-editor-card', { 'is-collapsed': caseInfoCollapsed }]"
+      :class="['step-editor-card', 'case-info-card', { 'is-collapsed': caseInfoCollapsed }]"
   >
     <template #header>
       <div class="card-header-row">
@@ -68,21 +68,6 @@
             </n-form-item>
           </div>
 
-          <div class="case-field case-field-desc">
-            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
-              <n-input
-                  :value="readonlyForm.case_desc"
-                  disabled
-                  size="small"
-                  type="textarea"
-                  :resizable="false"
-                  :autosize="{ minRows: 1, maxRows: 1 }"
-                  placeholder="请输入用例描述"
-                  class="case-field-input"
-              />
-            </n-form-item>
-          </div>
-
           <div class="case-field">
             <n-form-item label="用例类型" path="case_type" required :show-feedback="false">
               <n-select
@@ -116,7 +101,7 @@
                   :options="projectOptions"
                   disabled
                   filterable
-                  placeholder="所属应用"
+                  placeholder="请选择所属应用"
                   size="small"
                   class="case-field-input"
               />
@@ -124,12 +109,40 @@
           </div>
 
           <div class="case-field">
-            <n-form-item label="所属标签" path="case_tags" required :show-feedback="false">
+            <n-form-item label="所属标签" path="case_tags" :show-feedback="false">
               <n-input
                   :value="displayTags"
                   disabled
                   size="small"
                   placeholder="请选择所属标签"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field">
+            <n-form-item label="变量传递" path="session_transfer" :show-feedback="false">
+              <n-select
+                  :value="readonlyForm.session_transfer"
+                  :options="sessionTransferOptions"
+                  disabled
+                  placeholder="请选择变量传递"
+                  size="small"
+                  class="case-field-input"
+              />
+            </n-form-item>
+          </div>
+
+          <div class="case-field case-field-desc">
+            <n-form-item label="用例描述" path="case_desc" :show-feedback="false">
+              <n-input
+                  :value="readonlyForm.case_desc"
+                  disabled
+                  size="small"
+                  type="textarea"
+                  :resizable="false"
+                  :autosize="{ minRows: 1, maxRows: 1 }"
+                  placeholder="请输入用例描述"
                   class="case-field-input"
               />
             </n-form-item>
@@ -167,6 +180,11 @@ const caseTypeOptions = [
   { label: '公共接口', value: '公共接口' },
 ]
 
+const sessionTransferOptions = [
+  { label: '禁用', value: '禁用' },
+  { label: '启用', value: '启用' },
+]
+
 let tagIdToNameCache = null
 let tagIdToNameLoading = null
 
@@ -194,7 +212,7 @@ const props = defineProps({
   projectOptions: { type: Array, default: () => [] },
 })
 
-const caseInfoCollapsed = ref(false)
+const caseInfoCollapsed = ref(true)
 
 const quoteCasePayload = computed(() => props.step?.original?.quote_case ?? null)
 
@@ -207,6 +225,7 @@ const readonlyForm = computed(() => {
       case_type: null,
       case_attr: null,
       case_project: null,
+      session_transfer: '禁用',
     }
   }
   const cp = qc.case_project
@@ -224,6 +243,7 @@ const readonlyForm = computed(() => {
     case_type: qc.case_type != null && qc.case_type !== '' ? String(qc.case_type) : null,
     case_attr: qc.case_attr != null && qc.case_attr !== '' ? String(qc.case_attr) : null,
     case_project,
+    session_transfer: qc.session_transfer || '禁用',
   }
 })
 
@@ -279,6 +299,10 @@ watch(
 <style scoped>
 /* 卡片壳 / 标题 / 折叠见 styles/autotest-theme.scss .step-editor-card */
 
+.case-info-card {
+  margin-bottom: 16px;
+}
+
 .card-header-row {
   padding-right: 140px;
 }
@@ -295,7 +319,7 @@ watch(
 
 .case-field {
   min-width: 0;
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
 .case-field :deep(.n-form-item) {
@@ -303,7 +327,7 @@ watch(
 }
 
 .case-field-desc {
-  grid-column: span 9;
+  grid-column: span 12;
 }
 
 .case-field-desc :deep(textarea) {

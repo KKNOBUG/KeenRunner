@@ -272,12 +272,12 @@
 
 <script setup>
 /**
- * index.vue — API 自动化「步骤编辑」页编排层
+ * index.vue — API 自动化「用例编辑」页编排层
  *
  * 本文件：左侧步骤树、右侧动态编辑器、步骤树 CRUD、前后端映射、保存/加载。
  * CaseInfoPanel：用例信息；ExecConfigModal：调试配置；ScriptSelectDrawer：选脚本；AddStepPopover：添加步骤菜单。
  */
-defineOptions({ name: '步骤编辑' })
+defineOptions({ name: '用例编辑' })
 import {computed, h, nextTick, onActivated, onMounted, provide, ref, watch} from 'vue'
 import {useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router'
 import {
@@ -424,7 +424,7 @@ const loadedCaseInfo = ref(undefined)
 
 /** 用例信息子组件 ref：表单、校验、项目列表 */
 const caseInfoPanelRef = ref(null)
-/** 当前步骤编辑器 ref：用于保存步骤树前先保存数据源 */
+/** 当前用例编辑器 ref：用于保存步骤树前先保存数据源 */
 const activeStepEditorRef = ref(null)
 /** 执行/调试环境配置弹窗 ref */
 const execConfigModalRef = ref(null)
@@ -453,7 +453,7 @@ const {
   buildUpdateOrCreateTreePayload,
 } = useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseMeta, caseInfoPanelRef })
 
-/** 右侧步骤编辑器使用的「所属应用」选项（来自 CaseInfoPanel） */
+/** 右侧用例编辑器使用的「所属应用」选项（来自 CaseInfoPanel） */
 const editorProjectOptions = computed(() => {
   const p = caseInfoPanelRef.value?.projectOptions
   return p?.value ?? p ?? []
@@ -1169,7 +1169,7 @@ const {
 
 const { isDirty, markSaved: markDirtySaved, markLoaded: markDirtyLoaded, reset: resetDirty, confirmIfDirty } = useDirtyCheck(buildSourceJsonFromMemoryTree)
 
-// 离开「步骤编辑」路由时拦截未保存改动。
+// 离开「用例编辑」路由时拦截未保存改动。
 // 注意：仅「切换标签」选离开时必须保活内存态，不可在此强制刷新/resetDirty，
 // 否则回来后编辑内容会被接口数据覆盖；强制拉数只在「关闭页签」时由下方 watch 处理。
 onBeforeRouteLeave(async () => {
@@ -1178,7 +1178,7 @@ onBeforeRouteLeave(async () => {
   return await confirmIfDirty()
 })
 
-// 同一路由内切换用例（多个「步骤编辑」标签页之间，仅 query 变化、组件复用）时，
+// 同一路由内切换用例（多个「用例编辑」标签页之间，仅 query 变化、组件复用）时，
 // 触发的是 onBeforeRouteUpdate 而非 onBeforeRouteLeave，需同样拦截未保存改动
 onBeforeRouteUpdate(async () => {
   if (saveLoading.value) return true
@@ -1186,8 +1186,8 @@ onBeforeRouteUpdate(async () => {
 })
 
 /**
- * 关闭「步骤编辑」导航页签：清该用例缓存并标记强制刷新。
- * 若已无任何步骤编辑页签，重置 KeepAlive（重置键为路由 path「/autotest/steps」），避免共用 path key 的缓存实例残留。
+ * 关闭「用例编辑」导航页签：清该用例缓存并标记强制刷新。
+ * 若已无任何用例编辑页签，重置 KeepAlive（重置键为路由 path「/autotest/steps」），避免共用 path key 的缓存实例残留。
  * 仅切换页签（页签仍在列表中）不会触发，保持保活。
  */
 watch(
@@ -1226,7 +1226,7 @@ const handleSaveAll = async () => {
   }
   saveLoading.value = true
   try {
-    // 等待步骤编辑器将表单防抖同步到 step.config（约 300ms），避免校验/落库读到过期提取断言配置
+    // 等待用例编辑器将表单防抖同步到 step.config（约 300ms），避免校验/落库读到过期提取断言配置
     await new Promise((resolve) => setTimeout(resolve, 320))
 
     // 用例信息必填项校验

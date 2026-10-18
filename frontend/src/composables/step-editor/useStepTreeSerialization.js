@@ -98,6 +98,12 @@ const resolveArrayField = (config, original, key) => {
     return null
 }
 
+// 结束符未选择(空)归一为null，选「无」原样透传落库；帧模式互斥清空由后端schema归一兜底
+const normalizeTcpEndSymbol = (v) => {
+    const text = v == null ? '' : String(v).trim()
+    return text || null
+}
+
 /**
  * 步骤树前后端序列化
  *
@@ -197,18 +203,24 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 ? (config.data_source_desc || null)
                 : (original.data_source_desc || null)
 
-            // TCP帧配置：value 与后端枚举展示值同源（进制数与结束符互斥由后端 schema 校验）。
-            // 长度位参数需尊重 config 显式 null（进制数=不使用时必须为空，不可回退 original 旧值）
+            // TCP帧配置：value 与后端枚举展示值同源（帧模式由后端按进制数与结束符组合推导）。
+            // 互斥由后端按帧模式无条件归一（进制数开启→结束符置null；不使用→长度位置null），前端按原值透传：
+            // 进制数为不使用时长度位参数强制为空、长度前缀模式下结束符强制null；结束符未选择null、选「无」原样落库
             backendStep.tcp_radix = config.tcp_radix ?? original.tcp_radix ?? '十进制'
-            backendStep.tcp_radix_length = config.tcp_radix_length !== undefined
-                ? config.tcp_radix_length
-                : (original.tcp_radix_length ?? 8)
-            backendStep.tcp_datagram_length = config.tcp_datagram_length !== undefined
-                ? config.tcp_datagram_length
-                : (original.tcp_datagram_length ?? '不包含长度位')
-            backendStep.tcp_request_end_symbol = config.tcp_request_end_symbol ?? original.tcp_request_end_symbol ?? '无'
-            backendStep.tcp_response_end_symbol = config.tcp_response_end_symbol ?? original.tcp_response_end_symbol ?? '无'
-            backendStep.tcp_response_timeout = config.tcp_response_timeout ?? original.tcp_response_timeout ?? null
+            const tcpRadixDisabled = !backendStep.tcp_radix || backendStep.tcp_radix === '不使用'
+            backendStep.tcp_radix_length = tcpRadixDisabled
+                ? null
+                : (config.tcp_radix_length !== undefined ? config.tcp_radix_length : (original.tcp_radix_length ?? 8))
+            backendStep.tcp_datagram_length = tcpRadixDisabled
+                ? null
+                : (config.tcp_datagram_length !== undefined ? config.tcp_datagram_length : (original.tcp_datagram_length ?? '不包含长度位'))
+            backendStep.tcp_request_end_symbol = tcpRadixDisabled
+                ? normalizeTcpEndSymbol(config.tcp_request_end_symbol !== undefined ? config.tcp_request_end_symbol : original.tcp_request_end_symbol)
+                : null
+            backendStep.tcp_response_end_symbol = tcpRadixDisabled
+                ? normalizeTcpEndSymbol(config.tcp_response_end_symbol !== undefined ? config.tcp_response_end_symbol : original.tcp_response_end_symbol)
+                : null
+            backendStep.tcp_response_timeout = config.tcp_response_timeout ?? original.tcp_response_timeout ?? 5
             backendStep.tcp_connect_type = config.tcp_connect_type ?? original.tcp_connect_type ?? '短连接'
             backendStep.tcp_encoding = config.tcp_encoding ?? original.tcp_encoding ?? 'UTF-8'
             backendStep.tcp_hex_string = config.tcp_hex_string ?? original.tcp_hex_string ?? false
@@ -251,6 +263,13 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.step_name = config.step_name !== undefined ? config.step_name : (original.step_name || step.name || '提取')
             backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
         } else if (step.type === 'loop') {
+            // 循环变量名提交口径：trim 后为空传 null(页面默认值已预填，后端以保存入库的为准，引擎对null回落默认名)；
+            // 非当前模式使用的变量名传null
+            const resolveLoopVar = (key) => {
+                const raw = config[key] !== undefined ? config[key] : original[key]
+                const text = raw != null ? String(raw).trim() : ''
+                return text || null
+            }
             backendStep.loop_mode = config.loop_mode || original.loop_mode || '次数循环'
             backendStep.loop_on_error = config.loop_on_error || original.loop_on_error || '中断循环'
             backendStep.loop_interval = config.loop_interval !== undefined ? Number(config.loop_interval) : (original.loop_interval ? Number(original.loop_interval) : 0)
@@ -258,10 +277,19 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             if (backendStep.loop_mode === '次数循环') {
                 const rawMax = config.loop_maximums !== undefined ? config.loop_maximums : original.loop_maximums
                 backendStep.loop_maximums = rawMax != null && rawMax !== '' ? String(rawMax) : '5'
+                backendStep.loop_index = resolveLoopVar('loop_index')
+                backendStep.loop_key = null
+                backendStep.loop_value = null
             } else if (backendStep.loop_mode === '列表循环') {
                 backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
+                backendStep.loop_index = resolveLoopVar('loop_index')
+                backendStep.loop_key = null
+                backendStep.loop_value = resolveLoopVar('loop_value')
             } else if (backendStep.loop_mode === '字典循环') {
                 backendStep.loop_iterable = config.loop_iterable !== undefined ? config.loop_iterable : (original.loop_iterable || '')
+                backendStep.loop_index = resolveLoopVar('loop_index')
+                backendStep.loop_key = resolveLoopVar('loop_key')
+                backendStep.loop_value = resolveLoopVar('loop_value')
             } else if (backendStep.loop_mode === '条件循环') {
                 const fromConfigDict = config.loop_conditions && typeof config.loop_conditions === 'object' && !Array.isArray(config.loop_conditions)
                     ? config.loop_conditions
@@ -292,7 +320,12 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 } else {
                     backendStep.loop_conditions = null
                 }
-                backendStep.loop_timeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
+                // 条件循环最大循环时间上限300秒，与后端 schema/执行引擎 clamp 同口径
+                const rawTimeout = config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original.loop_timeout ? Number(original.loop_timeout) : 0)
+                backendStep.loop_timeout = Number.isFinite(rawTimeout) ? Math.min(Math.max(rawTimeout, 0), 300) : 0
+                backendStep.loop_index = resolveLoopVar('loop_index')
+                backendStep.loop_key = null
+                backendStep.loop_value = null
             }
         } else if (step.type === 'if') {
             const branchItems = Array.isArray(config.branch_items) ? config.branch_items : []

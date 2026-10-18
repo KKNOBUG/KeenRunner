@@ -1,5 +1,5 @@
 <!--
-  StepSourceJsonPanel — 步骤编辑「源数据模式」：编辑 update_or_create_tree 同构 JSON
+  StepSourceJsonPanel — 用例编辑「源数据模式」：编辑 update_or_create_tree 同构 JSON
 -->
 <template>
   <n-card size="small" :bordered="false" class="step-source-json-card">

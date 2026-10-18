@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { openSavedCaseExecModal } from '@/views/autotest/steps/utils/prepareCaseExecute'
 
 /**
- * 与步骤编辑页 handleRun 一致：加载已保存步骤树并打开 ExecConfigModal
+ * 与用量编辑页 handleRun 一致：加载已保存步骤树并打开 ExecConfigModal
  * @param {import('vue').Ref} execConfigModalRef
  * @param {import('vue').Ref<boolean>} [runLoadingRef] 与 ExecConfigModal v-model:run-loading 同步
  */

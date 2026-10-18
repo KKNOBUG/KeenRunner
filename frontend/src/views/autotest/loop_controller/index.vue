@@ -34,7 +34,12 @@
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
+            <n-input
+                v-model:value="form.loop_index"
+                :maxlength="64"
+                placeholder="默认 loop_index, 嵌套循环时可自定义避免同名冲突"
+                :disabled="props.readonly"
+            />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -57,10 +62,20 @@
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
+            <n-input
+                v-model:value="form.loop_index"
+                :maxlength="64"
+                placeholder="默认 loop_index, 嵌套循环时可自定义避免同名冲突"
+                :disabled="props.readonly"
+            />
           </n-form-item>
           <n-form-item label="循环数据变量">
-            <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value"  />
+            <n-input
+                v-model:value="form.loop_value"
+                :maxlength="64"
+                placeholder="默认 loop_value, 嵌套循环时可自定义避免同名冲突"
+                :disabled="props.readonly"
+            />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -83,13 +98,28 @@
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
+            <n-input
+                v-model:value="form.loop_index"
+                :maxlength="64"
+                placeholder="默认 loop_index, 嵌套循环时可自定义避免同名冲突"
+                :disabled="props.readonly"
+            />
           </n-form-item>
           <n-form-item label="循环键名变量">
-            <n-input :value="LOOP_KEY_NAME" disabled placeholder="loop_key"  />
+            <n-input
+                v-model:value="form.loop_key"
+                :maxlength="64"
+                placeholder="默认 loop_key, 嵌套循环时可自定义避免同名冲突"
+                :disabled="props.readonly"
+            />
           </n-form-item>
           <n-form-item label="循环数据变量">
-            <n-input :value="LOOP_VALUE_NAME" disabled placeholder="loop_value"  />
+            <n-input
+                v-model:value="form.loop_value"
+                :maxlength="64"
+                placeholder="默认 loop_value, 嵌套循环时可自定义避免同名冲突"
+                :disabled="props.readonly"
+            />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -127,7 +157,12 @@
             />
           </n-form-item>
           <n-form-item label="循环索引变量">
-            <n-input :value="LOOP_INDEX_NAME" disabled placeholder="loop_index"  />
+            <n-input
+                v-model:value="form.loop_index"
+                :maxlength="64"
+                placeholder="默认 loop_index, 嵌套循环时可自定义避免同名冲突"
+                :disabled="props.readonly"
+            />
           </n-form-item>
           <n-form-item label="循环间隔时间">
             <n-input-number
@@ -143,6 +178,7 @@
             <n-input-number
                 v-model:value="form.loop_timeout"
                 :min="0"
+                :max="300"
                 :precision="2"
                 suffix="秒"
                 placeholder="0 表示不超时, 最大循环时间: 300"
@@ -163,10 +199,18 @@ import {
 } from '@/constants/autotestAssertionOperation'
 import { useStepEditorForm } from '@/composables/step-editor'
 
-/** 执行引擎写入会话变量的固定名称（不再落库配置字段） */
-const LOOP_INDEX_NAME = 'loop_index'
-const LOOP_VALUE_NAME = 'loop_value'
-const LOOP_KEY_NAME = 'loop_key'
+/** 循环变量默认名：输入框初始值与空值回落口径，引擎侧同名字段为空时使用相同默认名 */
+const DEFAULT_INDEX_VAR = 'loop_index'
+const DEFAULT_KEY_VAR = 'loop_key'
+const DEFAULT_VALUE_VAR = 'loop_value'
+/** 条件循环最大循环时间上限(秒)，与后端 schema/执行引擎 clamp 同口径 */
+const MAX_LOOP_TIMEOUT = 300
+
+/** 规范化循环变量名：trim 后为空回落默认名 */
+const normalizeLoopVar = (v, fallback) => {
+  const text = v != null ? String(v).trim() : ''
+  return text || fallback
+}
 
 const props = defineProps({
   config: {
@@ -219,7 +263,10 @@ const mergeConfigAndOriginal = (config, original) => {
       : normalizeLoopMaximums(original?.loop_maximums),
     loop_interval: config.loop_interval !== undefined ? Number(config.loop_interval) : (original?.loop_interval ? Number(original.loop_interval) : 0),
     loop_iterable: config.loop_iterable !== undefined ? config.loop_iterable : (original?.loop_iterable || ''),
-    loop_timeout: config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original?.loop_timeout ? Number(original.loop_timeout) : 0)
+    loop_timeout: config.loop_timeout !== undefined ? Number(config.loop_timeout) : (original?.loop_timeout ? Number(original.loop_timeout) : 0),
+    loop_index: normalizeLoopVar(config.loop_index !== undefined ? config.loop_index : original?.loop_index, DEFAULT_INDEX_VAR),
+    loop_key: normalizeLoopVar(config.loop_key !== undefined ? config.loop_key : original?.loop_key, DEFAULT_KEY_VAR),
+    loop_value: normalizeLoopVar(config.loop_value !== undefined ? config.loop_value : original?.loop_value, DEFAULT_VALUE_VAR)
   }
 
   const fromConfigDict = config.loop_conditions && typeof config.loop_conditions === 'object' && !Array.isArray(config.loop_conditions)
@@ -253,10 +300,19 @@ const createDefaults = () => ({
   loop_interval: 0,
   loop_iterable: '',
   loop_timeout: 0,
+  loop_index: DEFAULT_INDEX_VAR,
+  loop_key: DEFAULT_KEY_VAR,
+  loop_value: DEFAULT_VALUE_VAR,
   condition_expr: '',
   condition_compare: DEFAULT_ASSERTION_OPERATION,
   condition_value: ''
 })
+
+/** 循环变量名提交口径：trim 后为空传 null，由引擎回落默认名(页面输入框默认预填，后端以保存入库的为准)；非当前模式使用的变量名传null */
+const loopVarOrNull = (v) => {
+  const text = v != null ? String(v).trim() : ''
+  return text || null
+}
 
 /** payload 按循环模式条件性输出字段 */
 const buildLoopConfig = (f) => {
@@ -267,15 +323,24 @@ const buildLoopConfig = (f) => {
   }
   if (f.loop_mode === '次数循环') {
     config.loop_maximums = normalizeLoopMaximums(f.loop_maximums)
+    config.loop_index = loopVarOrNull(f.loop_index)
+    config.loop_key = null
+    config.loop_value = null
   } else if (f.loop_mode === '列表循环' || f.loop_mode === '字典循环') {
     config.loop_iterable = f.loop_iterable
+    config.loop_index = loopVarOrNull(f.loop_index)
+    config.loop_value = loopVarOrNull(f.loop_value)
+    config.loop_key = f.loop_mode === '字典循环' ? loopVarOrNull(f.loop_key) : null
   } else if (f.loop_mode === '条件循环') {
     config.loop_conditions = {
       condition_expr: f.condition_expr || '',
       condition_compare: f.condition_compare || DEFAULT_ASSERTION_OPERATION,
       condition_value: f.condition_value || ''
     }
-    config.loop_timeout = f.loop_timeout || 120
+    config.loop_timeout = Math.min(f.loop_timeout || 120, MAX_LOOP_TIMEOUT)
+    config.loop_index = loopVarOrNull(f.loop_index)
+    config.loop_key = null
+    config.loop_value = null
   }
   return config
 }
@@ -293,6 +358,9 @@ const { form } = useStepEditorForm({
     f.loop_maximums,
     f.loop_iterable,
     f.loop_timeout,
+    f.loop_index,
+    f.loop_key,
+    f.loop_value,
     f.condition_expr,
     f.condition_compare,
     f.condition_value

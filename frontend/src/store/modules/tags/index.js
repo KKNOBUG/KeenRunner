@@ -41,7 +41,7 @@ function sortTagsWithWorkbenchFirst(tagList) {
 }
 
 /**
- * 尝试导航到目标页签；若被路由守卫拦截（如步骤编辑页脏检查选择「留下」）则返回 false。
+ * 尝试导航到目标页签；若被路由守卫拦截（如用例编辑页脏检查选择「留下」）则返回 false。
  * 页签的增删/激活只在导航真正成功后进行，避免「页面留下但页签已关闭」的不一致。
  * @param {string} path - 目标路由 path
  * @returns {Promise<boolean>} 导航成功返回 true，被拦截返回 false
@@ -111,7 +111,7 @@ export const useTagsStore = defineStore('tag', {
             ? this.tags[this.activeIndex - 1].path
             : this.tags[this.activeIndex + 1].path
         // 先导航（可能被脏检查守卫拦截）；成功后再更新激活页签与列表，避免「页面留下但页签已关闭」。
-        // 显式更新激活页签：相邻页签与当前页 route.path 相同（仅 query 不同，如多个「步骤编辑」页签）时，
+        // 显式更新激活页签：相邻页签与当前页 route.path 相同（仅 query 不同，如多个「用例编辑」页签）时，
         // 布局 watch(route.path) 不会触发，activeTag 不会被自动更新，会导致后续关闭页签不再跳转
         if (!await navigateIfAllowed(nextPath)) return
         this.setActiveTag(nextPath)

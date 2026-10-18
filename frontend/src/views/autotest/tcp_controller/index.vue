@@ -80,7 +80,6 @@
                   :disabled="props.readonly"
               />
               <n-button
-                  v-if="!props.readonly"
                   type="primary"
                   size="small"
                   class="tcp-debug-btn"
@@ -128,7 +127,7 @@
           <n-form-item label="Hex String" path="tcp_hex_string">
             <n-switch v-model:value="state.form.tcp_hex_string" :disabled="props.readonly" />
           </n-form-item>
-          <n-form-item class="tcp-frame-cell" label="报文长度" path="tcp_radix">
+          <n-form-item class="tcp-frame-cell" label="报文前缀" path="tcp_radix">
             <div class="tcp-frame-inline">
               <n-select
                   v-model:value="state.form.tcp_radix"
@@ -158,6 +157,7 @@
                 v-model:value="state.form.tcp_request_end_symbol"
                 :options="TCP_END_SYMBOL_OPTIONS"
                 placeholder="请求结束符"
+                clearable
                 :disabled="props.readonly || tcpEndSymbolDisabled"
             />
           </n-form-item>
@@ -167,6 +167,7 @@
                 v-model:value="state.form.tcp_response_end_symbol"
                 :options="TCP_END_SYMBOL_OPTIONS"
                 placeholder="响应结束符(可自定义, 如\r\n)"
+                clearable
                 :disabled="props.readonly || tcpEndSymbolDisabled"
                 filterable
                 tag
@@ -819,30 +820,32 @@ const buildConfigFromState = () => {
   let data = null
 
   // 始终解析 JSON（无论当前在哪个模式），用于落库到 request_body
+  // 非法JSON归一为null：避免产出{}与null交替出现的多形态
   const jsonStr = jsonBodyText.trim()
   if (jsonStr) {
     try {
       data = JSON.parse(jsonStr)
     } catch {
-      data = {}
+      data = null
     }
   }
 
+  // 空字符串归一为null：与后端「有数据或NULL」两态语义对齐
   switch (bodyType) {
     case 'json':
       // JSON 模式下后端使用 request_body(data) 作为 payload，
       // request_text 保留 XML 文本用于落库（raw 已在切换时清空 XML 或被覆盖）
-      request_text = xmlBodyText || null
+      request_text = xmlBodyText?.trim() || null
       break
     case 'xml':
       // XML 模式下 request_text = XML 文本（payload），data = JSON dict（落库）
-      request_text = xmlBodyText
+      request_text = xmlBodyText?.trim() || null
       break
     case 'raw':
     default:
       // raw 模式下 request_text = raw 文本（payload），data = JSON dict（落库）
       // XML 已在切换 raw 模式时经用户确认后清空
-      request_text = rawBodyText
+      request_text = rawBodyText?.trim() || null
       break
   }
 
@@ -866,12 +869,13 @@ const buildConfigFromState = () => {
     data_source_name: state.form.data_source_name || '',
     data_source_desc: state.form.data_source_desc || '',
     // TCP帧配置：value 与后端枚举展示值同源，后端按进制数与结束符组合推导帧模式。
-    // 互斥约束与后端 schema 校验一致：进制数=不使用时长度位参数必须为空；进制数非不使用时结束符必须为「无」
+    // 互斥由后端按帧模式无条件归一（进制数开启→结束符置null；不使用→长度位置null），前端按表单原值透传：
+    // 结束符未选择传null、选「无」原样传「无」，展示即落库
     tcp_radix: state.form.tcp_radix || '不使用',
     tcp_radix_length: state.form.tcp_radix === '不使用' ? null : (state.form.tcp_radix_length ?? 8),
     tcp_datagram_length: state.form.tcp_radix === '不使用' ? null : (state.form.tcp_datagram_length || '不包含长度位'),
-    tcp_request_end_symbol: state.form.tcp_radix !== '不使用' ? '无' : (state.form.tcp_request_end_symbol || '无'),
-    tcp_response_end_symbol: state.form.tcp_radix !== '不使用' ? '无' : (state.form.tcp_response_end_symbol || '无'),
+    tcp_request_end_symbol: normalizeTcpEndSymbol(state.form.tcp_request_end_symbol),
+    tcp_response_end_symbol: normalizeTcpEndSymbol(state.form.tcp_response_end_symbol),
     tcp_response_timeout: state.form.tcp_response_timeout ?? null,
     tcp_connect_type: state.form.tcp_connect_type || '短连接',
     tcp_encoding: state.form.tcp_encoding || 'UTF-8',
@@ -943,13 +947,13 @@ const hydrateTcpForm = (p) => {
     data_source_name: cfg.data_source_name ?? original.data_source_name ?? '',
     data_source_desc: cfg.data_source_desc ?? original.data_source_desc ?? '',
     // TCP帧配置：修改时直接显示已保存数据(cfg优先、original兜底)；仅新增(无后端original.id)用新步骤默认值。
-    // 存量步骤(NULL)回退引擎实际生效默认（十进制/8位/30s），保证所见=所执行
+    // 存量步骤(NULL)回退十进制/8位与响应超时默认5s，保证所见=所执行
     tcp_radix: cfg.tcp_radix ?? original.tcp_radix ?? (hasSavedTcpStep ? '十进制' : '不使用'),
     tcp_radix_length: cfg.tcp_radix_length ?? original.tcp_radix_length ?? null,
     tcp_datagram_length: cfg.tcp_datagram_length ?? original.tcp_datagram_length ?? '不包含长度位',
-    tcp_request_end_symbol: cfg.tcp_request_end_symbol ?? original.tcp_request_end_symbol ?? '无',
-    tcp_response_end_symbol: cfg.tcp_response_end_symbol ?? original.tcp_response_end_symbol ?? '无',
-    tcp_response_timeout: cfg.tcp_response_timeout ?? original.tcp_response_timeout ?? (hasSavedTcpStep ? null : 10),
+    tcp_request_end_symbol: cfg.tcp_request_end_symbol ?? original.tcp_request_end_symbol ?? null,
+    tcp_response_end_symbol: cfg.tcp_response_end_symbol ?? original.tcp_response_end_symbol ?? null,
+    tcp_response_timeout: cfg.tcp_response_timeout ?? original.tcp_response_timeout ?? 5,
     tcp_connect_type: cfg.tcp_connect_type ?? original.tcp_connect_type ?? '短连接',
     tcp_encoding: cfg.tcp_encoding ?? original.tcp_encoding ?? 'UTF-8',
     tcp_hex_string: cfg.tcp_hex_string ?? original.tcp_hex_string ?? false,
@@ -981,13 +985,13 @@ const { form, syncFromExternal } = useStepEditorForm({
     data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
-    // TCP帧配置：新增默认值（不使用=RAW/响应超时10s）；修改场景由 hydrate 按已保存数据回显
+    // TCP帧配置：新增默认值（不使用=RAW、结束符未选择=null）；修改场景由 hydrate 按已保存数据回显
     tcp_radix: '不使用',
     tcp_radix_length: null,
     tcp_datagram_length: '不包含长度位',
-    tcp_request_end_symbol: '无',
-    tcp_response_end_symbol: '无',
-    tcp_response_timeout: 10,
+    tcp_request_end_symbol: null,
+    tcp_response_end_symbol: null,
+    tcp_response_timeout: 5,
     tcp_connect_type: '短连接',
     tcp_encoding: 'UTF-8',
     tcp_hex_string: false,
@@ -1140,15 +1144,21 @@ const TCP_ENCODING_OPTIONS = [
   { label: 'ASCII', value: 'ASCII' },
 ]
 
+// 结束符未选择(空)归一为null，选「无」原样透传落库；帧模式互斥清空由后端schema归一兜底
+const normalizeTcpEndSymbol = (v) => {
+  const text = v == null ? '' : String(v).trim()
+  return text || null
+}
+
 // 互斥联动（对齐JMeter帧模式推导）：进制数≠不使用 → 长度前缀模式（位数/总长度可配，结束符禁用）；
 // 进制数=不使用 → 长度位参数禁用，结束符可配
 const tcpLengthDisabled = computed(() => state.form.tcp_radix === '不使用')
 const tcpEndSymbolDisabled = computed(() => state.form.tcp_radix !== '不使用')
 watch(() => state.form.tcp_radix, (radix) => {
   if (radix !== '不使用') {
-    // 切回长度前缀模式时复位结束符，避免与后端互斥校验冲突
-    state.form.tcp_request_end_symbol = '无'
-    state.form.tcp_response_end_symbol = '无'
+    // 切回长度前缀模式时清空结束符（未选择=null），长度位与结束符互斥
+    state.form.tcp_request_end_symbol = null
+    state.form.tcp_response_end_symbol = null
   }
 })
 
@@ -1618,13 +1628,10 @@ const doDebugRequest = async (env_name) => {
       const value = cfg[field] ?? original[field]
       if (value != null) debugPayload[field] = value
     })
-    // 与后端互斥校验一致：进制数=不使用不带长度位参数，非不使用强制结束符为「无」（防 original 旧值残留）
+    // 进制数=不使用不带长度位参数；帧模式互斥（长度位/结束符清空）由后端schema归一兜底
     if ((debugPayload.tcp_radix ?? '十进制') === '不使用') {
       delete debugPayload.tcp_radix_length
       delete debugPayload.tcp_datagram_length
-    } else {
-      debugPayload.tcp_request_end_symbol = '无'
-      debugPayload.tcp_response_end_symbol = '无'
     }
 
     const res = await api.tcpRequestDebugging(debugPayload)
@@ -1667,6 +1674,12 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 .tcp-request-row {
   width: 100%;
 }
+
+/* 移除 n-form-item 默认下边距，由容器 gap/margin 统一控制行距 */
+.tcp-request-row .n-form-item {
+  margin-bottom: 0;
+}
+
 /* 三列：步骤名 / 应用 /（配置名+调试）；第三列内 flex 保证下拉与按钮同一基线 */
 .tcp-request-row-top {
   display: grid;
@@ -1675,6 +1688,7 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
   align-items: start;
   width: 100%;
   box-sizing: border-box;
+  margin-bottom: 8px;
 }
 
 .tcp-request-row-top :deep(.n-form-item) {
@@ -1686,10 +1700,12 @@ defineExpose({ saveDataSource, getPendingDataSourceSceneNames })
 .tcp-request-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  row-gap: 8px;
+  column-gap: 12px;
   align-items: start;
   width: 100%;
   box-sizing: border-box;
+  margin-bottom: 8px;
 }
 
 .tcp-request-grid :deep(.n-form-item) {

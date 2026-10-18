@@ -80,7 +80,7 @@ const validateDatabaseSteps = (stepList) => {
             const stepName = step.name || original.step_name || '未命名步骤'
 
             if (rawOps != null && typeof rawOps !== 'object') {
-                return { valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开步骤编辑或删除后添加` }
+                return { valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开用例编辑或删除后添加` }
             }
 
             const list = normalizeOperatesList(rawOps)
@@ -142,7 +142,7 @@ const validateRedisSteps = (stepList) => {
             const stepName = step.name || original.step_name || '未命名步骤'
 
             if (rawOps != null && typeof rawOps !== 'object') {
-                return { valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开步骤编辑或删除后添加` }
+                return { valid: false, message: `步骤：${stepName}，请求配置格式无效，请重新打开用例编辑或删除后添加` }
             }
 
             const list = normalizeOperatesList(rawOps)

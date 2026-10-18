@@ -1,5 +1,5 @@
 /**
- * 步骤树：后端数据 ↔ 前端树节点（执行配置弹窗、步骤编辑页共用）
+ * 步骤树：后端数据 ↔ 前端树节点（执行配置弹窗、用例编辑页共用）
  */
 
 /** 步骤类型是否允许挂子节点 */
@@ -117,6 +117,9 @@ export function mapBackendStep(step) {
       loop_interval: step.loop_interval ? Number(step.loop_interval) : 0,
       loop_iterable: step.loop_iterable || '',
       loop_timeout: step.loop_timeout ? Number(step.loop_timeout) : 0,
+      loop_index: step.loop_index || 'loop_index',
+      loop_key: step.loop_key || 'loop_key',
+      loop_value: step.loop_value || 'loop_value',
     }
     if (step.loop_conditions && typeof step.loop_conditions === 'object' && !Array.isArray(step.loop_conditions)) {
       const condition = step.loop_conditions
@@ -158,7 +161,7 @@ export function mapBackendStep(step) {
       tcp_datagram_length: step.tcp_datagram_length || '不包含长度位',
       tcp_request_end_symbol: step.tcp_request_end_symbol || '无',
       tcp_response_end_symbol: step.tcp_response_end_symbol || '无',
-      tcp_response_timeout: step.tcp_response_timeout ?? null,
+      tcp_response_timeout: step.tcp_response_timeout ?? 5,
       tcp_connect_type: step.tcp_connect_type || '短连接',
       tcp_encoding: step.tcp_encoding || 'UTF-8',
       tcp_hex_string: step.tcp_hex_string ?? false,

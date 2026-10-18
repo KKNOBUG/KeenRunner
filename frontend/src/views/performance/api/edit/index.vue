@@ -1,7 +1,7 @@
 <!--
   压测接口编辑子页 — 新增/编辑/导入草稿确认共用（隐藏菜单，query 传 api_id）
 
-  栏目结构对齐 autotest 步骤编辑页「HTTP/TCP请求」类型子页面（无 api_project，接口名称全局唯一）：
+  栏目结构对齐 autotest 用例编辑页「HTTP/TCP请求」类型子页面（无 api_project，接口名称全局唯一）：
   DataSource（参数化数据集，PerfApiDatasetPanel）→
   Request（接口类型 + 请求方式/地址 + 接口名称/所属应用/配置 + 接口描述 + 请求头/请求体/变量/提取/断言）→
   Response（点击调试后出现）。
@@ -509,7 +509,7 @@ async function loadConfigNames(projectId) {
   }
 }
 
-/** 所属应用变化时联动加载配置名称选项并重置已选值（对齐步骤编辑页联动逻辑） */
+/** 所属应用变化时联动加载配置名称选项并重置已选值（对齐用例编辑页联动逻辑） */
 watch(
     () => form.request_project_id,
     (pid, prev) => {
@@ -552,7 +552,7 @@ async function loadApi(apiId) {
     const res = await api.getPerfApi({ api_id: apiId })
     applyDetail(res.data || {})
     apiRow.value = res.data || {}
-    // 刷新地址栏，刷新页面后仍能回到本接口（同 autotest 步骤编辑页约定）
+    // 刷新地址栏，刷新页面后仍能回到本接口（同 autotest 用例编辑页约定）
     router.replace({ path: route.path, query: { api_id: String(apiId) } })
   } catch (e) {
     handleBack()
