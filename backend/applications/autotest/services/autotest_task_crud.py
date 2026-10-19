@@ -78,6 +78,7 @@ def extract_steps_execute_envs(cases_execute_config: Any) -> Dict[str, str]:
                 step_envs[str(step_key)] = str(env_name)
     return step_envs
 
+
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     解析用例执行配置。
@@ -280,20 +281,18 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             instance = await self.get_by_code(task_code=task_code, on_error=True, state__not=1)
             task_id = instance.id
 
+        # exclude_unset保留显式传入的null以重置可空列旧值；非空列的null入参由守卫剔除
         update_dict: Dict[str, Any] = task_in.model_dump(
-            exclude_none=True,
             exclude_unset=True,
             exclude={"task_id", "task_code"}
         )
-        # 定时表达式允许显式清空：exclude_none会剔除前端传null的两键，
-        # 按model_fields_set检测显式清空意图，还原为None以便覆盖旧定时；
+        self.drop_none_on_required_columns(update_dict)
+        # 定时表达式允许显式清空(更新载荷已保留显式null)；
         # 原有定时被清空时同步停用调度，避免残留“已启动但永不触发”的误导状态
-        _schedule_keys = ("task_periodic_expr", "task_schedule_expr")
-        _clearing_schedule = any(
-            key in task_in.model_fields_set and getattr(task_in, key, None) is None
-            for key in _schedule_keys
-        )
-        if _clearing_schedule and (instance.task_periodic_expr or instance.task_schedule_expr):
+        if any(
+                key in update_dict and update_dict[key] is None
+                for key in ("task_periodic_expr", "task_schedule_expr")
+        ) and (instance.task_periodic_expr or instance.task_schedule_expr):
             update_dict["task_periodic_expr"] = None
             update_dict["task_schedule_expr"] = None
             update_dict["task_enabled"] = False

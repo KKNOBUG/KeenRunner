@@ -19,6 +19,7 @@ from backend.applications.autotest.services.autotest_runtime.sandbox import RE_P
 
 class VariableFlowValidation:
     """校验步骤树中变量引用与产出的对应关系。"""
+
     @classmethod
     def collect_session_variables(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
@@ -37,10 +38,7 @@ class VariableFlowValidation:
         return variables
 
     @classmethod
-    def validate_variable_flow(
-            cls,
-            steps: List[AutoTestStepTreeUpdateItem],
-    ) -> List[Dict[str, Any]]:
+    def validate_variable_flow(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:
         """
         校验步骤树中${var}引用是否有对应的变量产出。
 
@@ -52,6 +50,11 @@ class VariableFlowValidation:
 
         def _collect_produced(step: AutoTestStepTreeUpdateItem) -> None:
             """递归收集步骤树上可产出的变量名到produced。"""
+            # 循环结构自定义变量名同样视为产出项
+            for attr in ("loop_index", "loop_key", "loop_value"):
+                name = getattr(step, attr, None)
+                if name:
+                    produced.add(str(name))
             for var in (step.session_variables or []):
                 key = getattr(var, "key", None) or (var.get("key") if isinstance(var, dict) else None)
                 if key:

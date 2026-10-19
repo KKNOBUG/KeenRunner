@@ -454,8 +454,8 @@ class _TcpFrameServerStartIn(BaseModel):
     """
     TCP帧协议诊断服务器启动入参。
 
-    tcp_*字段取值与步骤schema完全一致，帧模式复用 resolve_tcp_frame_config 推导，
-    互斥校验规则与 AutoTestStepReqBase._validate_tcp_frame_fields 相同。
+    tcp_*字段取值与步骤schema完全一致，帧模式复用 resolve_tcp_frame_config 推导。
+    与步骤schema不同：诊断端口为显式单一用途配置，互斥冲突直接拒绝而非静默归一。
     """
 
     port: int = Field(default=9093, ge=1, le=65535, description="监听端口（监听地址与外层host一致，不单独配置）")

@@ -62,9 +62,9 @@ class AutoTestBranchType(StringEnum):
 class AutoTestLoopMode(StringEnum):
     # 循环模式：次数循环(loop_mode + loop_maximums + loop_interval；loop_maximums支持正整数或变量占位符)
     COUNT = "次数循环"
-    # 循环模式：列表循环(loop_mode + loop_iterable + loop_interval；会话变量固定loop_index/loop_value)
+    # 循环模式：列表循环(loop_mode + loop_iterable + loop_interval；会话变量loop_index/loop_value可自定义)
     LIST = "列表循环"
-    # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量固定loop_index/loop_key/loop_value)
+    # 循环模式：字典循环(loop_mode + loop_iterable + loop_interval；会话变量loop_index/loop_key/loop_value可自定义)
     DICT = "字典循环"
     # 循环模式：条件循环(loop_mode + loop_conditions + loop_interval + loop_timeout)
     CONDITION = "条件循环"
