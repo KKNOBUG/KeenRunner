@@ -85,6 +85,9 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     # loop_conditions存储为Dict[str, Any]格式, 包含condition_expr、condition_compare、condition_value项
     loop_conditions = fields.JSONField(null=True, description="条件循环判断条件")
     loop_cycles = fields.IntField(null=True, description="循环执行圈数")
+    loop_index = fields.CharField(max_length=64, null=True, description="循环索引变量名")
+    loop_key = fields.CharField(max_length=64, null=True, description="循环键名变量名")
+    loop_value = fields.CharField(max_length=64, null=True, description="循环数据变量名")
 
     # IF分支相关
     # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type(AutoTestBranchType枚举: if|elif|else)、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
