@@ -58,7 +58,7 @@ class ConditionsBase(BaseModel):
 
     @field_validator("condition_compare", mode="before")
     @classmethod
-    def validate_condition_compare(cls, v: Any) -> str:
+    def _validate_condition_compare(cls, v: Any) -> str:
         """
         校验并规范化条件比较符为AutoTestAssertionOperation枚举值。
 
@@ -130,9 +130,9 @@ class AutoTestDetailVarBase(BaseModel):
         mode="before",
     )
     @classmethod
-    def _empty_list_to_none(cls, v: Any) -> Any:
+    def _validate_empty_list_to_none(cls, v: Any) -> Any:
         """
-        部分列表类型字段空数组时归一为null值。
+        声明字段为空数组时归一为null值。
 
         :param v: 原始值
         :return: 空数组时返回None，其余原样返回
@@ -143,7 +143,7 @@ class AutoTestDetailVarBase(BaseModel):
 
     @field_validator("step_exec_logger", mode="before")
     @classmethod
-    def normalize_step_exec_logger(cls, v: Any) -> Optional[str]:
+    def _validate_step_exec_logger(cls, v: Any) -> Optional[str]:
         """
         将step_exec_logger规范为多行文本或null。
 
@@ -160,7 +160,7 @@ class AutoTestDetailVarBase(BaseModel):
 
     @field_validator('database_operates', 'redis_operates', mode='before')
     @classmethod
-    def normalize_database_operates(cls, v):
+    def _validate_database_operates(cls, v):
         """
         将单条database_operates对象包装为列表。
 
@@ -177,7 +177,7 @@ class AutoTestDetailVarBase(BaseModel):
 
     @model_validator(mode='before')
     @classmethod
-    def normalize_json_fields(cls, v):
+    def _validate_json_fields(cls, v):
         """
         将嵌套模型/复杂字段转为可JSON序列化结构；失败时置空并写入step_exec_logger。
 
