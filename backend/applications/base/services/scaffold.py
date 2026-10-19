@@ -43,11 +43,7 @@ class UpperStr(str):
     """
 
     @classmethod
-    def __get_pydantic_core_schema__(
-            cls,
-            source_type: Any,
-            handler: GetCoreSchemaHandler,
-    ) -> core_schema.CoreSchema:
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
         return core_schema.with_info_after_validator_function(
             cls._validate,
             handler(str),
@@ -70,11 +66,7 @@ class LowerStr(str):
     """
 
     @classmethod
-    def __get_pydantic_core_schema__(
-            cls,
-            source_type: Any,
-            handler: GetCoreSchemaHandler,
-    ) -> core_schema.CoreSchema:
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
         return core_schema.with_info_after_validator_function(
             cls._validate,
             handler(str),
@@ -127,7 +119,7 @@ class LowerCharField(fields.CharField):
 
 class JSONTextField(JSONField):
     """
-    以TEXT类型存储JSON格式的数据字段，避免MySQL的JSON列在落库时会对对象键做归一化（根据键长度、字节值排序），导致字段顺序丢失；。
+    以TEXT类型存储JSON格式的数据字段，避免MySQL的JSON列在落库时会对对象键做归一化（根据键长度、字节值排序），导致字段顺序丢失。
     """
 
     SQL_TYPE = "LONGTEXT"
@@ -136,6 +128,76 @@ class JSONTextField(JSONField):
         if isinstance(value, str) and not value.strip():
             return None
         return super().to_python_value(value)
+
+
+class UUIDModel:
+    """
+    UUID唯一标识Mixin，为模型添加uid字段。
+    """
+    uid = fields.UUIDField(unique=True, null=True, description="唯一标识符")
+
+
+class PacketModel:
+    """
+    分组标识Mixin，为模型添加pid字段用于分组。
+    """
+    pid = fields.BigIntField(index=True, description="分组标识符")
+
+
+class StateModel:
+    """
+    状态模型Mixin，为模型添加state字段。
+
+    状态约定：
+    - 0: 启用/正常
+    - 1: 禁用/软删
+
+    配合ScaffoldCrud的软删除方法使用：
+        await crud.soft_delete(id=1)      # state = 1
+        await crud.soft_delete_restore(id=1)  # state = 0
+    """
+    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
+
+
+class ClassModel:
+    """
+    分类模型Mixin，为模型添加代码、名称、描述字段。
+    """
+    code = fields.CharField(max_length=16, unique=True, description="代码")
+    name = fields.CharField(max_length=64, unique=True, description="名称")
+    description = fields.TextField(null=True, description="描述")
+
+
+class TimestampMixin:
+    """
+    时间戳Mixin，自动记录创建和更新时间。
+
+    - created_time: 记录首次创建时间，不可变
+    - updated_time: 每次保存自动更新，可用于记录最后操作时间(如软删除时间)
+    """
+    created_time = fields.DatetimeField(auto_now_add=True, description="创建时间")
+    updated_time = fields.DatetimeField(auto_now=True, description="更新时间")
+
+
+class MaintainMixin:
+    """
+    维护信息Mixin，记录数据的创建人和最后更新人。
+
+    - created_user: 记录数据的创建者（自动转大写）
+    - updated_user: 记录数据的最后更新者（自动转大写；创建时由
+      ScaffoldCrud.fill_created_user 与created_user同值回填，对齐updated_time的auto_now语义）
+    """
+    created_user = UpperCharField(max_length=16, default=None, null=True, description="创建人员")
+    updated_user = UpperCharField(max_length=16, default=None, null=True, description="更新人员")
+
+
+class ReserveFields:
+    """
+    备用字段Mixin，为模型预留扩展字段。
+    """
+    reserve_1 = fields.CharField(max_length=255, default=None, null=True, description="备用字段1")
+    reserve_2 = fields.JSONField(default=None, null=True, description="备用字段2")
+    reserve_3 = fields.TextField(default=None, null=True, description="备用字段3")
 
 
 class ScaffoldModel(models.Model):
@@ -319,76 +381,6 @@ class ScaffoldModel(models.Model):
         default_connection = "default"  # 默认数据库连接
 
 
-class UUIDModel:
-    """
-    UUID唯一标识Mixin，为模型添加uid字段。
-    """
-    uid = fields.UUIDField(unique=True, null=True, description="唯一标识符")
-
-
-class PacketModel:
-    """
-    分组标识Mixin，为模型添加pid字段用于分组。
-    """
-    pid = fields.BigIntField(index=True, description="分组标识符")
-
-
-class StateModel:
-    """
-    状态模型Mixin，为模型添加state字段。
-
-    状态约定：
-    - 0: 启用/正常
-    - 1: 禁用/删除(软删除状态)
-
-    配合ScaffoldCrud的软删除方法使用：
-        await crud.soft_delete(id=1)      # state = 1
-        await crud.soft_delete_restore(id=1)  # state = 0
-    """
-    state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
-
-
-class ClassModel:
-    """
-    分类模型Mixin，为模型添加代码、名称、描述字段。
-    """
-    code = fields.CharField(max_length=16, unique=True, description="代码")
-    name = fields.CharField(max_length=64, unique=True, description="名称")
-    description = fields.TextField(null=True, description="描述")
-
-
-class TimestampMixin:
-    """
-    时间戳Mixin，自动记录创建和更新时间。
-
-    - created_time: 记录首次创建时间，不可变
-    - updated_time: 每次保存自动更新，可用于记录最后操作时间(如软删除时间)
-    """
-    created_time = fields.DatetimeField(auto_now_add=True, description="创建时间")
-    updated_time = fields.DatetimeField(auto_now=True, description="更新时间")
-
-
-class MaintainMixin:
-    """
-    维护信息Mixin，记录数据的创建人和最后更新人。
-
-    - created_user: 记录数据的创建者（自动转大写）
-    - updated_user: 记录数据的最后更新者（自动转大写；创建时由
-      ScaffoldCrud.fill_created_user 与created_user同值回填，对齐updated_time的auto_now语义）
-    """
-    created_user = UpperCharField(max_length=16, default=None, null=True, description="创建人员")
-    updated_user = UpperCharField(max_length=16, default=None, null=True, description="更新人员")
-
-
-class ReserveFields:
-    """
-    备用字段Mixin，为模型预留扩展字段。
-    """
-    reserve_1 = fields.CharField(max_length=255, default=None, null=True, description="备用字段1")
-    reserve_2 = fields.JSONField(default=None, null=True, description="备用字段2")
-    reserve_3 = fields.TextField(default=None, null=True, description="备用字段3")
-
-
 # 类型变量定义，用于泛型约束
 # ModelType: 限定为 Tortoise ORM 的 Model 子类
 ModelType = TypeVar("ModelType", bound=Model)
@@ -434,7 +426,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             if item is None:
                 continue
             if not isinstance(item, str):
-                raise ParameterException(message=f"排序字段必须为字符串, 收到: {type(item).__name__}")
+                raise ParameterException(message=f"排序字段必须为字符串, 实际: {type(item).__name__}")
             field = item.strip()
             if not field or field in ("-", "+"):
                 continue
@@ -451,6 +443,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         target = model or self.model
         if not hasattr(target, "created_user"):
             return
+
         # 惰性导入，避免 scaffold ↔ services.dependency 循环依赖
         from backend.services.ctx import get_current_username
         username = get_current_username()
@@ -460,6 +453,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             existing = obj_dict.get("created_user")
             if isinstance(existing, str) and existing.strip():
                 obj_dict["created_user"] = existing.strip().upper()[:16]
+
         if hasattr(target, "updated_user") and not obj_dict.get("updated_user"):
             created = obj_dict.get("created_user")
             if created:
@@ -475,11 +469,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         target = model or self.model
         if not hasattr(target, "updated_user"):
             return
+
         from backend.services.ctx import get_current_username
         username = get_current_username()
         if username:
             obj_dict["updated_user"] = username
             return
+
         existing = obj_dict.get("updated_user")
         if isinstance(existing, str) and existing.strip():
             obj_dict["updated_user"] = existing.strip().upper()[:16]
