@@ -39,9 +39,9 @@ class AutoTestCaseBase(BaseModel):
 
     @field_validator("case_tags", "session_variables", mode="before")
     @classmethod
-    def _empty_list_to_none(cls, v: Any) -> Any:
+    def _validate_empty_list_to_none(cls, v: Any) -> Any:
         """
-        case_tags/session_variables字段空数组时归一为null值。
+        case_tags/session_variables字段为空数组时归一为null值。
 
         :param v: 原始值
         :return: 空数组时返回None，其余原样返回
@@ -81,9 +81,9 @@ class AutoTestCaseScriptGenerate(BaseModel):
 
     @field_validator("case_type")
     @classmethod
-    def _validate_script_type(cls, v: AutoTestCaseType) -> AutoTestCaseType:
+    def _validate_case_type(cls, v: AutoTestCaseType) -> AutoTestCaseType:
         """
-        校验脚本类型：公共接口自身不允许作为生成目标类型。
+        公共接口自身不允许作为生成目标类型。
 
         :param v: 脚本类型
         :return: 校验通过的脚本类型
@@ -94,9 +94,9 @@ class AutoTestCaseScriptGenerate(BaseModel):
 
     @field_validator("case_tags", mode="before")
     @classmethod
-    def _empty_tags_to_none(cls, v: Any) -> Any:
+    def _validate_empty_case_tags_to_none(cls, v: Any) -> Any:
         """
-        case_tags字段空数组时归一为null值。
+        case_tags字段为空数组时归一为null值。
 
         :param v: 原始值
         :return: 空数组时返回None，其余原样返回
@@ -106,7 +106,7 @@ class AutoTestCaseScriptGenerate(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _validate_tags_required(self) -> "AutoTestCaseScriptGenerate":
+    def _validate_case_tags_required(self) -> "AutoTestCaseScriptGenerate":
         """
         脚本类型为用户脚本时标签必选，公共脚本可选。
 
