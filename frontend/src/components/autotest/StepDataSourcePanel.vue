@@ -115,6 +115,7 @@ import {
 import TheIcon from '@/components/icon/TheIcon.vue'
 import Luckysheet from '@/components/common/Luckysheet.vue'
 import api from '@/api'
+import { trackDataSourceSave } from '@/composables/step-editor/pendingDataSourceSaves'
 import { downloadBlobResponse } from '@/utils/common/downloadFile'
 
 const props = defineProps({
@@ -815,8 +816,8 @@ onBeforeUnmount(() => {
   const matrix = Array.isArray(cachedMatrix.value) ? cachedMatrix.value.map((row) => [...(row || [])]) : []
   if (matrix.length < 2) return
   if (!hasDbRecord.value && !dataSourceId.value && !hasAnySceneData(matrix)) return
-  // 静默保存，错误由 http 拦截器统一提示
-  api.saveOrUpdateDataSource(buildSavePayload(ctx, matrix)).catch(() => {})
+  // 静默保存，错误由 http 拦截器统一提示；登记在途Promise，页面保存树前会等待其全部落库
+  trackDataSourceSave(api.saveOrUpdateDataSource(buildSavePayload(ctx, matrix))).catch(() => {})
 })
 
 /* ========================= 全屏（CSS 铺满页面窗口） ========================= */

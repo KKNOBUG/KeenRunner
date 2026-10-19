@@ -318,6 +318,7 @@ import ApiQuoteEditor from "@/views/autotest/quote_controller/index.vue";
 import ApiAssertEditor from "@/views/autotest/assert_controller/index.vue";
 import ApiExtractEditor from "@/views/autotest/extract_controller/index.vue";
 import api from "@/api";
+import { awaitPendingDataSourceSaves } from '@/composables/step-editor/pendingDataSourceSaves'
 import { mapBackendStep } from './utils/stepTreeMap'
 import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
 import {
@@ -1373,6 +1374,8 @@ const handleSaveAll = async () => {
     if (dataSourceSavedBefore && dataSourceSavedBefore.success === false && !dataSourceSavedBefore.skipped) {
       return
     }
+    // 等待切换步骤时面板卸载触发的静默保存全部落库，避免树接口的场景列一致性校验读到旧数据源而误判放行
+    await awaitPendingDataSourceSaves()
     // 新步骤尚无 step_code 时数据源会 skipped：在树保存前用当前面板场景列与用例已落库数据源比对
     if (dataSourceSavedBefore?.skipped && Array.isArray(pendingSceneNames) && pendingSceneNames.length) {
       const caseIdForDs = toPositiveCaseId(caseId.value) ?? toPositiveCaseId(caseInfo?.case_id)
