@@ -42,7 +42,7 @@ class AutoTestDataSourceCreate(AutoTestDataSourceBase):
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
     @model_validator(mode="after")
-    def _require_case_and_step(self):
+    def _validate_case_and_step(self):
         """创建必须同时定位到用例与步骤。"""
         has_case = bool(self.case_id) or _has_text(self.case_code)
         has_step = bool(self.step_id) or _has_text(self.step_code)
