@@ -61,7 +61,7 @@ class AutoTestTaskCasesExecuteConfig(BaseModel):
     env_name: Optional[str] = Field(None, max_length=128, description="全局环境名称")
 
     @model_validator(mode="after")
-    def validate_case_configs(self):
+    def _validate_case_configs(self):
         """校验动态case_id键对应对象必须符合用例级执行配置结构。"""
         extra = getattr(self, "__pydantic_extra__", None) or {}
         for case_key, case_cfg in extra.items():
