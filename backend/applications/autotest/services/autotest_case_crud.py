@@ -33,9 +33,6 @@ from backend.enums import (
 )
 from backend.services import get_current_username
 
-# 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL
-CASE_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = ("case_tags", "session_variables")
-
 
 def _normalize_case_tags(case_type: Optional[AutoTestCaseType], case_tags: Optional[List[int]], *, context: str = "用例") -> Optional[List[int]]:
     """打标签管控：公共接口禁止打标签；用户脚本必选标签；公共脚本允许打标签(可选)。"""
@@ -53,20 +50,6 @@ def _normalize_case_tags(case_type: Optional[AutoTestCaseType], case_tags: Optio
         LOGGER.error(error_message)
         raise ParameterException(message=error_message)
     return case_tags
-
-
-def _readd_explicit_null_fields(payload: Any, update_dict: Dict[str, Any], field_names: Tuple[str, ...]) -> None:
-    """
-    回补显式置空字段到更新载荷，避免exclude_none丢弃None导致旧值残留。
-
-    :param payload: 更新入参schema实例
-    :param update_dict: model_dump产出的更新字典(就地修改)
-    :param field_names: 需要回补语义的字段名集合
-    :return: None
-    """
-    for field_name in field_names:
-        if field_name in payload.model_fields_set and getattr(payload, field_name, None) is None:
-            update_dict[field_name] = None
 
 
 class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoTestCaseUpdate]):
@@ -322,12 +305,10 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             case_id = instance.id
         original_case_type: Optional[AutoTestCaseType] = instance.case_type
         update_dict = case_in.model_dump(
-            exclude_none=True,
             exclude_unset=True,
             exclude={"case_id", "case_code"}
         )
-        _readd_explicit_null_fields(case_in, update_dict, CASE_CLEARABLE_JSON_FIELDS)
-
+        self.drop_none_on_required_columns(update_dict)
         effective_type = update_dict.get("case_type", instance.case_type)
         if effective_type in NO_TAG_CASE_TYPES:
             if update_dict.get("case_tags"):
@@ -568,13 +549,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             else:
                 if case_type == AutoTestCaseType.PUBLIC_API and case_instance.case_type != AutoTestCaseType.PUBLIC_API:
                     await self._validate_switch_to_public_api(case_instance)
-
                 update_case_dict: Dict[str, Any] = case_data.model_dump(
-                    exclude_none=True,
                     exclude_unset=True,
                     exclude={"case_id", "case_code"}
                 )
-                _readd_explicit_null_fields(case_data, update_case_dict, CASE_CLEARABLE_JSON_FIELDS)
+                self.drop_none_on_required_columns(update_case_dict)
                 if not update_case_dict:
                     processed_case.add((case_id, case_code))
                     case_dict: Dict[str, Any] = await case_instance.to_dict(

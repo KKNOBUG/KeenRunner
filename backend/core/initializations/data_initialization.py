@@ -465,7 +465,7 @@ async def init_database_menu():
         ),
         Menu(
             menu_type=MenuType.MENU,
-            name="步骤编辑",
+            name="用例编辑",
             path="steps",
             order=3,
             parent_id=autotest_parent_menu.id,
