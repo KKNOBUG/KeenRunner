@@ -87,6 +87,9 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     loop_timeout = fields.FloatField(ge=0, null=True, description="条件循环超时时间(正浮点数, 单位:秒, 0表示不超时)")
     # loop_conditions 存储为Dict[str, Any]格式, 包含condition_expr、condition_compare、condition_value项
     loop_conditions = fields.JSONField(null=True, description="条件循环判断条件")
+    loop_index = fields.CharField(max_length=64, null=True, description="循环索引变量名")
+    loop_key = fields.CharField(max_length=64, null=True, description="循环键名变量名")
+    loop_value = fields.CharField(max_length=64, null=True, description="循环数据变量名")
 
     # IF分支相关
     # branch_items 存储为List[Dict[str, Any]]格式, 每个元素包含branch_type(AutoTestBranchType枚举: if|elif|else)、branch_desc、branch_conditions{condition_expr,condition_compare,condition_value}项
