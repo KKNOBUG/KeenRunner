@@ -35,9 +35,9 @@ class AutoTestProjectCreate(AutoTestProjectBase):
 
     @field_validator('project_dev_owners', 'project_developers', 'project_test_owners', 'project_testers', mode='before')
     @classmethod
-    def normalize_project_involve_people(cls, v):
+    def _validate_involve_people(cls, v):
         """
-        project_dev_owners/project_developers/project_test_owners/project_testers字段规范为null或列表。
+        声明字段规范为null或列表。
 
         :param v: 原始值
         :return: 人员列表或原值

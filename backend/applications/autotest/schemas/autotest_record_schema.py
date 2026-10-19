@@ -21,7 +21,7 @@ from backend.enums import (
 
 
 class AutoTestRecordBase(BaseModel):
-    """任务执行观测记录公共字段。"""
+    """任务执行记录公共字段。"""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -46,7 +46,7 @@ class AutoTestRecordBase(BaseModel):
 
 
 class AutoTestRecordCreate(AutoTestRecordBase):
-    """创建任务执行观测记录入参。"""
+    """创建任务执行记录入参。"""
 
     celery_id: str = Field(..., max_length=255, description="Celery调度ID")
     celery_status: AutoTestTaskStatus = Field(default=AutoTestTaskStatus.RUNNING, description="Celery执行状态")
@@ -63,7 +63,7 @@ class AutoTestRecordCreate(AutoTestRecordBase):
 
 
 class AutoTestRecordUpdate(AutoTestRecordBase):
-    """更新任务执行观测记录入参（根据celery_id部分更新）。"""
+    """更新任务执行记录入参（根据celery_id部分更新）。"""
 
     celery_id: Optional[str] = Field(None, max_length=255, description="Celery调度ID")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
@@ -78,7 +78,7 @@ class AutoTestRecordUpdate(AutoTestRecordBase):
 
 
 class AutoTestRecordSelect(BaseModel):
-    """分页查询任务执行观测记录入参。"""
+    """分页查询任务执行记录入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, description="每页数量")
