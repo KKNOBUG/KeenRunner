@@ -54,25 +54,20 @@ from backend.enums import (
     PUBLIC_CASE_TYPES
 )
 
-# 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL；
-# loop_*循环变量名支持用户清空，同样按显式置空语义回补
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
-    "request_header", "request_params", "request_form_data",
-    "request_form_urlencoded", "request_form_file", "request_body",
-    "session_variables", "defined_variables", "extract_variables",
-    "assert_validators", "database_operates", "redis_operates",
+    "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
+    "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates",
     "loop_conditions", "loop_index", "loop_key", "loop_value",
 )
 
 
 def _apply_tcp_frame_mutex(values: Dict[str, Any]) -> None:
     """
-    TCP帧模式互斥的业务侧归一：长度位模式与结束符模式字段互斥，切换时显式置None覆盖旧值。
+    长度位模式与结束符模式字段互斥，切换时显式置None覆盖旧值。
 
     exclude_none会丢弃schema归一产生的null，互斥清空必须直接落在更新/新建字典上；
-    仅当载荷携带tcp_radix时归一，未触碰帧模式的步骤更新不受影响。
 
-    :param values: 更新/新建步骤字段字典(就地修改)
+    :param values: 更新/新建步骤字段字典
     :return: None
     """
     if "tcp_radix" not in values:
@@ -604,7 +599,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             exclude_unset=True,
             exclude={"step_id", "step_code"}
         )
-        self.explicit_restored_null_fields(step_in, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+        self.explicit_restored_null_fields(
+            payload=step_in,
+            update_dict=update_dict,
+            field_names=STEP_CLEARABLE_JSON_FIELDS
+        )
         _apply_tcp_frame_mutex(update_dict)
         if not update_dict:
             return instance
@@ -1141,7 +1140,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     exclude_unset=True,
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branch_items"},
                 )
-                self.explicit_restored_null_fields(step_data, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+                self.explicit_restored_null_fields(
+                    payload=step_data,
+                    update_dict=update_dict,
+                    field_names=STEP_CLEARABLE_JSON_FIELDS
+                )
                 _apply_tcp_frame_mutex(update_dict)
                 # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
                 update_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))

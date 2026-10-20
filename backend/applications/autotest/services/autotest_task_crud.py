@@ -289,7 +289,11 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         # 定时表达式允许显式清空：回补显式null以覆盖旧定时；
         # 原有定时被清空时同步停用调度，避免残留“已启动但永不触发”的误导状态
         _schedule_keys = ("task_periodic_expr", "task_schedule_expr")
-        self.explicit_restored_null_fields(task_in, update_dict, _schedule_keys)
+        self.explicit_restored_null_fields(
+            payload=task_in,
+            update_dict=update_dict,
+            field_names=_schedule_keys
+        )
         if any(
                 key in update_dict and update_dict[key] is None
                 for key in _schedule_keys
