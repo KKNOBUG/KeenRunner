@@ -31,7 +31,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     step_tree_item_from_storage,
     step_variables_list_from_storage,
 )
-from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud, _readd_explicit_null_fields
 from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
 from backend.applications.autotest.services.autotest_report_crud import AutoTestReportCrud
 from backend.applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
@@ -50,8 +50,39 @@ from backend.enums import (
     AutoTestReportType,
     AutoTestTaskExecuteMode,
     AutoTestSessionTransfer,
+    AutoTestTcpRadix,
     PUBLIC_CASE_TYPES
 )
+
+# 列表/对象型JSON字段：schema已将空数组归一为None；payload显式给出这些字段时，None代表显式清空，需回补以落库NULL；
+# loop_*循环变量名支持用户清空，同样按显式置空语义回补
+STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
+    "request_header", "request_params", "request_form_data",
+    "request_form_urlencoded", "request_form_file", "request_body",
+    "session_variables", "defined_variables", "extract_variables",
+    "assert_validators", "database_operates", "redis_operates",
+    "loop_conditions", "loop_index", "loop_key", "loop_value",
+)
+
+
+def _apply_tcp_frame_mutex(values: Dict[str, Any]) -> None:
+    """
+    TCP帧模式互斥的业务侧归一：长度位模式与结束符模式字段互斥，切换时显式置None覆盖旧值。
+
+    exclude_none会丢弃schema归一产生的null，互斥清空必须直接落在更新/新建字典上；
+    仅当载荷携带tcp_radix时归一，未触碰帧模式的步骤更新不受影响。
+
+    :param values: 更新/新建步骤字段字典(就地修改)
+    :return: None
+    """
+    if "tcp_radix" not in values:
+        return
+    if values.get("tcp_radix") in (None, AutoTestTcpRadix.NONE):
+        values["tcp_radix_length"] = None
+        values["tcp_datagram_length"] = None
+    else:
+        values["tcp_request_end_symbol"] = None
+        values["tcp_response_end_symbol"] = None
 
 
 async def _load_case_dataset_names(case_id: int) -> List[str]:
@@ -569,10 +600,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             step_id: int = instance.id
 
         update_dict: Dict[str, Any] = step_in.model_dump(
+            exclude_none=True,
             exclude_unset=True,
             exclude={"step_id", "step_code"}
         )
-        self.drop_none_on_required_columns(update_dict)
+        _readd_explicit_null_fields(step_in, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+        _apply_tcp_frame_mutex(update_dict)
         if not update_dict:
             return instance
 
@@ -1012,6 +1045,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     exclude_none=True,
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branch_items"},
                 )
+                _apply_tcp_frame_mutex(create_step_dict)
                 create_step_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if final_parent_step_id is not None:
                     create_step_dict["parent_step_id"] = final_parent_step_id
@@ -1103,10 +1137,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             # 步骤存在，执行更新
             else:
                 update_dict = step_data.model_dump(
+                    exclude_none=True,
                     exclude_unset=True,
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branch_items"},
                 )
-                self.drop_none_on_required_columns(update_dict)
+                _readd_explicit_null_fields(step_data, update_dict, STEP_CLEARABLE_JSON_FIELDS)
+                _apply_tcp_frame_mutex(update_dict)
                 # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
                 update_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if "parent_step_id" not in step_data.model_dump(exclude_unset=True) and parent_step_id is not None:

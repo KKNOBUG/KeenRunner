@@ -480,24 +480,6 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if isinstance(existing, str) and existing.strip():
             obj_dict["updated_user"] = existing.strip().upper()[:16]
 
-    def drop_none_on_required_columns(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
-        """
-        剔除指向非空列的None值。
-
-        更新走exclude_unset保留显式null以重置可空列旧值；
-        但非空列(如step_name/step_type)的null入参属无效字段，剔除以维持exclude_none时代的静默忽略行为，避免落库触发非空约束错误。
-
-        :param obj_dict: 更新载荷字典
-        :param model: 目标模型；默认 self.model
-        :return: None
-        """
-        target = model or self.model
-        fields_map = target._meta.fields_map
-        for key in [k for k, v in obj_dict.items() if v is None]:
-            field_obj: Any = fields_map.get(key)
-            if field_obj is not None and not field_obj.null:
-                obj_dict.pop(key)
-
     def soft_delete_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
         """
         构造软删除更新字典: state=1 + 按统一规则填充updated_user字段。
