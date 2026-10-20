@@ -480,6 +480,20 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if isinstance(existing, str) and existing.strip():
             obj_dict["updated_user"] = existing.strip().upper()[:16]
 
+    @staticmethod
+    def explicit_restored_null_fields(payload: Any, update_dict: Dict[str, Any], field_names: Tuple[str, ...]) -> None:
+        """
+        显式回补置空字段到更新模型，避免exclude_none丢弃None导致旧值残留。
+
+        :param payload: 更新入参
+        :param update_dict: model_dump产出的更新字典
+        :param field_names: 需要回补的字段名
+        :return: None
+        """
+        for field_name in field_names:
+            if field_name in payload.model_fields_set and getattr(payload, field_name, None) is None:
+                update_dict[field_name] = None
+
     def soft_delete_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
         """
         构造软删除更新字典: state=1 + 按统一规则填充updated_user字段。
