@@ -382,6 +382,13 @@ async def save_or_update_data_source(
                     data_source_code=data_source_in.data_source_code,
                     on_error=True,
                 )
+                # 定位分支绕过创建准入：归属用例类型/步骤可挂载/入参归属一致须补校验
+                await DataSourceService.ensure_data_source_writable(
+                    services,
+                    instance=existing,
+                    case_id=data_source_in.case_id,
+                    case_code=data_source_in.case_code,
+                )
                 update_in = AutoTestDataSourceUpdate.model_validate({
                     **data_source_in.model_dump(),
                     "data_source_id": existing.id,
@@ -525,6 +532,13 @@ async def update_data_source_fields(
             return BadReqResponse(message="当前步骤无数据源, 无法完成更新字段")
         if not isinstance(instance.dataframe, list) or not instance.dataframe:
             return BadReqResponse(message="数据源矩阵为空, 无法完成更新字段")
+        # id定位可能命中他用例数据源：归属与用例类型准入须与入参定位比对
+        await DataSourceService.ensure_data_source_writable(
+            services,
+            instance=instance,
+            case_id=case.id,
+            case_code=case.case_code,
+        )
         datagram_step = await DataSourceService.resolve_datagram_source_step(services, step)
         updates = await DataSourceService.sync_data_source_fields(datagram_step, instance.dataframe, instance.axis)
         async with in_transaction():
@@ -1052,21 +1066,31 @@ async def single_step_dataset_upload(
         return BadReqResponse(message="解析数据源文件结果为空, 第1个Sheet无有效数据")
     try:
         created_user = get_current_username()
-        instance = await services.data_source_curd.create_data_sources_from_parsed(
-            case_id=case_id,
-            case_code=case_instance.case_code,
-            step_id=int(step_id),
-            step_code=step_code,
-            file_name=file_name or None,
-            file_path=file_path,
-            file_hash=file_hash or None,
-            file_desc=(file_desc or "")[:2048].strip() or None,
-            parsed_data=step_data,
-            dataset_names=dataset_names,
-            dataframe=dataframe,
-            axis=axis,
-            created_user=created_user,
-        )
+        # create与指针同步同一事务：sync失败整体回滚，避免残留无指针数据源
+        async with in_transaction():
+            instance = await services.data_source_curd.create_data_sources_from_parsed(
+                case_id=case_id,
+                case_code=case_instance.case_code,
+                step_id=int(step_id),
+                step_code=step_code,
+                file_name=file_name or None,
+                file_path=file_path,
+                file_hash=file_hash or None,
+                file_desc=(file_desc or "")[:2048].strip() or None,
+                parsed_data=step_data,
+                dataset_names=dataset_names,
+                dataframe=dataframe,
+                axis=axis,
+                created_user=created_user,
+            )
+            await DataSourceService.sync_step_data_source_meta(
+                services,
+                case_id=case_id,
+                step_code=step_code,
+                data_source_id=instance.id,
+                file_name=file_name,
+                file_desc=file_desc,
+            )
     except NotFoundException as e:
         await _remove_upload_file(file_path)
         return NotFoundResponse(message=str(e.message))
@@ -1084,14 +1108,6 @@ async def single_step_dataset_upload(
         LOGGER.error(f"数据源文件保存失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"数据源文件保存失败，异常描述: {e}")
 
-    await DataSourceService.sync_step_data_source_meta(
-        services,
-        case_id=case_id,
-        step_code=step_code,
-        data_source_id=instance.id,
-        file_name=file_name,
-        file_desc=file_desc,
-    )
     data = await _serialize_data_source(instance)
     return SuccessResponse(message="数据源文件上传成功", data=data, total=1)
 
@@ -1240,7 +1256,8 @@ async def batch_step_dataset_upload(
             continue
         step_map[step_name] = {"step_id": step.id, "step_code": step.step_code}
     if duplicate_step_names:
-        return BadReqResponse(message=f"用例中存在同名的可挂载数据源步骤(HTTP/TCP/引用公共接口), 无法唯一定位步骤: {', '.join(sorted(duplicate_step_names))}")
+        return BadReqResponse(
+            message=f"用例中存在同名的可挂载数据源步骤(HTTP/TCP/引用公共接口), 无法唯一定位步骤: {', '.join(sorted(duplicate_step_names))}")
     if not step_map:
         return BadReqResponse(message="该用例步骤树中没有可挂载数据源的步骤(HTTP/TCP/引用公共接口)，无法批量上传数据源")
 
@@ -1341,7 +1358,8 @@ async def batch_step_dataset_upload(
                     file_hash=file_hash or None,
                     file_desc=(file_desc or "")[:2048].strip() or None,
                     parsed_data=step_data,
-                    dataset_names=sorted(step_data.keys()),
+                    # 场景序与dataset键序、跨sheet校验基准一致(文件列插入序)，不用排序序，避免场景名一致性比对错乱
+                    dataset_names=list(step_data.keys()),
                     dataframe=sheet_dataframes[sheet_name],
                     axis=sheet_axes.get(sheet_name, DataSourceMatrixParser.AXIS_VERTICAL),
                     created_user=created_user,
@@ -1424,7 +1442,8 @@ async def batch_step_dataset_download(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/batch_step_template_download", summary="下载数据源汇总模板", description="根据用例汇总导出所有可挂载数据源步骤(HTTP/TCP/引用公共接口)报文构建模板xlsx")
+@autotest_data_source.get("/batch_step_template_download", summary="下载数据源汇总模板",
+                          description="根据用例汇总导出所有可挂载数据源步骤(HTTP/TCP/引用公共接口)报文构建模板xlsx")
 async def batch_step_template_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),

@@ -388,10 +388,10 @@ async def batch_update_steps_tree(
 
         # 1.5 校验数据源场景列名一致性（HTTP/TCP步骤 + 引用公共接口壳上挂载的数据源；含树上尚未带回 data_source_id、但库中已落库的数据源）
         def _walk_data_source_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
-            """收集步骤树中携带数据源的步骤：HTTP/TCP步骤与挂载数据源的引用壳等，含 children 与条件分支子步骤。"""
+            """收集步骤树中全部可挂载数据源的步骤(HTTP/TCP/引用壳，含 children 与条件分支子步骤)；壳不依赖载荷回传data_source_id。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
             for s in steps or []:
-                if s.step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP) or s.data_source_id:
+                if s.step_type in DataSourceService.CLEAR_META_STEP_TYPES:
                     collected.append(s)
                 if s.children:
                     collected.extend(_walk_data_source_steps(s.children))

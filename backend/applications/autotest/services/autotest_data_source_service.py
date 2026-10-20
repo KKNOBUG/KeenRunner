@@ -128,6 +128,40 @@ class DataSourceService:
             raise ParameterException(message="公共脚本/公共接口不允许使用数据源")
 
     @classmethod
+    async def ensure_data_source_writable(
+            cls,
+            services: AutoTestServices,
+            instance: AutoTestDataSourceModel,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None,
+    ) -> None:
+        """
+        数据源写操作准入：归属用例不允许公共类型、归属步骤须可挂载；入参携带用例定位时须与归属一致。
+
+        按id/code定位的更新路径绕过了创建时的准入校验，更新/字段同步前必须调用。
+
+        :param services: CRUD聚合
+        :param instance: 已定位的启用中数据源
+        :param case_id: 入参用例ID(可选)
+        :param case_code: 入参用例标识(可选)
+        :raises ParameterException: 归属用例为公共类型、入参定位与归属不一致、归属步骤不可挂载
+        :raises NotFoundException: 归属用例不存在
+        """
+        owner_case = await services.case_curd.get_by_id(case_id=instance.case_id, on_error=True, state__not=1)
+        cls.ensure_case_allows_data_source(owner_case)
+        input_case_id = case_id if case_id else None
+        input_case_code = str(case_code).strip() if case_code else ""
+        if (input_case_id and input_case_id != instance.case_id) or (
+                input_case_code and input_case_code != owner_case.case_code
+        ):
+            raise ParameterException(message="数据源归属用例与入参定位不一致, 不允许操作")
+        owner_step = await services.step_curd.model.filter(
+            case_id=instance.case_id, step_code=instance.step_code, state__not=1
+        ).first()
+        if owner_step is not None:
+            cls.ensure_request_step(owner_step, case=owner_case)
+
+    @classmethod
     async def resolve_datagram_source_step(cls, services: AutoTestServices, step: AutoTestStepModel) -> AutoTestStepModel:
         """
         解析报文来源步骤：引用公共接口步骤是壳（无自身报文），回落到被引用公共接口用例内的请求步骤。

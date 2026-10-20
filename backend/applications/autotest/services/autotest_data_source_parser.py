@@ -141,7 +141,8 @@ class DataSourceMatrixParser:
             return {}, [], [], cls.AXIS_VERTICAL
         axis = cls.detect_matrix_axis(df.values)
         step_data = await cls._parse_sheet_async(df, axis)
-        dataset_names = sorted(step_data.keys()) if step_data else []
+        # 场景序保持文件列插入序(与dataset键序一致)，不用排序序，避免与表格保存路径的场景序口径错乱
+        dataset_names = list(step_data.keys()) if step_data else []
         dataframe = cls._dataframe_to_matrix(df)
         LOGGER.info(f"解析 xlsx 首 sheet 完成: {file_path}, axis={axis}, dataset_names={dataset_names}")
         return step_data, dataset_names, dataframe, axis

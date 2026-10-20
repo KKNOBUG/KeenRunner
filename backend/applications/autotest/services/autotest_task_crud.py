@@ -286,15 +286,14 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             exclude_unset=True,
             exclude={"task_id", "task_code"}
         )
-        # 定时表达式允许显式清空：exclude_none会剔除前端传null的两键，
-        # 按model_fields_set检测显式清空意图，还原为None以便覆盖旧定时；
+        # 定时表达式允许显式清空：回补显式null以覆盖旧定时；
         # 原有定时被清空时同步停用调度，避免残留“已启动但永不触发”的误导状态
         _schedule_keys = ("task_periodic_expr", "task_schedule_expr")
-        _clearing_schedule = any(
-            key in task_in.model_fields_set and getattr(task_in, key, None) is None
-            for key in _schedule_keys
-        )
-        if _clearing_schedule and (instance.task_periodic_expr or instance.task_schedule_expr):
+        self.explicit_restored_null_fields(task_in, update_dict, _schedule_keys)
+        if any(
+                key in update_dict and update_dict[key] is None
+                for key in _schedule_keys
+        ) and (instance.task_periodic_expr or instance.task_schedule_expr):
             update_dict["task_periodic_expr"] = None
             update_dict["task_schedule_expr"] = None
             update_dict["task_enabled"] = False
