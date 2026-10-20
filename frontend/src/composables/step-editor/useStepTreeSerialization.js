@@ -98,7 +98,7 @@ const resolveArrayField = (config, original, key) => {
     return null
 }
 
-// 结束符未选择(空)归一为null，选「无」原样透传落库；帧模式互斥清空由后端schema归一兜底
+// 响应结束符未选择(空)归一为null；请求结束符为必选项，空值由调用处按默认\r\n兜底
 const normalizeTcpEndSymbol = (v) => {
     const text = v == null ? '' : String(v).trim()
     return text || null
@@ -203,23 +203,13 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
                 ? (config.data_source_desc || null)
                 : (original.data_source_desc || null)
 
-            // TCP帧配置：value 与后端枚举展示值同源（帧模式由后端按进制数与结束符组合推导）。
-            // 互斥由后端按帧模式无条件归一（进制数开启→结束符置null；不使用→长度位置null），前端按原值透传：
-            // 进制数为不使用时长度位参数强制为空、长度前缀模式下结束符强制null；结束符未选择null、选「无」原样落库
-            backendStep.tcp_radix = config.tcp_radix ?? original.tcp_radix ?? '十进制'
-            const tcpRadixDisabled = !backendStep.tcp_radix || backendStep.tcp_radix === '不使用'
-            backendStep.tcp_radix_length = tcpRadixDisabled
-                ? null
-                : (config.tcp_radix_length !== undefined ? config.tcp_radix_length : (original.tcp_radix_length ?? 8))
-            backendStep.tcp_datagram_length = tcpRadixDisabled
-                ? null
-                : (config.tcp_datagram_length !== undefined ? config.tcp_datagram_length : (original.tcp_datagram_length ?? '不包含长度位'))
-            backendStep.tcp_request_end_symbol = tcpRadixDisabled
-                ? normalizeTcpEndSymbol(config.tcp_request_end_symbol !== undefined ? config.tcp_request_end_symbol : original.tcp_request_end_symbol)
-                : null
-            backendStep.tcp_response_end_symbol = tcpRadixDisabled
-                ? normalizeTcpEndSymbol(config.tcp_response_end_symbol !== undefined ? config.tcp_response_end_symbol : original.tcp_response_end_symbol)
-                : null
+            // TCP帧配置：字段相互独立不互斥，value 与后端枚举展示值同源全量透传，展示即落库；
+            // 帧模式由后端运行时按优先级推导（进制数≠不使用→长度前缀，结束符字段保留但不参与成帧）
+            backendStep.tcp_radix = config.tcp_radix ?? original.tcp_radix ?? '不使用'
+            backendStep.tcp_radix_length = config.tcp_radix_length !== undefined ? config.tcp_radix_length : (original.tcp_radix_length ?? 8)
+            backendStep.tcp_datagram_length = config.tcp_datagram_length !== undefined ? config.tcp_datagram_length : (original.tcp_datagram_length ?? '不包含长度位')
+            backendStep.tcp_request_end_symbol = normalizeTcpEndSymbol(config.tcp_request_end_symbol !== undefined ? config.tcp_request_end_symbol : original.tcp_request_end_symbol) ?? '\\r\\n'
+            backendStep.tcp_response_end_symbol = normalizeTcpEndSymbol(config.tcp_response_end_symbol !== undefined ? config.tcp_response_end_symbol : original.tcp_response_end_symbol)
             backendStep.tcp_response_timeout = config.tcp_response_timeout ?? original.tcp_response_timeout ?? 5
             backendStep.tcp_connect_type = config.tcp_connect_type ?? original.tcp_connect_type ?? '短连接'
             backendStep.tcp_encoding = config.tcp_encoding ?? original.tcp_encoding ?? 'UTF-8'

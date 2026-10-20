@@ -50,7 +50,6 @@ from backend.enums import (
     AutoTestReportType,
     AutoTestTaskExecuteMode,
     AutoTestSessionTransfer,
-    AutoTestTcpRadix,
     PUBLIC_CASE_TYPES
 )
 
@@ -59,25 +58,6 @@ STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates",
     "loop_conditions", "loop_index", "loop_key", "loop_value",
 )
-
-
-def _apply_tcp_frame_mutex(values: Dict[str, Any]) -> None:
-    """
-    长度位模式与结束符模式字段互斥，切换时显式置None覆盖旧值。
-
-    exclude_none会丢弃schema归一产生的null，互斥清空必须直接落在更新/新建字典上；
-
-    :param values: 更新/新建步骤字段字典
-    :return: None
-    """
-    if "tcp_radix" not in values:
-        return
-    if values.get("tcp_radix") in (None, AutoTestTcpRadix.NONE):
-        values["tcp_radix_length"] = None
-        values["tcp_datagram_length"] = None
-    else:
-        values["tcp_request_end_symbol"] = None
-        values["tcp_response_end_symbol"] = None
 
 
 async def _load_case_dataset_names(case_id: int) -> List[str]:
@@ -604,7 +584,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             update_dict=update_dict,
             field_names=STEP_CLEARABLE_JSON_FIELDS
         )
-        _apply_tcp_frame_mutex(update_dict)
         if not update_dict:
             return instance
 
@@ -1044,7 +1023,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     exclude_none=True,
                     exclude={"id", "case", "children", "quote_steps", "quote_case", "step_code", "branch_items"},
                 )
-                _apply_tcp_frame_mutex(create_step_dict)
                 create_step_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if final_parent_step_id is not None:
                     create_step_dict["parent_step_id"] = final_parent_step_id
@@ -1145,7 +1123,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     update_dict=update_dict,
                     field_names=STEP_CLEARABLE_JSON_FIELDS
                 )
-                _apply_tcp_frame_mutex(update_dict)
                 # step_is_skipped=False 需显式落库（exclude_none 会保留 False，此处再兜底一次）
                 update_dict["step_is_skipped"] = bool(getattr(step_data, "step_is_skipped", False))
                 if "parent_step_id" not in step_data.model_dump(exclude_unset=True) and parent_step_id is not None:

@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import orjson
 from fastapi import APIRouter, Body
 from lxml import etree
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from backend.applications.autotest.services.autotest_runtime.protocol_tcp import (
     TCP_MAX_RESPONSE_BYTES,
@@ -454,8 +454,8 @@ class _TcpFrameServerStartIn(BaseModel):
     """
     TCP帧协议诊断服务器启动入参。
 
-    tcp_*字段取值与步骤schema完全一致，帧模式复用 resolve_tcp_frame_config 推导。
-    与步骤schema不同：诊断端口为显式单一用途配置，互斥冲突直接拒绝而非静默归一。
+    tcp_*字段取值与步骤schema完全一致且相互独立不互斥，帧模式复用 resolve_tcp_frame_config 按优先级推导
+    （进制数≠不使用 → 长度前缀，结束符字段保留但不参与成帧；进制数=不使用且配置了结束符 → 结束符；均未配置 → RAW）。
     """
 
     port: int = Field(default=9093, ge=1, le=65535, description="监听端口（监听地址与外层host一致，不单独配置）")
@@ -468,28 +468,10 @@ class _TcpFrameServerStartIn(BaseModel):
     tcp_encoding: Optional[str] = Field(default=None, max_length=32, description="TCP文本编码")
     response_text: Optional[str] = Field(default=None, max_length=65536, description="响应报文内容；缺省回显请求内容")
 
-    @model_validator(mode="after")
-    def _validate_frame_mutex(self) -> "_TcpFrameServerStartIn":
-        """
-        校验帧配置互斥关系：长度位参数仅在与结束符二选一时有效。
-
-        :return: 当前模型实例
-        """
-        if self.tcp_radix in (None, AutoTestTcpRadix.NONE):
-            if self.tcp_radix_length is not None or self.tcp_datagram_length is not None:
-                raise ValueError("参数[tcp_radix_length|tcp_datagram_length]仅在进制数非「不使用」时允许配置")
-        else:
-            # 响应结束符为自定义文本：无/空视为未配置（与步骤schema互斥校验同源）
-            response_symbol_text = (self.tcp_response_end_symbol or "").strip()
-            if (self.tcp_request_end_symbol not in (None, AutoTestTcpEndSymbol.NONE)
-                    or response_symbol_text not in ("", AutoTestTcpEndSymbol.NONE.value)):
-                raise ValueError("参数[tcp_request_end_symbol|tcp_response_end_symbol]仅在进制数为「不使用」时允许配置")
-        return self
-
 
 # 帧诊断端口内置组合：一键启动即覆盖用例帧链路验收所需的全部配置组合（端口与"TCP帧诊断*"环境配置对应）
 _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
-    # TCP协议：十进制/8位长度位/不包含长度位/无结束符
+    # TCP协议：十进制/8位长度位/不包含长度位
     _TcpFrameServerStartIn(
         port=9093,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
@@ -531,6 +513,15 @@ _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
         port=9098,
         tcp_radix=AutoTestTcpRadix.NONE
     ),
+    # TCP协议：帧字段共存组合（进制数与结束符不互斥）：推导按优先级取长度前缀，结束符保留不参与成帧
+    _TcpFrameServerStartIn(
+        port=9099,
+        tcp_radix=AutoTestTcpRadix.DECIMAL,
+        tcp_radix_length=8,
+        tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
+        tcp_request_end_symbol=AutoTestTcpEndSymbol.CRLF,
+        tcp_response_end_symbol="\\r\\n"
+    ),
 ]
 
 
@@ -555,8 +546,8 @@ async def start_tcp_test_server(
 
     帧协议自动检测：LENGTH_PREFIX（8位长度前缀）或RAW（无前缀）。
 
-    - **帧诊断端口**（内置组合9093~9098）：一次启动全部帧配置组合
-      （十进制8位/十六进制4位包含/结束符/HEX/GBK/RAW），按各端口配置组帧/解帧并回显；
+    - **帧诊断端口**（内置组合9093~9099）：一次启动全部帧配置组合
+      （十进制8位/十六进制4位包含/结束符/HEX/GBK/RAW/共存组合），按各端口配置组帧/解帧并回显；
       监听地址统一使用外层host。
 
     :param host: 监听地址（所有端口共用）
@@ -775,7 +766,7 @@ class _TcpFrameTestServer:
         self._last_report = {}
         self._frame_desc = {
             "frame_mode": self._frame_config.frame_mode.value,
-            "tcp_radix": tcp_enum_value(req.tcp_radix) or "十进制",
+            "tcp_radix": tcp_enum_value(req.tcp_radix) or "不使用",
             "tcp_radix_length": int(req.tcp_radix_length or 8),
             "tcp_datagram_length": tcp_enum_value(req.tcp_datagram_length) or "不包含长度位",
             "tcp_request_end_symbol": tcp_enum_value(req.tcp_request_end_symbol) or "无",

@@ -141,14 +141,14 @@
                   :options="TCP_RADIX_LENGTH_OPTIONS"
                   placeholder="位数"
                   class="tcp-frame-select"
-                  :disabled="props.readonly || tcpLengthDisabled"
+                  :disabled="props.readonly"
               />
               <n-select
                   v-model:value="state.form.tcp_datagram_length"
                   :options="TCP_DATAGRAM_LENGTH_OPTIONS"
                   placeholder="总长度"
                   class="tcp-frame-select"
-                  :disabled="props.readonly || tcpLengthDisabled"
+                  :disabled="props.readonly"
               />
             </div>
           </n-form-item>
@@ -157,8 +157,7 @@
                 v-model:value="state.form.tcp_request_end_symbol"
                 :options="TCP_END_SYMBOL_OPTIONS"
                 placeholder="请求结束符"
-                clearable
-                :disabled="props.readonly || tcpEndSymbolDisabled"
+                :disabled="props.readonly"
             />
           </n-form-item>
           <!-- 响应结束符对齐JMeter EOL为自定义输入：可选预设也允许输入任意转义序列文本 -->
@@ -168,7 +167,7 @@
                 :options="TCP_END_SYMBOL_OPTIONS"
                 placeholder="响应结束符(可自定义, 如\r\n)"
                 clearable
-                :disabled="props.readonly || tcpEndSymbolDisabled"
+                :disabled="props.readonly"
                 filterable
                 tag
             />
@@ -868,13 +867,12 @@ const buildConfigFromState = () => {
     data_source_id: state.form.data_source_id ?? null,
     data_source_name: state.form.data_source_name || '',
     data_source_desc: state.form.data_source_desc || '',
-    // TCP帧配置：value 与后端枚举展示值同源，后端按进制数与结束符组合推导帧模式。
-    // 互斥由后端按帧模式无条件归一（进制数开启→结束符置null；不使用→长度位置null），前端按表单原值透传：
-    // 结束符未选择传null、选「无」原样传「无」，展示即落库
+    // TCP帧配置：字段相互独立不互斥，value 与后端枚举展示值同源全量透传，展示即落库；
+    // 帧模式由后端运行时按优先级推导（进制数≠不使用→长度前缀，结束符字段保留但不参与成帧）
     tcp_radix: state.form.tcp_radix || '不使用',
-    tcp_radix_length: state.form.tcp_radix === '不使用' ? null : (state.form.tcp_radix_length ?? 8),
-    tcp_datagram_length: state.form.tcp_radix === '不使用' ? null : (state.form.tcp_datagram_length || '不包含长度位'),
-    tcp_request_end_symbol: normalizeTcpEndSymbol(state.form.tcp_request_end_symbol),
+    tcp_radix_length: state.form.tcp_radix_length ?? 8,
+    tcp_datagram_length: state.form.tcp_datagram_length || '不包含长度位',
+    tcp_request_end_symbol: normalizeTcpEndSymbol(state.form.tcp_request_end_symbol) ?? '\\r\\n',
     tcp_response_end_symbol: normalizeTcpEndSymbol(state.form.tcp_response_end_symbol),
     tcp_response_timeout: state.form.tcp_response_timeout ?? null,
     tcp_connect_type: state.form.tcp_connect_type || '短连接',
@@ -890,8 +888,6 @@ const buildConfigFromState = () => {
 const hydrateTcpForm = (p) => {
   const cfg = p.config || {}
   const original = p.step?.original || {}
-  // 是否已落库的后端步骤：区分新增默认值与修改回显
-  const hasSavedTcpStep = p.step?.original?.id != null
 
   const argsType = normalizeBodyType(cfg.request_args_type ?? original.request_args_type ?? 'xml')
   const backendText = cfg.request_text ?? original.request_text ?? ''
@@ -947,11 +943,11 @@ const hydrateTcpForm = (p) => {
     data_source_name: cfg.data_source_name ?? original.data_source_name ?? '',
     data_source_desc: cfg.data_source_desc ?? original.data_source_desc ?? '',
     // TCP帧配置：修改时直接显示已保存数据(cfg优先、original兜底)；仅新增(无后端original.id)用新步骤默认值。
-    // 存量步骤(NULL)回退十进制/8位与响应超时默认5s，保证所见=所执行
-    tcp_radix: cfg.tcp_radix ?? original.tcp_radix ?? (hasSavedTcpStep ? '十进制' : '不使用'),
-    tcp_radix_length: cfg.tcp_radix_length ?? original.tcp_radix_length ?? null,
+    // 存量步骤(NULL)回退与后端推导缺省一致：不使用/8位/不包含长度位/\r\n，保证所见=所执行
+    tcp_radix: cfg.tcp_radix ?? original.tcp_radix ?? '不使用',
+    tcp_radix_length: cfg.tcp_radix_length ?? original.tcp_radix_length ?? 8,
     tcp_datagram_length: cfg.tcp_datagram_length ?? original.tcp_datagram_length ?? '不包含长度位',
-    tcp_request_end_symbol: cfg.tcp_request_end_symbol ?? original.tcp_request_end_symbol ?? null,
+    tcp_request_end_symbol: cfg.tcp_request_end_symbol ?? original.tcp_request_end_symbol ?? '\\r\\n',
     tcp_response_end_symbol: cfg.tcp_response_end_symbol ?? original.tcp_response_end_symbol ?? null,
     tcp_response_timeout: cfg.tcp_response_timeout ?? original.tcp_response_timeout ?? 5,
     tcp_connect_type: cfg.tcp_connect_type ?? original.tcp_connect_type ?? '短连接',
@@ -985,11 +981,11 @@ const { form, syncFromExternal } = useStepEditorForm({
     data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
-    // TCP帧配置：新增默认值（不使用=RAW、结束符未选择=null）；修改场景由 hydrate 按已保存数据回显
+    // TCP帧配置：新增默认值（不使用/8位/不包含长度位/请求结束符\r\n必选/响应结束符自定义可空）；修改场景由 hydrate 按已保存数据回显
     tcp_radix: '不使用',
-    tcp_radix_length: null,
+    tcp_radix_length: 8,
     tcp_datagram_length: '不包含长度位',
-    tcp_request_end_symbol: null,
+    tcp_request_end_symbol: '\\r\\n',
     tcp_response_end_symbol: null,
     tcp_response_timeout: 5,
     tcp_connect_type: '短连接',
@@ -1116,18 +1112,18 @@ const tcpConfigNameLoading = ref(false)
 
 /* =================== TCP帧配置选项（value 与后端枚举展示值同源，落库即展示值） =================== */
 const TCP_RADIX_OPTIONS = [
+  { label: '不使用', value: '不使用' },
   { label: '十进制', value: '十进制' },
   { label: '十六进制', value: '十六进制' },
-  { label: '不使用', value: '不使用' },
 ]
-const TCP_RADIX_LENGTH_OPTIONS = Array.from({length: 9}, (_, i) => ({label: String(i + 2), value: i + 2}))
+const TCP_RADIX_LENGTH_OPTIONS = Array.from({length: 9}, (_, i) => ({label: String(10 - i), value: 10 - i}))
 const TCP_DATAGRAM_LENGTH_OPTIONS = [
   { label: '包含长度位', value: '包含长度位' },
   { label: '不包含长度位', value: '不包含长度位' },
 ]
 const TCP_END_SYMBOL_OPTIONS = [
-  { label: '无', value: '无' },
   { label: '\\r\\n', value: '\\r\\n' },
+  { label: '无', value: '无' },
   { label: '\\r', value: '\\r' },
   { label: '\\n', value: '\\n' },
 ]
@@ -1144,23 +1140,11 @@ const TCP_ENCODING_OPTIONS = [
   { label: 'ASCII', value: 'ASCII' },
 ]
 
-// 结束符未选择(空)归一为null，选「无」原样透传落库；帧模式互斥清空由后端schema归一兜底
+// 响应结束符未选择(空)归一为null；请求结束符为必选项，空值由调用处按默认\r\n兜底
 const normalizeTcpEndSymbol = (v) => {
   const text = v == null ? '' : String(v).trim()
   return text || null
 }
-
-// 互斥联动（对齐JMeter帧模式推导）：进制数≠不使用 → 长度前缀模式（位数/总长度可配，结束符禁用）；
-// 进制数=不使用 → 长度位参数禁用，结束符可配
-const tcpLengthDisabled = computed(() => state.form.tcp_radix === '不使用')
-const tcpEndSymbolDisabled = computed(() => state.form.tcp_radix !== '不使用')
-watch(() => state.form.tcp_radix, (radix) => {
-  if (radix !== '不使用') {
-    // 切回长度前缀模式时清空结束符（未选择=null），长度位与结束符互斥
-    state.form.tcp_request_end_symbol = null
-    state.form.tcp_response_end_symbol = null
-  }
-})
 
 const loadTcpConfigNames = async (projectId) => {
   const pid = projectId != null && projectId !== '' ? Number(projectId) : null
@@ -1618,7 +1602,8 @@ const doDebugRequest = async (env_name) => {
     if (av.length > 0) {
       debugPayload.assert_validators = av
     }
-    // TCP帧配置：与保存链路同源（cfg 优先、original 兜底），保证调试与执行行为一致
+    // TCP帧配置：与保存链路同源全量透传（cfg优先、original兜底），帧字段独立不互斥，
+    // 帧模式由后端按优先级推导（进制数≠不使用→长度前缀，结束符字段保留但不参与成帧），保证调试与执行行为一致
     const tcpFrameFields = [
       'tcp_radix', 'tcp_radix_length', 'tcp_datagram_length',
       'tcp_request_end_symbol', 'tcp_response_end_symbol',
@@ -1628,11 +1613,6 @@ const doDebugRequest = async (env_name) => {
       const value = cfg[field] ?? original[field]
       if (value != null) debugPayload[field] = value
     })
-    // 进制数=不使用不带长度位参数；帧模式互斥（长度位/结束符清空）由后端schema归一兜底
-    if ((debugPayload.tcp_radix ?? '十进制') === '不使用') {
-      delete debugPayload.tcp_radix_length
-      delete debugPayload.tcp_datagram_length
-    }
 
     const res = await api.tcpRequestDebugging(debugPayload)
     if (res.code === '000000') {

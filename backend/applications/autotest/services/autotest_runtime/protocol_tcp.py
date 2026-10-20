@@ -117,15 +117,14 @@ def tcp_enum_value(raw: Any) -> Optional[str]:
 
 def resolve_tcp_frame_config(step: Any) -> TcpFrameConfig:
     """
-    按TCP步骤字段组合推导帧配置；缺省值与线上历史行为一致（十进制/8位/不包含长度位/无结束符）。
+    按TCP步骤字段组合推导帧配置；
 
-    推导规则：进制数≠不使用 → 长度前缀；进制数=不使用且任一结束符≠无 → 结束符；均未配置 → RAW。
-    schema层已校验长度位与结束符互斥，此处不做重复校验。
+    进制数≠不使用 → 长度前缀（结束符字段保留但不参与成帧计算）；进制数=不使用且配置了结束符 → 结束符；均未配置 → RAW
 
-    :param step: 步骤对象（执行入参或调试入参，需携带tcp_*字段）
+    :param step: 步骤对象
     :return: 帧配置对象
     """
-    radix_value = tcp_enum_value(getattr(step, "tcp_radix", None)) or AutoTestTcpRadix.DECIMAL.value
+    radix_value = tcp_enum_value(getattr(step, "tcp_radix", None)) or AutoTestTcpRadix.NONE.value
     datagram_value = tcp_enum_value(getattr(step, "tcp_datagram_length", None)) or AutoTestTcpDatagramLength.EXCLUDE.value
     request_symbol = tcp_enum_value(getattr(step, "tcp_request_end_symbol", None)) or AutoTestTcpEndSymbol.NONE.value
     # 响应结束符为自定义文本：无/空→None；非空即结束符模式（对齐JMeter EOL）

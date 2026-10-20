@@ -2693,7 +2693,7 @@ class TcpStepExecutor(BaseStepExecutor):
         - request_args_type 为 RAW 时发送 request_text（str/bytes），为 JSON 时发送 request_body（dict 或 JSON 字符串），其它或未配置时优先 request_text、否则 request_body。
         - TCP帧配置（tcp_radix/tcp_radix_length/tcp_datagram_length/tcp_request_end_symbol/tcp_response_end_symbol/
           tcp_connect_type/tcp_encoding/tcp_hex_string/tcp_response_timeout 等）由 resolve_tcp_frame_config 统一推导，
-          帧模式三选一：长度前缀 / 结束符 / RAW；进制数与结束符互斥由 schema 校验。
+          帧字段相互独立不互斥，按优先级推导：进制数≠不使用 → 长度前缀；否则配置了结束符 → 结束符；均未配置 → RAW。
         - 连接超时与最大读取字节数对齐JMeter不向用户暴露，由引擎按内部默认值兜底（TCP_MAX_RESPONSE_BYTES）。
     """
 

@@ -187,8 +187,7 @@ class AutoTestStepReqBase(BaseModel):
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
     request_config_name: Optional[str] = Field(None, max_length=128, description="请求环境配置名称")
 
-    # TCP请求帧配置（仅TCP步骤使用）；帧模式由字段组合推导：
-    # 进制数≠不使用 → 长度前缀；进制数=不使用且任一结束符≠无 → 结束符；均未配置 → RAW
+    # 进制数≠不使用 → 长度前缀（结束符字段保留但不参与成帧计算）；进制数=不使用且配置了结束符 → 结束符；均未配置 → RAW
     tcp_radix: Optional[AutoTestTcpRadix] = Field(None, description="TCP报文头进制数")
     tcp_radix_length: Optional[int] = Field(None, ge=2, le=10, description="TCP长度位宽度")
     tcp_datagram_length: Optional[AutoTestTcpDatagramLength] = Field(None, description="TCP报文总长度")
@@ -615,9 +614,8 @@ def step_variables_list_from_storage(raw: Any) -> List[StepVariablesBase]:
 
 def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
     """
-    将仓储层to_dict得到的单步JSON转为AutoTestStepTreeUpdateItem。
+    将仓储层to_dict得到的单步JSON转为AutoTestStepTreeUpdateItem；
     已为目标模型时直接返回；递归处理children/quote_steps/branch_items。
-    TCP帧互斥由业务侧写入时归一（见step_crud._apply_tcp_frame_mutex），此处不做预处理。
     """
     if isinstance(data, AutoTestStepTreeUpdateItem):
         return data
