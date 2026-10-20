@@ -57,6 +57,7 @@ STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
     "session_variables", "defined_variables", "extract_variables", "assert_validators", "database_operates", "redis_operates",
     "loop_conditions", "loop_index", "loop_key", "loop_value",
+    "tcp_response_end_symbol",
 )
 
 

@@ -159,8 +159,10 @@ export function mapBackendStep(step) {
       tcp_radix: step.tcp_radix || '十进制',
       tcp_radix_length: step.tcp_radix_length ?? ((step.tcp_radix ?? '十进制') !== '不使用' ? 8 : null),
       tcp_datagram_length: step.tcp_datagram_length || '不包含长度位',
-      tcp_request_end_symbol: step.tcp_request_end_symbol || '无',
-      tcp_response_end_symbol: step.tcp_response_end_symbol || '无',
+      // 结束符原样透传：null=未选择（请求结束符由编辑面板按默认\r\n兜底；响应结束符留空保存即落库null），
+      // 禁止把null强转「无」，否则字面量「无」会被当自定义文本原样落库
+      tcp_request_end_symbol: step.tcp_request_end_symbol || null,
+      tcp_response_end_symbol: step.tcp_response_end_symbol || null,
       tcp_response_timeout: step.tcp_response_timeout ?? 5,
       tcp_connect_type: step.tcp_connect_type || '短连接',
       tcp_encoding: step.tcp_encoding || 'UTF-8',
