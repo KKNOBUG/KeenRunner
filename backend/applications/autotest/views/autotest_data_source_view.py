@@ -34,7 +34,7 @@ from backend.applications.autotest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceUnbindCase,
     AutoTestDataSourceUpdateFields,
 )
-from backend.applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
+from backend.applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.configure import LOGGER, PROJECT_CONFIG
@@ -1147,7 +1147,7 @@ async def single_step_dataset_download(
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-            style_data_source_sheet(writer.sheets[safe_name])
+            CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
@@ -1200,7 +1200,7 @@ async def single_step_template_download(
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-            style_data_source_sheet(writer.sheets[safe_name])
+            CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源模板_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
@@ -1429,7 +1429,7 @@ async def batch_step_dataset_download(
                 df = pd.DataFrame(dataset_dataframe if dataset_dataframe else [[None]])
                 safe_name = _safe_sheet_name(step_name, used_names)
                 df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-                style_data_source_sheet(writer.sheets[safe_name])
+                CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
@@ -1494,7 +1494,7 @@ async def batch_step_template_download(
                 safe_name = _safe_sheet_name(step.step_name, used_names)
                 df = pd.DataFrame(matrix)
                 df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
-                style_data_source_sheet(writer.sheets[safe_name])
+                CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
 
         file_name = f"数据源模板_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)

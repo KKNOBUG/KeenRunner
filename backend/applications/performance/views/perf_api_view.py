@@ -22,7 +22,7 @@ from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import StreamingResponse
 from tortoise.expressions import Q
 
-from backend.applications.autotest.services.autotest_case_excel_service import style_data_source_sheet
+from backend.applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
 from backend.applications.performance.schemas.perf_api_schema import (
@@ -339,7 +339,7 @@ async def download_perf_api_template(
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, header=False, sheet_name=safe_name)
             # 统一样式: 分区标记黄底、居中换行、行高/列宽自适应(与功能数据源模板导出风格一致)
-            style_data_source_sheet(writer.sheets[safe_name])
+            CaseExcelService.style_data_source_sheet(writer.sheets[safe_name])
         output.seek(0)
 
         file_name = f"数据源模板_{api.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"

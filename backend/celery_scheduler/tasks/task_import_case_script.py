@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
-from backend.applications.autotest.services.autotest_case_excel_service import import_script_rows
+from backend.applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from backend.celery_scheduler.celery_base import run_async
 from backend.celery_scheduler.celery_worker import celery
 from backend.configure import LOGGER
@@ -35,7 +35,7 @@ async def _import_case_scripts_impl(rows: List[Dict[str, Any]], file_name: Optio
         CTX_USERNAME.set(str(created_user).strip())
     services: AutoTestServices = await get_autotest_api_services()
 
-    result, invalid = await import_script_rows(rows=rows, services=services)
+    result, invalid = await CaseExcelService.import_script_rows(rows=rows, services=services)
     if invalid:
         return {
             "total_cases": len(rows),

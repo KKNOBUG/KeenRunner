@@ -158,6 +158,15 @@ export default {
   generateCaseScriptsAsync: (data = {}) => request.post('/autotest/case/generate_case_scripts_async', data),
   /** FormData：file —— 导入公共接口脚本（模板xlsx：按应用+接口名称匹配，存在更新/不存在新增；统一异步），返回 { celery_task_id } */
   importCaseScriptsAsync: (formData) => request.post('/autotest/case/import_case_scripts_async', formData),
+  /** 下载公共接口导入模板（blob）：模板取自部署目录xlsx，响应落地文件名固定为 接口模板.xlsx */
+  downloadCaseImportTemplate: () => axios.post(
+      `${import.meta.env.VITE_BASE_API}/autotest/case/import_template_download`,
+      null,
+      {
+        responseType: 'blob',
+        headers: { token: getToken() || '' },
+      },
+  ),
   getAutoTestStepTree: (data = {}) => {
     const params = []
     if (data.case_id) params.push(`case_id=${data.case_id}`)

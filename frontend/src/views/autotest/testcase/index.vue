@@ -12,6 +12,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import {apiPermissionKey, formatDateTime, renderIcon} from '@/utils'
+import {downloadBlobResponse} from '@/utils/common/downloadFile'
 import {useCRUD} from '@/composables'
 import api from '@/api'
 import {useAutotestStore, usePermissionStore, useTagsStore, useUserStore} from '@/store'
@@ -91,22 +92,27 @@ const queryBarProps = computed(() => ({
   /** 仅测试用例：导出/导入收纳进右侧更多菜单 */
   extraActions: [
     {
-      label: '导出报文',
+      label: '导出报文数据',
       key: 'exportData',
       icon: renderIcon('material-symbols:download', { size: 16 }),
     },
     {
-      label: '导出接口',
+      label: '导出接口明细',
       key: 'exportScript',
       icon: renderIcon('material-symbols:download', { size: 16 }),
     },
     {
-      label: '导入接口',
+      label: '导入接口明细',
       key: 'importScript',
       icon: renderIcon('material-symbols:upload', { size: 16 }),
     },
     {
-      label: '脚本生成',
+      label: '接口模板下载',
+      key: 'downloadTemplate',
+      icon: renderIcon('material-symbols:download', { size: 16 }),
+    },
+    {
+      label: '接口生成脚本',
       key: 'generateScript',
       icon: renderIcon('material-symbols:difference', { size: 16 }),
     },
@@ -114,7 +120,8 @@ const queryBarProps = computed(() => ({
 }))
 
 function onQueryBarAction(key) {
-  if (key === 'exportData') handleExport()
+  if (key === 'downloadTemplate') handleDownloadTemplate()
+  else if (key === 'exportData') handleExport()
   else if (key === 'exportScript') handleExportScript()
   else if (key === 'importScript') handleImportScript()
   else if (key === 'generateScript') handleGenerateScript()
@@ -260,6 +267,24 @@ async function submitImportScript() {
     }
   } finally {
     importLoading.value = false
+  }
+}
+
+/** 接口模板下载：同步下载部署目录内的导入模板xlsx，不走异步中心(无任务产物) */
+const templateDownloading = ref(false)
+
+async function handleDownloadTemplate() {
+  if (templateDownloading.value) return
+  templateDownloading.value = true
+  try {
+    const res = await api.downloadCaseImportTemplate()
+    await downloadBlobResponse(res, '接口模板.xlsx')
+    window.$message?.success?.('接口模板下载成功')
+  } catch (err) {
+    // 后端异常时为JSON错误体，已由 downloadBlobResponse 解析message；网络/鉴权错误在此兜底
+    window.$message?.error?.(`接口模板下载失败：${err?.message || err}`)
+  } finally {
+    templateDownloading.value = false
   }
 }
 
@@ -1187,7 +1212,7 @@ const columns = computed(() => {
     </NModal>
 
     <!-- 公共接口转脚本对话框：为勾选的公共接口逐个生成独立脚本(异步任务，结果在异步中心查看) -->
-    <NModal v-model:show="generateScriptShow" preset="card" title="脚本生成" style="width: 560px">
+    <NModal v-model:show="generateScriptShow" preset="card" title="接口生成脚本" style="width: 560px">
       <NAlert type="info" style="margin-bottom: 16px">
         将为每个接口生成独立脚本，脚本仅包含当前接口
       </NAlert>

@@ -23,11 +23,7 @@ from backend.applications.autotest.schemas.autotest_case_schema import (
     AutoTestCaseSelect,
     AutoTestCaseUpdate
 )
-from backend.applications.autotest.services.autotest_case_excel_service import (
-    prepare_export_cases,
-    prepare_script_export_rows,
-    parse_script_workbook,
-)
+from backend.applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from backend.celery_scheduler.tasks.task_export_case_datagram import export_testcases_task
 from backend.celery_scheduler.tasks.task_export_case_script import export_case_scripts_task
 from backend.celery_scheduler.tasks.task_import_case_script import import_case_scripts_task
@@ -532,15 +528,13 @@ async def public_api_import_template_download():
 
     :return: 文件流响应
     """
-    filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "公共接口模板.xlsx"))
+    filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", CaseExcelService.SCRIPT_IMPORT_TEMPLATE_FILE))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
         LOGGER.error(f"导入模板文件不存在: {filepath}")
         return NotFoundResponse(message="导入模板文件不存在，请联系管理员部署")
-    file_name = os.path.basename(filepath)
-    quoted_name = quote(file_name)
-    headers = {
-        "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"
-    }
+
+    quoted_name = quote(CaseExcelService.SCRIPT_IMPORT_TEMPLATE_DOWNLOAD_NAME)
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
     return StreamingResponse(
         FileTransfer.iter_download_file_chunks(download_file=filepath, add_bom=False),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -565,7 +559,7 @@ async def import_case_scripts_async(
         return FileExtensionResponse(message="仅支持.xlsx后缀的模板文件")
     try:
         content: bytes = await file.read()
-        rows, parse_invalid = parse_script_workbook(content)
+        rows, parse_invalid = await CaseExcelService.parse_script_workbook_async(content)
         if parse_invalid:
             return ParameterResponse(message="文件存在不合规行，已取消导入", data={"invalid": parse_invalid})
         apply_async_result = import_case_scripts_task.apply_async(
@@ -608,7 +602,7 @@ async def export_case_datagram_async(
     try:
         if not case_ids:
             return ParameterResponse(message="请选择目标接口")
-        _, invalid = await prepare_export_cases(case_ids=case_ids, services=services)
+        _, invalid = await CaseExcelService.prepare_export_cases(case_ids=case_ids, services=services)
         if invalid:
             return ParameterResponse(message="存在不合规接口，导出失败", data={"invalid": invalid})
         apply_async_result = export_testcases_task.apply_async(
@@ -651,7 +645,7 @@ async def export_case_scripts_async(
     try:
         if not case_ids:
             return ParameterResponse(message="请选择目标接口")
-        _, invalid = await prepare_script_export_rows(case_ids=case_ids, services=services)
+        _, invalid = await CaseExcelService.prepare_script_export_rows(case_ids=case_ids, services=services)
         if invalid:
             return ParameterResponse(message="存在不合规接口，导出失败", data={"invalid": invalid})
         apply_async_result = export_case_scripts_task.apply_async(
