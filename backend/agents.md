@@ -2,7 +2,6 @@
 
 > 本文件为 AI Agent / 新成员快速理解后端仓库的入口地图。
 > 仓库定位：**生产在运**的接口自动化 + 性能压测一体化平台后端。
-> 任何改动前请先阅读 `.qoder/skills/production-project-guard/SKILL.md`（生产项目强制约束）。
 
 ---
 
