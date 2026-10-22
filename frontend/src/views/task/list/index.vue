@@ -324,11 +324,11 @@ const formatDateForQuery = (ts) => {
 }
 const handleDateRangeChange = (value) => {
   if (value == null) {
-    queryItems.value.date_from = null
-    queryItems.value.date_to = null
+    queryItems.value.execute_time_start = null
+    queryItems.value.execute_time_end = null
   } else {
-    queryItems.value.date_from = formatDateForQuery(value[0])
-    queryItems.value.date_to = formatDateForQuery(value[1])
+    queryItems.value.execute_time_start = formatDateForQuery(value[0])
+    queryItems.value.execute_time_end = formatDateForQuery(value[1])
   }
 }
 
@@ -340,9 +340,9 @@ watch(
 )
 
 watch(
-    () => [queryItems.value.date_from, queryItems.value.date_to],
-    ([from, to]) => {
-      if (from == null && to == null) dateRange.value = null
+    () => [queryItems.value.execute_time_start, queryItems.value.execute_time_end],
+    ([start, end]) => {
+      if (start == null && end == null) dateRange.value = null
     }
 )
 

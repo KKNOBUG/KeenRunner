@@ -131,8 +131,8 @@ class AutoTestTaskSelect(AutoTestTaskUpdate):
     last_execute_user: Optional[str] = Field(None, max_length=16, description="最后执行人员")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     task_enabled: Optional[bool] = Field(None, description="是否启动调度")
-    date_from: Optional[str] = Field(None, description="最后执行时间-起")
-    date_to: Optional[str] = Field(None, description="最后执行时间-止")
+    execute_time_start: Optional[str] = Field(None, description="最后执行时间-起")
+    execute_time_end: Optional[str] = Field(None, description="最后执行时间-止")
     state: Optional[int] = Field(default=0, description="状态")
 
 

@@ -244,16 +244,16 @@ async def search_tasks(
                 env_name = env_enum.env_name if env_enum else None
             # 环境不存在时返回空结果集
             q &= Q(task_involve_envs__contains=[env_name]) if env_name else Q(pk=0)
-        if task_in.date_from:
-            date_from = task_in.date_from.strip()
-            if len(date_from) == 10:
-                date_from = f"{date_from} 00:00:00"
-            q &= Q(last_execute_time__gte=date_from)
-        if task_in.date_to:
-            date_to = task_in.date_to.strip()
-            if len(date_to) == 10:
-                date_to = f"{date_to} 23:59:59"
-            q &= Q(last_execute_time__lte=date_to)
+        if task_in.execute_time_start:
+            execute_time_start = task_in.execute_time_start.strip()
+            if len(execute_time_start) == 10:
+                execute_time_start = f"{execute_time_start} 00:00:00"
+            q &= Q(last_execute_time__gte=execute_time_start)
+        if task_in.execute_time_end:
+            execute_time_end = task_in.execute_time_end.strip()
+            if len(execute_time_end) == 10:
+                execute_time_end = f"{execute_time_end} 23:59:59"
+            q &= Q(last_execute_time__lte=execute_time_end)
         q &= Q(state=task_in.state)
         total, instances = await services.task_curd.select_tasks(
             search=q,
