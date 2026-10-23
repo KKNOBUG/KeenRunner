@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : menu_enum.py
 @DateTime: 2025/2/18 19:43
 """

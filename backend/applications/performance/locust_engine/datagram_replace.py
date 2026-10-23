@@ -9,7 +9,7 @@ orjson/jsonpath/jsonpath_ng), 调整任一侧时必须同步评估另一侧。
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : datagram_replace.py
 @DateTime: 2026/9/18 10:00
 """

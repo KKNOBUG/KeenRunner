@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : autotest_case_transfer_crud.py
 @DateTime: 2026/8/17
 """

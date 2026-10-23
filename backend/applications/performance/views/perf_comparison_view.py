@@ -7,7 +7,7 @@
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_comparison_view.py
 @DateTime: 2026/9/17 20:30
 """

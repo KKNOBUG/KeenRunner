@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : database_async_pool.py
 @DateTime: 2025/1/12 19:55
 """

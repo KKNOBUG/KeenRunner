@@ -2,7 +2,7 @@
 r"""
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : scripts/patch_redoc_cjk_slug
 @DateTime: 2026/9/8
 

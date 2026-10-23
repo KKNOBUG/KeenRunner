@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : task_autotest_case
 @DateTime: 2026/2/1 16:10
 """

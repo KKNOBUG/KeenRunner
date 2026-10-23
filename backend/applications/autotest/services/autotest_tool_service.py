@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : autotest_tool_service.py
 @DateTime: 2026/1/17 12:20
 """

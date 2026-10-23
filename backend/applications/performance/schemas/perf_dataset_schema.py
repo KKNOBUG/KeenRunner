@@ -8,7 +8,7 @@ dataset/dataset_names 由服务端经 autotest_data_source_parser 解析派生, 
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_dataset_schema.py
 @DateTime: 2026/9/15 15:50
 """

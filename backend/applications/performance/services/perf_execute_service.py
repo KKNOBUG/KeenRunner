@@ -16,7 +16,7 @@ Linux 单变量 32KB 上限 MAX_ARG_STRLEN 不变），引擎子进程永不回�
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_execute_service.py
 @DateTime: 2026/9/14 15:30
 """

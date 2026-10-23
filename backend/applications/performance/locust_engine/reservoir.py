@@ -13,7 +13,7 @@ Locust 分位数取自响应时间直方图(键按2位有效数字分桶)且不�
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : reservoir.py
 @DateTime: 2026/9/16 10:30
 """

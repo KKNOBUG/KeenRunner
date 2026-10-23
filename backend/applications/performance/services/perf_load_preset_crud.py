@@ -7,7 +7,7 @@
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_load_preset_crud.py
 @DateTime: 2026/9/14 11:20
 """

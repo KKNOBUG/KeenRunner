@@ -10,7 +10,7 @@ placeholders/resolver、exchange/extractors、exchange/assert_compare;
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : request_executor.py
 @DateTime: 2026/9/14 14:40
 """

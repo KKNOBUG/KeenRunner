@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : base_enum_cls.py
 @DateTime: 2025/1/12 22:58
 """

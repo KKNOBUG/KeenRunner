@@ -10,7 +10,7 @@
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_dataset_service.py
 @DateTime: 2026/9/16 10:20
 """

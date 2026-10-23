@@ -31,7 +31,7 @@ PERF_MIN_SAMPLES_FOR_COMPARE 后才判定), 超限进程标记自身结束原因
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_locustfile.py
 @DateTime: 2026/9/16 10:30
 """

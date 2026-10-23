@@ -11,7 +11,7 @@ verify/cleanup 跑完轮次即成功(报告与明细即产出, 独立追溯)。
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_job_service.py
 @DateTime: 2026/9/17 17:50
 """

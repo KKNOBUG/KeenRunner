@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : testcase_priority_enum.py
 @DateTime: 2025/3/28 15:16
 """

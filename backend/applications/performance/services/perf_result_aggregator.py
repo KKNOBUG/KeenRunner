@@ -14,7 +14,7 @@ Locust 直方图值仅存 locust_stats 快照供交叉校验。
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_result_aggregator.py
 @DateTime: 2026/9/16 16:40
 """

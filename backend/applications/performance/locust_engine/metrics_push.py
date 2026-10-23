@@ -15,7 +15,7 @@ VM 地址为空时整体跳过。上报失败静默跳过本轮, 不影响压测
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : metrics_push.py
 @DateTime: 2026/9/14 14:40
 """

@@ -8,7 +8,7 @@ import backend)。进程登记与终止均为内存态, 服务重启后注册表
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_process_registry.py
 @DateTime: 2026/9/14 14:40
 """

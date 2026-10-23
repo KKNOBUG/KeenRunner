@@ -16,7 +16,7 @@ completed(运行中/失败/停止的报告指标不完整, 参与对比会误导
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_comparison_service.py
 @DateTime: 2026/9/17 20:30
 """

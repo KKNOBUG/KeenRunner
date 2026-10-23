@@ -13,7 +13,7 @@
 
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : perf_job_crud.py
 @DateTime: 2026/9/17 17:40
 """

@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : redis_sync_pool.py
 @DateTime: 2025/1/14 15:30
 """

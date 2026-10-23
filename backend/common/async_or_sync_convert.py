@@ -2,7 +2,7 @@
 """
 @Author  : yangkai
 @Email   : 807440781@qq.com
-@Project : Krun
+@Project : KeenRunner
 @Module  : async_or_sync_convert
 @DateTime: 2026/1/27 16:38
 """
