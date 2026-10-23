@@ -63,7 +63,7 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
     request_config_name = fields.CharField(max_length=128, null=True, description="请求环境配置名称")
 
-    # TCP请求帧配置（仅TCP步骤使用）；全为null时引擎按默认值执行：十进制/8位/不包含长度位/无结束符/短连接/utf-8
+    # TCP请求帧配置（仅TCP步骤使用）；全为null时引擎按默认值执行：10进制/8位/不包含长度位/无结束符/短连接/utf-8
     tcp_radix = fields.CharEnumField(AutoTestTcpRadix, default=None, null=True, description="TCP报文头进制数")
     tcp_radix_length = fields.IntField(null=True, ge=2, le=10, description="TCP报文头长位数")
     tcp_datagram_length = fields.CharEnumField(AutoTestTcpDatagramLength, default=None, null=True, description="TCP报文总长度")

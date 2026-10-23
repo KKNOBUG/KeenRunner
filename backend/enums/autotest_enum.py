@@ -190,8 +190,8 @@ class AutoTestConfigNodeType(StringEnum):
 class AutoTestTcpRadix(StringEnum):
     """TCP报文头(长度位)进制数；不使用表示不追加长度前缀。"""
     NONE = "不使用"
-    DECIMAL = "十进制"
-    HEX = "十六进制"
+    DECIMAL = "10进制"
+    HEX = "16进制"
 
 
 class AutoTestTcpDatagramLength(StringEnum):

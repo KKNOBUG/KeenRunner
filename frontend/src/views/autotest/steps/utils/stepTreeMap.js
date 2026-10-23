@@ -156,8 +156,8 @@ export function mapBackendStep(step) {
       assert_validators: Array.isArray(step.assert_validators) ? step.assert_validators : [],
       // TCP帧配置：value 与后端枚举展示值同源，缺省与后端引擎默认行为一致。
       // 位数回显已保存值；未保存(NULL)时按进制数回退：非「不使用」显示引擎生效默认8，「不使用」显示空
-      tcp_radix: step.tcp_radix || '十进制',
-      tcp_radix_length: step.tcp_radix_length ?? ((step.tcp_radix ?? '十进制') !== '不使用' ? 8 : null),
+      tcp_radix: step.tcp_radix || '10进制',
+      tcp_radix_length: step.tcp_radix_length ?? ((step.tcp_radix ?? '10进制') !== '不使用' ? 8 : null),
       tcp_datagram_length: step.tcp_datagram_length || '不包含长度位',
       // 结束符原样透传：null=未选择（请求结束符由编辑面板按默认\r\n兜底；响应结束符留空保存即落库null），
       // 禁止把null强转「无」，否则字面量「无」会被当自定义文本原样落库

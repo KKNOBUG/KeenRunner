@@ -1113,8 +1113,8 @@ const tcpConfigNameLoading = ref(false)
 /* =================== TCP帧配置选项（value 与后端枚举展示值同源，落库即展示值） =================== */
 const TCP_RADIX_OPTIONS = [
   { label: '不使用', value: '不使用' },
-  { label: '十进制', value: '十进制' },
-  { label: '十六进制', value: '十六进制' },
+  { label: '10进制', value: '10进制' },
+  { label: '16进制', value: '16进制' },
 ]
 const TCP_RADIX_LENGTH_OPTIONS = Array.from({length: 9}, (_, i) => ({label: String(10 - i), value: 10 - i}))
 const TCP_DATAGRAM_LENGTH_OPTIONS = [
