@@ -45,7 +45,6 @@ class ExtractAssertPipeline:
             is_core_engine: bool = True,
             step_struct: Optional[Dict[str, Dict[str, Any]]] = None,
             raise_on_failure: bool = True,
-            body_source: str = "response json",
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         统一执行变量提取与断言验证：先提取写入变量池，再执行断言，最后追加数据驱动断言。
@@ -67,7 +66,6 @@ class ExtractAssertPipeline:
         :param is_core_engine: 占位符解析模式
         :param step_struct: 数据驱动结构；非None时追加assert_head/assert_body
         :param raise_on_failure: True时提取或断言失败即抛ValueError
-        :param body_source: 保留参数，当前未生效
         :return: (extract_results_list, assert_results_list)
         """
         extract_results_dict, extract_results_list = ExtractPipeline.run_extract_variables(
@@ -132,7 +130,6 @@ class ExtractAssertPipeline:
                 finished_variables=finished_variables,
                 is_core_engine=is_core_engine,
                 log_callback=log_callback,
-                body_source=body_source,
             )
         if raise_on_failure:
             assert_failed_items = [item for item in validator_results if not item.get("success", True)]

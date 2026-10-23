@@ -164,8 +164,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             ).values_list("id", flat=True)
             count = await detail_crud.soft_delete_batch(ids=list(detail_ids))
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
-
-        return await self.soft_delete(id=instance.id)
+            # 报告软删与明细软删必须同事务，避免明细已删而报告未删的中间态
+            return await self.soft_delete(id=instance.id)
 
     async def select_reports(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestReportModel]]:
         """

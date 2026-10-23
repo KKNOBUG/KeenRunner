@@ -169,9 +169,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         data_dict: Dict[str, Any] = data_source_in.model_dump(exclude_none=True, exclude_unset=True)
         case_id = data_dict.get("case_id")
-        step_code = data_dict.get("step_code")
-        if not case_id or not str(step_code or "").strip():
-            error_message: str = "新增数据源失败, 参数[case_id, step_code]不允许为空"
+        case_code = str(data_dict.get("case_code") or "").strip()
+        step_id = data_dict.get("step_id")
+        step_code = str(data_dict.get("step_code") or "").strip()
+        if not case_id or not case_code or not step_id or not step_code:
+            error_message: str = "新增数据源失败, 参数[case_id, case_code, step_id, step_code]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 

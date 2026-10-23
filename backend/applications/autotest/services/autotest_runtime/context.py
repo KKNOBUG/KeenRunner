@@ -9,22 +9,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Protocol, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from backend.applications.autotest.schemas.autotest_step_schema import StepVariablesBase
-
-
-class VariableResolver(Protocol):
-    """变量解析协议：根据名称返回已定义变量的值。"""
-
-    def get_variable(self, name: str) -> Any:
-        """
-        根据变量名取值。
-
-        :param name: 变量名
-        :return: 变量值
-        """
-        ...
 
 
 @dataclass
@@ -81,7 +68,7 @@ def coerce_variable_resolver(
 
     :param finished_variables: 引擎上下文或变量列表；None表示无变量源
     :param is_core_engine: True时视为已实现get_variable的引擎上下文
-    :return: VariableResolver兼容对象；无变量源时返回None
+    :return: 实现get_variable的兼容对象；无变量源时返回None
     """
     if finished_variables is None:
         return None

@@ -138,16 +138,6 @@ class StepExecutionResult:
     assert_validators: List[Dict[str, Any]] = field(default_factory=list)
     children: List["StepExecutionResult"] = field(default_factory=list)
 
-    def append_child(self, child: "StepExecutionResult") -> None:
-        """
-        将子步骤执行结果追加到当前结果的children列表。
-
-        :param child: 子步骤的执行结果对象
-        :return: None
-        """
-        self.children.append(child)
-
-
 class HttpClientProtocol(Protocol):
     """
     HTTP客户端协议，便于依赖注入和单元测试。
@@ -259,14 +249,17 @@ class StepExecutionContext:
         """
         解析变量或配置中的${...}占位符（含函数占位符）。
 
+        上下文适配：统一绑定 logger_object、is_core_engine 与 finished_variables=self，
+        执行器无需在每个调用点重复传参。
+
         :param variables: 待解析的值，常见为List[StepVariablesBase]或嵌套结构
         :param step_code: 日志归属的步骤标识，未传则使用当前步骤
-        :return: 解析后的值；variables为空时返回None
+        :return: 解析后的值；None原样返回，空容器/0/False保留原语义
         """
-        if not variables:
+        if variables is None:
             return None
         return AutoTestToolService.resolve_placeholders(
-            value=variables or [],
+            value=variables,
             logger_object=lambda msg: self.log(msg, step_code=step_code),
             is_core_engine=True,
             finished_variables=self
@@ -275,6 +268,8 @@ class StepExecutionContext:
     def resolve_xml_placeholders(self, xml_text: str, step_code: Optional[str] = None) -> str:
         """
         解析XML报文中各文本节点与属性内的 ${...} 占位符（含算术表达式）。
+
+        上下文适配：统一绑定 logger_object、is_core_engine 与 finished_variables=self。
 
         :param xml_text: XML报文字符串
         :param step_code: 日志归属的步骤标识，未传则使用当前步骤
@@ -1074,6 +1069,53 @@ class BaseStepExecutor:
         result.dataset_name = dataset_name
         return step_struct
 
+    def evaluate_condition(self, condition: ConditionsBase, *, operation_type: str = "条件") -> bool:
+        """
+        评估条件是否成立：解析左侧表达式与右侧比较值中的占位符，再按操作符比较。
+
+        Loop 条件循环与 Condition 条件分支共用，避免两套实现出现“只解析左侧、不解析右侧”的漂移。
+
+        :param condition: 条件模型（condition_expr/condition_compare/condition_value）
+        :param operation_type: 错误信息前缀（循环结构/条件分支）
+        :return: 条件成立返回True
+        """
+        condition_expr = condition.condition_expr
+        condition_compare = condition.condition_compare
+        condition_value = condition.condition_value
+        if condition_expr is None or condition_compare is None:
+            raise StepExecutionError(
+                f"【{operation_type}】条件缺少必要字段: \n\t"
+                f"条件表达式: {condition_expr!r}\n\t"
+                f"条件操作符: {condition_compare!r}"
+            )
+
+        try:
+            resolved_expr = self.context.resolve_placeholders(variables=condition_expr, step_code=self.step_code)
+            if isinstance(resolved_expr, str) and resolved_expr.startswith("${") and resolved_expr.endswith("}"):
+                variable_name = resolved_expr[2:-1]
+                try:
+                    actual_value = self.context.get_variable(variable_name)
+                except KeyError as e:
+                    raise StepExecutionError(
+                        f"【{operation_type}】条件表达式中变量未定义: {variable_name}"
+                    ) from e
+            else:
+                actual_value = resolved_expr
+        except StepExecutionError:
+            raise
+        except Exception as e:
+            raise StepExecutionError(f"【{operation_type}】条件表达式占位符解析异常, 错误描述: {e}") from e
+
+        try:
+            resolved_value = self.context.resolve_placeholders(variables=condition_value, step_code=self.step_code)
+        except Exception as e:
+            raise StepExecutionError(f"【{operation_type}】条件比较值占位符解析异常, 错误描述: {e}") from e
+
+        try:
+            return AutoTestToolService.compare_assertion(actual_value, condition_compare, resolved_value)
+        except ValueError as e:
+            raise StepExecutionError(f"【{operation_type}】条件表达式执行异常, 错误描述: {e}") from e
+
     def get_execute_config(
             self,
             database_operates_index: Optional[int] = None,
@@ -1164,7 +1206,6 @@ class BaseStepExecutor:
             assert_validators: Optional[Any] = None,
             step_struct: Optional[Dict[str, Dict[str, Any]]] = None,
             session_lookup_extra: Optional[Dict[str, Any]] = None,
-            body_source: str = "response json",
     ) -> None:
         """
         统一变量提取 + 断言：构建变量池查找表，调用工具管线，失败转为StepExecutionError。
@@ -1184,7 +1225,6 @@ class BaseStepExecutor:
         :param assert_validators: 断言校验规则，缺省时使用步骤自身的assert_validators
         :param step_struct: 步骤结构映射，供提取断言管线解析引用
         :param session_lookup_extra: 额外并入变量池查找表的会话变量
-        :param body_source: 提取断言所用的响应体来源标识
         :return: None
         """
         session_lookup = AutoTestToolService.build_session_lookup(
@@ -1211,7 +1251,6 @@ class BaseStepExecutor:
                 finished_variables=self.context,
                 is_core_engine=True,
                 step_struct=step_struct,
-                body_source=body_source,
                 raise_on_failure=False,
             )
             # 无论成功与否，先将结果追加到 result，确保落库不丢失
@@ -1279,26 +1318,31 @@ class BaseStepExecutor:
         # 先注入内置环境变量（SERVER_HOST/SERVER_PORT/TARGET_HOST/TARGET_PORT/TARGET_PATH），
         # 使用户定义变量的值中也可引用内置变量；占位符解析完成后再拼接回变量池末尾，
         # 保证同名查找时用户变量优先命中（内置变量不覆盖用户主动定义的变量）
-        builtin_variables: List[StepVariablesBase] = self.collect_builtin_variables()
-        self.context.defined_variables = builtin_variables
-        if self.resolve_own_defined_variables:
-            # 注入前剔除key为空的变量项（与前端保存校验同口径），避免空键数据进入变量池参与发送
-            step_defined_variables: List[StepVariablesBase] = [
-                item for item in (self.step.defined_variables or [])
-                if isinstance(item, StepVariablesBase) and item.key and item.key.strip()
-            ]
-            # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
-            resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
-                variables=step_defined_variables,
-                step_code=self.step_code
-            ) or []
-            resolved_keys: Set[str] = {
-                item.key for item in resolved_defined_variables
-                if isinstance(item, StepVariablesBase) and item.key
-            }
-            self.context.defined_variables = resolved_defined_variables + [
-                item for item in builtin_variables if item.key not in resolved_keys
-            ]
+        try:
+            builtin_variables: List[StepVariablesBase] = self.collect_builtin_variables()
+            self.context.defined_variables = builtin_variables
+            if self.resolve_own_defined_variables:
+                # 注入前剔除key为空的变量项（与前端保存校验同口径），避免空键数据进入变量池参与发送
+                step_defined_variables: List[StepVariablesBase] = [
+                    item for item in (self.step.defined_variables or [])
+                    if isinstance(item, StepVariablesBase) and item.key and item.key.strip()
+                ]
+                # 将当前步骤的 defined_variables 注入到 context，供占位符解析使用
+                resolved_defined_variables: List[StepVariablesBase] = self.context.resolve_placeholders(
+                    variables=step_defined_variables,
+                    step_code=self.step_code
+                ) or []
+                resolved_keys: Set[str] = {
+                    item.key for item in resolved_defined_variables
+                    if isinstance(item, StepVariablesBase) and item.key
+                }
+                self.context.defined_variables = resolved_defined_variables + [
+                    item for item in builtin_variables if item.key not in resolved_keys
+                ]
+        except Exception:
+            # 内置变量/局部变量准备失败时也必须恢复日志归属，避免current_step_code泄漏到后续步骤
+            self.context.set_current_step_code(step_code=previous_step_code)
+            raise
         try:
             await self._execute(result)
         except Exception as e:  # 会导致重复异常的信息展示在log中
@@ -1431,7 +1475,7 @@ class BaseStepExecutor:
             request_method=actual_request.get("request_method"),
             request_args_type=actual_request.get("request_args_type"),
             request_project_id=self.step.request_project_id,
-            request_config_name=self.step.request_config_name,
+            request_config_name=actual_request.get("request_config_name") or self.step.request_config_name,
             request_env_name=actual_request.get("request_env_name"),
             request_header=actual_request.get("request_header"),
             request_params=actual_request.get("request_params"),
@@ -1632,7 +1676,7 @@ class LoopStepExecutor(BaseStepExecutor):
             return on_error == AutoTestLoopErrorStrategy.CONTINUE
 
         for child in child_results:
-            result.append_child(child)
+            result.children.append(child)
             if not child.success:
                 result.success = False
                 if on_error == AutoTestLoopErrorStrategy.STOP:
@@ -1754,7 +1798,7 @@ class LoopStepExecutor(BaseStepExecutor):
             ) from e
 
         if loop_maximums < 1 or loop_maximums > 100:
-            raise StepExecutionError(f"【循环结构】次数循环: 参数[loop_maximums]必须为大于1且小于100的正整数")
+            raise StepExecutionError(f"【循环结构】次数循环: 参数[loop_maximums]必须为1到100之间的整数")
         return loop_maximums
 
     async def _execute_count_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
@@ -1922,8 +1966,8 @@ class LoopStepExecutor(BaseStepExecutor):
         :param on_error: 子步骤失败时的策略（继续/中断/停止用例）
         :return: None
         """
-        condition = self.step.loop_conditions
-        if not condition:
+        condition_config = self.step.loop_conditions
+        if not condition_config:
             raise StepExecutionError("【循环结构】条件循环, 参数[loop_conditions]不允许为空")
 
         loop_timeout: float = self.step.loop_timeout
@@ -1937,10 +1981,10 @@ class LoopStepExecutor(BaseStepExecutor):
             )
             loop_timeout = float(self.CONDITION_LOOP_MAX_TIMEOUT)
 
-        if hasattr(condition, "model_dump"):
-            result.request = {"loop_conditions": condition.model_dump()}
-        elif isinstance(condition, dict):
-            result.request = {"loop_conditions": condition}
+        if hasattr(condition_config, "model_dump"):
+            result.request = {"loop_conditions": condition_config.model_dump()}
+        elif isinstance(condition_config, dict):
+            result.request = {"loop_conditions": condition_config}
         else:
             result.request = {"loop_conditions": None}
         self.context.log(message=f"【循环结构】条件循环开始: \n\t循环超时配置: {loop_timeout}s", step_code=self.step_code)
@@ -1963,8 +2007,8 @@ class LoopStepExecutor(BaseStepExecutor):
 
             # 先评估条件：不满足则不再执行本轮子步骤（while语义）
             try:
-                condition = self.evaluate_condition(condition)
-                if not condition:
+                matched = self.evaluate_condition(condition_config, operation_type="循环结构")
+                if not matched:
                     self.context.log(
                         message=f"【循环结构】条件循环, 评估失败: \n\t本轮不执行子步骤, 已累计执行: {loop_no} 次",
                         step_code=self.step_code,
@@ -1976,62 +2020,26 @@ class LoopStepExecutor(BaseStepExecutor):
                 self.context.log(result.error, step_code=self.step_code)
                 break
 
+            if loop_no >= self.LOOP_GUARD_LIMIT:
+                raise StepExecutionError(
+                    f"【循环结构】条件循环, "
+                    f"循环次数超过最大限制{self.LOOP_GUARD_LIMIT}, 疑似无限循环, 为保护系统安全已自动终止循环"
+                )
             loop_no += 1
             should_continue = await self._execute_loop_round(
                 result=result,
                 on_error=on_error,
                 loop_no=loop_no,
-                loop_message=f"【循环结构】条件循环: 第 {loop_no} 轮(条件已满足, {condition!r})",
+                loop_message=f"【循环结构】条件循环: 第 {loop_no} 轮(条件已满足)",
                 loop_mode=f"条件循环",
                 include_variables=[StepVariablesBase(key=loop_index, value=loop_no, desc="")],
             )
             if not should_continue:
                 break
-
-            if loop_no > self.LOOP_GUARD_LIMIT:
-                raise StepExecutionError(
-                    f"【循环结构】条件循环, "
-                    f"循环次数超过最大限制{self.LOOP_GUARD_LIMIT}, 疑似无限循环, 为保护系统安全已自动终止循环"
-                )
             if loop_interval and loop_interval > 0:
                 await self.context.sleep(loop_interval)
 
         self.context.log(message=f"【循环结构】条件循环结束: 共执行 {loop_no} 次", step_code=self.step_code)
-
-    def evaluate_condition(self, condition: ConditionsBase) -> bool:
-        """
-        评估条件是否成立；condition为ConditionsBase模型实例。
-
-        :param condition: 待评估的条件模型
-        :return: 条件成立返回 True，否则False
-        """
-        condition_expr = condition.condition_expr
-        condition_compare = condition.condition_compare
-        condition_value = condition.condition_value
-        if condition_expr is None or condition_compare is None:
-            raise StepExecutionError(
-                f"【循环结构】条件缺少必要字段: \n\t"
-                f"条件表达式: {condition_expr!r}\n\t"
-                f"条件操作符: {condition_compare!r}"
-            )
-        try:
-            resolved = self.context.resolve_placeholders(variables=condition_expr, step_code=self.step_code)
-            if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
-                variable_name = resolved[2:-1]
-                try:
-                    actual_value = self.context.get_variable(variable_name)
-                except KeyError as e:
-                    raise StepExecutionError(f"【循环结构】条件表达式中变量未定义: {variable_name}") from e
-            else:
-                actual_value = resolved
-        except Exception as e:
-            if isinstance(e, StepExecutionError):
-                raise
-            raise StepExecutionError(f"【循环结构】条件表达式中占位符解析异常, 错误描述: {e}") from e
-        try:
-            return AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value)
-        except ValueError as e:
-            raise StepExecutionError(f"【循环结构】条件表达式执行异常, 错误描述: {e}") from e
 
     def parse_iterable_source(self, source: Any) -> Any:
         """
@@ -2069,35 +2077,6 @@ class ConditionStepExecutor(BaseStepExecutor):
 
     所有分支均未命中且无 else 时本步 success 仍为 True；子步骤失败不向上传递。
     """
-
-    def _evaluate_branch_condition(self, condition: ConditionsBase) -> bool:
-        condition_expr = condition.condition_expr
-        condition_compare = condition.condition_compare
-        condition_value = condition.condition_value
-        if condition_expr is None or condition_compare is None:
-            raise StepExecutionError(
-                f"【条件分支】条件缺少必要字段: \n\t"
-                f"条件表达式: {condition_expr!r}\n\t"
-                f"条件操作符: {condition_compare!r}"
-            )
-        try:
-            resolved = self.context.resolve_placeholders(variables=condition_expr, step_code=self.step_code)
-            if isinstance(resolved, str) and resolved.startswith("${") and resolved.endswith("}"):
-                variable_name = resolved[2:-1]
-                try:
-                    actual_value = self.context.get_variable(variable_name)
-                except KeyError as e:
-                    raise StepExecutionError(f"【条件分支】条件表达式中变量未定义: {variable_name}") from e
-            else:
-                actual_value = resolved
-        except Exception as e:
-            if isinstance(e, StepExecutionError):
-                raise
-            raise StepExecutionError(f"【条件分支】条件表达式占位符解析异常, 错误详情: {e}") from e
-        try:
-            return AutoTestToolService.compare_assertion(actual_value, condition_compare, condition_value)
-        except ValueError as e:
-            raise StepExecutionError(f"【条件分支】条件表达式执行异常, 错误描述: {e}") from e
 
     async def _execute_branch_children(self, branch_children: List[AutoTestStepTreeUpdateItem]) -> List[StepExecutionResult]:
         results: List[StepExecutionResult] = []
@@ -2138,7 +2117,7 @@ class ConditionStepExecutor(BaseStepExecutor):
                 else:
                     if not branch.branch_conditions:
                         raise StepExecutionError(f"【条件分支】第{i + 1}个分支({branch.branch_type})缺少 branch_conditions")
-                    matched = self._evaluate_branch_condition(branch.branch_conditions)
+                    matched = self.evaluate_condition(branch.branch_conditions, operation_type="条件分支")
 
                 if matched:
                     desc = branch.branch_desc or branch.branch_type
@@ -2156,7 +2135,7 @@ class ConditionStepExecutor(BaseStepExecutor):
                         branch_children = branch.branch_children or []
                         child_results = await self._execute_branch_children(branch_children)
                         for child in child_results:
-                            result.append_child(child)
+                            result.children.append(child)
                     except Exception as e:
                         result.success = False
                         error_message: str = f"【条件分支】执行分支[{branch.branch_type}]子步骤失败: {e}"
@@ -2625,7 +2604,7 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
                     child_result = await executor.execute()
                     if child_result is None:
                         continue
-                    result.append_child(child_result)
+                    result.children.append(child_result)
                     if not child_result.success:
                         result.success = False
                 except StepExecutionError:
@@ -2650,7 +2629,7 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
                         success=False,
                         error=error_message
                     )
-                    result.append_child(failed_result)
+                    result.children.append(failed_result)
             self.context.log(
                 f"【{self.quote_step_label}】执行用例(id={quote_case_id}, name={quote_case_name})结束",
                 step_code=self.step_code
@@ -2934,7 +2913,6 @@ class TcpStepExecutor(BaseStepExecutor):
                 request_text=request_text_for_extract,
                 request_json=request_json_for_extract,
                 step_struct=step_struct,
-                body_source="response text",
             )
         except StepExecutionError:
             raise
@@ -2959,6 +2937,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
         """
         try:
             merge_operates_env_name: Optional[str] = None
+            display_config_name: Optional[str] = self.step.request_config_name
             database_operates: Optional[List[DataBaseOperates]] = self.step.database_operates
             if database_operates is None:
                 raise StepExecutionError("【数据库请求】参数[database_operates]不能为空")
@@ -2997,11 +2976,10 @@ class DataBaseStepExecutor(BaseStepExecutor):
                     database_name: str = current_op_execute_cfg.database_name
                     db_operate.config_name = config_name
                     db_operate.database_name = database_name
-                    request_config_name: Optional[str] = self.step.request_config_name
-                    if request_config_name:
-                        self.step.request_config_name += f", ({db_idx}){db_operate.config_name}"
+                    if display_config_name:
+                        display_config_name += f", ({db_idx}){db_operate.config_name}"
                     else:
-                        self.step.request_config_name = f"({db_idx}){db_operate.config_name}"
+                        display_config_name = f"({db_idx}){db_operate.config_name}"
                     if merge_operates_env_name:
                         merge_operates_env_name += f", ({db_idx}){env_name}"
                     else:
@@ -3157,6 +3135,7 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 "database_searched": database_searched,
                 "request_args_type": AutoTestReqArgsType.RAW,
                 "request_env_name": merge_operates_env_name,
+                "request_config_name": display_config_name,
             }
             result.response = {
                 "response_body": database_operates_response,
@@ -3223,6 +3202,7 @@ class RedisStepExecutor(BaseStepExecutor):
         """
         try:
             merge_operates_env_name: Optional[str] = None
+            display_config_name: Optional[str] = self.step.request_config_name
             redis_operates: Optional[List[RedisOperates]] = self.step.redis_operates
             if redis_operates is None:
                 raise StepExecutionError("【Redis请求】参数[redis_operates]不能为空")
@@ -3261,11 +3241,10 @@ class RedisStepExecutor(BaseStepExecutor):
                     database_name: str = current_op_execute_cfg.database_name or redis_operate.database_name
                     redis_operate.config_name = config_name
                     redis_operate.database_name = database_name
-                    request_config_name: Optional[str] = self.step.request_config_name
-                    if request_config_name:
-                        self.step.request_config_name += f", ({redis_idx}){redis_operate.config_name}"
+                    if display_config_name:
+                        display_config_name += f", ({redis_idx}){redis_operate.config_name}"
                     else:
-                        self.step.request_config_name = f"({redis_idx}){redis_operate.config_name}"
+                        display_config_name = f"({redis_idx}){redis_operate.config_name}"
                     if merge_operates_env_name:
                         merge_operates_env_name += f", ({redis_idx}){env_name}"
                     else:
@@ -3444,6 +3423,7 @@ class RedisStepExecutor(BaseStepExecutor):
                 "redis_operates": redis_operates_request,
                 "redis_searched": redis_searched,
                 "request_args_type": AutoTestReqArgsType.RAW,
+                "request_config_name": display_config_name,
                 "request_env_name": merge_operates_env_name,
             }
             result.response = {
@@ -3921,7 +3901,7 @@ class DefaultStepExecutor(BaseStepExecutor):
         try:
             child_results = await self._execute_children()
             for child in child_results:
-                result.append_child(child)
+                result.children.append(child)
                 if not child.success:
                     result.success = False
         except Exception as e:
@@ -3933,7 +3913,7 @@ class DefaultStepExecutor(BaseStepExecutor):
 
 class StepExecutorFactory:
     """
-    根据步骤类型创建对应执行器实例，未知类型使用DefaultStepExecutor。
+    根据步骤类型创建对应执行器实例；非法/未知类型抛出StepExecutionError。
     """
 
     EXECUTOR_MAP: Dict[AutoTestStepType, Callable[[AutoTestStepTreeUpdateItem, StepExecutionContext], BaseStepExecutor]] = {
@@ -3956,7 +3936,7 @@ class StepExecutorFactory:
     @classmethod
     def create_executor(cls, step: AutoTestStepTreeUpdateItem, context: StepExecutionContext) -> BaseStepExecutor:
         """
-        根据step.step_type创建对应执行器；未知类型使用DefaultStepExecutor。
+        根据step.step_type创建对应执行器；非法/未知类型抛出StepExecutionError。
 
         :param step: 步骤树节点
         :param context: 执行上下文

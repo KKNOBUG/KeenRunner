@@ -20,32 +20,38 @@ class PlaceholderFunctions:
     @classmethod
     def _parse_funcname_funcargs(cls, func_string: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """
-        从func_name(key1=val1)格式字符串中解析函数名与参数字典，仅支持关键字参数。
+        解析func_name(key1=val1, key2="a,b")格式字符串，仅支持关键字字面量参数。
+
+        使用AST解析而非逗号切分，避免字符串参数内含逗号时被错误拆分。
 
         :param func_string: 函数调用形式的字符串
         :return: 二元组(函数名, 参数字典)，无法解析时返回(None, None)
         """
         if not isinstance(func_string, str):
             return None, None
-        if not func_string.endswith(")") or func_string.find("(") == -1:
+        text = func_string.strip()
+        if not text.endswith(")"):
             return None, None
-        func_name, func_args = func_string.split("(", 1)
-        func_args: str = func_args.rstrip(")")
+        try:
+            expression = ast.parse(text, mode="eval").body
+        except SyntaxError as e:
+            raise ValueError(f"【辅助函数】[{func_string!r}]解析失败, 不是合法的函数调用: {e}") from e
+        if not isinstance(expression, ast.Call) or not isinstance(expression.func, ast.Name):
+            return None, None
+        if expression.args:
+            raise ValueError(f"【辅助函数】[{func_string!r}]解析失败, 仅支持关键字参数")
         args_dict: Dict[str, Any] = {}
-        if func_args.strip():
-            _args: List[str] = func_args.split(",")
-            for item in _args:
-                part: str = item.strip()
-                if "=" not in part:
-                    continue
-                key, _, value_part = part.partition("=")
-                key = str(key).strip()
-                value_part: str = value_part.strip()
-                try:
-                    args_dict[key] = ast.literal_eval(value_part)
-                except (ValueError, SyntaxError) as e:
-                    raise ValueError(f"【辅助函数】[{func_string!r}]解析失败, 参数仅支持字面量(数字、字符串、布尔、None等), {key}={value_part!r}") from e
-        return func_name.strip(), args_dict
+        for keyword in expression.keywords:
+            if keyword.arg is None:
+                raise ValueError(f"【辅助函数】[{func_string!r}]解析失败, 不支持**kwargs")
+            try:
+                args_dict[keyword.arg] = ast.literal_eval(keyword.value)
+            except (ValueError, SyntaxError) as e:
+                raise ValueError(
+                    f"【辅助函数】[{func_string!r}]解析失败, 参数仅支持字面量(数字、字符串、布尔、None等), "
+                    f"{keyword.arg}={ast.unparse(keyword.value)!r}"
+                ) from e
+        return expression.func.id, args_dict
 
     @classmethod
     def execute_func_string_single(cls, content: str) -> Any:

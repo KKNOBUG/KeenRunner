@@ -229,6 +229,28 @@ class JsonDatagram:
         return None
 
     @staticmethod
+    def _apply_path_map(datagram: Dict[str, Any], path_map: Dict[str, Any], *, type_adapted: bool) -> None:
+        """
+        将JSONPath映射批量写入一个映射容器，统一JSON body与form/urlencoded/params的注入差异。
+
+        :param datagram: 目标映射，原地修改
+        :param path_map: JSONPath->值
+        :param type_adapted: True按原字段类型适配（JSON body）；False使用wire文本（字符串通道）
+        :return: None
+        """
+        for json_path, json_value in path_map.items():
+            if not json_path:
+                continue
+            JsonDatagram._by_jsonpath_modify_inner_content(
+                datagram=datagram,
+                json_path=json_path,
+                json_value=json_value if type_adapted else expand_dataset_general_value(
+                    value=expand_dataset_special_value(value=json_value)
+                ),
+                type_adapted=type_adapted,
+            )
+
+    @staticmethod
     def _by_jsonpath_modify_request_params(
             path_map: Dict[str, Any],
             *,
@@ -252,59 +274,21 @@ class JsonDatagram:
 
         rb = request_body
         if isinstance(rb, dict):
-            for json_path, json_value in path_map.items():
-                if not json_path:
-                    continue
-                JsonDatagram._by_jsonpath_modify_inner_content(
-                    datagram=rb,
-                    json_path=json_path,
-                    json_value=json_value
-                )
+            JsonDatagram._apply_path_map(rb, path_map, type_adapted=True)
         elif isinstance(rb, str):
             try:
                 payload_dict = orjson.loads(rb) if rb.strip() else {}
                 if isinstance(payload_dict, dict):
-                    for json_path, json_value in path_map.items():
-                        if not json_path:
-                            continue
-                        JsonDatagram._by_jsonpath_modify_inner_content(
-                            datagram=payload_dict,
-                            json_path=json_path,
-                            json_value=json_value
-                        )
+                    JsonDatagram._apply_path_map(payload_dict, path_map, type_adapted=True)
                     rb = payload_dict
             except (TypeError, orjson.JSONDecodeError):
                 pass
         if isinstance(form_data, dict):
-            for json_path, json_value in path_map.items():
-                if not json_path:
-                    continue
-                JsonDatagram._by_jsonpath_modify_inner_content(
-                    datagram=form_data,
-                    json_path=json_path,
-                    json_value=expand_dataset_general_value(value=expand_dataset_special_value(value=json_value)),
-                    type_adapted=False
-                )
+            JsonDatagram._apply_path_map(form_data, path_map, type_adapted=False)
         if isinstance(urlencoded, dict):
-            for json_path, json_value in path_map.items():
-                if not json_path:
-                    continue
-                JsonDatagram._by_jsonpath_modify_inner_content(
-                    datagram=urlencoded,
-                    json_path=json_path,
-                    json_value=expand_dataset_general_value(value=expand_dataset_special_value(value=json_value)),
-                    type_adapted=False
-                )
+            JsonDatagram._apply_path_map(urlencoded, path_map, type_adapted=False)
         if isinstance(params, dict):
-            for json_path, json_value in path_map.items():
-                if not json_path:
-                    continue
-                JsonDatagram._by_jsonpath_modify_inner_content(
-                    datagram=params,
-                    json_path=json_path,
-                    json_value=expand_dataset_general_value(value=expand_dataset_special_value(value=json_value)),
-                    type_adapted=False
-                )
+            JsonDatagram._apply_path_map(params, path_map, type_adapted=False)
         return rb
 
     @staticmethod
@@ -324,11 +308,11 @@ class JsonDatagram:
         路径在所有通道均未命中时汇总告警跳过。
 
         通道约定：
-        - head_map 写请求头（兼容历史：同时尝试写入 body/form/urlencoded 的同名路径）；
+        - head_map 只写请求头，禁止跨通道写 body/form/urlencoded；
         - body_map 写 body/form/urlencoded/query params；
         - 请求头匹配大小写不敏感，写回时保留原始键名。
 
-        :param head_map: 请求头/报文侧JSONPath->值
+        :param head_map: 请求头JSONPath->值
         :param body_map: 报文体JSONPath->值
         :param request_body: 原始body（dict或可解析为dict的JSON字符串）
         :param request_headers: 请求头字典；可为None
@@ -340,7 +324,6 @@ class JsonDatagram:
         """
         head_map = head_map or {}
         body_map = body_map or {}
-        head_channels = (request_body, form_data, urlencoded)
         body_channels = (request_body, form_data, urlencoded, params)
         missed_paths: List[str] = []
 
@@ -349,9 +332,6 @@ class JsonDatagram:
                 continue
             header_key = JsonDatagram._by_jsonpath_modify_request_header(json_path)
             if JsonDatagram._resolve_header_key(request_headers, header_key) is not None:
-                continue
-            # 兼容历史语义：请求头路径允许落到 body/form/urlencoded 的同名 JSONPath
-            if JsonDatagram._jsonpath_hits(json_path, *head_channels):
                 continue
             missed_paths.append(json_path)
 
@@ -372,13 +352,6 @@ class JsonDatagram:
                     )
 
         rb = request_body
-        # 历史兼容：head_map 仍参与 body/form/urlencoded 的同名路径写入
-        rb = JsonDatagram._by_jsonpath_modify_request_params(
-            path_map=head_map,
-            request_body=rb,
-            form_data=form_data,
-            urlencoded=urlencoded,
-        )
         rb = JsonDatagram._by_jsonpath_modify_request_params(
             path_map=body_map,
             request_body=rb,

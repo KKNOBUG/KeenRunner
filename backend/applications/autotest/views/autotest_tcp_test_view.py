@@ -71,14 +71,14 @@ _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
     # 业务mock端口：JSON请求(银行账户交易查询→XML响应)、XML请求(贷款申请→XML响应)，帧自动检测(8位十进制长度前缀/RAW)
     _TcpFrameServerStartIn(port=9091, mock_type="json"),
     _TcpFrameServerStartIn(port=9092, mock_type="xml"),
-    # TCP协议：十进制/8位长度位/不包含长度位
+    # TCP协议：10进制/8位长度位/不包含长度位
     _TcpFrameServerStartIn(
         port=9093,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
         tcp_radix_length=8,
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE
     ),
-    # TCP协议：十六进制/4位长度位/包含长度位
+    # TCP协议：16进制/4位长度位/包含长度位
     _TcpFrameServerStartIn(
         port=9094,
         tcp_radix=AutoTestTcpRadix.HEX,
@@ -92,7 +92,7 @@ _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
         tcp_request_end_symbol=AutoTestTcpEndSymbol.CRLF,
         tcp_response_end_symbol="\\r\\n"
     ),
-    # TCP协议：十进制/8位/不包含长度位/HEX开启
+    # TCP协议：10进制/8位/不包含长度位/HEX开启
     _TcpFrameServerStartIn(
         port=9096,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
@@ -100,7 +100,7 @@ _DEFAULT_FRAME_CONFIGS: List[_TcpFrameServerStartIn] = [
         tcp_datagram_length=AutoTestTcpDatagramLength.EXCLUDE,
         tcp_hex_string=True
     ),
-    # TCP协议：十进制/8位/不包含长度位/GBK编码
+    # TCP协议：10进制/8位/不包含长度位/GBK编码
     _TcpFrameServerStartIn(
         port=9097,
         tcp_radix=AutoTestTcpRadix.DECIMAL,
@@ -839,7 +839,7 @@ async def start_tcp_test_server():
 
     - **mock端口**：9091(JSON请求→银行交易查询XML响应)、9092(XML贷款请求→XML响应)，帧自动检测(8位十进制长度前缀/RAW)
     - **帧诊断端口**（9093~9099）：一次启动全部帧配置组合
-      （十进制8位/十六进制4位包含/结束符/HEX/GBK/RAW/共存组合），按各端口配置组帧/解帧并回显
+      （10进制8位/16进制4位包含/结束符/HEX/GBK/RAW/共存组合），按各端口配置组帧/解帧并回显
 
     :return: 统一HTTP响应，data含 frame 各端口状态快照列表
     """

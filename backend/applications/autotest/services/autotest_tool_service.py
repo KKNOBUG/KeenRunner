@@ -49,14 +49,13 @@ class AutoTestToolService:
     """
     自动化测试工具服务门面（供步骤引擎与调试视图复用）。
 
-    实现根据领域拆分至 autotest_runtime；本类仅转发，保持公开方法名与签名不变。
+    实现根据领域拆分至 autotest_runtime；本类只保留执行链实际消费的稳定入口，并提供跨模块共用的报文类型判定。
     """
 
     # --- 数据的平铺和分组转换 / 日志收集 ---
     list_to_dict = KvUtils.list_to_dict
     convert_list_to_dict_for_http = KvUtils.convert_list_to_dict_for_http
     merge_mapping_dicts = KvUtils.merge_mapping_dicts
-    get_value_from_list = KvUtils.get_value_from_list
     get_item_from_list = KvUtils.get_item_from_list
     try_serialize_request_body = KvUtils.try_serialize_request_body
     format_step_error_message = KvUtils.format_step_error_message

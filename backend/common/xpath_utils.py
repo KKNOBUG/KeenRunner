@@ -472,6 +472,29 @@ class XPathUtils:
         return cls.element_extract_value(elements[-1])
 
     @classmethod
+    def query_all(cls, xml_data: Union[str, ElementTree.Element], xpath: str) -> List[Any]:
+        """
+        查询XPath全部匹配值，属性路径返回属性值，元素路径返回元素值。
+
+        :param xml_data: XML字符串或ElementTree元素
+        :param xpath: XPath表达式
+        :return: 匹配值列表；未匹配返回空列表
+        """
+        if not xpath:
+            return []
+        root = cls._parse(xml_data)
+        parent_path, attribute_name = cls._split_attribute_xpath(xpath)
+        if attribute_name:
+            parents = cls.findall(root, parent_path)
+            values: List[Any] = []
+            for parent in parents:
+                value = cls._get_attribute(parent, attribute_name)
+                if value is not None:
+                    values.append(value)
+            return values
+        return [cls.element_extract_value(element) for element in cls.findall(root, xpath)]
+
+    @classmethod
     def element_extract_value(cls, element: ElementTree.Element) -> str:
         """
         提取单个元素的值：有子节点时返回整段序列化，否则返回叶子文本。

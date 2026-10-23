@@ -204,7 +204,7 @@ class DataSourceService:
                 case_id__in=list(shell_case_ids),
                 step_type__in=list(cls.REQUEST_STEP_TYPES),
                 state__not=1,
-            ).order_by("case_id", "step_no")
+            ).order_by("case_id", "step_no", "id")
             for inner_step in inner_steps:
                 inner_step_map.setdefault(inner_step.case_id, inner_step)
 

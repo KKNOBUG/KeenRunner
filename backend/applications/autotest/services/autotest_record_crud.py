@@ -178,7 +178,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         :return: (总数, 记录列表)
         """
         try:
-            q = Q()
+            q = Q(state__not=1)
             if record_in.celery_id:
                 q &= Q(celery_id=record_in.celery_id)
             if record_in.task_id is not None:

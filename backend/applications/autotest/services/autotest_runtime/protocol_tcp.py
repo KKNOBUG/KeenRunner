@@ -166,45 +166,26 @@ def select_tcp_payload(
         *,
         request_text: Optional[str],
         request_body: Any,
+        serialize_json: bool = False,
 ) -> Any:
     """
-    按请求体类型选择TCP发送载荷。
+    按请求体类型选择TCP载荷；调试路径可将JSON对象序列化为字符串。
 
     :param request_args_type: 请求体类型
     :param request_text: 文本/XML/RAW载荷
     :param request_body: JSON载荷（可为dict/list）
+    :param serialize_json: True时JSON/未知类型对象转UTF-8 JSON字符串（仅调试发送需要）
     :return: 发往TCP客户端的payload
     """
-    if request_args_type is None:
-        return request_text if request_text not in (None, "") else request_body
-    if request_args_type == AutoTestReqArgsType.RAW:
-        return request_text
     if request_args_type == AutoTestReqArgsType.JSON:
-        return request_body
-    if request_args_type == AutoTestReqArgsType.XML:
-        return request_text
-    return request_text if request_text not in (None, "") else request_body
-
-
-def select_tcp_debug_payload(
-        request_args_type: Optional[AutoTestReqArgsType],
-        *,
-        request_text: Optional[str],
-        request_body: Any,
-) -> Any:
-    """
-    组装TCP调试发送载荷，JSON类型将对象序列化为字符串。
-
-    :param request_args_type: 请求体类型
-    :param request_text: 文本/XML/RAW载荷
-    :param request_body: JSON载荷
-    :return: 调试路径实际发送用的payload
-    """
-    if request_args_type == AutoTestReqArgsType.JSON:
-        if isinstance(request_body, (dict, list)):
-            return orjson.dumps(request_body).decode("UTF-8")
-        return request_body
-    return request_text
+        payload = request_body
+    elif request_args_type in (AutoTestReqArgsType.RAW, AutoTestReqArgsType.XML):
+        payload = request_text
+    else:
+        payload = request_text if request_text not in (None, "") else request_body
+    if serialize_json and isinstance(payload, (dict, list)):
+        return orjson.dumps(payload).decode("UTF-8")
+    return payload
 
 
 def build_tcp_debug_request_info_body(
@@ -235,35 +216,6 @@ def build_tcp_debug_request_info_body(
                 return request_body
         return request_body
     return request_text
-
-
-def resolve_tcp_debug_request_extract_sources(
-        *,
-        request_body: Any,
-        request_text: Optional[str],
-) -> Tuple[Optional[Any], Optional[str]]:
-    """
-    解析TCP提取请求侧的数据来源。
-
-    :param request_body: 请求体
-    :param request_text: 请求文本
-    :return: (request_json_for_extract, request_text_for_extract)
-    """
-    request_json_for_extract: Optional[Any] = None
-    if isinstance(request_body, (dict, list)):
-        request_json_for_extract = request_body
-    elif isinstance(request_text, str) and request_text.strip().startswith(("{", "[")):
-        try:
-            parsed_request = orjson.loads(request_text)
-            if isinstance(parsed_request, (dict, list)):
-                request_json_for_extract = parsed_request
-        except Exception:
-            request_json_for_extract = None
-
-    request_text_for_extract = request_text
-    if request_text_for_extract in (None, "") and isinstance(request_body, (dict, list)):
-        request_text_for_extract = orjson.dumps(request_body).decode("UTF-8")
-    return request_json_for_extract, request_text_for_extract
 
 
 def parse_tcp_timeouts(
@@ -338,14 +290,16 @@ def resolve_tcp_request_extract_sources(
         *,
         request_body: Any,
         request_text: Optional[str],
-        payload: Any,
+        payload: Any = None,
 ) -> Tuple[Optional[Any], Optional[str]]:
     """
     为TCP提取/断言准备request_json与request_text来源。
 
+    执行期传实际发送payload（用于request_text为空时回落），调试期不传payload。
+
     :param request_body: 原始/解析后的请求体
     :param request_text: 请求文本
-    :param payload: 实际发送载荷
+    :param payload: 实际发送载荷；调试路径可为None
     :return: (request_json_for_extract, request_text_for_extract)
     """
     request_json_for_extract: Optional[Any] = None

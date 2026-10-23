@@ -97,8 +97,6 @@ def _parse_xml_field(line: str) -> Optional[Tuple[str, str]]:
     stripped = line.strip()
     if stripped.startswith("</"):
         return None
-    if stripped.endswith("/>"):
-        return tag, stripped
     return tag, stripped
 
 

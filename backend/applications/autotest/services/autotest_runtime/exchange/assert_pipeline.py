@@ -188,7 +188,6 @@ class AssertPipeline:
             finished_variables: Optional[Any] = None,
             is_core_engine: bool = False,
             log_callback: Optional[Callable[[str], None]] = None,
-            body_source: str = "response json",
     ) -> None:
         """
         将数据驱动场景的assert_head/assert_body追加到validator_results，response_headers为None时跳过head断言。
@@ -204,7 +203,6 @@ class AssertPipeline:
         :param finished_variables: 期望值占位符解析上下文；None则不解析
         :param is_core_engine: 占位符解析模式
         :param log_callback: 可选日志回调
-        :param body_source: 保留参数，当前未生效
         :return: None
         """
         if not isinstance(step_struct, dict):
