@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : Krun
-@Module  : __init__.py.py
+@Module  : __init__.py
 @DateTime: 2025/1/12 19:38
 """
 from .ctx import CTX_USER_ID, CTX_USERNAME, get_current_username
