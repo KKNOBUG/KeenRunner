@@ -615,7 +615,7 @@ class CaseExcelService:
         """
         按导出用例的协议组合选择模板：全HTTP用HTTP模板、全TCP用TCP模板、混合用HTTP&TCP模板；
         模板内HTTP行写入[HTTP模板]sheet、TCP行写入[TCP模板]sheet；填充完成后将用户可见页签
-        重命名为[HTTP数据]/[TCP数据]，[帮助]sheet不做任何修改。
+        重命名为[HTTP数据]/[TCP数据]，[填写说明]sheet不做任何修改。
 
         :param rows: 行字典列表（键为列名，TCP行额外携带帧配置列）
         :return: 填充完成的工作簿
@@ -875,7 +875,7 @@ class CaseExcelService:
         """
         解析导入模板首个sheet：识别布局、逐行校验，输出可落库行与不合规明细。
 
-        仅读取首个sheet（模板帮助页明确约定），空行跳过。
+        仅读取首个sheet（模板填写说明页明确约定），空行跳过。
 
         :param content: xlsx文件字节
         :return: (行字典列表, 不合规明细[{row, reason}])
