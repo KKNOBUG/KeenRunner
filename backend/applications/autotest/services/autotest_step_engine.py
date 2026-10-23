@@ -89,6 +89,27 @@ from backend.enums import (
 from backend.services import get_current_username
 
 
+def resolve_datagram_is_xml(args_type: Optional[AutoTestReqArgsType], request_text: Optional[str], request_body: Any) -> bool:
+    """
+    判定请求报文是否按 XML 处理（HTTP/TCP 数据驱动共用同一口径）。
+
+    显式 XML/JSON 类型优先；未明确类型时，按 request_text 或字符串型 request_body 的内容嗅探。
+
+    :param args_type: 请求体类型
+    :param request_text: 文本报文
+    :param request_body: 对象/字符串报文
+    :return: 按 XML 处理返回True
+    """
+    if args_type == AutoTestReqArgsType.XML:
+        return True
+    if args_type == AutoTestReqArgsType.JSON:
+        return False
+    text_for_detect = request_text if isinstance(request_text, str) and request_text.strip() else (
+        request_body if isinstance(request_body, str) else ""
+    )
+    return text_for_detect.strip().startswith("<")
+
+
 class StepExecutionError(Exception):
     """
     步骤执行过程中的业务异常，用于中断执行并携带错误信息。
@@ -2770,19 +2791,15 @@ class TcpStepExecutor(BaseStepExecutor):
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
             if AutoTestToolService.has_dataset_payload(step_struct):
-                # 根据request_args_type优先判断报文类型，未明确类型时根据内容嗅探
-                text_for_detect = request_text if isinstance(request_text, str) else ""
-                if self.step.request_args_type == AutoTestReqArgsType.XML:
-                    is_xml = True
-                elif self.step.request_args_type == AutoTestReqArgsType.JSON:
-                    is_xml = False
-                else:
-                    is_xml = text_for_detect.strip().startswith("<")
+                is_xml = resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body)
                 if is_xml:
-                    xml_source = request_text or (request_body if isinstance(request_body, str) else None)
+                    xml_source = request_text if isinstance(request_text, str) and request_text.strip() else (
+                        request_body if isinstance(request_body, str) else None
+                    )
                     request_text = AutoTestToolService.replace_xml_datagram(
                         body_map=step_struct.get("body") or {},
                         request_text=xml_source,
+                        logger_object=lambda msg: self.context.log(msg, step_code=self.step_code),
                     )
                 else:
                     body_for_replace = request_body
@@ -2798,18 +2815,28 @@ class TcpStepExecutor(BaseStepExecutor):
                             except (orjson.JSONDecodeError, ValueError, TypeError):
                                 body_for_replace = request_body
                     out = AutoTestToolService.replace_json_datagram(
-                        head_map=step_struct.get("head") or {},
+                        # TCP无请求头：HEAD分区不参与正文替换，避免误改同名body字段
+                        head_map=None,
                         body_map=step_struct.get("body") or {},
                         request_headers=None,
                         request_body=body_for_replace,
                         form_data=None,
                         urlencoded=None,
+                        logger_object=lambda msg: self.context.log(msg, step_code=self.step_code),
                     )
                     request_body = out["request_body"]
                     if isinstance(request_body, (dict, list)):
                         request_text = orjson.dumps(request_body).decode("UTF-8")
                     elif isinstance(request_body, str) and request_body:
                         request_text = request_body
+
+            # 历史/导入数据可能把 XML 存在 request_body 字符串中；发送前回落到 request_text，
+            # 避免 XML 步骤因 request_text 为空而发出空报文。
+            if not request_text and isinstance(request_body, str) and (
+                    self.step.request_args_type == AutoTestReqArgsType.XML
+                    or request_body.lstrip().startswith("<")
+            ):
+                request_text = request_body
 
             request_body = self.context.resolve_placeholders(
                 variables=request_body,
@@ -3497,6 +3524,8 @@ class HttpStepExecutor(BaseStepExecutor):
         try:
             request_url: str = (self.step.request_url or "").strip()
             request_method: HTTPMethod = self.step.request_method
+            if request_method is None:
+                raise StepExecutionError("【HTTP请求】请求方式[request_method]不能为空")
             current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
                 expected_config_type=AutoTestConfigNodeType.APP,
             )
@@ -3551,14 +3580,15 @@ class HttpStepExecutor(BaseStepExecutor):
             request_form_data: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_form_data)
             request_form_urlencoded: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_form_urlencoded)
             request_form_file: Optional[Dict[str, Any]] = AutoTestToolService.convert_list_to_dict_for_http(self.step.request_form_file)
-            request_body: Dict[str, Any] = AutoTestToolService.try_serialize_request_body(self.step.request_body)
+            request_body: Any = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text: Optional[str] = self.step.request_text
 
             # 2）数据驱动：先替换报文（XML走XPath、其余走JSONPath），再占位符
             if AutoTestToolService.has_dataset_payload(step_struct):
                 head_map = step_struct.get("head") or {}
                 body_map = step_struct.get("body") or {}
-                if self.step.request_args_type == AutoTestReqArgsType.XML:
+                is_xml = resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body)
+                if is_xml:
                     out = AutoTestToolService.replace_json_datagram(
                         head_map=head_map,
                         body_map={},
@@ -3566,11 +3596,16 @@ class HttpStepExecutor(BaseStepExecutor):
                         request_body=None,
                         form_data=None,
                         urlencoded=None,
+                        logger_object=lambda msg: self.context.log(msg, step_code=self.step_code),
                     )
                     request_header = out["headers"]
+                    xml_source = request_text if isinstance(request_text, str) and request_text.strip() else (
+                        request_body if isinstance(request_body, str) else None
+                    )
                     request_text = AutoTestToolService.replace_xml_datagram(
                         body_map=body_map,
-                        request_text=request_text,
+                        request_text=xml_source,
+                        logger_object=lambda msg: self.context.log(msg, step_code=self.step_code),
                     )
                 else:
                     out = AutoTestToolService.replace_json_datagram(
@@ -3580,11 +3615,30 @@ class HttpStepExecutor(BaseStepExecutor):
                         request_body=request_body,
                         form_data=request_form_data,
                         urlencoded=request_form_urlencoded,
+                        params=request_params,
+                        logger_object=lambda msg: self.context.log(msg, step_code=self.step_code),
                     )
                     request_header = out["headers"]
                     request_body = out["request_body"]
                     request_form_data = out["form_data"]
                     request_form_urlencoded = out["urlencoded"]
+                    request_params = out["params"]
+                    # RAW/未指定类型且正文以JSON文本提供时，payload 走 request_text；
+                    # 数据驱动修改的是解析后的 request_body，必须同步回写文本，否则替换结果不会生效。
+                    if (
+                            isinstance(request_body, (dict, list))
+                            and isinstance(request_text, str)
+                            and request_text.lstrip().startswith(("{", "["))
+                    ):
+                        request_text = orjson.dumps(request_body).decode("UTF-8")
+
+            # 历史/导入数据可能把 XML 存在 request_body 字符串中；发送前回落到 request_text，
+            # 避免 XML 步骤因 request_text 为空而发出空报文。
+            if not request_text and isinstance(request_body, str) and (
+                    self.step.request_args_type == AutoTestReqArgsType.XML
+                    or request_body.lstrip().startswith("<")
+            ):
+                request_text = request_body
 
             # 3）再对报文做变量占位符解析
             request_header = self.context.resolve_placeholders(
@@ -3607,7 +3661,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 variables=request_body,
                 step_code=self.step_code
             )
-            if self.step.request_args_type == AutoTestReqArgsType.XML and request_text:
+            if resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body) and request_text:
                 request_text = self.context.resolve_xml_placeholders(
                     xml_text=request_text,
                     step_code=self.step_code,

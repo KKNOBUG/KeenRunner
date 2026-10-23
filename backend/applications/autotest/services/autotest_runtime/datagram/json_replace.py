@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import orjson
 from jsonpath_ng import parse
@@ -210,20 +210,41 @@ class JsonDatagram:
         return parts[-1].strip() if parts and parts[-1] else ""
 
     @staticmethod
+    def _resolve_header_key(headers: Optional[Dict[str, Any]], key: str) -> Optional[str]:
+        """
+        按HTTP头大小写不敏感规则定位实际键名，写回时保留原始大小写。
+
+        :param headers: 请求头字典
+        :param key: 数据源路径提取出的头字段名
+        :return: 实际键名；未命中返回None
+        """
+        if not headers or not key:
+            return None
+        if key in headers:
+            return key
+        lower_key = key.lower()
+        for existing_key in headers:
+            if str(existing_key).lower() == lower_key:
+                return existing_key
+        return None
+
+    @staticmethod
     def _by_jsonpath_modify_request_params(
             path_map: Dict[str, Any],
             *,
             request_body: Any,
             form_data: Optional[Dict[str, Any]],
             urlencoded: Optional[Dict[str, Any]],
+            params: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """
-        将JSONPath映射写入body/form/urlencoded，原地修改dict，找不到路径则忽略。
+        将JSONPath映射写入body/form/urlencoded/query params，原地修改dict，找不到路径则忽略。
 
         :param path_map: JSONPath->值的映射
         :param request_body: 原始body（dict或可解析为dict的JSON字符串）
         :param form_data: form-data字典，原地修改；可为None
         :param urlencoded: x-www-form-urlencoded字典，原地修改；可为None
+        :param params: URL查询参数字典，原地修改；可为None
         :return: 写入后的request_body
         """
         if not path_map:
@@ -274,6 +295,16 @@ class JsonDatagram:
                     json_value=expand_dataset_general_value(value=expand_dataset_special_value(value=json_value)),
                     type_adapted=False
                 )
+        if isinstance(params, dict):
+            for json_path, json_value in path_map.items():
+                if not json_path:
+                    continue
+                JsonDatagram._by_jsonpath_modify_inner_content(
+                    datagram=params,
+                    json_path=json_path,
+                    json_value=expand_dataset_general_value(value=expand_dataset_special_value(value=json_value)),
+                    type_adapted=False
+                )
         return rb
 
     @staticmethod
@@ -285,10 +316,17 @@ class JsonDatagram:
             request_headers: Optional[Dict[str, Any]] = None,
             form_data: Optional[Dict[str, Any]] = None,
             urlencoded: Optional[Dict[str, Any]] = None,
+            params: Optional[Dict[str, Any]] = None,
+            logger_object: Optional[Callable[[str], None]] = None,
     ) -> Dict[str, Any]:
         """
-        数据驱动报文替换：根据head_map/body_map将JSONPath应用到请求头与body/form/urlencoded；
-        路径在所有通道均未命中时汇总记日志跳过。
+        数据驱动报文替换：根据head_map/body_map将JSONPath应用到请求头、body/form/urlencoded/query参数；
+        路径在所有通道均未命中时汇总告警跳过。
+
+        通道约定：
+        - head_map 写请求头（兼容历史：同时尝试写入 body/form/urlencoded 的同名路径）；
+        - body_map 写 body/form/urlencoded/query params；
+        - 请求头匹配大小写不敏感，写回时保留原始键名。
 
         :param head_map: 请求头/报文侧JSONPath->值
         :param body_map: 报文体JSONPath->值
@@ -296,49 +334,67 @@ class JsonDatagram:
         :param request_headers: 请求头字典；可为None
         :param form_data: form-data字典；可为None
         :param urlencoded: x-www-form-urlencoded字典；可为None
-        :return: 含headers/request_body/form_data/urlencoded的字典
+        :param params: URL查询参数字典；可为None
+        :param logger_object: 可选的步骤日志回调
+        :return: 含headers/request_body/form_data/urlencoded/params的字典
         """
         head_map = head_map or {}
         body_map = body_map or {}
-        channels = (request_body, form_data, urlencoded)
+        head_channels = (request_body, form_data, urlencoded)
+        body_channels = (request_body, form_data, urlencoded, params)
         missed_paths: List[str] = []
+
         for json_path in head_map:
             if not json_path:
                 continue
             header_key = JsonDatagram._by_jsonpath_modify_request_header(json_path)
-            if (request_headers is not None and header_key in request_headers) or JsonDatagram._jsonpath_hits(json_path, *channels):
+            if JsonDatagram._resolve_header_key(request_headers, header_key) is not None:
+                continue
+            # 兼容历史语义：请求头路径允许落到 body/form/urlencoded 的同名 JSONPath
+            if JsonDatagram._jsonpath_hits(json_path, *head_channels):
                 continue
             missed_paths.append(json_path)
+
         for json_path in body_map:
-            if not json_path or JsonDatagram._jsonpath_hits(json_path, *channels):
+            if not json_path or JsonDatagram._jsonpath_hits(json_path, *body_channels):
                 continue
             missed_paths.append(json_path)
+
         if request_headers is not None:
             for json_path, json_value in head_map.items():
                 if not json_path:
                     continue
                 key = JsonDatagram._by_jsonpath_modify_request_header(json_path)
-                if key and key in request_headers:
-                    request_headers[key] = expand_dataset_general_value(value=expand_dataset_special_value(value=json_value))
+                actual_key = JsonDatagram._resolve_header_key(request_headers, key)
+                if actual_key is not None:
+                    request_headers[actual_key] = expand_dataset_general_value(
+                        value=expand_dataset_special_value(value=json_value)
+                    )
 
         rb = request_body
+        # 历史兼容：head_map 仍参与 body/form/urlencoded 的同名路径写入
         rb = JsonDatagram._by_jsonpath_modify_request_params(
             path_map=head_map,
             request_body=rb,
             form_data=form_data,
-            urlencoded=urlencoded
+            urlencoded=urlencoded,
         )
         rb = JsonDatagram._by_jsonpath_modify_request_params(
             path_map=body_map,
             request_body=rb,
             form_data=form_data,
-            urlencoded=urlencoded
+            urlencoded=urlencoded,
+            params=params,
         )
         if missed_paths:
-            LOGGER.info(f"【报文替换】数据源路径在报文中未命中已跳过: {', '.join(missed_paths)}")
+            message = f"【报文替换】数据源路径在报文中未命中已跳过: {', '.join(missed_paths)}"
+            LOGGER.warning(message)
+            if logger_object is not None:
+                logger_object(message)
         return {
             "headers": request_headers,
             "request_body": rb,
             "form_data": form_data,
             "urlencoded": urlencoded,
+            "params": params,
         }

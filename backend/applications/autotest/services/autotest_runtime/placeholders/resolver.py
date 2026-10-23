@@ -21,6 +21,7 @@ from backend.applications.autotest.services.autotest_runtime.context import coer
 from backend.applications.autotest.services.autotest_runtime.placeholders.arithmetic import PlaceholderArithmetic
 from backend.applications.autotest.services.autotest_runtime.placeholders.functions import PlaceholderFunctions
 from backend.applications.autotest.services.autotest_runtime.sandbox import RE_PLACEHOLDER
+from backend.common.xml_utils import XmlUtils
 
 
 class PlaceholderResolver:
@@ -228,21 +229,20 @@ class PlaceholderResolver:
         if "${" not in xml_text:
             return xml_text
         try:
-            # 使用iterparse保留默认命名空间，避免序列化时产生ns0:前缀
-            from io import BytesIO
-            ns_map: List[Tuple[str, str]] = []
-            for event, elem in ElementTree.iterparse(BytesIO(xml_text.encode("utf-8")), events=("start-ns",)):
-                ns_map.append(elem)
-            for prefix, uri in ns_map:
-                ElementTree.register_namespace(prefix, uri)
-            root = ElementTree.fromstring(xml_text.encode("utf-8"))
+            # 统一走 XmlUtils：保留默认命名空间/XML声明/注释，避免 ElementTree 生成 ns0 前缀；
+            # 也避免对 ns0 这类保留前缀再次 register_namespace 触发 ValueError 后中断占位符替换。
+            parsed = XmlUtils.parse(xml_text)
             cls._resolve_xml_element_placeholders(
-                element=root,
+                element=parsed.root,
                 logger_object=logger_object,
                 is_core_engine=is_core_engine,
                 finished_variables=finished_variables,
             )
-            return ElementTree.tostring(root, encoding="unicode")
+            return XmlUtils.serialize(
+                parsed.root,
+                namespaces=parsed.namespaces,
+                declaration=parsed.declaration,
+            )
         except ElementTree.ParseError:
             logger_object(
                 "【参数替换】XML 报文解析失败, 回退为整串占位符替换"
@@ -261,7 +261,13 @@ class PlaceholderResolver:
                 f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\t"
                 f"错误回溯: {traceback.format_exc()}"
             )
-            return xml_text
+            # XML 解析/序列化异常时回退整串替换，避免把 ${...} 原样发给对端
+            return cls._resolve_string_placeholders(
+                content=xml_text,
+                logger_object=logger_object,
+                is_core_engine=is_core_engine,
+                finished_variables=finished_variables,
+            )
 
     @classmethod
     def resolve_placeholders(cls, value: Any, logger_object: Callable, is_core_engine: bool = False, finished_variables: Optional[Any] = None) -> Any:

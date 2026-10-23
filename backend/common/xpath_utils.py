@@ -5,8 +5,10 @@
 @Project : Krun
 @Module  : xpath_utils
 """
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Tuple, Union
 from xml.etree import ElementTree
+
+from backend.common.xml_utils import ParsedXml, XmlUtils
 
 
 class XPathUtils:
@@ -17,17 +19,36 @@ class XPathUtils:
     默认命名空间下无前缀路径会自动按{*}回退匹配。
     """
 
-    @staticmethod
-    def _parse(xml_data: Union[str, ElementTree.Element]) -> ElementTree.Element:
+    @classmethod
+    def _parse_document(cls, xml_data: Union[str, ElementTree.Element]) -> ParsedXml:
+        """
+        将XML字符串或元素统一解析为ParsedXml（含命名空间与声明）。
+
+        :param xml_data: XML字符串或ElementTree元素
+        :return: ParsedXml
+        """
+        if isinstance(xml_data, str):
+            return XmlUtils.parse(xml_data)
+        return ParsedXml(root=xml_data)
+
+    @classmethod
+    def _serialize(cls, parsed: ParsedXml) -> str:
+        """序列化ParsedXml，保留默认命名空间与XML声明。"""
+        return XmlUtils.serialize(
+            parsed.root,
+            namespaces=parsed.namespaces,
+            declaration=parsed.declaration,
+        )
+
+    @classmethod
+    def _parse(cls, xml_data: Union[str, ElementTree.Element]) -> ElementTree.Element:
         """
         将XML字符串或元素解析为ElementTree元素。
 
         :param xml_data: XML字符串或ElementTree元素
         :return: ElementTree元素
         """
-        if isinstance(xml_data, str):
-            return ElementTree.fromstring(xml_data.encode("utf-8"))
-        return xml_data
+        return cls._parse_document(xml_data).root
 
     @staticmethod
     def _local_name(tag: str) -> str:
@@ -123,7 +144,7 @@ class XPathUtils:
             return []
         try:
             elements = root.findall(xpath)
-        except (SyntaxError, TypeError):
+        except (SyntaxError, TypeError, KeyError):
             elements = []
         if elements:
             return list(elements)
@@ -132,8 +153,79 @@ class XPathUtils:
             return list(elements) if elements else []
         try:
             return list(root.findall(alt))
-        except (SyntaxError, TypeError):
+        except (SyntaxError, TypeError, KeyError):
             return []
+
+    @staticmethod
+    def _split_attribute_xpath(xpath: str) -> Tuple[str, str]:
+        """
+        拆分属性XPath：末段为@attr时返回(父路径, 属性本地名)，否则返回空元组。
+
+        :param xpath: XPath表达式，如./@id、./Head/@id
+        :return: (父路径, 属性名)；非属性路径返回("", "")
+        """
+        if not xpath:
+            return "", ""
+        if xpath.startswith("@"):
+            return ".", xpath[1:].strip().rsplit(":", 1)[-1]
+        last_slash = xpath.rfind("/")
+        if last_slash < 0:
+            return "", ""
+        attribute = xpath[last_slash + 1:]
+        if not attribute.startswith("@"):
+            return "", ""
+        return (xpath[:last_slash] or "."), attribute[1:].strip().rsplit(":", 1)[-1]
+
+    @classmethod
+    def _attribute_key(cls, element: ElementTree.Element, local_name: str) -> Optional[str]:
+        """按本地名查找元素属性键，兼容带命名空间的属性。"""
+        if not local_name:
+            return None
+        for key in element.attrib:
+            if cls._local_name(key) == local_name:
+                return key
+        return None
+
+    @classmethod
+    def _get_attribute(cls, element: ElementTree.Element, local_name: str) -> Optional[str]:
+        """按本地名读取属性值；不存在返回None。"""
+        key = cls._attribute_key(element, local_name)
+        return element.get(key) if key is not None else None
+
+    @classmethod
+    def _set_attribute(cls, element: ElementTree.Element, local_name: str, value: Any) -> None:
+        """按本地名写入属性：优先复用原属性键，避免命名空间丢失。"""
+        key = cls._attribute_key(element, local_name) or local_name
+        element.set(key, "" if value is None else str(value))
+
+    @classmethod
+    def update_in_place(cls, root: ElementTree.Element, xpath: str, value: Any) -> bool:
+        """
+        按XPath原地更新文本或属性，不序列化。
+
+        文本节点多匹配时更新最后一个（与历史语义一致）；属性路径按父节点定位后写属性。
+
+        :param root: XML根节点
+        :param xpath: XPath表达式
+        :param value: 新值
+        :return: 命中并更新返回True；未命中返回False
+        """
+        if not xpath:
+            return False
+
+        parent_path, attribute_name = cls._split_attribute_xpath(xpath)
+        if attribute_name:
+            parents = cls.findall(root, parent_path)
+            if not parents:
+                return False
+            cls._set_attribute(parents[-1], attribute_name, value)
+            return True
+
+        elements = cls.findall(root, xpath)
+        if not elements:
+            return False
+        elements[-1].text = "" if value is None else str(value)
+        return True
 
     @classmethod
     def find_child(cls, parent: ElementTree.Element, name: str) -> Optional[ElementTree.Element]:
@@ -198,18 +290,19 @@ class XPathUtils:
         :param tag: 新子元素标签名；不提供时按规则推导
         :return: 新增后的XML字符串
         """
+        parsed = cls._parse_document(xml_data)
         if not xpath:
             if isinstance(xml_data, str):
                 return xml_data
-            return ElementTree.tostring(xml_data, encoding="unicode")
+            return cls._serialize(parsed)
 
-        root = cls._parse(xml_data)
+        root = parsed.root
         elements = cls.findall(root, xpath)
 
         if not elements:
             # 情况4：XPath 不存在，沿路径创建元素
             cls._create_path(root, xpath, value, tag)
-            return ElementTree.tostring(root, encoding="unicode")
+            return cls._serialize(parsed)
 
         target = elements[-1]
         children = list(target)
@@ -236,7 +329,7 @@ class XPathUtils:
             new_element = ElementTree.SubElement(target, new_tag)
             new_element.text = str(value) if value is not None else ""
 
-        return ElementTree.tostring(root, encoding="unicode")
+        return cls._serialize(parsed)
 
     @classmethod
     def _create_path(
@@ -301,24 +394,25 @@ class XPathUtils:
         :param xpath: XPath表达式
         :return: 删除后的XML字符串；未匹配时返回原内容
         """
+        parsed = cls._parse_document(xml_data)
         if not xpath:
             if isinstance(xml_data, str):
                 return xml_data
-            return ElementTree.tostring(xml_data, encoding="unicode")
+            return cls._serialize(parsed)
 
-        root = cls._parse(xml_data)
+        root = parsed.root
         elements = cls.findall(root, xpath)
         if not elements:
             if isinstance(xml_data, str):
                 return xml_data
-            return ElementTree.tostring(root, encoding="unicode")
+            return cls._serialize(parsed)
 
         for elem in elements:
             parent = cls._find_parent(root, elem)
             if parent is not None:
                 parent.remove(elem)
 
-        return ElementTree.tostring(root, encoding="unicode")
+        return cls._serialize(parsed)
 
     @classmethod
     def update(
@@ -335,21 +429,17 @@ class XPathUtils:
         :param value: 新值，写入匹配元素的text
         :return: 更新后的XML字符串；未匹配时返回原内容
         """
+        parsed = cls._parse_document(xml_data)
         if not xpath:
             if isinstance(xml_data, str):
                 return xml_data
-            return ElementTree.tostring(xml_data, encoding="unicode")
+            return cls._serialize(parsed)
 
-        root = cls._parse(xml_data)
-        elements = cls.findall(root, xpath)
-        if not elements:
+        if not cls.update_in_place(parsed.root, xpath, value):
             if isinstance(xml_data, str):
                 return xml_data
-            return ElementTree.tostring(root, encoding="unicode")
-
-        target_element = elements[-1]
-        target_element.text = str(value) if value is not None else ""
-        return ElementTree.tostring(root, encoding="unicode")
+            return cls._serialize(parsed)
+        return cls._serialize(parsed)
 
     @classmethod
     def query(
@@ -368,6 +458,13 @@ class XPathUtils:
             return None
 
         root = cls._parse(xml_data)
+        parent_path, attribute_name = cls._split_attribute_xpath(xpath)
+        if attribute_name:
+            parents = cls.findall(root, parent_path)
+            if not parents:
+                return None
+            return cls._get_attribute(parents[-1], attribute_name)
+
         elements = cls.findall(root, xpath)
         if not elements:
             return None
@@ -385,8 +482,8 @@ class XPathUtils:
         :return: 叶子text，或整元素的XML字符串
         """
         if len(element) > 0:
-            return ElementTree.tostring(element, encoding="unicode")
-        return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
+            return XmlUtils.serialize(element)
+        return element.text if element.text else XmlUtils.serialize(element)
 
 
 if __name__ == '__main__':

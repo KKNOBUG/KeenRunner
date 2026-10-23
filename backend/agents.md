@@ -62,7 +62,7 @@ backend/
 │  ├─ project_config.py     # 项目配置主入口
 │  ├─ global_config.py      # 全局常量
 │  ├─ database_config.py    # 数据库配置
-│  ├─ celery_config.py      # Celery 配置（队列名 = {port}_default,{port}_autotest）
+│  ├─ celery_config.py      # Celery 配置（队列名 = {port}_default / _autotest / _perf）
 │  ├─ logging_config.py     # loguru 配置
 │  └─ router_registry.py    # 路由注册表（ROUTER_SUMMARY/ROUTER_TAGS）
 │
@@ -75,10 +75,10 @@ backend/
 │
 ├─ enums/                   # 枚举集中（autotest/perf/http/menu/app/...）
 ├─ services/                # 顶层服务（ctx/dependency/file_transfer/password）
-├─ migrations/models/       # aerich 迁移产物（25 个版本文件）
-├─ scripts/                 # 运维脚本（菜单注册 SQL、修复脚本、冒烟测试）
+├─ migrations/models/       # aerich 迁移产物（当前 11 个版本文件，以目录现状为准）
+├─ scripts/                 # 运维/修复脚本（aerich 对齐、redoc slug 等）
 ├─ static/                  # 静态资源（avatar/pythonHelpDoc/redoc/swagger-ui）
-└─ output/                  # 运行时产物目录（报告/导出文件，不入 git）
+└─ output/                  # 运行时产物（download/logs/jmx/upload 等不入 git；template/ 为部署模板资产）
 ```
 
 ---
@@ -87,7 +87,7 @@ backend/
 
 ### 3.1 autotest — 接口自动化
 
-**数据模型地图**（详见 SKILL.md 第 10 节）：
+**数据模型地图**（字段以 `applications/autotest/models/` 模型定义为准）：
 - `krun_autotest_project`（应用主数据）← case/task/tag 关联
 - `krun_autotest_case`（用例）1—N `krun_autotest_step`（步骤树，parent_step_id 自关联）
 - `krun_autotest_data_source`（参数化文件，dataset/dataset_names/cache_key）
@@ -98,11 +98,11 @@ backend/
 **核心执行链路**：
 ```
 views/autotest_task_view.py (/autotest/task/run)
-  → apply_async(run_autotest_task)  # 队列经 celery_config.task_routes 路由
+  → apply_async(run_autotest_task)  # task_routes 路由到 {port}_autotest
   → celery_scheduler/tasks/task_autotest_case.py (_run_autotest_task_impl)
-  → AutoTestStepCrud.batch_execute_cases
-  → AutoTestStepExecutionEngine.execute_case  # 返回七元组
-  → 写 report + details、回填 case/task 状态
+  → AutoTestStepCrud.batch_execute_cases  # batch_code；任务级串行/并行；用例内 轮次×数据场景
+  → AutoTestStepExecutionEngine.execute_case  # 七元组：results/logs/report_code/statistics/session_variables/defer_create_report/pending_create_details
+  → 写 report + details、回填 case/task 状态；执行观测写 record(task_summary)
 ```
 
 **步骤引擎**（`services/autotest_step_engine.py`）：
@@ -121,6 +121,27 @@ views/autotest_task_view.py (/autotest/task/run)
 - `exchange/`：提取/断言管线（extractors、assert_compare、pipeline）
 - `placeholders/`：占位符解析（arithmetic、functions、resolver）
 - `validation/`：执行器字段/步骤树/变量流校验
+
+**步骤边界**：
+- `step_is_skipped` 的步骤视为不存在：不写明细、不计统计；
+- 引用公共脚本/公共接口的壳步骤执行的是被引用用例内部步骤（children 逐项计数，壳不重复计数）；
+- `details` 只存执行快照，步骤定义仍以 `krun_autotest_step` 为准。
+
+**数据源链路**：
+```
+views/autotest_data_source_view.py (/autotest/data_source/*)
+  → services/autotest_data_source_service.py (DataSourceService：准入校验/字段同步/矩阵清洗)
+  → services/autotest_data_source_parser.py (DataSourceMatrixParser：HEAD/BODY/ASSERT_* 四分区、水平/垂直方向、字符串化)
+  → AutoTestDataSourceCrud 落库
+执行期：DatasetLoader.load_dataset_for_request_step → AutoTestDataSourceCrud.get_dataset_scenario
+        （按 case_id + step_code + dataset_name 查库）
+```
+- 仅 HTTP/TCP 步骤可挂载；用户脚本宿主下的「引用公共接口」步骤可挂；公共脚本/公共接口禁止使用数据源。
+- `cache_key` 仅作为字段落库（`dataset_{case_id}_{step_code}`），当前执行期不读 Redis。
+
+**执行记录与异步中心**：
+- 异步导入/导出/脚本生成统一写 `krun_autotest_record`：`task_type` 分类、`task_summary` 结果快照（含 `attachments` 信封）、失败态也回填；异步中心按 `AutoTestTaskType` 的 `task_type_in` 过滤。
+- 报告读模型：`/report/search`（手工报告）、`/report/search_task_batches`（task_code 批次）、`/report/search_batch_scripts`（batch_code 脚本维度）、`/report/search_script_round_reports`（batch_code+case_id+round_no）、`/report/search_batch_reports`；报告明细树由 `/detail/tree` 后端组装。
 
 **调试模式**（不落库，顺序严格对齐执行模式）：
 ```
@@ -156,6 +177,17 @@ views (/http_debugging, /tcp_debugging)
 - `perf_analysis_service.py`：报告分析
 - `perf_asset_utils.py`：资产工具（产物清单、差异对比、导出 sheet 构建）
 - `perf_process_registry.py`：引擎进程注册表
+
+**执行链路**：
+```
+/perf/load_preset/run
+  → PerfExecuteService.run_preset（完整性校验，原子置 queued）
+  → run_perf_preset.apply_async（{port}_perf）
+  → PerfExecuteService.execute_pipeline（消费闸门 → 建报告 → 拉起 Locust → 轮询停止/退出 → 分片聚合 → 报告终态）
+停止：/perf/load_preset/stop → stopping → 管线数秒内杀进程组
+```
+- 状态机：`queued → running → completed/failed/stopped`；停止过渡态为 `stopping`，消息重投靠 queued 消费闸门防重复施压。
+- 场景独立编辑页唯一保存入口 `save_wizard`：事务内 upsert scene + diff upsert presets（新增/更新/软删）。
 
 **视图路由**：`/perf/api/*`、`/perf/scene/*`、`/perf/load_preset/*`、`/perf/report/*`、`/perf/comparison/*`、`/perf/dataset/*`、`/perf/job/*`、`/perf/analysis/*`
 
@@ -216,7 +248,7 @@ views (/http_debugging, /tcp_debugging)
 **配置一律来自 `.env` → `PROJECT_CONFIG`，禁止硬编码 host/port/队列名/配置值。**
 
 - `project_config.py`：`PROJECT_CONFIG` 单例（APP_TITLE/SERVER_HOST/SERVER_PORT/...）
-- `celery_config.py`：队列名 = `{port}_default,{port}_autotest`（端口前缀派生）；`task_routes` 统一路由
+- `celery_config.py`：队列名 = `{port}_default` / `{port}_autotest` / `{port}_perf`（端口前缀派生）；`task_routes` 统一路由
 - `database_config.py`：MySQL 连接
 - `logging_config.py`：loguru 格式与轮转
 - `router_registry.py`：`ROUTER_SUMMARY` / `ROUTER_TAGS`（OpenAPI 文档增强）
@@ -226,21 +258,25 @@ views (/http_debugging, /tcp_debugging)
 ## 6. Celery 任务（celery_scheduler/）
 
 **队列纪律**（禁止漂移）：
-- 队列名统一为 `{port}_default,{port}_autotest`
+- 队列名统一为 `{port}_default`、`{port}_autotest`、`{port}_perf`（以 `configure/celery_config.py` 为准）
 - 生产者经 `task_routes` 统一路由，`apply_async` **不得硬编码 queue**
-- worker 的 `-Q` 必须与配置一致
+- worker 的 `-Q` 必须与配置一致；`visibility_timeout=36000` 与最长任务硬时限（perf `36000s`）对齐，防止 unacked 消息被重投导致重复执行
 
 **任务清单**（`tasks/`）：
-- `task_autotest_case.py`：autotest 用例执行（`run_autotest_task`）
+- `task_autotest_case.py`：用例执行 `run_autotest_task` + Beat 扫描 `scan_and_dispatch_autotest_tasks`
 - `task_execute_assign_case.py`：分配用例执行
-- `task_export_case_datagram.py` / `task_export_case_script.py`：导出
-- `task_import_case_script.py`：导入
+- `task_export_case_datagram.py` / `task_export_case_script.py`：公共接口报文/脚本导出
+- `task_import_case_script.py`：公共接口脚本导入
 - `task_public_api_to_script.py`：公共接口转脚本
-- `task_performance.py`：性能压测执行
-- `task_perf_data_job.py`：性能数据作业
+- `task_performance.py`：压测执行（`run_perf_preset`，perf 队列）
+- `task_perf_data_job.py`：性能数据作业（perf 队列）
 - `task_example.py`：示例任务
 
-**Beat 调度**：`scan_and_dispatch_autotest_tasks` 每 60 秒扫描到期任务并下发。
+**任务时限**：任务级覆盖全局 `3300/3600s`；`run_autotest_task` 为 `25200/28800s`；`run_perf_preset` 为 `32400/36000s`。
+
+**Beat 调度**：`scan_and_dispatch_autotest_tasks` 每 60 秒扫描到期任务，经 default 队列下发。
+
+**执行记录类型**（`AutoTestTaskType`）：任务定义实际只用「多个用例执行」；记录分类另有「单个用例执行/调度任务扫描/公共接口报文导出/公共接口导出/公共接口导入/单接口脚本生成/测试案例生成」。
 
 ---
 
@@ -249,6 +285,7 @@ views (/http_debugging, /tcp_debugging)
 - `cache/`：Redis 连接池（`redis_connection_pool` 异步 / `redis_sync_pool` 同步）
 - `database/`：MySQL 连接池（异步/同步/原生 SQL 操作）
 - `excel/`：openpyxl + pandas 读写
+- `xml_utils.py`：XML 命名空间/声明保留解析与序列化（数据驱动替换、占位符解析共用）
 - `request/`：HTTP（`request_async_utils`/`request_sync_utils`）+ TCP（`tcp_async_utils`）
 - 单文件工具：`curl_utils`、`jsonpath_utils`、`xpath_utils`、`yaml_utils`、`openapi_utils`、`api_doc_convert`、`file_utils`、`generate_utils`、`convert_utils`、`replace_utils`、`shell_utils`、`url_utils`、`async_or_sync_convert`、`request_context`
 
@@ -257,12 +294,12 @@ views (/http_debugging, /tcp_debugging)
 ## 8. 枚举（enums/）
 
 按业务域集中声明，禁止内联魔法值：
-- `autotest_enum.py`：步骤类型/执行状态/...
-- `perf_enum.py`：`PerfRunMode`/`PerfLoadMode`/`PerfReportStatus`/`PerfAssertMode`/`PerfApiRole`/`PerfTargetMetric`/...
+- `autotest_enum.py`：步骤类型/任务类型/报告类型/任务状态/执行模式/断言与比较操作/...
+- `perf_enum.py`：`PerfRunMode`/`PerfLoadMode`/`PerfPresetStatus`/`PerfReportStatus`/`PerfAssertMode`/`PerfApiRole`/`PerfTargetMetric`/...
 - `http_enum.py`：HTTP 方法/状态码
 - `menu_enum.py`：菜单类型
 - `app_enum.py`：应用级
-- `base_enum_cls.py`：枚举基类
+- `base_enum_cls.py`：枚举基类（StringEnum 与 str 值等价比较）
 - `base_error_enum.py`：错误码
 - `file_size_enum.py`：文件大小
 - `program_env_enum.py`：环境
@@ -279,6 +316,8 @@ models → schemas → services → views(router)
 - **router 只做**：参数接收、调用 service、返回统一响应
 - **业务逻辑全部在 services**
 - **services 写法**：模块级函数与 `XxxService` 静态方法类并存，跟随同目录文件现有风格
+- **依赖注入**：视图通过 `applications/<模块>/dependencies.py` 的 `XxxServices` 聚合获取 CRUD（`get_autotest_api_services` / `get_perf_api_services`），不要在各视图自行 new
+- **路由挂载**：模块内 `views/__init__.py` 聚合并声明前缀/tags，统一由 `core/initializations/app_initialization.register_routers` 挂载
 - **业务不进 views、model 逻辑不进 schemas、后端业务不下沉前端**
 
 ---
@@ -295,6 +334,8 @@ models → schemas → services → views(router)
 - 注释解释"**为什么**"与意图，不复述代码"做了什么"
 - 数据与逻辑分离：常量、注册表、配置映射独立声明
 - 写操作收敛单一入口：新增写操作必须挂到该资源既有 Crud/Service 入口
+- 禁止循环内查库/远程请求：用批量 `__in` 查询或事务内一次处理，复用现有连接池/客户端
+- 响应序列化用模型 `to_dict()`（异步方法，必须 `await`）；跨表引用优先 `*_code`
 
 ---
 
@@ -306,6 +347,8 @@ models → schemas → services → views(router)
 - 跨表引用优先 `*_code`，表内定位用 `id`
 - 除环境链外均为 BigInt **逻辑关联**、无物理外键，业务层校验；**禁止擅自补外键**
 - 新增字段走 Tortoise Model + aerich 迁移；**禁止裸写原生 SQL**
+- 报告 `report_code` 全局唯一；明细 `unique_together=(report_code, case_code, step_code, loop_cycles)`
+- `krun_autotest_details` 只追加执行快照，禁止用明细数据回改步骤定义
 
 ---
 
@@ -315,7 +358,9 @@ models → schemas → services → views(router)
 |------|------|
 | FastAPI 开发 | `uvicorn backend.backend_main:app --reload` |
 | FastAPI 生产 | `gunicorn -c backend/gunicorn.conf.py backend.backend_main:app` |
+| 后端直启 | `PYTHONPATH=. python backend/backend_main.py`（从仓库根目录执行） |
 | Celery worker | `bash backend/celery_deploy.sh` |
+| Celery 队列 | worker `-Q` 需覆盖 `{port}_default,{port}_autotest,{port}_perf` |
 | 一键部署 | `bash backend/full_deploy.sh` |
 | 依赖安装 | `uv sync`（或 `pip install -r requirements.txt`） |
 | 迁移 | `aerich migrate` + `aerich upgrade` |
@@ -333,6 +378,15 @@ models → schemas → services → views(router)
 | 统一响应 | `core/responses/` |
 | 异常体系 | `core/exceptions/` |
 | 脚手架基类 | `applications/base/services/scaffold.py` |
+| XML 解析/序列化 | `common/xml_utils.py` |
+| autotest CRUD 聚合 | `applications/autotest/dependencies.py` |
+| perf CRUD 聚合 | `applications/performance/dependencies.py` |
+| autotest 数据源解析 | `applications/autotest/services/autotest_data_source_parser.py` |
+| autotest 数据源装载 | `applications/autotest/services/autotest_dataset_loader.py` |
+| autotest Excel 导入导出 | `applications/autotest/services/autotest_case_excel_service.py` |
+| 初始菜单/路由灌入 | `core/initializations/data_initialization.py` |
+| 权限规则 | `applications/base/services/permission_rule.py` |
+| 当前用户菜单/路由 | `applications/base/views/auth_view.py` |
 | autotest 步骤引擎 | `applications/autotest/services/autotest_step_engine.py` |
 | autotest 调试服务 | `applications/autotest/services/autotest_step_debug_service.py` |
 | perf 执行管线 | `applications/performance/services/perf_execute_service.py` |
@@ -357,12 +411,17 @@ models → schemas → services → views(router)
 7. 配置一律来自 `.env` → `PROJECT_CONFIG`，禁止硬编码
 8. Celery 队列名统一，`apply_async` 不得硬编码 queue
 
+新增页面/接口额外检查：
+9. 菜单：`krun_menu` 写入/更新（component 指向 `/xxx`、keepalive、order、parent_id），否则前端无路由
+10. 接口：`POST /base/router/refresh` 同步 `krun_router`，核对 summary 前缀分类与角色补绑
+11. 异步任务：record 写入 `task_type`、`task_summary`（含 attachments 信封），并纳入异步中心类型过滤
+
 交付前：
-9. 链路复核：改动前后行为一致，未波及其他分支
-10. 边界验证：空值、非法入参、异常分支均按预期处理
-11. 编译与导入冒烟：`py_compile` 必做
-12. 残留检查：全局搜索被替换的旧符号、旧路径、死代码
-13. 影响声明：改动文件、依赖、表结构与线上兼容性
+12. 链路复核：改动前后行为一致，未波及其他分支
+13. 边界验证：空值、非法入参、异常分支均按预期处理
+14. 编译与导入冒烟：`py_compile` 必做
+15. 残留检查：全局搜索被替换的旧符号、旧路径、死代码
+16. 影响声明：改动文件、依赖、表结构与线上兼容性
 
 ---
 
@@ -374,9 +433,12 @@ models → schemas → services → views(router)
 - ❌ 未经确认增删改已有表字段（改表必须走 aerich 并显式确认）
 - ❌ 硬编码 host/port/队列名/配置值
 - ❌ Celery 队列漂移
+- ❌ 绕过 `core/responses` / `core/exceptions` 自造返回或错误结构
+- ❌ 在循环内查库或发起远程请求
+- ❌ 新增页面/接口未同步菜单与路由表即上线
 - ❌ 把大二进制/压缩包写入 git 版本库
 
 ---
 
-> 本文件由仓库结构扫描生成，作为 Agent 导航入口。
-> 详细业务约束与数据模型地图见 `.qoder/skills/production-project-guard/SKILL.md`。
+> 本文件由仓库结构扫描生成，作为后端 Agent 导航入口；与代码冲突时以代码为准。
+> 跨端编码规范与前端链路见仓库根 `AGENTS.md`；原 `.qoder/skills/production-project-guard/SKILL.md` 为历史文档，缺失时以根 `AGENTS.md` 与本文件为准。
