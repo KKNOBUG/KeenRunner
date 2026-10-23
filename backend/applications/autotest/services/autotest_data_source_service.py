@@ -17,7 +17,7 @@
 - 场景名称与身份补齐：场景列提取、重复检测、新建身份生成（树保存一致性校验消费）
 """
 from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
 import orjson
@@ -29,6 +29,7 @@ from backend.applications.autotest.models.autotest_step_model import AutoTestSte
 from backend.applications.autotest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate
 from backend.applications.autotest.services.autotest_data_source_crud import make_cache_key
 from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
 from backend.core.exceptions import NotFoundException, ParameterException
 from backend.enums import AutoTestReqArgsType, AutoTestStepType, PUBLIC_CASE_TYPES
 from backend.services import get_current_username
@@ -170,14 +171,50 @@ class DataSourceService:
         :param step: 当前定位到的步骤
         :return: 用于构建矩阵/报文原始值的步骤；非引用步骤原样返回，未找到内部请求步骤时兜底原步骤
         """
-        if step.step_type != AutoTestStepType.QUOTE_PUBLIC_API:
-            return step
-        inner = await services.step_curd.model.filter(
-            case_id=step.quote_case_id or 0,
-            step_type__in=list(cls.REQUEST_STEP_TYPES),
-            state__not=1,
-        ).order_by("step_no").first()
-        return inner or step
+        resolved_map = await cls.resolve_datagram_source_steps(services, [step])
+        return resolved_map.get(step.id, step)
+
+    @classmethod
+    async def resolve_datagram_source_steps(
+            cls,
+            services: AutoTestServices,
+            steps: Sequence[AutoTestStepModel],
+    ) -> Dict[int, AutoTestStepModel]:
+        """
+        批量解析报文来源步骤：引用公共接口壳统一回落到被引用用例内的请求步骤。
+
+        单步与批量共用同一解析口径；批量按quote_case_id一次性预载内部请求步骤，避免下载多sheet时逐步骤查库。
+
+        :param services: CRUD聚合
+        :param steps: 当前步骤集合
+        :return: 原步骤id→报文来源步骤；非引用步骤映射自身，未找到内部请求步骤时兜底壳步骤
+        """
+        step_list: List[AutoTestStepModel] = list(steps or [])
+        if not step_list:
+            return {}
+
+        shell_case_ids = {
+            int(step.quote_case_id)
+            for step in step_list
+            if step.step_type == AutoTestStepType.QUOTE_PUBLIC_API and step.quote_case_id
+        }
+        inner_step_map: Dict[int, AutoTestStepModel] = {}
+        if shell_case_ids:
+            inner_steps = await services.step_curd.model.filter(
+                case_id__in=list(shell_case_ids),
+                step_type__in=list(cls.REQUEST_STEP_TYPES),
+                state__not=1,
+            ).order_by("case_id", "step_no")
+            for inner_step in inner_steps:
+                inner_step_map.setdefault(inner_step.case_id, inner_step)
+
+        resolved_map: Dict[int, AutoTestStepModel] = {}
+        for step in step_list:
+            if step.step_type == AutoTestStepType.QUOTE_PUBLIC_API and step.quote_case_id:
+                resolved_map[step.id] = inner_step_map.get(int(step.quote_case_id), step)
+            else:
+                resolved_map[step.id] = step
+        return resolved_map
 
     @staticmethod
     async def resolve_enabled_data_source(
@@ -410,32 +447,17 @@ class DataSourceService:
         return None
 
     @staticmethod
-    def _looks_like_xml_payload(value: Any) -> bool:
+    def _xml_payload_text(step: AutoTestStepModel) -> str:
         """
-        判断报文文本是否以XML起始标记开头。
-
-        :param value: 候选报文
-        :return: 疑似XML返回True
-        """
-        if not isinstance(value, str):
-            return False
-        return value.lstrip("\ufeff \t\r\n").startswith("<")
-
-    @classmethod
-    def _xml_payload_text(cls, step: AutoTestStepModel) -> str:
-        """
-        提取步骤的XML报文本：优先request_text，缺失时兼容字符串型request_body。
+        提取步骤的XML报文本：复用AutoTestToolService的统一判定，兼容request_body字符串。
 
         :param step: 步骤实例
         :return: XML文本；非XML或为空时返回空串
         """
-        request_text = getattr(step, "request_text", None)
-        if cls._looks_like_xml_payload(request_text):
-            return request_text.lstrip("\ufeff \t\r\n")
-        request_body = getattr(step, "request_body", None)
-        if cls._looks_like_xml_payload(request_body):
-            return request_body.lstrip("\ufeff \t\r\n")
-        return ""
+        return AutoTestToolService.extract_xml_payload_text(
+            getattr(step, "request_text", None),
+            getattr(step, "request_body", None),
+        )
 
     @classmethod
     def _collect_step_partition(cls, step: AutoTestStepModel) -> Dict[str, Dict[str, Any]]:
@@ -464,9 +486,12 @@ class DataSourceService:
         elif args in (AutoTestReqArgsType.RAW.value, AutoTestReqArgsType.NONE.value, ""):
             # RAW/NONE 不是“无报文”，只是未声明结构；正文是XML时按XML采集字段，
             # 否则保持空BODY（纯文本/十六进制报文无法生成字段路径）。
-            xml_text = cls._xml_payload_text(step)
-            if xml_text:
-                result["BODY"] = cls._flatten_xml_xpath_values(xml_text)
+            if AutoTestToolService.resolve_datagram_is_xml(
+                    getattr(step, "request_args_type", None),
+                    getattr(step, "request_text", None),
+                    getattr(step, "request_body", None),
+            ):
+                result["BODY"] = cls._flatten_xml_xpath_values(cls._xml_payload_text(step))
         elif args == AutoTestReqArgsType.PARAMS.value:
             result["BODY"] = cls._kv_originals(getattr(step, "request_params", None))
         elif args == AutoTestReqArgsType.FORM_DATA.value:

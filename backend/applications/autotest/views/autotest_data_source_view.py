@@ -25,6 +25,7 @@ from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
+from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.autotest.schemas.autotest_data_source_schema import (
     AutoTestDataSourceCreate,
     AutoTestDataSourceUpdate,
@@ -99,20 +100,30 @@ async def _locate_request_step_name(services: AutoTestServices, *, case_id: int,
     return (step.step_name if step else "") or step_code
 
 
-async def _collect_report_original(services: AutoTestServices, instance: AutoTestDataSourceModel) -> Dict[str, Dict[str, Any]]:
+async def _collect_report_original(
+        services: AutoTestServices,
+        instance: AutoTestDataSourceModel,
+        step: Optional[AutoTestStepModel] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
     按数据源绑定的步骤实时采集报文原始值映射(HEAD/BODY分区隔离同名字段)，供前端本地插入正交易场景；
     引用公共接口壳无自身报文，回落被引用用例的请求步骤采集；步骤缺失或无法定位请求步骤时返回空映射。
+
+    :param services: CRUD聚合
+    :param instance: 数据源实例
+    :param step: 已定位的归属步骤；传入时复用，避免/build已有数据源分支重复查库
+    :return: HEAD/BODY分区原始值映射
     """
-    try:
-        step = await services.step_curd.model.filter(
-            case_id=instance.case_id,
-            step_code=instance.step_code,
-            state__not=1
-        ).first()
-    except Exception as e:
-        LOGGER.warning(f"查询步骤报文失败，返回空原始值映射: {e}")
-        return {}
+    if step is None:
+        try:
+            step = await services.step_curd.model.filter(
+                case_id=instance.case_id,
+                step_code=instance.step_code,
+                state__not=1
+            ).first()
+        except Exception as e:
+            LOGGER.warning(f"查询步骤报文失败，返回空原始值映射: {e}")
+            return {}
     if step is None or step.step_type not in DataSourceService.CLEAR_META_STEP_TYPES:
         return {}
     # 引用壳回落：与/build构建分支同口径，矩阵与报文原始值均取自被引用用例的请求步骤
@@ -597,7 +608,7 @@ async def build_data_source(
         )
         if existing:
             data = await _serialize_data_source(existing)
-            data["data_original"] = await _collect_report_original(services, existing)
+            data["data_original"] = await _collect_report_original(services, existing, step=step)
             return SuccessResponse(message="查询成功", data=data, total=1)
 
         # 引用公共接口步骤是壳：矩阵与报文原始值取自被引用用例的请求步骤，step_id/step_code仍指向引用步骤（保存定位上下文）
@@ -1466,20 +1477,8 @@ async def batch_step_template_download(
         if not request_steps:
             return BadReqResponse(message="该脚本步骤树中没有HTTP/TCP请求步骤或引用公共接口步骤，无法下载模板")
 
-        # 引用壳矩阵回落被引用用例的请求步骤：按quote_case_id批量预载首个请求步骤，避免逐步骤循环查库
-        shell_case_ids = {
-            step.quote_case_id for step in request_steps
-            if step.step_type == AutoTestStepType.QUOTE_PUBLIC_API and step.quote_case_id
-        }
-        inner_step_map: Dict[int, Any] = {}
-        if shell_case_ids:
-            inner_steps = await services.step_curd.model.filter(
-                case_id__in=list(shell_case_ids),
-                step_type__in=list(DataSourceService.REQUEST_STEP_TYPES),
-                state__not=1,
-            ).order_by("step_no")
-            for inner_step in inner_steps:
-                inner_step_map.setdefault(inner_step.case_id, inner_step)
+        # 引用壳统一由DataSourceService解析：批量预载被引用用例的请求步骤，避免逐步骤查库
+        datagram_step_map = await DataSourceService.resolve_datagram_source_steps(services, request_steps)
 
         output = io.BytesIO()
         used_names: Set[str] = set()
@@ -1487,9 +1486,7 @@ async def batch_step_template_download(
             for step in request_steps:
                 # 空数据时pandas不会按指定名建sheet(openpyxl兜底建sheet1)，须至少写入1列占位，否则下游按名取sheet报KeyError
                 matrix = DataSourceService.build_vertical_matrix_from_step(
-                    inner_step_map.get(step.quote_case_id)
-                    if step.step_type == AutoTestStepType.QUOTE_PUBLIC_API and step.quote_case_id
-                    else step
+                    datagram_step_map.get(step.id, step)
                 ) or [[None]]
                 safe_name = _safe_sheet_name(step.step_name, used_names)
                 df = pd.DataFrame(matrix)

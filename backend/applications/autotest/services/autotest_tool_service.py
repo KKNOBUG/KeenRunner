@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+from typing import Any, Optional, Union
+
 from backend.applications.autotest.services.autotest_dataset_loader import DatasetLoader
 from backend.applications.autotest.services.autotest_runtime.datagram.json_replace import JsonDatagram
 from backend.applications.autotest.services.autotest_runtime.datagram.xml_replace import XmlDatagram
@@ -30,6 +32,7 @@ from backend.applications.autotest.services.autotest_runtime.util_kv import KvUt
 from backend.applications.autotest.services.autotest_runtime.validation.executor_fields import ExecutorFieldsValidation
 from backend.applications.autotest.services.autotest_runtime.validation.step_tree import StepTreeValidation
 from backend.applications.autotest.services.autotest_runtime.validation.variable_flow import VariableFlowValidation
+from backend.enums import AutoTestReqArgsType
 
 __all__ = [
     "AutoTestToolService",
@@ -63,7 +66,57 @@ class AutoTestToolService:
     # --- 数据驱动 ---
     has_dataset_payload = DatasetLoader.has_dataset_payload
     load_dataset_for_request_step = DatasetLoader.load_dataset_for_request_step
-    try_acquire_step_dataset = DatasetLoader.has_dataset_payload
+
+    # --- 报文类型判定 ---
+    @staticmethod
+    def looks_like_xml_payload(value: Any) -> bool:
+        """
+        判断报文文本是否以XML起始标记开头（兼容BOM与前后空白）。
+
+        :param value: 候选报文
+        :return: 疑似XML返回True
+        """
+        if not isinstance(value, str):
+            return False
+        return value.lstrip("\ufeff \t\r\n").startswith("<")
+
+    @classmethod
+    def extract_xml_payload_text(cls, request_text: Any, request_body: Any) -> str:
+        """
+        提取步骤的XML报文本：优先request_text，缺失时兼容字符串型request_body。
+
+        :param request_text: 文本报文
+        :param request_body: 对象/字符串报文
+        :return: XML文本；非XML或为空时返回空串
+        """
+        for value in (request_text, request_body):
+            if cls.looks_like_xml_payload(value):
+                return value.lstrip("\ufeff \t\r\n")
+        return ""
+
+    @classmethod
+    def resolve_datagram_is_xml(
+            cls,
+            args_type: Optional[Union[AutoTestReqArgsType, str]],
+            request_text: Optional[str],
+            request_body: Any,
+    ) -> bool:
+        """
+        判定请求报文是否按XML处理（HTTP/TCP数据驱动共用同一口径）。
+
+        显式XML/JSON类型优先；未明确类型时，按request_text或字符串型request_body的内容嗅探。
+
+        :param args_type: 请求体类型
+        :param request_text: 文本报文
+        :param request_body: 对象/字符串报文
+        :return: 按XML处理返回True
+        """
+        args_value = str(getattr(args_type, "value", args_type) or "").strip().lower()
+        if args_value == AutoTestReqArgsType.XML.value:
+            return True
+        if args_value == AutoTestReqArgsType.JSON.value:
+            return False
+        return bool(cls.extract_xml_payload_text(request_text, request_body))
 
     # --- 数据处理 ---
     replace_json_datagram = JsonDatagram.replace_json_datagram

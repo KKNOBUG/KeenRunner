@@ -109,6 +109,7 @@ views/autotest_task_view.py (/autotest/task/run)
 - `StepExecutionContext`：变量池、占位符解析（`${}`/函数）、日志、Python 受限执行
 - `StepExecutorFactory` 按 `step_type` 路由
 - `BaseStepExecutor.execute()` 统一编排：跳过检查 → 内置变量注入 → defined_variables 解析 → `_execute()` → 提取+断言 → 明细快照
+- HTTP/TCP 报文类型判定统一走 `AutoTestToolService.resolve_datagram_is_xml`（显式类型优先，RAW/NONE 按内容嗅探），执行器与数据源采集共用同一口径
 - 执行器子类：Http / Tcp / DataBase / Redis / Python / Wait / Assert / UserVariables / QuoteCase / Loop / Condition / DatagramDiff / Default
 
 **运行时子包**（`services/autotest_runtime/`）：
@@ -138,8 +139,9 @@ views/autotest_data_source_view.py (/autotest/data_source/*)
 ```
 - 仅 HTTP/TCP 步骤可挂载；用户脚本宿主下的「引用公共接口」步骤可挂；公共脚本/公共接口禁止使用数据源。
 - BODY 分区：JSON 展平 JSONPath、XML 展平 XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED 取键值；RAW/NONE/未指定类型正文为 XML 时同样按 XPath 展平（不改变纯文本/十六进制报文语义）。
-- 引用公共接口壳：数据源归属仍是宿主 case_id + 壳 step_code（保存/执行定位），但矩阵与 data_original 取自被引用公共接口用例的唯一根 HTTP/TCP 请求步骤；`resolve_datagram_source_step` 统一该口径。
+- 引用公共接口壳：数据源归属仍是宿主 case_id + 壳 step_code（保存/执行定位），但矩阵与 data_original 取自被引用公共接口用例的唯一根 HTTP/TCP 请求步骤；`resolve_datagram_source_step` / `resolve_datagram_source_steps` 统一该口径（批量模板一次预载，避免循环查库）。
 - `cache_key` 仅作为字段落库（`dataset_{case_id}_{step_code}`），当前执行期不读 Redis。
+- 数据源字段/报文替换契约变更必须同步压测侧独立副本：`applications/performance/locust_engine/datagram_replace.py`（PerfXPath/PerfJsonDatagram/PerfXmlDatagram）、`request_executor.py` 与前端 `PerfApiDatasetPanel.vue`；压测 Locust 子进程禁止 import backend 主包，不能假定自动复用 autotest 修改。
 
 **执行记录与异步中心**：
 - 异步导入/导出/脚本生成统一写 `krun_autotest_record`：`task_type` 分类、`task_summary` 结果快照（含 `attachments` 信封）、失败态也回填；异步中心按 `AutoTestTaskType` 的 `task_type_in` 过滤。

@@ -89,27 +89,6 @@ from backend.enums import (
 from backend.services import get_current_username
 
 
-def resolve_datagram_is_xml(args_type: Optional[AutoTestReqArgsType], request_text: Optional[str], request_body: Any) -> bool:
-    """
-    判定请求报文是否按 XML 处理（HTTP/TCP 数据驱动共用同一口径）。
-
-    显式 XML/JSON 类型优先；未明确类型时，按 request_text 或字符串型 request_body 的内容嗅探。
-
-    :param args_type: 请求体类型
-    :param request_text: 文本报文
-    :param request_body: 对象/字符串报文
-    :return: 按 XML 处理返回True
-    """
-    if args_type == AutoTestReqArgsType.XML:
-        return True
-    if args_type == AutoTestReqArgsType.JSON:
-        return False
-    text_for_detect = request_text if isinstance(request_text, str) and request_text.strip() else (
-        request_body if isinstance(request_body, str) else ""
-    )
-    return text_for_detect.strip().startswith("<")
-
-
 class StepExecutionError(Exception):
     """
     步骤执行过程中的业务异常，用于中断执行并携带错误信息。
@@ -210,7 +189,7 @@ class StepExecutionContext:
         :param case_code: 用例编码
         :param steps_execute_config: 执行环境配置
         :param report_code: 报告编码，用于保存步骤明细
-        :param dataset_name: 参数化时传入的数据集名称，仅HttpStepExecutor内据此 + case_id/step_no/step_code查表取数
+        :param dataset_name: 参数化时传入的数据集名称，HTTP/TCP执行器据此 + case_id/step_code查表取数
         :param http_client: 可选HTTP客户端，不传则在__aenter__中创建
         :param initial_variables: 初始会话变量列表List[StepVariablesBase]；会经占位符解析后赋给session_variables
         :param pending_details: save_report 时收集待落库明细的列表；非None时_save_step_detail仅追加不写库
@@ -1069,6 +1048,31 @@ class BaseStepExecutor:
         """获取自动化测试依赖注入的CRUD服务聚合。"""
         from backend.applications.autotest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
+
+    async def load_step_dataset(self, result: StepExecutionResult) -> Optional[Dict[str, Dict[str, Any]]]:
+        """
+        加载当前请求步骤的数据源场景，并写入结果快照。
+
+        HTTP/TCP 共用：普通步骤按 case_id + step_code + dataset_name 查库；
+        引用链内层步骤直接消费引用壳预载的 quote_dataset_snapshot，不再重复查库。
+
+        :param result: 本步执行结果，用于回填dataset_snapshot/dataset_name
+        :return: _acquire_dataset_payload结构；无数据驱动或未命中时为None
+        """
+        dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
+        executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
+        if executing_quote_case_id:
+            step_struct = getattr(self.context, "quote_dataset_snapshot", None)
+        else:
+            step_struct = await AutoTestToolService.load_dataset_for_request_step(
+                case_id=self.case_id,
+                step_code=self.step_code,
+                dataset_name=dataset_name,
+                executing_quote_case_id=executing_quote_case_id,
+            )
+        result.dataset_snapshot = step_struct
+        result.dataset_name = dataset_name
+        return step_struct
 
     def get_execute_config(
             self,
@@ -2765,21 +2769,8 @@ class TcpStepExecutor(BaseStepExecutor):
             if not request_url or not request_port:
                 raise StepExecutionError(f"【TCP请求】请求主机[{request_url!r}]或请求端口[{request_port!r}]不是有效的配置")
 
-            # 参数化驱动：与HTTP步骤一致（当存在 dataset_name 且不是引用公共脚本时）
-            dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
-            executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            if executing_quote_case_id:
-                # 引用链内层步骤：loader对引用链短路，数据驱动取引用公共接口自身挂载的数据源快照（引用公共脚本链中恒为None）
-                step_struct = getattr(self.context, "quote_dataset_snapshot", None)
-            else:
-                step_struct = await AutoTestToolService.load_dataset_for_request_step(
-                    case_id=self.case_id,
-                    step_code=self.step_code,
-                    dataset_name=dataset_name,
-                    executing_quote_case_id=executing_quote_case_id,
-                )
-            result.dataset_snapshot = step_struct
-            result.dataset_name = dataset_name
+            # 参数化驱动：与HTTP步骤同一加载口径（引用链内层消费引用壳快照）
+            step_struct = await self.load_step_dataset(result)
 
             request_project_id: Optional[int] = self.step.request_project_id
             request_config_name: Optional[str] = self.step.request_config_name
@@ -2791,7 +2782,7 @@ class TcpStepExecutor(BaseStepExecutor):
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
             if AutoTestToolService.has_dataset_payload(step_struct):
-                is_xml = resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body)
+                is_xml = AutoTestToolService.resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body)
                 if is_xml:
                     xml_source = request_text if isinstance(request_text, str) and request_text.strip() else (
                         request_body if isinstance(request_body, str) else None
@@ -3489,7 +3480,7 @@ class RedisStepExecutor(BaseStepExecutor):
 class HttpStepExecutor(BaseStepExecutor):
     """
     HTTP 步骤执行器：发请求、解析占位符、根据request_project_id取项目下环境补全 URL，并执行变量提取与断言。
-    参数化驱动仅在此执行器内处理：根据dataset_name + case_id/step_code查AutoTestDataSourceModel取数。
+    参数化驱动在HTTP/TCP执行器内处理：根据dataset_name + case_id/step_code查AutoTestDataSourceModel取数。
     """
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
@@ -3543,20 +3534,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址或未明确执行环境")
 
             # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestDataSourceModel 取该步骤数据集
-            dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
-            executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
-            if executing_quote_case_id:
-                # 引用链内层步骤：loader对引用链短路，数据驱动取引用公共接口自身挂载的数据源快照（引用公共脚本链中恒为None）
-                step_struct: Optional[Dict[str, Dict[str, Any]]] = getattr(self.context, "quote_dataset_snapshot", None)
-            else:
-                step_struct = await AutoTestToolService.load_dataset_for_request_step(
-                    case_id=self.case_id,
-                    step_code=self.step_code,
-                    dataset_name=dataset_name,
-                    executing_quote_case_id=executing_quote_case_id,
-                )
-            result.dataset_snapshot = step_struct
-            result.dataset_name = dataset_name
+            step_struct = await self.load_step_dataset(result)
             self.context.log(
                 f"【HTTP请求】请求开始: \n\t"
                 f"环境名称: {env_name}\n\t"
@@ -3565,7 +3543,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 f"请求方法: {request_method}\n\t"
                 f"请求地址: {request_url}\n\t"
                 f"参数类型: {self.step.request_args_type}\n\t"
-                f"数据源名称: {dataset_name}"
+                f"数据源名称: {result.dataset_name}"
             )
         except StepExecutionError:
             raise
@@ -3587,7 +3565,7 @@ class HttpStepExecutor(BaseStepExecutor):
             if AutoTestToolService.has_dataset_payload(step_struct):
                 head_map = step_struct.get("head") or {}
                 body_map = step_struct.get("body") or {}
-                is_xml = resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body)
+                is_xml = AutoTestToolService.resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body)
                 if is_xml:
                     out = AutoTestToolService.replace_json_datagram(
                         head_map=head_map,
@@ -3661,7 +3639,7 @@ class HttpStepExecutor(BaseStepExecutor):
                 variables=request_body,
                 step_code=self.step_code
             )
-            if resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body) and request_text:
+            if AutoTestToolService.resolve_datagram_is_xml(self.step.request_args_type, request_text, request_body) and request_text:
                 request_text = self.context.resolve_xml_placeholders(
                     xml_text=request_text,
                     step_code=self.step_code,

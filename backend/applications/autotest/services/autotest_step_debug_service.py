@@ -486,7 +486,7 @@ class StepDebugService:
                 value=request_body, logger_object=log, finished_variables=finished_variables
             )
         if request_text is not None:
-            if request_args_type == AutoTestReqArgsType.XML:
+            if AutoTestToolService.resolve_datagram_is_xml(request_args_type, request_text, request_body):
                 request_text = AutoTestToolService.resolve_xml_placeholders(
                     xml_text=request_text, logger_object=log, finished_variables=finished_variables
                 )
@@ -710,7 +710,7 @@ class StepDebugService:
                 value=request_body, logger_object=log, finished_variables=finished_variables
             )
         elif request_text is not None:
-            if request_args_type == AutoTestReqArgsType.XML:
+            if AutoTestToolService.resolve_datagram_is_xml(request_args_type, request_text, request_body):
                 request_text = AutoTestToolService.resolve_xml_placeholders(
                     xml_text=request_text, logger_object=log, finished_variables=finished_variables
                 )

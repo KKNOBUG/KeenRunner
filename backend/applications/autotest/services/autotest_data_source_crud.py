@@ -149,12 +149,13 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         if not (dataset_name or "").strip():
             return None
-        record = await self.get_by_case_step(
-            case_id=case_id,
-            step_code=(step_code or "").strip(),
-            on_error=False,
-            **kwargs
-        )
+        # 执行期只消费dataset；显式only避免把大字段dataframe一并读回（每个步骤每圈都会走这里）
+        conditions: Dict[str, Any] = {
+            "case_id": case_id,
+            "step_code": (step_code or "").strip(),
+            **kwargs,
+        }
+        record = await self.model.filter(**conditions).only("id", "dataset").first()
         if not record or not isinstance(record.dataset, dict):
             return None
         return record.dataset.get((dataset_name or "").strip())
