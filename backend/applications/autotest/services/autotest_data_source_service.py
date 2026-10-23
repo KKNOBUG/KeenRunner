@@ -409,14 +409,43 @@ class DataSourceService:
                 return loaded
         return None
 
+    @staticmethod
+    def _looks_like_xml_payload(value: Any) -> bool:
+        """
+        判断报文文本是否以XML起始标记开头。
+
+        :param value: 候选报文
+        :return: 疑似XML返回True
+        """
+        if not isinstance(value, str):
+            return False
+        return value.lstrip("\ufeff \t\r\n").startswith("<")
+
+    @classmethod
+    def _xml_payload_text(cls, step: AutoTestStepModel) -> str:
+        """
+        提取步骤的XML报文本：优先request_text，缺失时兼容字符串型request_body。
+
+        :param step: 步骤实例
+        :return: XML文本；非XML或为空时返回空串
+        """
+        request_text = getattr(step, "request_text", None)
+        if cls._looks_like_xml_payload(request_text):
+            return request_text.lstrip("\ufeff \t\r\n")
+        request_body = getattr(step, "request_body", None)
+        if cls._looks_like_xml_payload(request_body):
+            return request_body.lstrip("\ufeff \t\r\n")
+        return ""
+
     @classmethod
     def _collect_step_partition(cls, step: AutoTestStepModel) -> Dict[str, Dict[str, Any]]:
         """
         统一采集步骤报文的HEAD与BODY分区路径及原始值。
 
         HEAD取自请求头键值对；BODY按request_args_type分支采集：
-        JSON展平叶子、XML展平XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED取键值，
-        RAW/NONE/其他返回空BODY。
+        JSON展平叶子、XML展平XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED取键值；
+        RAW/NONE/未指定类型默认无结构化字段，但正文为XML时同样按XPath展平
+        （TCP/HTTP的RAW报文常直接存放XML，若只认xml类型会导致数据源矩阵与data_original为空）。
 
         :param step: 步骤实例(取request_args_type与报文)
         :return: 分区名→{路径→原始值}映射，如{"HEAD": {"$.Token": "x"}, "BODY": {"$.id": 1}}
@@ -425,13 +454,19 @@ class DataSourceService:
             "HEAD": dict(cls._kv_originals(getattr(step, "request_header", None))),
             "BODY": {},
         }
-        args = cls._enum_value(getattr(step, "request_args_type", None))
+        args = cls._enum_value(getattr(step, "request_args_type", None)).lower()
         if args == AutoTestReqArgsType.JSON.value:
             payload = cls._parse_json_body(getattr(step, "request_body", None))
             if payload is not None:
                 result["BODY"] = cls._flatten_json_leaf_values(payload)
         elif args == AutoTestReqArgsType.XML.value:
-            result["BODY"] = cls._flatten_xml_xpath_values(getattr(step, "request_text", None) or "")
+            result["BODY"] = cls._flatten_xml_xpath_values(cls._xml_payload_text(step))
+        elif args in (AutoTestReqArgsType.RAW.value, AutoTestReqArgsType.NONE.value, ""):
+            # RAW/NONE 不是“无报文”，只是未声明结构；正文是XML时按XML采集字段，
+            # 否则保持空BODY（纯文本/十六进制报文无法生成字段路径）。
+            xml_text = cls._xml_payload_text(step)
+            if xml_text:
+                result["BODY"] = cls._flatten_xml_xpath_values(xml_text)
         elif args == AutoTestReqArgsType.PARAMS.value:
             result["BODY"] = cls._kv_originals(getattr(step, "request_params", None))
         elif args == AutoTestReqArgsType.FORM_DATA.value:
@@ -450,7 +485,7 @@ class DataSourceService:
         """
         按请求参数类型收集BODY分区路径。
 
-        raw/none/文件型form-data不进入BODY。
+        raw/none 正文为XML时进入BODY；纯文本/十六进制及文件型form-data不进入。
         """
         return list(cls._collect_step_partition(step).get("BODY", {}))
 

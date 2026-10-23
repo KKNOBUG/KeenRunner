@@ -137,6 +137,8 @@ views/autotest_data_source_view.py (/autotest/data_source/*)
         （按 case_id + step_code + dataset_name 查库）
 ```
 - 仅 HTTP/TCP 步骤可挂载；用户脚本宿主下的「引用公共接口」步骤可挂；公共脚本/公共接口禁止使用数据源。
+- BODY 分区：JSON 展平 JSONPath、XML 展平 XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED 取键值；RAW/NONE/未指定类型正文为 XML 时同样按 XPath 展平（不改变纯文本/十六进制报文语义）。
+- 引用公共接口壳：数据源归属仍是宿主 case_id + 壳 step_code（保存/执行定位），但矩阵与 data_original 取自被引用公共接口用例的唯一根 HTTP/TCP 请求步骤；`resolve_datagram_source_step` 统一该口径。
 - `cache_key` 仅作为字段落库（`dataset_{case_id}_{step_code}`），当前执行期不读 Redis。
 
 **执行记录与异步中心**：
