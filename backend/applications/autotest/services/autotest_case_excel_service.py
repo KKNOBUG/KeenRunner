@@ -14,6 +14,7 @@ import os
 import re
 import traceback
 from collections import Counter, defaultdict
+from copy import copy
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from xml.etree import ElementTree
@@ -660,10 +661,17 @@ class CaseExcelService:
 
     @classmethod
     def _fill_script_sheet(cls, sheet: Worksheet, columns: Tuple[str, ...], rows: List[Dict[str, str]]) -> None:
-        """按列定义写入数据行并套用数据区样式与列宽。"""
+        """按列定义写入数据行，继承模板数据行字体并套用数据区样式与列宽。"""
+        # 新增行不会继承模板字体，需以首条数据行为基准，避免回退到工作簿默认字号。
+        data_row_fonts = [
+            copy(sheet.cell(row=cls.SCRIPT_DATA_START_ROW, column=col_index).font)
+            for col_index in range(1, len(columns) + 1)
+        ]
         for row_index, row in enumerate(rows, start=cls.SCRIPT_DATA_START_ROW):
-            for col_index, column in enumerate(columns, start=1):
-                sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
+            for col_index, (column, data_font) in enumerate(zip(columns, data_row_fonts), start=1):
+                cell = sheet.cell(row=row_index, column=col_index, value=row.get(column) or "")
+                # 工作簿按字体值登记并去重，各单元格共享字体即可，无需逐格复制。
+                cell.font = data_font
         cls._set_sheet_cells_style(sheet, start_row=cls.SCRIPT_DATA_START_ROW, row_height=cls.SHEET_STYLE_ROW_HEIGHT)
         cls._auto_size_sheet_columns(sheet)
 
