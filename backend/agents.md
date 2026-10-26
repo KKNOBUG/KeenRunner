@@ -144,7 +144,7 @@ views/autotest_data_source_view.py (/autotest/data_source/*)
 - 数据源字段/报文替换契约变更必须同步压测侧独立副本：`applications/performance/locust_engine/datagram_replace.py`（PerfXPath/PerfJsonDatagram/PerfXmlDatagram）、`request_executor.py` 与前端 `PerfApiDatasetPanel.vue`；压测 Locust 子进程禁止 import backend 主包，不能假定自动复用 autotest 修改。
 
 **执行记录与异步中心**：
-- 异步导入/导出/脚本生成统一写 `krun_autotest_record`：`task_type` 分类、`task_summary` 结果快照（含 `attachments` 信封）、失败态也回填；异步中心按 `AutoTestTaskType` 的 `task_type_in` 过滤。
+- 异步导入/导出/脚本生成统一写 `krun_autotest_record`：`task_type` 分类、`task_summary` 结果快照（含 `attachments` 信封）、失败态也回填；终态以 `celery_status` 为准，`task_summary.success` 仅表示全部成功，失败/部分成功的 `task_error` 与 `task_summary.error` 写同一摘要，`task_summary.raw` 保留任务原始返回；异步中心按 `AutoTestTaskType` 的 `task_type_in` 过滤。
 - 报告读模型：`/report/search`（手工报告）、`/report/search_task_batches`（task_code 批次）、`/report/search_batch_scripts`（batch_code 脚本维度）、`/report/search_script_round_reports`（batch_code+case_id+round_no）、`/report/search_batch_reports`；报告明细树由 `/detail/tree` 后端组装。
 
 **调试模式**（不落库，顺序严格对齐执行模式）：

@@ -13,11 +13,9 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 from backend.applications.performance.services.perf_execute_service import PerfExecuteService
-from backend.celery_scheduler.celery_base import (
-    get_span_id_for_log,
-    run_async,
-)
+from backend.celery_scheduler.celery_base import get_span_id_for_log
 from backend.celery_scheduler.celery_worker import celery
+from backend.common import AsyncEventLoopContextIOPool
 from backend.configure import LOGGER
 from backend.enums import PerfPresetStatus
 
@@ -94,4 +92,6 @@ def run_perf_preset(preset_code: str, created_user: Optional[str] = None):
     :param created_user: 触发用户账号(报告执行人归因)
     :return: 管线执行结果字典
     """
-    return run_async(_run_perf_preset_impl(preset_code, run_perf_preset.request.id, created_user))
+    return AsyncEventLoopContextIOPool.run_in_pool(
+        _run_perf_preset_impl(preset_code, run_perf_preset.request.id, created_user)
+    )

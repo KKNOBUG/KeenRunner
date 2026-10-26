@@ -1,10 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-数据作业Celery任务: 复用功能执行链跑脚本用例N轮(prepare造数/verify校验/cleanup清理)。
-
-作业与压测热路径零交集, 固定走 {port}_perf 队列(路由见 celery_config.task_routes),
-避免长时造数占用默认队列拖慢功能任务。
-
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : KeenRunner
@@ -17,11 +12,9 @@ import traceback
 from typing import Any, Dict, Optional
 
 from backend.applications.performance.services.perf_job_service import PerfJobService
-from backend.celery_scheduler.celery_base import (
-    get_span_id_for_log,
-    run_async,
-)
+from backend.celery_scheduler.celery_base import get_span_id_for_log
 from backend.celery_scheduler.celery_worker import celery
+from backend.common import AsyncEventLoopContextIOPool
 from backend.configure import LOGGER
 
 _LOG_PREFIX = "【Celery-Worker】"
@@ -84,4 +77,6 @@ def run_perf_data_job(job_code: str, created_user: Optional[str] = None):
     :param created_user: 触发用户账号(执行归因)
     :return: 作业执行结果字典
     """
-    return run_async(_run_perf_data_job_impl(job_code, run_perf_data_job.request.id, created_user))
+    return AsyncEventLoopContextIOPool.run_in_pool(
+        _run_perf_data_job_impl(job_code, run_perf_data_job.request.id, created_user)
+    )

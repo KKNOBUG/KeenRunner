@@ -4,12 +4,15 @@
 @Email   : 807440781@qq.com
 @Project : KeenRunner
 @Module  : celery_worker
-@DateTime: 2026/1/27 16:25
+@DateTime: 2026/1/25 12:15
 """
 import asyncio
 import logging
+import os
+import sys
 import traceback
 from abc import ABC
+from contextlib import suppress
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -25,7 +28,7 @@ from backend.common.request_context import (
     get_span_id,
     _extract_celery_trace_fields,
 )
-from backend.configure import LOGGER, CELERY_CONFIG
+from backend.configure import LOGGER, CELERY_CONFIG, PROJECT_CONFIG
 from backend.configure.logging_config import InterceptHandler
 from .celery_base import (
     ensure_tortoise_orm_initialized,
@@ -34,7 +37,6 @@ from .celery_base import (
     LOCAL_CONTEXT_VAR,
 )
 
-_async_event_loop_pool = None
 # 扫描任务不写执行记录、不走终态更新
 _SCAN_TASK_NAME = "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
 # setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
@@ -51,67 +53,14 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     :param kwargs: Celery signal透传参数
     :return: None
     """
-    global _async_event_loop_pool
-    _async_event_loop_pool = None
     AsyncEventLoopContextIOPool.reset_process_state()
     reset_tortoise_orm_state()
     # prefork 子进程继承父进程 Loguru 文件句柄，需重建 Sink 以免多进程共写/轮转失败
     from backend.configure.logging_config import loguru_logging
 
     loguru_logging()
-    _ensure_celery_logfile_sink_after_fork()
+    setup_loggers(logfile=os.environ.get("CELERY_LOGFILE") or None)
     LOGGER.debug(f"{_LOG_PREFIX}worker_process_init: 已重置异步池、Tortoise 与日志 Sink")
-
-
-def get_async_event_loop_pool():
-    """
-    惰性获取异步事件循环池，仅在Worker执行任务时创建。
-
-    :return: AsyncEventLoopContextIOPool单例实例
-    """
-    global _async_event_loop_pool
-    if _async_event_loop_pool is None:
-        _async_event_loop_pool = AsyncEventLoopContextIOPool()
-    return _async_event_loop_pool
-
-
-async def _ensure_tortoise_then_create_task_record(
-        celery_id: str,
-        celery_node: str,
-        celery_trace_id: str,
-        task_id: str,
-        celery_task_name: str,
-        trigger_type=None,
-        report_type=None,
-        created_user=None,
-        request_kwargs: Optional[Dict[str, Any]] = None,
-):
-    """
-    同一协程内先初始化Tortoise，再写入执行记录，保证同loop。
-
-    :param celery_id: Celery任务UUID
-    :param celery_node: Celery任务名(节点标识)
-    :param celery_trace_id: 链路trace_id
-    :param task_id: 业务任务主键(来自apply_async的__task_id)
-    :param celery_task_name: Celery注册任务名
-    :param trigger_type: 触发类型枚举(手动/调度)
-    :param report_type: 报告类型枚举
-    :param created_user: 触发用户账号(可选)
-    :param request_kwargs: Celery任务入参快照
-    :return: None
-    """
-    await init_tortoise_orm()
-    await _create_task_record(
-        celery_id=celery_id,
-        celery_node=celery_node,
-        celery_trace_id=celery_trace_id,
-        task_id=task_id,
-        celery_task_name=celery_task_name,
-        trigger_type=trigger_type,
-        report_type=report_type,
-        created_user=created_user,
-        request_kwargs=request_kwargs,
-    )
 
 
 def _resolve_trigger_and_report(task: Task):
@@ -137,25 +86,6 @@ def _resolve_trigger_and_report(task: Task):
     if is_manual:
         return AutoTestTaskTriggerType.MANUAL, AutoTestReportType.ASYNC_EXEC
     return AutoTestTaskTriggerType.SCHEDULE, AutoTestReportType.SCHEDULE_EXEC
-
-
-def _to_jsonable(value: Any) -> Any:
-    """
-    将任意对象转为可JSON落库结构，保留完整内容。
-
-    :param value: 原始对象
-    :return: dict/list/基础类型，或兜底包装
-    """
-    import json
-
-    if value is None:
-        return None
-    if isinstance(value, (dict, list, str, int, float, bool)):
-        try:
-            return json.loads(json.dumps(value, ensure_ascii=False, default=str))
-        except Exception:
-            return {"value": str(value)}
-    return {"value": str(value)}
 
 
 async def _create_task_record(
@@ -185,8 +115,15 @@ async def _create_task_record(
     """
     from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
     from backend.applications.autotest.services.autotest_record_crud import AutoTestRecordCrud
-    from backend.celery_scheduler.celery_task_contract import build_async_center_task_name, resolve_task_meta
+    from backend.celery_scheduler.celery_task_contract import (
+        build_async_center_task_name,
+        resolve_task_meta,
+        to_jsonable,
+    )
     from backend.enums import AutoTestTaskStatus
+
+    # 与终态写库一致：同一协程内先确保ORM可用，避免长任务后连接失效
+    await init_tortoise_orm()
 
     def _normalize_username(raw: Any) -> Optional[str]:
         if raw is None:
@@ -245,7 +182,7 @@ async def _create_task_record(
                 "task_type": getattr(task_instance, "task_type", None) or task_meta.get("task_type"),
                 "task_project": getattr(task_instance, "task_project", None),
                 "case_ids": case_ids,
-                "exec_snapshot": _to_jsonable({
+                "exec_snapshot": to_jsonable({
                     "report_type": report_val,
                     "task_kwargs": {
                         "case_ids": case_ids,
@@ -263,7 +200,7 @@ async def _create_task_record(
                 }),
             })
     elif req_kwargs:
-        data["exec_snapshot"] = _to_jsonable({
+        data["exec_snapshot"] = to_jsonable({
             "report_type": report_val,
             "kwargs": {
                 k: v for k, v in req_kwargs.items()
@@ -291,19 +228,19 @@ async def _update_task_record_on_end(
         batch_code: str = None,
 ):
     """
-    将执行记录更新为终态，task_summary写入信封契约(含raw原文)。
+    将执行记录更新为终态，并对齐task_summary.success/error与task_error（raw保留原文）。
 
     :param celery_id: Celery任务UUID
-    :param success: 是否根据成功终态落库
-    :param task_summary: 任务返回值(将规范化为信封)
-    :param traceback_str: 失败时的堆栈文本
+    :param success: Celery管道是否成功；存在批次计数时仍会按业务结果重算终态
+    :param task_summary: 任务返回值(将规范化并按终态完成信封)
+    :param traceback_str: Celery异常堆栈文本（可选，作为无显式错误时的兜底）
     :param batch_code: 批次号(可选；缺省时从信封抽取)
     :return: None
     """
     if not celery_id:
         return
     from backend.applications.autotest.services.autotest_record_crud import AutoTestRecordCrud
-    from backend.celery_scheduler.celery_task_contract import normalize_task_summary
+    from backend.celery_scheduler.celery_task_contract import finalize_task_summary, normalize_task_summary
     from backend.enums import AutoTestTaskStatus
 
     # 长任务后连接可能失效；与 create 一样先 init/探活，避免终态写库失败导致永远「正在执行」
@@ -323,11 +260,12 @@ async def _update_task_record_on_end(
     else:
         status_enum = AutoTestTaskStatus.SUCCESS if success else AutoTestTaskStatus.FAILURE
     summary_obj = normalize_task_summary(task_summary, pipeline_ok=success)
-    error_text = None
-    if not success:
-        error_text = summary_obj.get("error") or traceback_str or "执行失败"
-        if traceback_str and not summary_obj.get("error"):
-            summary_obj["error"] = str(error_text) if not isinstance(error_text, str) else error_text
+    # 终态、信封success与错误摘要必须在同一出口生成，避免业务失败只停留在raw。
+    summary_obj, error_text = finalize_task_summary(
+        summary_obj,
+        terminal_status=status_enum,
+        traceback_str=traceback_str,
+    )
     resolved_batch = batch_code or summary_obj.get("batch_code")
     data = {
         "celery_status": status_enum,
@@ -386,15 +324,12 @@ def receiver_task_pre_run(task: Task, *args, **kwargs):
             ensure_tortoise_orm_initialized()
         else:
             try:
-                h = getattr(task.request, "headers", None) or {}
-                if isinstance(h, dict):
-                    celery_trace_id_val = h.get("trace_id") or (h.get("headers") or {}).get("trace_id") or ""
-                else:
-                    celery_trace_id_val = ""
-                celery_node_val = (task.name or "").strip() or ""
+                h = getattr(task.request, "headers", None)
+                celery_trace_id_val = _extract_celery_trace_fields(h)[0] if isinstance(h, dict) else ""
+                celery_node_val = (task.name or "").strip()
                 trigger_type, report_type = _resolve_trigger_and_report(task)
-                get_async_event_loop_pool().run(
-                    _ensure_tortoise_then_create_task_record(
+                AsyncEventLoopContextIOPool.run_in_pool(
+                    _create_task_record(
                         task_id=task_id,
                         celery_id=task.request.id,
                         celery_node=celery_node_val,
@@ -435,13 +370,9 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     :return: None
     """
     global _celery_logfile_sink_id, _celery_console_sink_id
-    import os
-    import sys
-
     from loguru import logger as loguru_logger
 
     from backend.configure.logging_config import LOG_FORMAT
-    from backend.configure.project_config import PROJECT_CONFIG
 
     level = loglevel if isinstance(loglevel, int) else logging.INFO
     try:
@@ -451,37 +382,21 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
         root.handlers = [InterceptHandler()]
         root.setLevel(level)
 
-    def _detect_celery_role() -> str:
-        joined = " ".join(sys.argv).lower()
-        # 匹配 `celery ... beat` / `... beat -l`
-        tokens = [t.lower() for t in sys.argv]
-        if "beat" in tokens:
-            return "beat"
-        if "beat" in joined and "worker" not in tokens:
-            return "beat"
-        return "worker"
-
-    def _default_celery_logfile() -> str:
-        role = _detect_celery_role()
-        name = "celery_beat.log" if role == "beat" else "celery_worker.log"
-        log_dir = os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs")
-        return os.path.join(log_dir, name)
-
-    target = (
-            (logfile or "").strip()
-            or (os.environ.get("CELERY_LOGFILE") or "").strip()
-            or _default_celery_logfile()
+    # 依argv区分worker/beat默认日志文件；显式--logfile或CELERY_LOGFILE环境变量优先
+    argv_tokens = [t.lower() for t in sys.argv]
+    is_beat = "beat" in argv_tokens or ("beat" in " ".join(argv_tokens) and "worker" not in argv_tokens)
+    default_logfile = os.path.join(
+        PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs", f"celery_{'beat' if is_beat else 'worker'}.log"
     )
+    target = (logfile or "").strip() or (os.environ.get("CELERY_LOGFILE") or "").strip() or default_logfile
 
     if target:
         log_dir = os.path.dirname(target)
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
         if _celery_logfile_sink_id is not None:
-            try:
+            with suppress(ValueError):
                 loguru_logger.remove(_celery_logfile_sink_id)
-            except ValueError:
-                pass
             _celery_logfile_sink_id = None
         _celery_logfile_sink_id = loguru_logger.add(
             target,
@@ -502,10 +417,8 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     is_detached = "--detach" in sys.argv or "-D" in sys.argv
     if not is_detached and sys.stderr and getattr(sys.stderr, "isatty", lambda: False)():
         if _celery_console_sink_id is not None:
-            try:
+            with suppress(ValueError):
                 loguru_logger.remove(_celery_console_sink_id)
-            except ValueError:
-                pass
             _celery_console_sink_id = None
         _celery_console_sink_id = loguru_logger.add(
             sys.stderr,
@@ -516,17 +429,6 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
             colorize=True,
             diagnose=bool(PROJECT_CONFIG.SERVER_DEBUG),
         )
-
-
-def _ensure_celery_logfile_sink_after_fork():
-    """
-    prefork子进程重建celery文件与控制台sink。
-
-    :return: None
-    """
-    import os
-
-    setup_loggers(logfile=os.environ.get("CELERY_LOGFILE") or None)
 
 
 class TaskRequest(Request):
@@ -563,16 +465,6 @@ def create_celery():
     """
 
     class NewCelery(Celery):
-        def __init__(self, *args, **kwargs):
-            """
-            初始化NewCelery。
-
-            :param args: Celery位置参数
-            :param kwargs: Celery关键字参数
-            :return: None
-            """
-            super().__init__(*args, **kwargs)
-
         def send_task(self, *args, **kwargs):
             """
             发送任务时注入trace_id/span_id/parent_span_id到headers。
@@ -581,13 +473,7 @@ def create_celery():
             :param kwargs: send_task关键字参数
             :return: AsyncResult
             """
-            headers = {
-                "headers": celery_dispatch_trace_headers(),
-            }
-            if kwargs:
-                kwargs.update(headers)
-            else:
-                kwargs = headers
+            kwargs["headers"] = celery_dispatch_trace_headers()
             return super().send_task(*args, **kwargs)
 
     class ContextTask(Task, ABC):
@@ -596,16 +482,6 @@ def create_celery():
         """
 
         Request = TaskRequest
-
-        def delay(self, *args, **kwargs):
-            """
-            便捷下发任务，等价于apply_async。
-
-            :param args: 任务位置参数
-            :param kwargs: 任务关键字参数
-            :return: AsyncResult
-            """
-            return self.apply_async(args, kwargs)
 
         def apply_async(self, args=None, kwargs=None, task_id=None, producer=None,
                         link=None, link_error=None, shadow=None, **options):
@@ -623,23 +499,14 @@ def create_celery():
             :return: AsyncResult
             """
 
-            __task_id = options.get("__task_id", None)
-
-            headers = {
-                "headers": celery_dispatch_trace_headers(),
-                "__task_id": __task_id,
-            }
-
-            if options:
-                options.update(headers)
-            else:
-                options = headers
+            options["headers"] = celery_dispatch_trace_headers()
+            options["__task_id"] = options.get("__task_id")
 
             return super(ContextTask, self).apply_async(
                 args, kwargs, task_id, producer, link, link_error, shadow, **options
             )
 
-        def handel_task_record(
+        def handle_task_record(
                 self,
                 success: bool,
                 task_summary: Any = None,
@@ -649,15 +516,15 @@ def create_celery():
             """
             更新观测记录终态，扫描任务跳过。
 
-            :param success: 是否根据成功终态落库
+            :param success: Celery管道是否成功；批次计数存在时终态按业务结果重算
             :param task_summary: 完整响应对象
-            :param traceback_str: 失败堆栈
+            :param traceback_str: Celery异常堆栈文本（可选）
             :param batch_code: 批次号
             :return: None
             """
             if self.request.id and self.name != _SCAN_TASK_NAME:
                 try:
-                    get_async_event_loop_pool().run(
+                    AsyncEventLoopContextIOPool.run_in_pool(
                         _update_task_record_on_end(
                             celery_id=self.request.id,
                             success=success,
@@ -702,12 +569,12 @@ def create_celery():
             batch_code = retval.get("batch_code") if isinstance(retval, dict) else None
             summary = retval if retval is not None else {"success": True}
             # task_summary 在 _update_task_record_on_end 内规范化为信封
-            self.handel_task_record(pipeline_ok, summary, batch_code=batch_code)
+            self.handle_task_record(pipeline_ok, summary, batch_code=batch_code)
             return super(ContextTask, self).on_success(retval, task_id, args, kwargs)
 
         def on_failure(self, exc, task_id, args, kwargs, einfo):
             """
-            任务抛异常时完整错误写入task_summary，堆栈写入task_error，状态为失败。
+            任务抛异常时异常信息写入task_summary，错误摘要写入task_error，状态为失败。
 
             :param exc: 异常实例
             :param task_id: Celery任务UUID
@@ -728,7 +595,7 @@ def create_celery():
                 "error": str(exc) if exc else "执行失败",
                 "error_type": type(exc).__name__ if exc else None,
             }
-            self.handel_task_record(
+            self.handle_task_record(
                 False,
                 summary,
                 traceback_str=getattr(einfo, "traceback", None) or "",
@@ -745,11 +612,10 @@ def create_celery():
             """
             try:
                 ensure_tortoise_orm_initialized()
-                hdr = self.request.headers or {}
-                if isinstance(hdr, dict):
-                    trace_id, span_id, parent_span_id = _extract_celery_trace_fields(hdr)
-                else:
-                    trace_id, span_id, parent_span_id = "", "", ""
+                hdr = self.request.headers
+                trace_id, span_id, parent_span_id = (
+                    _extract_celery_trace_fields(hdr) if isinstance(hdr, dict) else ("", "", "")
+                )
                 if not trace_id:
                     trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
                 enter_celery_span(trace_id, parent_span_id, span_id)
@@ -761,8 +627,8 @@ def create_celery():
             # 完整Request；再次push_request会以裸args/kwargs上下文遮蔽原始Request，
             # 导致任务体内self.request.id变空(数据生成任务报celery_id为空即由此而来)。
             if asyncio.iscoroutinefunction(self.run):
-                # 异步函数使用惰性初始化的池执行，避免在 Web 进程导入时创建事件循环
-                return get_async_event_loop_pool().run(self.run(*args, **kwargs))
+                # 异步函数投递到进程单例池执行，避免在 Web 进程导入时创建事件循环
+                return AsyncEventLoopContextIOPool.run_in_pool(self.run(*args, **kwargs))
             # 同步函数直接执行
             return self.run(*args, **kwargs)
 
@@ -783,6 +649,4 @@ celery = create_celery()
 # 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
 
 if __name__ == '__main__':
-    import sys
-
     celery.start(argv=sys.argv[1:])

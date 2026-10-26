@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+"""
+@Author  : yangkai
+@Email   : 807440781@qq.com
+@Project : KeenRunner
+@Module  : celery_base
+@DateTime: 2026/1/27 17:35
+"""
 from __future__ import annotations
 
 import json
@@ -8,7 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.configure import PROJECT_CONFIG
-from backend.enums import AutoTestTaskType
+from backend.enums import AutoTestTaskStatus, AutoTestTaskType
 
 # Celery 注册名 → 任务类型 / 默认展示名
 CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
@@ -52,6 +59,10 @@ ASYNC_CENTER_TASK_TYPES: Tuple[AutoTestTaskType, ...] = (
 )
 
 _ASYNC_CENTER_TASK_TYPE_VALUES = frozenset(t.value for t in ASYNC_CENTER_TASK_TYPES)
+
+# 错误摘要只提取有限条业务明细；完整明细仍保留在raw，避免大结果集导致摘要无限膨胀
+TASK_ERROR_DETAIL_LIMIT: int = 3
+TASK_ERROR_DETAIL_KEYS: Tuple[str, ...] = ("invalid", "failed_details")
 
 
 def build_async_center_task_name(task_type: Any) -> Optional[str]:
@@ -103,7 +114,8 @@ def resolve_storage_path(storage_key: str) -> str:
     return full
 
 
-def _to_jsonable(value: Any) -> Any:
+def to_jsonable(value: Any) -> Any:
+    """将任意对象经JSON往返转为可落库结构，无法序列化时兜底包装。"""
     if value is None:
         return None
     if isinstance(value, (dict, list, str, int, float, bool)):
@@ -112,10 +124,6 @@ def _to_jsonable(value: Any) -> Any:
         except Exception:
             return {"value": str(value)}
     return {"value": str(value)}
-
-
-def _is_envelope(value: Any) -> bool:
-    return isinstance(value, dict) and "attachments" in value and "raw" in value and "success" in value
 
 
 def _build_attachment(
@@ -181,9 +189,12 @@ def _attachments_from_raw(raw: Any) -> List[Dict[str, Any]]:
 def normalize_task_summary(retval: Any, *, pipeline_ok: bool = True) -> Dict[str, Any]:
     """
     将任务返回值规范为信封结构，原文进入raw。
+
+    此处success只按管道结果初始归一；最终业务终态由finalize_task_summary统一覆盖。
     """
-    data = _to_jsonable(retval)
-    if _is_envelope(data):
+    data = to_jsonable(retval)
+    # 信封三键齐备时视为已规范化结构，直接沿用并补齐缺省字段
+    if isinstance(data, dict) and {"attachments", "raw", "success"} <= data.keys():
         attachments = data.get("attachments")
         if not isinstance(attachments, list):
             attachments = _attachments_from_raw(data.get("raw"))
@@ -219,6 +230,89 @@ def normalize_task_summary(retval: Any, *, pipeline_ok: bool = True) -> Dict[str
         "attachments": _attachments_from_raw(raw),
         "raw": raw,
     }
+
+
+def _failure_detail_summary(raw: Any) -> Optional[str]:
+    """
+    从已知业务失败明细中提取有限条原因。
+
+    只识别平台既有invalid/failed_details契约，不让终态处理依赖各任务私有结构；非列表、缺reason等异常形态安全忽略。
+
+    :param raw: 任务原始响应快照
+    :return: 错误摘要；无有效原因时返回None，例如 "应用不存在（共5条失败明细，完整明细见执行结果）"
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    detail_groups: List[List[Any]] = []
+    detail_total = 0
+    for key in TASK_ERROR_DETAIL_KEYS:
+        entries = raw.get(key)
+        if not isinstance(entries, list) or not entries:
+            continue
+        detail_groups.append(entries)
+        detail_total += len(entries)
+
+    reasons: List[str] = []
+    for entries in detail_groups:
+        for item in entries[:TASK_ERROR_DETAIL_LIMIT]:
+            if len(reasons) >= TASK_ERROR_DETAIL_LIMIT:
+                break
+            reason = item.get("reason") if isinstance(item, dict) else item
+            reason_text = str(reason).strip() if reason is not None else ""
+            if reason_text:
+                reasons.append(reason_text)
+        if len(reasons) >= TASK_ERROR_DETAIL_LIMIT:
+            break
+    if not reasons:
+        return None
+
+    summary = "；".join(reasons)
+    if detail_total > len(reasons):
+        summary = f"{summary}（共{detail_total}条失败明细，完整明细见执行结果）"
+    return summary
+
+
+def finalize_task_summary(
+        summary: Dict[str, Any],
+        *,
+        terminal_status: AutoTestTaskStatus,
+        traceback_str: Optional[str] = None,
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """
+    将任务信封与最终执行状态对齐，并生成统一错误摘要。
+
+    success仅表示全部成功；失败/部分成功均为False且携带错误摘要。raw、attachments与batch_code保持原样。
+
+    :param summary: normalize_task_summary生成的任务信封
+    :param terminal_status: 执行记录最终状态
+    :param traceback_str: Celery异常堆栈（可选）
+    :return: (终态信封, 错误摘要)；成功示例 ({"success": True, "error": None}, None)
+    """
+    is_full_success = terminal_status == AutoTestTaskStatus.SUCCESS
+    summary["success"] = is_full_success
+    if is_full_success:
+        summary["error"] = None
+        return summary, None
+
+    explicit_error = summary.get("error")
+    error_text = str(explicit_error).strip() if explicit_error is not None else ""
+    traceback_text = str(traceback_str).strip() if traceback_str is not None else ""
+    if not error_text and traceback_text:
+        error_text = traceback_text
+    if not error_text:
+        error_text = _failure_detail_summary(summary.get("raw")) or ""
+    if not error_text:
+        error_text = (
+            "部分执行成功，存在失败明细"
+            if terminal_status == AutoTestTaskStatus.PARTIAL_SUCCESS else "执行失败"
+        )
+
+    summary["error"] = error_text
+    message = summary.get("message")
+    if message is None or not str(message).strip():
+        summary["message"] = error_text
+    return summary, error_text
 
 
 def list_attachments_from_summary(task_summary: Any) -> List[Dict[str, Any]]:

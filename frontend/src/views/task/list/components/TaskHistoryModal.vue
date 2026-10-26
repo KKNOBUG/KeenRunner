@@ -739,7 +739,7 @@ const modalStyle = {
       <div v-if="pagination.itemCount > 0" class="history-pagination">
         <NPagination
           v-model:page="pagination.page"
-          :page-count="Math.max(1, Math.ceil(pagination.itemCount / pagination.pageSize))"
+          :item-count="pagination.itemCount"
           :page-size="pagination.pageSize"
           :page-sizes="pagination.pageSizes"
           show-size-picker
@@ -768,7 +768,7 @@ const modalStyle = {
         <div v-if="scriptPagination.itemCount > 0" class="history-pagination">
           <NPagination
             v-model:page="scriptPagination.page"
-            :page-count="Math.max(1, Math.ceil(scriptPagination.itemCount / scriptPagination.pageSize))"
+            :item-count="scriptPagination.itemCount"
             :page-size="scriptPagination.pageSize"
             :page-sizes="scriptPagination.pageSizes"
             show-size-picker
@@ -808,7 +808,7 @@ const modalStyle = {
                 <div v-if="round.row_count > 0" class="history-pagination round-pagination">
                   <NPagination
                     :page="round.page"
-                    :page-count="Math.max(1, Math.ceil(round.row_count / round.pageSize))"
+                    :item-count="round.row_count"
                     :page-size="round.pageSize"
                     :page-sizes="ROUND_PAGE_SIZES"
                     show-size-picker

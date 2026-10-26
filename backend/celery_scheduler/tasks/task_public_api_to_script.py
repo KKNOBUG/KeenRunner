@@ -20,8 +20,8 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateList,
 )
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
-from backend.celery_scheduler.celery_base import run_async
 from backend.celery_scheduler.celery_worker import celery
+from backend.common import AsyncEventLoopContextIOPool
 from backend.configure import LOGGER
 from backend.enums import AutoTestCaseType, AutoTestStepType
 from backend.services.ctx import CTX_USERNAME
@@ -294,14 +294,16 @@ def generate_case_scripts_task(
             f"case_project={case_project}, case_type={case_type}, case_attr={case_attr}, "
             f"created_user={created_user}, report_type={report_type}"
         )
-        result = run_async(_generate_case_scripts_impl(
-            case_ids=case_ids or [],
-            case_project=case_project,
-            case_type=case_type,
-            case_attr=case_attr,
-            case_tags=case_tags,
-            created_user=created_user,
-        ))
+        result = AsyncEventLoopContextIOPool.run_in_pool(
+            _generate_case_scripts_impl(
+                case_ids=case_ids or [],
+                case_project=case_project,
+                case_type=case_type,
+                case_attr=case_attr,
+                case_tags=case_tags,
+                created_user=created_user,
+            )
+        )
         LOGGER.info(
             f"【Celery-Worker】公共接口转脚本任务完成: total_cases={result.get('total_cases')}, "
             f"success_cases={result.get('success_cases')}, failed_cases={result.get('failed_cases')}"

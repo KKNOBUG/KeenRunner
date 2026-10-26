@@ -18,11 +18,9 @@ from backend.applications.autotest.services.autotest_task_schedule import (
     fetch_schedulable_tasks,
     is_task_due,
 )
-from backend.celery_scheduler.celery_base import (
-    get_span_id_for_log,
-    run_async,
-)
+from backend.celery_scheduler.celery_base import get_span_id_for_log
 from backend.celery_scheduler.celery_worker import celery
+from backend.common import AsyncEventLoopContextIOPool
 from backend.configure import LOGGER
 from backend.enums import (
     AutoTestReportType,
@@ -59,7 +57,11 @@ def _should_close_schedule(task: Any) -> bool:
     return schedule_obj.is_completed(last_run)
 
 
-async def _run_autotest_task_impl(task_id: int, report_type: Optional[AutoTestReportType] = None, execute_user: Optional[str] = None) -> Dict[str, Any]:
+async def _run_autotest_task_impl(
+        task_id: int,
+        report_type: Optional[AutoTestReportType] = None,
+        execute_user: Optional[str] = None
+) -> Dict[str, Any]:
     """
     执行单个自动化任务的核心逻辑，区分手动与扫描触发并写回执行状态。
 
@@ -227,7 +229,7 @@ def scan_and_dispatch_autotest_tasks():
 
     :return: 扫描与下发统计字典
     """
-    return run_async(_scan_and_dispatch_impl())
+    return AsyncEventLoopContextIOPool.run_in_pool(_scan_and_dispatch_impl())
 
 
 @celery.task(
@@ -254,4 +256,6 @@ def run_autotest_task(
     :return: 任务执行结果字典
     """
     # created_user 随kwargs传到Worker：task_prerun写入执行记录，并回填任务表last_execute_user(定时触发为空时由impl回退维护人)
-    return run_async(_run_autotest_task_impl(task_id, report_type=report_type, execute_user=created_user))
+    return AsyncEventLoopContextIOPool.run_in_pool(
+        _run_autotest_task_impl(task_id, report_type=report_type, execute_user=created_user)
+    )

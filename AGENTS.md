@@ -70,7 +70,7 @@ frontend/
 - 容器式字段/步骤类型变更必须四处同步：model 注释、schema 定义、执行引擎、前端 `useStepTreeSerialization.js`；遗漏任一处即断链。
 - 禁止循环内查库/远程请求；复用现有连接池；队列名统一 `{port}_default`、`{port}_autotest`、`{port}_perf`，经 `task_routes` 路由，禁止硬编码 queue。
 - 新增/修改接口后：FastAPI 路由需经 `POST /base/router/refresh` 同步 `krun_router`，并按 `PermissionRule` 的 summary 前缀规则确认角色补绑；新增页面还需在菜单管理写入 `krun_menu`（组件路径、keepalive、排序）。
-- autotest 异步任务（导入/导出/脚本生成）统一写 `krun_autotest_record`（`task_summary` 结果快照，附件以 attachments 信封存放），失败态也要回填；异步中心按 `AutoTestTaskType` 过滤与展示。性能压测走 `perf_report` / `perf_load_preset` 自有状态链。
+- autotest 异步任务（导入/导出/脚本生成）统一写 `krun_autotest_record`（`task_summary` 结果快照，附件以 attachments 信封存放），失败态也要回填；终态以 `celery_status` 为准，`task_summary.success` 仅表示全部成功，失败/部分成功的 `task_error` 与 `task_summary.error` 写同一摘要，`task_summary.raw` 保留任务原始返回；异步中心按 `AutoTestTaskType` 过滤与展示。性能压测走 `perf_report` / `perf_load_preset` 自有状态链。
 
 ### 前端
 - Vue3 `<script setup>` 组合式 API；复杂页面逻辑拆到 `composables/useXXX.js`。
