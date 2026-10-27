@@ -20,29 +20,13 @@ from backend.applications.autotest.services.autotest_runtime.exchange.extractors
 from backend.applications.autotest.services.autotest_runtime.exchange.pipeline import ExtractAssertPipeline
 from backend.applications.autotest.services.autotest_runtime.placeholders.functions import PlaceholderFunctions
 from backend.applications.autotest.services.autotest_runtime.placeholders.resolver import PlaceholderResolver
-from backend.applications.autotest.services.autotest_runtime.sandbox import (
-    RE_PLACEHOLDER,
-    RE_QUOTED_CONCAT,
-    RE_QUOTED_PLACEHOLDER,
-    USER_CODE_ALLOWED_IMPORT_ROOTS,
-    USER_CODE_EXTRA_BUILTINS,
-    safe_user_code_import,
-)
 from backend.applications.autotest.services.autotest_runtime.util_kv import KvUtils
 from backend.applications.autotest.services.autotest_runtime.validation.executor_fields import ExecutorFieldsValidation
 from backend.applications.autotest.services.autotest_runtime.validation.step_tree import StepTreeValidation
 from backend.applications.autotest.services.autotest_runtime.validation.variable_flow import VariableFlowValidation
 from backend.enums import AutoTestReqArgsType
 
-__all__ = [
-    "AutoTestToolService",
-    "RE_PLACEHOLDER",
-    "RE_QUOTED_PLACEHOLDER",
-    "RE_QUOTED_CONCAT",
-    "USER_CODE_EXTRA_BUILTINS",
-    "USER_CODE_ALLOWED_IMPORT_ROOTS",
-    "safe_user_code_import",
-]
+__all__ = ["AutoTestToolService"]
 
 
 class AutoTestToolService:

@@ -14,7 +14,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,
     StepVariablesBase,
 )
-from backend.applications.autotest.services.autotest_runtime.sandbox import RE_PLACEHOLDER
+from backend.applications.autotest.services.autotest_runtime.sandbox import UserCodeSandbox
 
 
 class VariableFlowValidation:
@@ -93,7 +93,7 @@ class VariableFlowValidation:
             """递归收集任意值中的${...}占位符内部变量名（排除函数调用形式）。"""
             refs: List[str] = []
             if isinstance(value, str):
-                for match in RE_PLACEHOLDER.finditer(value):
+                for match in UserCodeSandbox.RE_PLACEHOLDER.finditer(value):
                     inner = match.group(1).strip()
                     # 排除函数调用形式
                     if "(" in inner and inner.endswith(")"):

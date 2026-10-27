@@ -56,14 +56,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     prepare_step_tree_item_for_execution,
     step_variables_list_from_storage,
 )
-from backend.applications.autotest.services.autotest_runtime.sandbox import (
-    RE_PLACEHOLDER,
-    RE_QUOTED_CONCAT,
-    RE_QUOTED_PLACEHOLDER,
-    USER_CODE_ALLOWED_IMPORT_ROOTS,
-    USER_CODE_EXTRA_BUILTINS,
-    safe_user_code_import,
-)
+from backend.applications.autotest.services.autotest_runtime.sandbox import UserCodeSandbox
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import unique_identify
 from backend.common import AioTcpClient
@@ -527,7 +520,8 @@ class StepExecutionContext:
         """
         在受限内置与namespace下执行code，支持单函数定义或result变量。
 
-        import/from 仅允许USER_CODE_EXTRA_BUILTINS中的根名；其余模块不可导入；另可使用safe_globals中其它内置名及namespace变量。
+        import/from 仅允许UserCodeSandbox.ALLOWED_IMPORT_ROOTS中的根模块；禁止下划线开头/帧自省属性访问（防对象自省逃逸沙箱）；
+        可用内建见sandbox.UserCodeSandbox.SAFE_BUILTINS（含常用异常类型），另可使用namespace变量（函数体内同可见，支持递归）。
         :param code: Python 代码字符串，可为单行或多行
         :param namespace: 执行时的局部命名空间（如变量字典），可选；不可通过__builtins__注入
         :param step_result: 可选；传入时写入其request，记录原始代码快照（未经占位符解析与规范化的原始code）
@@ -540,6 +534,14 @@ class StepExecutionContext:
             }
         if not code:
             return {}
+        if len(code) > UserCodeSandbox.MAX_CODE_LENGTH:
+            error_message = (
+                f"【代码请求(Python)】代码长度超限: \n\t"
+                f"最大允许: {UserCodeSandbox.MAX_CODE_LENGTH}字符\n\t"
+                f"当前输入: {len(code)}字符"
+            )
+            self.log(error_message)
+            raise StepExecutionError(error_message)
         resolved_code: str = self.resolve_code_placeholders(code)
         prepared_code: str = self.normalize_python_code(resolved_code)
         try:
@@ -547,66 +549,11 @@ class StepExecutionContext:
         except StepExecutionError as e:
             self.log(str(e))
             raise
-        safe_globals = {
-            "__builtins__": {
-                "__import__": safe_user_code_import,
-                # 基础类型
-                "bool": bool,
-                "bytes": bytes,
-                "bytearray": bytearray,
-                "dict": dict,
-                "float": float,
-                "frozenset": frozenset,
-                "int": int,
-                "list": list,
-                "set": set,
-                "str": str,
-                "tuple": tuple,
-                # 数学运算
-                "abs": abs,
-                "divmod": divmod,
-                "max": max,
-                "min": min,
-                "pow": pow,
-                "round": round,
-                "sum": sum,
-                # 进制/编码转换
-                "bin": bin,
-                "chr": chr,
-                "hex": hex,
-                "oct": oct,
-                "ord": ord,
-                # 迭代/序列操作
-                "all": all,
-                "any": any,
-                "enumerate": enumerate,
-                "filter": filter,
-                "len": len,
-                "map": map,
-                "range": range,
-                "reversed": reversed,
-                "sorted": sorted,
-                "zip": zip,
-                # 类型判断
-                "callable": callable,
-                "hash": hash,
-                "id": id,
-                "isinstance": isinstance,
-                "issubclass": issubclass,
-                "type": type,
-                # 输出/调试
-                "print": print,
-                "repr": repr,
-                **USER_CODE_EXTRA_BUILTINS,
-            }
-        }
-        local_context: Dict[str, Any] = {}
-        if namespace:
-            namespace.pop("__builtins__", None)
-            local_context.update(namespace)
+        # 单命名空间执行：沙箱builtins与namespace并入同一exec上下文字典（隔离与注入规则见工厂docstring）
+        exec_context: Dict[str, Any] = UserCodeSandbox.new_exec_context(namespace)
 
         try:
-            exec(prepared_code, safe_globals, local_context)
+            exec(prepared_code, exec_context)
         except SyntaxError as e:
             error_message: str = (
                 f"【代码请求(Python)】代码解析失败: \n\t"
@@ -640,7 +587,7 @@ class StepExecutionContext:
 
         functions = {
             name: obj
-            for name, obj in local_context.items()
+            for name, obj in exec_context.items()
             if isinstance(obj, types.FunctionType)
         }
         if functions:
@@ -665,8 +612,8 @@ class StepExecutionContext:
                 )
                 self.log(error_message)
                 raise StepExecutionError(error_message)
-        elif "result" in local_context:
-            result = local_context["result"]
+        elif "result" in exec_context:
+            result = exec_context["result"]
         else:
             result = None
 
@@ -731,21 +678,30 @@ class StepExecutionContext:
     @staticmethod
     def _validate_user_python_restricted(source: str) -> None:
         """
-        import/from 仅允许USER_CODE_EXTRA_BUILTINS中的根名（与safe_user_code_import一致）；语法错误留给exec。
+        import/from仅允许UserCodeSandbox.ALLOWED_IMPORT_ROOTS中的根模块（与受限导入钩子一致）；
+        禁止下划线开头属性（namedtuple只读工具方法除外）及UserCodeSandbox.FORBIDDEN_ATTRS帧自省属性
+        （阻断().__class__与gi_frame等对象自省逃逸沙箱路径）；
+        仅允许普通def函数，禁止class/async def；语法错误留给exec。
 
         :param source: 待校验的Python源代码字符串
         :return: None
         """
-        allowed_cn = "、".join(sorted(USER_CODE_ALLOWED_IMPORT_ROOTS))
+        allowed_cn = "、".join(sorted(UserCodeSandbox.ALLOWED_IMPORT_ROOTS))
         try:
             tree = ast.parse(source)
         except SyntaxError:
             return
         for node in ast.walk(tree):
+            if isinstance(node, (ast.ClassDef, ast.AsyncFunctionDef)):
+                error_message = (
+                    "【代码请求(Python)】安全限制: \n\t"
+                    "仅支持普通def函数或result变量, 不允许定义class或async函数"
+                )
+                raise StepExecutionError(error_message)
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     root = alias.name.split(".", 1)[0]
-                    if root not in USER_CODE_ALLOWED_IMPORT_ROOTS:
+                    if root not in UserCodeSandbox.ALLOWED_IMPORT_ROOTS:
                         error_message = (
                             "【代码请求(Python)】安全限制(仅允许导入预期定义的标准库模块): \n\t"
                             f"允许依赖: {allowed_cn}\n\t"
@@ -766,13 +722,22 @@ class StepExecutionContext:
                     )
                     raise StepExecutionError(error_message)
                 root = node.module.split(".", 1)[0]
-                if root not in USER_CODE_ALLOWED_IMPORT_ROOTS:
+                if root not in UserCodeSandbox.ALLOWED_IMPORT_ROOTS:
                     error_message = (
                         "【代码请求(Python)】安全限制(仅允许从以下模块 from 导入): \n\t"
                         f"允许依赖: {allowed_cn}\n\t"
                         f"非法依赖: {node.module}"
                     )
                     raise StepExecutionError(error_message)
+            elif isinstance(node, ast.Attribute) and (
+                    (node.attr.startswith("_") and node.attr not in UserCodeSandbox.ALLOWED_PRIVATE_ATTRS)
+                    or node.attr in UserCodeSandbox.FORBIDDEN_ATTRS
+            ):
+                error_message = (
+                    "【代码请求(Python)】安全限制(防止通过对象自省逃逸沙箱): \n\t"
+                    f"不允许访问下划线开头/帧自省属性: {node.attr}"
+                )
+                raise StepExecutionError(error_message)
 
     @staticmethod
     def normalize_python_code(code: str) -> str:
@@ -898,7 +863,7 @@ class StepExecutionContext:
                 return repr(var_value)
 
         # 先处理字符串字面量中的占位符（如 '${var}' 或 "${var}"）
-        code = RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)
+        code = UserCodeSandbox.RE_QUOTED_PLACEHOLDER.sub(replace_string_placeholder, code)
 
         def replace_string_concat_placeholder(match: re.Match[str]) -> str:
             """
@@ -926,7 +891,7 @@ class StepExecutionContext:
 
         # 处理字符串拼接中的占位符；循环直到无匹配，避免 "a_${x}_${y}" 中后一个占位符被误当代码逻辑用 repr 产生多余引号
         while True:
-            new_code = RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
+            new_code = UserCodeSandbox.RE_QUOTED_CONCAT.sub(replace_string_concat_placeholder, code)
             if new_code == code:
                 break
             code = new_code
@@ -960,7 +925,7 @@ class StepExecutionContext:
 
         try:
             # 处理代码逻辑中的占位符，如 if ${var} == 1:
-            resolved_code = RE_PLACEHOLDER.sub(replace_code_placeholder, code)
+            resolved_code = UserCodeSandbox.RE_PLACEHOLDER.sub(replace_code_placeholder, code)
             return resolved_code
         except Exception as e:
             error_message: str = (

@@ -20,7 +20,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import StepVaria
 from backend.applications.autotest.services.autotest_runtime.context import coerce_variable_resolver
 from backend.applications.autotest.services.autotest_runtime.placeholders.arithmetic import PlaceholderArithmetic
 from backend.applications.autotest.services.autotest_runtime.placeholders.functions import PlaceholderFunctions
-from backend.applications.autotest.services.autotest_runtime.sandbox import RE_PLACEHOLDER
+from backend.applications.autotest.services.autotest_runtime.sandbox import UserCodeSandbox
 from backend.common.xml_utils import XmlUtils
 
 
@@ -67,7 +67,7 @@ class PlaceholderResolver:
         """
         if "${" not in content:
             return content
-        regularly_matched: List[re.Match[str]] = list(RE_PLACEHOLDER.finditer(content))
+        regularly_matched: List[re.Match[str]] = list(UserCodeSandbox.RE_PLACEHOLDER.finditer(content))
         if not regularly_matched:
             return content
 

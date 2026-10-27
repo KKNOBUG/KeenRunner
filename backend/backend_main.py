@@ -93,3 +93,4 @@ if __name__ == '__main__':
     # redis-server
 
     # MacOS: gunicorn -c backend/gunicorn.conf.py backend.backend_main:app
+    # MacOS: OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES backend/.venv/bin/gunicorn -c backend/gunicorn.conf.py backend.backend_main:app
