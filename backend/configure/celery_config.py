@@ -79,9 +79,9 @@ class CeleryConfig(BaseSettings):
             "accept_content": ["json"],
             "result_serializer": "json",
             "result_accept_content": ["json"],
-            "task_acks_late": True,
+            "task_acks_late": True,  # 任务执行完成后才向 broker 确认消息
             "worker_prefetch_multiplier": 1,
-            "task_reject_on_worker_lost": True,
+            "task_reject_on_worker_lost": True,  # worker 进程崩溃/被杀时，消息重投回队列
             "result_expires": 3600,
             "result_persistent": True,
             "task_routes": {
@@ -102,11 +102,11 @@ class CeleryConfig(BaseSettings):
             "task_default_exchange": default_queue,
             "task_default_exchange_type": "direct",
             "task_default_routing_key": default_queue,
-            "worker_max_tasks_per_child": 1000,
+            "worker_max_tasks_per_child": 1000,  # 每个 prefork 子进程处理满 1000 个任务后销毁重建
             "worker_disable_rate_limits": False,
-            "task_acks_on_failure_or_timeout": False,
-            "task_time_limit": 3600,
-            "task_soft_time_limit": 3300,
+            "task_acks_on_failure_or_timeout": False,  # 全局默认：失败/超时不 ack（配合 acks_late 会重投）
+            "task_time_limit": 3600,  # 硬时限（1h）：到点 SIGKILL 强杀执行子进程
+            "task_soft_time_limit": 3300,  # 软时限（55min）：到点在任务内抛 SoftTimeLimitExceeded 异常
             "beat_scheduler": self.CELERY_BEAT_SCHEDULER,
             "redbeat_redis_url": self.CELERY_REDBEAT_REDIS_URL,
             # 显式置空阻断redbeat对broker_transport_options的回退透传：redbeat默认把该选项全量传给
