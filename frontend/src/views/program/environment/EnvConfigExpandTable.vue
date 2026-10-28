@@ -121,6 +121,8 @@ function buildActionColumn(type) {
     width: type === ENV_TYPE.DB ? 140 : 120,
     fixed: 'right',
     render(row) {
+      // autotest 全员可编辑；删除按后端行级 can_delete（含角色删除范围）
+      const deletable = userStore.canDeleteData(row.created_user, row.can_delete)
       const btns = [
         withDirectives(
             h(
@@ -150,41 +152,46 @@ function buildActionColumn(type) {
             ),
             [[vPermission, apiPermissionKey('post', CREATE_PERM[type])]]
         ),
-        h(
-            NPopconfirm,
-            { onPositiveClick: () => deleteConfig(type, row) },
-            {
-              trigger: () =>
-                  withDirectives(
-                      h(
-                          NButton,
-                          {
-                            size: 'tiny',
-                            quaternary: true,
-                            type: 'error',
-                            title: '删除',
-                            disabled: deletingIds.has(row.config_id),
-                          },
-                          { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
+        deletable
+            ? h(
+                NPopconfirm,
+                { onPositiveClick: () => deleteConfig(type, row) },
+                {
+                  trigger: () =>
+                      withDirectives(
+                          h(
+                              NButton,
+                              {
+                                size: 'tiny',
+                                quaternary: true,
+                                type: 'error',
+                                title: '删除',
+                                disabled: deletingIds.has(row.config_id),
+                              },
+                              { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
+                          ),
+                          [[vPermission, apiPermissionKey('post', '/autotest/config/delete')]]
                       ),
-                      [[vPermission, apiPermissionKey('post', '/autotest/config/delete')]]
-                  ),
-              default: () => h('div', {}, '确定删除该配置吗?'),
-            }
-        ),
-      ]
+                  default: () => h('div', {}, '确定删除该配置吗?'),
+                }
+            )
+            : null,
+      ].filter(Boolean)
       if (type === ENV_TYPE.DB) {
         btns.push(
-            h(
-                NButton,
-                {
-                  size: 'tiny',
-                  quaternary: true,
-                  type: 'warning',
-                  title: '测试',
-                  onClick: () => testConfig(row),
-                },
-                { icon: renderIcon('material-symbols:network-check', { size: 16 }) }
+            withDirectives(
+                h(
+                    NButton,
+                    {
+                      size: 'tiny',
+                      quaternary: true,
+                      type: 'warning',
+                      title: '测试',
+                      onClick: () => testConfig(row),
+                    },
+                    { icon: renderIcon('material-symbols:network-check', { size: 16 }) }
+                ),
+                [[vPermission, apiPermissionKey('post', '/autotest/config/database/test_connection')]]
             )
         )
       }

@@ -150,6 +150,8 @@ export default {
     if (params.case_code != null) q.push(`case_code=${encodeURIComponent(params.case_code)}`)
     return request.delete(`/autotest/case/delete${q.length ? '?' + q.join('&') : ''}`)
   },
+  /** 批量删除用例(保持软删)：Body { case_ids?: number[] } 或 { case_codes?: string[] } */
+  deleteApiTestcaseBatch: (data = {}) => request.post('/autotest/case/deletes', data),
   /** Body：{ case_ids } —— 导出公共接口用例请求头/体报文为 xlsx(统一异步)，返回 { celery_task_id } */
   exportTestcasesAsync: (data = {}) => request.post('/autotest/case/export_case_datagram_async', data),
   /** Body：{ case_ids } —— 导出公共接口脚本模板为 xlsx(统一异步)，返回 { celery_task_id } */

@@ -111,9 +111,16 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import TextPreviewModal from '@/components/common/TextPreviewModal.vue'
 
 import api from '@/api'
+import { useApiPermission } from '@/composables'
 import { formatDateTime, formatJsonBrief, resultPayloadOf, toPrettyJson } from '@/utils'
 
 defineOptions({ name: '执行记录' })
+
+const { hasApiPermission } = useApiPermission()
+/** 附件下载接口权限：与后端路由权限同源 */
+function hasDownloadPermission() {
+  return hasApiPermission('get', '/autotest/task/record/{record_id}/attachments/{key}/download')
+}
 
 const $table = ref(null)
 const queryItems = ref({})
@@ -202,8 +209,9 @@ const downloadAttachment = async (row, att) => {
   }
 }
 
-/** 单文件直接下；多文件下拉选文件后下 */
+/** 单文件直接下；多文件下拉选文件后下；无接口权限时不下发下载入口 */
 const renderAttachmentCell = (row) => {
+  if (!hasDownloadPermission()) return h('span', '-')
   const items = attachmentsOf(row.task_summary)
   if (!items.length) return h('span', '-')
   if (items.length === 1) {

@@ -8,7 +8,7 @@ import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
-import { useCRUD } from '@/composables'
+import { useApiPermission, useCRUD } from '@/composables'
 import api from '@/api'
 
 defineOptions({ name: '部门管理' })
@@ -16,11 +16,12 @@ defineOptions({ name: '部门管理' })
 const $table = ref(null)
 const queryItems = ref({ code: '', name: '', description: '' })
 const vPermission = resolveDirective('permission')
+const { hasApiPermission } = useApiPermission()
 
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
+  addCreate: hasApiPermission('post', '/dept/create'),
   addDelete: false,
   actionMode: 'split',
 }

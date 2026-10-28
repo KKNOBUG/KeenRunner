@@ -24,7 +24,8 @@ import TaskHistoryModal from '@/views/task/list/components/TaskHistoryModal.vue'
 
 import {formatDateTime, formatJsonBrief, renderIcon, resultPayloadOf} from '@/utils'
 import { buildScheduleTags } from '@/utils/common/schedule'
-import { useCRUD, useTaskRecordLogModal } from '@/composables'
+import { useApiPermission, useBatchDeleteGuard, useCRUD, useTaskRecordLogModal } from '@/composables'
+import { useUserStore } from '@/store'
 import api from '@/api'
 
 defineOptions({ name: '任务列表' }) // 与菜单名一致，供 KeepAlive include 匹配
@@ -38,6 +39,10 @@ const TASK_STATUS_MAP = {
 }
 
 const $table = ref(null)
+const userStore = useUserStore()
+const { pickDeletableIds } = useBatchDeleteGuard()
+const {hasApiPermission} = useApiPermission()
+
 const queryItems = ref({})
 
 /** 列表分页元数据（用于序号列） */
@@ -57,8 +62,8 @@ const taskFormEditRow = ref(null)
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
-  addDelete: true,
+  addCreate: hasApiPermission('post', '/autotest/task/create'),
+  addDelete: hasApiPermission('delete', '/autotest/task/delete'),
   actionMode: 'split',
 }
 
@@ -68,12 +73,23 @@ async function handleBatchDelete() {
     window.$message?.warning?.('请先勾选要删除的任务')
     return
   }
+  // 先剔除不在可删范围的任务，避免逐条删除时中途失败
+  const deletableIds = pickDeletableIds({
+    ids,
+    rows: $table.value?.tableData || [],
+    keyField: 'task_id',
+    label: '任务',
+  })
+  if (!deletableIds.length) {
+    window.$message?.warning?.('选中的任务均不在可删范围，无法删除')
+    return
+  }
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: `确定删除选中的 ${ids.length} 个任务吗？`,
+    content: `确定删除选中的 ${deletableIds.length} 个任务吗？`,
     async confirm() {
-      await Promise.all(ids.map((task_id) => api.deleteApiTaskList({ task_id })))
+      await Promise.all(deletableIds.map((task_id) => api.deleteApiTaskList({ task_id })))
       window.$message?.success?.('删除成功')
       taskTableCheckedRowKeys.value = []
       $table.value?.handleSearch?.()
@@ -622,27 +638,35 @@ const columns = computed(() => {
     align: 'center',
     fixed: 'right',
     render(row) {
+      // autotest 全员可查看/编辑/执行，删除按后端行级 can_delete（含角色删除范围），各动作另需接口权限
+      const canStart = hasApiPermission('post', '/autotest/task/start')
+      const canStop = hasApiPermission('post', '/autotest/task/stop')
+      const canUpdate = hasApiPermission('post', '/autotest/task/update')
+      const canDelete = hasApiPermission('delete', '/autotest/task/delete')
+      const canRun = hasApiPermission('post', '/autotest/task/run')
+      const canCopy = hasApiPermission('post', '/autotest/task/copy')
+      const deletable = canDelete && userStore.canDeleteData(row.created_user, row.can_delete)
       const dropdownOptions = [
         row.task_enabled
-          ? {
+          ? canStop && {
               label: '停止',
               key: 'stop',
               icon: renderIcon('material-symbols:stop-circle-outline', {size: 16}),
               onClick: () => handleStopTask(row),
             }
-          : {
+          : canStart && {
               label: '启动',
               key: 'start',
               icon: renderIcon('material-symbols:play-circle-outline', {size: 16}),
               onClick: () => handleStartTask(row),
             },
-        {
+        canUpdate && {
           label: '编辑',
           key: 'edit',
           icon: renderIcon('material-symbols:edit-outline', {size: 16}),
           onClick: () => openEdit(row),
         },
-        {
+        canCopy && {
           label: '复制',
           key: 'copy',
           icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
@@ -660,45 +684,49 @@ const columns = computed(() => {
           icon: renderIcon('material-symbols:history', {size: 16}),
           onClick: () => openHistory(row),
         },
-      ]
+      ].filter(Boolean)
       // 删除：NPopconfirm（对齐用户管理 / 测试用例），独立按钮触发，不放在「更多」内
       const actions = [
-        h(
-            NButton,
-            {
-              size: 'tiny',
-              quaternary: true,
-              type: 'primary',
-              onClick: () => handleRunTask(row),
-            },
-            {
-              default: () => '执行',
-              icon: renderIcon('material-symbols:play-arrow', {size: 16}),
-            },
-        ),
-        h(
-            NPopconfirm,
-            {
-              onPositiveClick: () => handleDelete({task_id: row.task_id}),
-              onNegativeClick: () => {},
-            },
-            {
-              trigger: () =>
-                  h(
-                      NButton,
-                      {
-                        size: 'tiny',
-                        quaternary: true,
-                        type: 'error',
-                      },
-                      {
-                        default: () => '删除',
-                        icon: renderIcon('material-symbols:delete-outline', {size: 16}),
-                      },
-                  ),
-              default: () => h('div', {}, '确定删除该任务吗?'),
-            },
-        ),
+        canRun
+          ? h(
+              NButton,
+              {
+                size: 'tiny',
+                quaternary: true,
+                type: 'primary',
+                onClick: () => handleRunTask(row),
+              },
+              {
+                default: () => '执行',
+                icon: renderIcon('material-symbols:play-arrow', {size: 16}),
+              },
+          )
+          : null,
+        deletable
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => handleDelete({task_id: row.task_id}),
+                onNegativeClick: () => {},
+              },
+              {
+                trigger: () =>
+                    h(
+                        NButton,
+                        {
+                          size: 'tiny',
+                          quaternary: true,
+                          type: 'error',
+                        },
+                        {
+                          default: () => '删除',
+                          icon: renderIcon('material-symbols:delete-outline', {size: 16}),
+                        },
+                    ),
+                default: () => h('div', {}, '确定删除该任务吗?'),
+              },
+          )
+          : null,
         h(
             NDropdown,
             {
@@ -722,7 +750,7 @@ const columns = computed(() => {
                   ),
             },
         ),
-      ]
+      ].filter(Boolean)
       return actions
     },
   },

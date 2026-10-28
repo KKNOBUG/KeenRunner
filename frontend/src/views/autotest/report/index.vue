@@ -25,10 +25,13 @@ import QueryBar from '@/components/query-bar/QueryBar.vue'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import ReportDetailDrawer from '@/components/autotest/ReportDetailDrawer.vue'
 import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
+import { useUserStore } from '@/store'
 import api from '@/api'
 import { isCaseSuccess } from '@/views/autotest/utils/reportBatchRows'
 
 defineOptions({ name: '测试报告' })
+
+const userStore = useUserStore()
 
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
@@ -397,6 +400,8 @@ const batchColumns = computed(() => [
     fixed: 'right',
     render(row) {
       const multi = !!row.has_multiple_dataset
+      // 详情/报告入口全员可看，删除按后端行级 can_delete（含角色删除范围）
+      const deletable = userStore.canDeleteData(row.created_user, row.can_delete)
       return h(NSpace, { size: 4, justify: 'center' }, [
         h(
           NButton,
@@ -416,28 +421,30 @@ const batchColumns = computed(() => [
             ),
           },
         ),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () => deleteReportRow(row),
-          },
-          {
-            trigger: () =>
-              withDirectives(
-                h(
-                  NButton,
-                  { size: 'tiny', type: 'error', quaternary: true },
-                  {
-                    default: () => '删除',
-                    icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                  },
-                ),
-                [[vPermission, apiPermissionKey('delete', '/autotest/report/delete')]],
-              ),
-            default: () => h('div', {}, '确定删除该报告吗？'),
-          },
-        ),
-      ])
+        deletable
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => deleteReportRow(row),
+              },
+              {
+                trigger: () =>
+                  withDirectives(
+                    h(
+                      NButton,
+                      { size: 'tiny', type: 'error', quaternary: true },
+                      {
+                        default: () => '删除',
+                        icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                      },
+                    ),
+                    [[vPermission, apiPermissionKey('delete', '/autotest/report/delete')]],
+                  ),
+                default: () => h('div', {}, '确定删除该报告吗？'),
+              },
+            )
+          : null,
+      ].filter(Boolean))
     },
   },
 ])
@@ -543,6 +550,8 @@ const datasetColumns = [
     align: 'center',
     fixed: 'right',
     render(row) {
+      // 详情全员可看，删除按后端行级 can_delete（含角色删除范围）
+      const deletable = userStore.canDeleteData(row.created_user, row.can_delete)
       return h(NSpace, { size: 4, justify: 'center' }, [
         h(
           NButton,
@@ -557,28 +566,30 @@ const datasetColumns = [
             icon: renderIcon('material-symbols:visibility-outline', { size: 16 }),
           },
         ),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () => deleteReportRow(row),
-          },
-          {
-            trigger: () =>
-              withDirectives(
-                h(
-                  NButton,
-                  { size: 'tiny', type: 'error', quaternary: true },
-                  {
-                    default: () => '删除',
-                    icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                  },
-                ),
-                [[vPermission, apiPermissionKey('delete', '/autotest/report/delete')]],
-              ),
-            default: () => h('div', {}, '确定删除该报告吗？'),
-          },
-        ),
-      ])
+        deletable
+          ? h(
+              NPopconfirm,
+              {
+                onPositiveClick: () => deleteReportRow(row),
+              },
+              {
+                trigger: () =>
+                  withDirectives(
+                    h(
+                      NButton,
+                      { size: 'tiny', type: 'error', quaternary: true },
+                      {
+                        default: () => '删除',
+                        icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                      },
+                    ),
+                    [[vPermission, apiPermissionKey('delete', '/autotest/report/delete')]],
+                  ),
+                default: () => h('div', {}, '确定删除该报告吗？'),
+              },
+            )
+          : null,
+      ].filter(Boolean))
     },
   },
 ]

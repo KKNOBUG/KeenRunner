@@ -25,7 +25,7 @@ import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import {apiPermissionKey, formatDateTime, renderIcon} from '@/utils'
-import {useCRUD} from '@/composables'
+import {useApiPermission, useCRUD} from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
 import {useUserStore} from '@/store'
@@ -42,13 +42,14 @@ function onListPaginationMeta(meta) {
 const checkedRowKeys = ref([])
 const queryItems = ref({ username: '', alias: '', dept_id: null, role_id: null })
 const vPermission = resolveDirective('permission')
+const {hasApiPermission} = useApiPermission()
 
-/** QueryBar：左搜索+右更多（分裂按钮） */
+/** QueryBar：左搜索+右更多（分裂按钮）；无接口权限的入口不下发 */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
-  addDelete: true,
+  addCreate: hasApiPermission('post', '/user/create'),
+  addDelete: hasApiPermission('post', '/user/deletes'),
   actionMode: 'split',
 }
 
@@ -508,7 +509,7 @@ const validateAddUser = {
               :model="modalForm"
               :rules="validateAddUser">
             <NFormItem label="用户账号" path="username">
-              <NInput v-model:value="modalForm.username" clearable placeholder="请输入用户名称"/>
+              <NInput v-model:value="modalForm.username" maxlength="16" clearable placeholder="请输入用户名称"/>
             </NFormItem>
             <NFormItem v-if="modalAction === 'add'" label="用户密码" path="password">
               <NInput

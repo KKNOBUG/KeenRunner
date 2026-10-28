@@ -23,7 +23,7 @@ import IconPicker from '@/components/icon/IconPicker.vue'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
 import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
-import {useCRUD} from '@/composables'
+import {useApiPermission, useCRUD} from '@/composables'
 import api from '@/api'
 
 defineOptions({name: '菜单管理'})
@@ -31,11 +31,12 @@ defineOptions({name: '菜单管理'})
 const $table = ref(null)
 const queryItems = ref({ menu_type: null, name: '' })
 const vPermission = resolveDirective('permission')
+const {hasApiPermission} = useApiPermission()
 
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
+  addCreate: hasApiPermission('post', '/base/menu/create'),
   addDelete: false,
   actionMode: 'split',
 }

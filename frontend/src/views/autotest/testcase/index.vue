@@ -11,11 +11,11 @@ import { useAutotestSavedCaseRun } from '@/composables/useAutotestSavedCaseRun'
 import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
-import {apiPermissionKey, formatDateTime, renderIcon} from '@/utils'
+import {formatDateTime, renderIcon} from '@/utils'
 import {downloadBlobResponse} from '@/utils/common/downloadFile'
-import {useCRUD} from '@/composables'
+import {useApiPermission, useBatchDeleteGuard, useCRUD} from '@/composables'
 import api from '@/api'
-import {useAutotestStore, usePermissionStore, useTagsStore, useUserStore} from '@/store'
+import {useAutotestStore, useTagsStore, useUserStore} from '@/store'
 
 defineOptions({name: '测试用例'})
 
@@ -77,46 +77,34 @@ function fetchCaseList(params = {}) {
 }
 
 const userStore = useUserStore()
-const permissionStore = usePermissionStore()
+const {pickDeletableIds} = useBatchDeleteGuard()
+const {hasApiPermission: hasCaseApiPermission} = useApiPermission()
 /** 与原头部「新增测试用例」按钮一致：无权限则不展示 QueryBar 中的「新增」 */
-const CASE_CREATE_PERM = apiPermissionKey('post', '/autotest/case/create')
-const canCreateCase = computed(
-    () => userStore.isSuperUser || permissionStore.apis.includes(CASE_CREATE_PERM)
+const canCreateCase = computed(() => hasCaseApiPermission('post', '/autotest/case/create'))
+/** 额外动作与后端接口权限一一对应，无权限不下发，避免出现点了 403 的按钮 */
+const CASE_EXTRA_ACTIONS = [
+  {label: '导出报文数据', key: 'exportData', perm: '/autotest/case/export_case_datagram_async'},
+  {label: '导出接口明细', key: 'exportScript', perm: '/autotest/case/export_case_scripts_async'},
+  {label: '导入接口明细', key: 'importScript', perm: '/autotest/case/import_case_scripts_async'},
+  {label: '接口模板下载', key: 'downloadTemplate', perm: '/autotest/case/import_template_download'},
+  {label: '接口生成脚本', key: 'generateScript', perm: '/autotest/case/generate_case_scripts_async'},
+]
+const caseExtraActions = computed(() =>
+    CASE_EXTRA_ACTIONS.filter((item) => hasCaseApiPermission('post', item.perm)).map(
+        ({perm, ...item}) => ({
+          ...item,
+          icon: renderIcon('material-symbols:download', {size: 16}),
+        })
+    )
 )
 const queryBarProps = computed(() => ({
   addReset: true,
   addSearch: true,
   addCreate: canCreateCase.value,
-  addDelete: true,
+  addDelete: hasCaseApiPermission('post', '/autotest/case/deletes'),
   actionMode: 'split',
   /** 仅测试用例：导出/导入收纳进右侧更多菜单 */
-  extraActions: [
-    {
-      label: '导出报文数据',
-      key: 'exportData',
-      icon: renderIcon('material-symbols:download', { size: 16 }),
-    },
-    {
-      label: '导出接口明细',
-      key: 'exportScript',
-      icon: renderIcon('material-symbols:download', { size: 16 }),
-    },
-    {
-      label: '导入接口明细',
-      key: 'importScript',
-      icon: renderIcon('material-symbols:upload', { size: 16 }),
-    },
-    {
-      label: '接口模板下载',
-      key: 'downloadTemplate',
-      icon: renderIcon('material-symbols:download', { size: 16 }),
-    },
-    {
-      label: '接口生成脚本',
-      key: 'generateScript',
-      icon: renderIcon('material-symbols:difference', { size: 16 }),
-    },
-  ],
+  extraActions: caseExtraActions.value,
 }))
 
 function onQueryBarAction(key) {
@@ -138,15 +126,28 @@ function onListPaginationMeta(meta) {
 async function handleBatchDelete() {
   const ids = [...(checkedRowKeys.value || [])]
   if (!ids.length) {
-    window.$message?.warning?.('请先勾选要删除的用例')
+    window.$message?.warning?.('请先勾选用例')
+    return
+  }
+  // 先剔除不在可删范围的用例，避免整批请求被后端删除权限整体拒绝
+  const deletableIds = pickDeletableIds({
+    ids,
+    rows: $table.value?.tableData || [],
+    keyField: 'case_id',
+    ownerField: 'owner_user',
+    label: '用例',
+  })
+  if (!deletableIds.length) {
+    window.$message?.warning?.('选中的用例均不在可删范围，无法删除')
     return
   }
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: `确定删除选中的 ${ids.length} 条用例吗？`,
+    content: `确定删除选中的 ${deletableIds.length} 条用例吗？`,
     async confirm() {
-      await Promise.all(ids.map((case_id) => api.deleteApiTestcaseList({ case_id })))
+      // 批量删除走后端批量入口，保持软删语义
+      await api.deleteApiTestcaseBatch({ case_ids: deletableIds })
       window.$message?.success?.('删除成功')
       checkedRowKeys.value = []
       $table.value?.handleSearch?.()
@@ -495,10 +496,6 @@ function openCaseEdit(row) {
   }
 }
 
-function hasCaseApiPermission(method, path) {
-  return userStore.isSuperUser || permissionStore.apis.includes(apiPermissionKey(method, path))
-}
-
 /**
  * 【用例管理「复制」】整用例复制：获取步骤树副本并进入编辑页（数据未保存）
  *
@@ -773,6 +770,7 @@ const columns = computed(() => {
       ellipsis: {tooltip: true},
       render(row) {
         const name = row.case_name || ''
+        // 名称链接是编辑入口，无编辑接口权限时降级为纯文本
         if (!hasCaseApiPermission('post', '/autotest/case/update')) {
           return name
         }
@@ -921,13 +919,17 @@ const columns = computed(() => {
       fixed: 'right',
       render(row) {
         const dropdownOptions = []
-        dropdownOptions.push({
-          label: '复制',
-          key: 'copy',
-          icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
-          disabled: copyLoading.value,
-          onClick: () => handleCopyCase(row),
-        })
+        // 复制会产生新用例（保存走新增），因此受新增接口权限约束
+        if (canCreateCase.value) {
+          dropdownOptions.push({
+            label: '复制',
+            key: 'copy',
+            icon: renderIcon('material-symbols:content-copy-outline', {size: 16}),
+            disabled: copyLoading.value,
+            onClick: () => handleCopyCase(row),
+          })
+        }
+        // autotest 全员可编辑，按钮仅受接口权限约束；删除另需归属人
         if (hasCaseApiPermission('post', '/autotest/case/update')) {
           dropdownOptions.push({
             label: '编辑',
@@ -936,31 +938,37 @@ const columns = computed(() => {
             onClick: () => openCaseEdit(row),
           })
         }
-        dropdownOptions.push({
-          label: '历史',
-          key: 'history',
-          icon: renderIcon('material-symbols:history', {size: 16}),
-          onClick: () => openHistoryDrawer(row),
-        })
+        // 历史抽屉的数据来自报告查询接口
+        if (hasCaseApiPermission('post', '/autotest/report/search')) {
+          dropdownOptions.push({
+            label: '历史',
+            key: 'history',
+            icon: renderIcon('material-symbols:history', {size: 16}),
+            onClick: () => openHistoryDrawer(row),
+          })
+        }
         // 删除使用 NPopconfirm（对齐用户管理）；需独立按钮作触发器，故不放在「更多」内
-        const actions = [
-          h(
-              NButton,
-              {
-                size: 'tiny',
-                quaternary: true,
-                type: 'primary',
-                loading: runLoading.value && runningCaseId.value === (row.case_id ?? null),
-                disabled: runLoading.value,
-                onClick: () => openRunModal(row),
-              },
-              {
-                default: () => '执行',
-                icon: renderIcon('material-symbols:play-arrow', {size: 16}),
-              }
-          ),
-        ]
-        if (hasCaseApiPermission('delete', '/autotest/case/delete')) {
+        const actions = []
+        if (hasCaseApiPermission('post', '/autotest/step/execute_or_debugging')) {
+          actions.push(
+              h(
+                  NButton,
+                  {
+                    size: 'tiny',
+                    quaternary: true,
+                    type: 'primary',
+                    loading: runLoading.value && runningCaseId.value === (row.case_id ?? null),
+                    disabled: runLoading.value,
+                    onClick: () => openRunModal(row),
+                  },
+                  {
+                    default: () => '执行',
+                    icon: renderIcon('material-symbols:play-arrow', {size: 16}),
+                  }
+              )
+          )
+        }
+        if (hasCaseApiPermission('delete', '/autotest/case/delete') && userStore.canDeleteData(row.owner_user, row.can_delete)) {
           actions.push(
               h(
                   NPopconfirm,

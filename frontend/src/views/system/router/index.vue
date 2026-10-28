@@ -9,7 +9,7 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import TheIcon from '@/components/icon/TheIcon.vue'
 
 import { apiPermissionKey, renderIcon } from '@/utils'
-import { useCRUD } from '@/composables'
+import { useApiPermission, useCRUD } from '@/composables'
 // import { loginTypeMap, loginTypeOptions } from '@/constant/data'
 import api from '@/api'
 
@@ -19,6 +19,7 @@ defineOptions({ name: '路由管理' })
 const $table = ref(null)
 const queryItems = ref({ method: null, tags: '', path: '', summary: '' })
 const vPermission = resolveDirective('permission')
+const { hasApiPermission } = useApiPermission()
 
 /** 路由方式筛选选项 */
 const methodOptions = [
@@ -41,8 +42,8 @@ function onListPaginationMeta(meta) {
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
-  addDelete: true,
+  addCreate: hasApiPermission('post', '/base/router/create'),
+  addDelete: hasApiPermission('delete', '/base/router/delete'),
   actionMode: 'split',
 }
 

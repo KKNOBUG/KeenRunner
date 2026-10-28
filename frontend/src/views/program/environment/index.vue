@@ -7,7 +7,9 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import { apiPermissionKey, renderIcon } from '@/utils'
+import { useApiPermission } from '@/composables'
 import api from '@/api'
+import { useUserStore } from '@/store'
 import EnvBindModal from './EnvBindModal.vue'
 import EnvConfigModal from './EnvConfigModal.vue'
 import EnvConfigExpandTable from './EnvConfigExpandTable.vue'
@@ -29,6 +31,8 @@ defineOptions({ name: '环境管理' })
  */
 
 const $table = ref(null)
+const userStore = useUserStore()
+const { hasApiPermission } = useApiPermission()
 const listPaginationMeta = ref({ page: 1, page_size: 10 })
 function onListPaginationMeta(meta) {
   listPaginationMeta.value = meta
@@ -87,7 +91,7 @@ async function handleDelete(row) {
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
+  addCreate: hasApiPermission('post', '/autotest/env/create'),
   addDelete: false,
   actionMode: 'split',
 }
@@ -195,6 +199,8 @@ const columns = computed(() => {
       align: 'center',
       fixed: 'right',
       render(row) {
+        // autotest 全员可编辑；删除按后端行级 can_delete（含角色删除范围）
+        const deletable = userStore.canDeleteData(row.created_user, row.can_delete)
         return h(NSpace, { size: 2, justify: 'center' }, {
           default: () => [
             withDirectives(
@@ -225,35 +231,37 @@ const columns = computed(() => {
                 ),
                 [[vPermission, apiPermissionKey('post', '/autotest/env/update')]]
             ),
-            h(
-                NPopconfirm,
-                { onPositiveClick: () => handleDelete(row) },
-                {
-                  trigger: () =>
-                      withDirectives(
-                          h(
-                              NButton,
-                              {
-                                size: 'tiny',
-                                quaternary: true,
-                                type: 'error',
-                                title: '删除',
-                              },
-                              { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
+            deletable
+                ? h(
+                    NPopconfirm,
+                    { onPositiveClick: () => handleDelete(row) },
+                    {
+                      trigger: () =>
+                          withDirectives(
+                              h(
+                                  NButton,
+                                  {
+                                    size: 'tiny',
+                                    quaternary: true,
+                                    type: 'error',
+                                    title: '删除',
+                                  },
+                                  { icon: renderIcon('material-symbols:delete-outline', { size: 16 }) }
+                              ),
+                              [[vPermission, apiPermissionKey('delete', '/autotest/env/delete')]]
                           ),
-                          [[vPermission, apiPermissionKey('delete', '/autotest/env/delete')]]
-                      ),
-                  default: () =>
-                      h(
-                          'div',
-                          {},
-                          row.is_delete
-                              ? '该环境下已无子表配置，确定删除吗？'
-                              : '确定删除该环境绑定吗？'
-                      ),
-                }
-            ),
-          ],
+                      default: () =>
+                          h(
+                              'div',
+                              {},
+                              row.is_delete
+                                  ? '该环境下已无子表配置，确定删除吗？'
+                                  : '确定删除该环境绑定吗？'
+                          ),
+                    }
+                )
+                : null,
+          ].filter(Boolean),
         })
       },
     },

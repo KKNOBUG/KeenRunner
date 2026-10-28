@@ -18,12 +18,16 @@ import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import { apiPermissionKey, renderIcon } from '@/utils'
-import { useCRUD } from '@/composables'
+import { useApiPermission, useBatchDeleteGuard, useCRUD } from '@/composables'
+import { useUserStore } from '@/store'
 import api from '@/api'
 
 defineOptions({ name: '项目管理' })
 
 const $table = ref(null)
+const userStore = useUserStore()
+const { pickDeletableIds } = useBatchDeleteGuard()
+const { hasApiPermission } = useApiPermission()
 /** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
 const listPaginationMeta = ref({ page: 1, page_size: 10 })
 function onListPaginationMeta(meta) {
@@ -169,12 +173,12 @@ function customHandleEdit(row) {
   })
 }
 
-/** QueryBar：左搜索+右更多（分裂按钮） */
+/** QueryBar：左搜索+右更多（分裂按钮）；无接口权限的入口不下发 */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
-  addDelete: true,
+  addCreate: hasApiPermission('post', '/autotest/project/create'),
+  addDelete: hasApiPermission('post', '/autotest/project/delete'),
   actionMode: 'split',
 }
 
@@ -184,12 +188,23 @@ async function handleBatchDelete() {
     window.$message?.warning?.('请先勾选要删除的应用')
     return
   }
+  // 先剔除不在可删范围的应用，避免整批请求被后端删除权限整体拒绝
+  const deletableIds = pickDeletableIds({
+    ids,
+    rows: $table.value?.tableData || [],
+    keyField: 'project_id',
+    label: '应用',
+  })
+  if (!deletableIds.length) {
+    window.$message?.warning?.('选中的应用均不在可删范围，无法删除')
+    return
+  }
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: `确定删除选中的 ${ids.length} 条应用吗？若应用下仍有用例、标签或环境配置将无法删除。`,
+    content: `确定删除选中的 ${deletableIds.length} 条应用吗？`,
     async confirm() {
-      await api.deleteProjectBatch({ project_ids: ids })
+      await api.deleteProjectBatch({ project_ids: deletableIds })
       window.$message?.success?.('删除成功')
       checkedRowKeys.value = []
       $table.value?.handleSearch?.()
@@ -365,6 +380,8 @@ const columns = computed(() => {
       align: 'center',
       fixed: 'right',
       render(row) {
+        // 编辑全员可用；删除按后端行级 can_delete（含角色删除范围），再叠加接口权限指令
+        const deletable = userStore.canDeleteData(row.created_user, row.can_delete)
         return [
           withDirectives(
               h(
@@ -382,34 +399,35 @@ const columns = computed(() => {
               ),
               [[vPermission, apiPermissionKey('post', '/autotest/project/update')]]
           ),
-          h(
-              NPopconfirm,
-              {
-                onPositiveClick: () => handleDelete({ project_id: row.project_id }, false),
-                onNegativeClick: () => {},
-              },
-              {
-                trigger: () =>
-                    withDirectives(
-                        h(
-                            NButton,
-                            {
-                              size: 'tiny',
-                              quaternary: true,
-                              type: 'error',
-                            },
-                            {
-                              default: () => '删除',
-                              icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                            }
+          deletable
+              ? h(
+                  NPopconfirm,
+                  {
+                    onPositiveClick: () => handleDelete({ project_id: row.project_id }, false),
+                    onNegativeClick: () => {},
+                  },
+                  {
+                    trigger: () =>
+                        withDirectives(
+                            h(
+                                NButton,
+                                {
+                                  size: 'tiny',
+                                  quaternary: true,
+                                  type: 'error',
+                                },
+                                {
+                                  default: () => '删除',
+                                  icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                                }
+                            ),
+                            [[vPermission, apiPermissionKey('delete', '/autotest/project/delete')]]
                         ),
-                        [[vPermission, apiPermissionKey('delete', '/autotest/project/delete')]]
-                    ),
-                default: () =>
-                    h('div', {}, '确定删除该应用吗？若仍有关联用例/标签/环境配置将删除失败。'),
-              }
-          ),
-        ]
+                    default: () => h('div', {}, '确定删除该应用吗？'),
+                  }
+              )
+              : null,
+        ].filter(Boolean)
       },
     },
   ]

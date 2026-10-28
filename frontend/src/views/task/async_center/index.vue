@@ -54,6 +54,8 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import api from '@/api'
+import { useApiPermission } from '@/composables'
+import { useUserStore } from '@/store'
 import { formatDateTime, renderIcon } from '@/utils'
 import {
   ASYNC_CENTER_TASK_TYPE_OPTIONS,
@@ -63,6 +65,8 @@ import {
 defineOptions({ name: '异步中心' })
 
 const $table = ref(null)
+const userStore = useUserStore()
+const {hasApiPermission} = useApiPermission()
 const queryItems = ref({})
 /** 非脚本执行类任务类型集合：本页仅展示异步中心范围记录，固定随请求下发 */
 const extraParams = { task_type_in: ASYNC_CENTER_TASK_TYPE_VALUES }
@@ -253,6 +257,13 @@ const columns = [
     fixed: 'right',
     render(row) {
       // 按钮样式对齐任务列表操作列：quaternary 无底色按钮 + 16px 图标，删除走 NPopconfirm
+      const canDownload = hasApiPermission(
+          'get',
+          '/autotest/task/record/{record_id}/attachments/{key}/download'
+      )
+      const deletable =
+          hasApiPermission('delete', '/autotest/task/record/delete') &&
+          userStore.canDeleteData(row.created_user, row.can_delete)
       const actions = [
         h(
             NButton,
@@ -284,22 +295,25 @@ const columns = [
               icon: renderIcon('material-symbols:refresh', {size: 16}),
             },
         ),
-        h(
-            NButton,
-            {
-              size: 'tiny',
-              quaternary: true,
-              type: 'primary',
-              disabled: row.celery_status !== '成功' || !attachmentsOf(row.task_summary).length,
-              title: '仅成功且拥有可下载产物的任务可下载',
-              onClick: () => downloadAttachment(row, attachmentsOf(row.task_summary)[0]),
-            },
-            {
-              default: () => '下载',
-              icon: renderIcon('material-symbols:download', {size: 16}),
-            },
-        ),
-        // 删除：NPopconfirm（对齐任务列表 / 用户管理 / 测试用例），独立按钮触发
+        canDownload
+            ? h(
+                NButton,
+                {
+                  size: 'tiny',
+                  quaternary: true,
+                  type: 'primary',
+                  disabled: row.celery_status !== '成功' || !attachmentsOf(row.task_summary).length,
+                  title: '仅成功且拥有可下载产物的任务可下载',
+                  onClick: () => downloadAttachment(row, attachmentsOf(row.task_summary)[0]),
+                },
+                {
+                  default: () => '下载',
+                  icon: renderIcon('material-symbols:download', {size: 16}),
+                },
+            )
+            : null,
+        // 删除：NPopconfirm（对齐任务列表 / 用户管理 / 测试用例），独立按钮触发；按后端行级 can_delete 控制
+        deletable &&
         h(
             NPopconfirm,
             {
@@ -324,7 +338,7 @@ const columns = [
               default: () => h('div', {}, '确定删除该任务记录吗? 将同时清理产物文件，删除后不可恢复'),
             },
         ),
-      ]
+      ].filter(Boolean)
       return actions
     },
   },

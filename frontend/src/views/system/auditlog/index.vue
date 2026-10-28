@@ -21,6 +21,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import api from '@/api'
+import { useApiPermission } from '@/composables'
 import { formatDateTime, renderIcon } from '@/utils'
 
 defineOptions({ name: '审计日志' })
@@ -33,12 +34,13 @@ function onListPaginationMeta(meta) {
 }
 
 const checkedRowKeys = ref([])
+const { hasApiPermission } = useApiPermission()
 
 const queryBarProps = {
   addReset: true,
   addSearch: true,
   addCreate: false,
-  addDelete: true,
+  addDelete: hasApiPermission('post', '/base/audit/deletes'),
   actionMode: 'split',
 }
 

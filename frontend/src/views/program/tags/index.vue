@@ -16,7 +16,8 @@ import CrudModal from '@/components/table/CrudModal.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
-import { useCRUD } from '@/composables'
+import { useApiPermission, useBatchDeleteGuard, useCRUD } from '@/composables'
+import { useUserStore } from '@/store'
 import api from '@/api'
 
 defineOptions({ name: '标签管理' })
@@ -28,6 +29,9 @@ defineOptions({ name: '标签管理' })
  */
 
 const $table = ref(null)
+const userStore = useUserStore()
+const { hasApiPermission } = useApiPermission()
+const { pickDeletableIds } = useBatchDeleteGuard()
 /** 与 CrudTable 分页同步，用于「序号」列跨页连续编号 */
 const listPaginationMeta = ref({ page: 1, page_size: 10 })
 function onListPaginationMeta(meta) {
@@ -88,12 +92,12 @@ const {
   refresh: () => $table.value?.handleSearch(),
 })
 
-/** QueryBar：左搜索+右更多（分裂按钮） */
+/** QueryBar：左搜索+右更多（分裂按钮）；无接口权限的入口不下发 */
 const queryBarProps = {
   addReset: true,
   addSearch: true,
-  addCreate: true,
-  addDelete: true,
+  addCreate: hasApiPermission('post', '/autotest/tag/create'),
+  addDelete: hasApiPermission('post', '/autotest/tag/delete'),
   actionMode: 'split',
 }
 
@@ -143,12 +147,23 @@ async function handleBatchDelete() {
     window.$message?.warning?.('请先勾选要删除的标签')
     return
   }
+  // 先剔除不在可删范围的标签，避免整批请求被后端删除权限整体拒绝
+  const deletableIds = pickDeletableIds({
+    ids,
+    rows: $table.value?.tableData || [],
+    keyField: 'tag_id',
+    label: '标签',
+  })
+  if (!deletableIds.length) {
+    window.$message?.warning?.('选中的标签均不在可删范围，无法删除')
+    return
+  }
   await $dialog.confirm({
     title: '提示',
     type: 'warning',
-    content: `确定删除选中的 ${ids.length} 条标签吗？删除后用例上已关联的标签将失效，请谨慎操作。`,
+    content: `确定删除选中的 ${deletableIds.length} 条标签吗？删除后用例上已关联的标签将失效，请谨慎操作。`,
     async confirm() {
-      await api.deleteTagBatch({ tag_ids: ids })
+      await api.deleteTagBatch({ tag_ids: deletableIds })
       window.$message?.success?.('删除成功')
       checkedRowKeys.value = []
       $table.value?.handleSearch?.()
@@ -334,6 +349,8 @@ const columns = computed(() => {
       align: 'center',
       fixed: 'right',
       render(row) {
+        // 编辑全员可用；删除按后端行级 can_delete（含角色删除范围），再叠加接口权限指令
+        const deletable = userStore.canDeleteData(row.created_user, row.can_delete)
         return [
           withDirectives(
               h(
@@ -351,33 +368,35 @@ const columns = computed(() => {
               ),
               [[vPermission, apiPermissionKey('post', '/autotest/tag/update')]]
           ),
-          h(
-              NPopconfirm,
-              {
-                onPositiveClick: () => handleDelete({ tag_id: row.tag_id }, false),
-                onNegativeClick: () => {},
-              },
-              {
-                trigger: () =>
-                    withDirectives(
-                        h(
-                            NButton,
-                            {
-                              size: 'tiny',
-                              quaternary: true,
-                              type: 'error',
-                            },
-                            {
-                              default: () => '删除',
-                              icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
-                            }
+          deletable
+              ? h(
+                  NPopconfirm,
+                  {
+                    onPositiveClick: () => handleDelete({ tag_id: row.tag_id }, false),
+                    onNegativeClick: () => {},
+                  },
+                  {
+                    trigger: () =>
+                        withDirectives(
+                            h(
+                                NButton,
+                                {
+                                  size: 'tiny',
+                                  quaternary: true,
+                                  type: 'error',
+                                },
+                                {
+                                  default: () => '删除',
+                                  icon: renderIcon('material-symbols:delete-outline', { size: 16 }),
+                                }
+                            ),
+                            [[vPermission, apiPermissionKey('delete', '/autotest/tag/delete')]]
                         ),
-                        [[vPermission, apiPermissionKey('delete', '/autotest/tag/delete')]]
-                    ),
-                default: () => h('div', {}, '确定删除该标签吗？用例上已关联的引用将失效。'),
-              }
-          ),
-        ]
+                    default: () => h('div', {}, '确定删除该标签吗？用例上已关联的引用将失效。'),
+                  }
+              )
+              : null,
+        ].filter(Boolean)
       },
     },
   ]
