@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from starlette.exceptions import HTTPException
 from tortoise.exceptions import DoesNotExist
 
+from backend.core.exceptions.base_exceptions import NoPermissionException
 from backend.core.responses import (
     BaseResponse,
     ParameterResponse,
@@ -81,6 +82,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> BaseRe
 
     else:
         return FailureResponse(message=str(exc))
+
+
+async def no_permission_exception_handler(request: Request, exc: NoPermissionException) -> BaseResponse:
+    """业务层拒绝数据越权操作时统一返回403，避免被通用异常处理成500。"""
+    return ForbiddenResponse(message=exc.message)
 
 
 # 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常

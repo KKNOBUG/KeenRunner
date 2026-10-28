@@ -34,6 +34,7 @@ from .http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
+    no_permission_exception_handler,
     null_point_exception_handler,
     app_exception_handler,
 )
@@ -60,10 +61,10 @@ __all__ = (
     ReqInvalidException,
     ResInvalidException,
     SyntaxException,
-
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
+    no_permission_exception_handler,
     null_point_exception_handler,
     app_exception_handler,
 )

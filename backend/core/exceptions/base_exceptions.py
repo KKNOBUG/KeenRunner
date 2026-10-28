@@ -145,7 +145,7 @@ class ParameterException(BaseExceptions):
 class NoPermissionException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE403)
-        kwargs.setdefault("code", BaseErrorEnum.BASE400.code)
+        kwargs.setdefault("code", BaseErrorEnum.BASE403.code)
         super().__init__(**kwargs)
 
 
