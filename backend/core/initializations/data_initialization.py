@@ -36,7 +36,7 @@ from backend.applications.department.services.department_crud import DepartmentC
 from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import UserCrud
 from backend.configure import LOGGER
-from backend.enums import MenuType
+from backend.enums import DataScopeEnum, MenuType
 
 # 初始化种子数据的创建人
 INIT_CREATED_USER = "ADMIN"
@@ -45,7 +45,12 @@ INIT_CREATED_USER = "ADMIN"
 async def init_database_role():
     role_crud = RoleCrud()
     if await role_crud.model.exists():
-        LOGGER.info("[角色]已有数据，跳过初始化")
+        await Role.filter(code=PermissionRule.ROLE_CODE_ADMIN).update(
+            select_scope=DataScopeEnum.ALL,
+            update_scope=DataScopeEnum.ALL,
+            delete_scope=DataScopeEnum.ALL
+        )
+        LOGGER.info("[角色]已有数据，校正管理员数据范围后跳过初始化")
         return
 
     from backend.applications.base.models.router_model import Router
@@ -55,6 +60,9 @@ async def init_database_role():
             code=PermissionRule.ROLE_CODE_ADMIN,
             name="管理员",
             description="平台超管，拥有全部菜单与接口权限",
+            select_scope=DataScopeEnum.ALL,
+            update_scope=DataScopeEnum.ALL,
+            delete_scope=DataScopeEnum.ALL,
             created_user=INIT_CREATED_USER,
         ),
     )
@@ -63,14 +71,20 @@ async def init_database_role():
             code=PermissionRule.ROLE_CODE_USER,
             name="标准用户",
             description="系统域只读，业务域增删改查全开；不可操作系统写操作与角色权限变更",
+            select_scope=DataScopeEnum.DEPT_AND_CHILD,
+            update_scope=DataScopeEnum.SELF,
+            delete_scope=DataScopeEnum.SELF,
             created_user=INIT_CREATED_USER,
         ),
     )
     guest_role = await role_crud.create_role(
         RoleCreate(
             code=PermissionRule.ROLE_CODE_GUEST,
-            name="宾客用户",
-            description="系统域只读，业务域仅查询与新增；禁止一切修改与删除",
+            name="访客用户",
+            description="系统域只读，业务域增删改查全开；删除仅限本人数据",
+            select_scope=DataScopeEnum.DEPT_AND_CHILD,
+            update_scope=DataScopeEnum.SELF,
+            delete_scope=DataScopeEnum.SELF,
             created_user=INIT_CREATED_USER,
         ),
     )
@@ -178,7 +192,7 @@ async def init_database_user():
         UserCreate(
             username="guest",
             password="KFuser01@!",
-            alias="宾客用户",
+            alias="访客用户",
             email="guest@test.com",
             phone="18888888888",
             avatar="/static/avatar/default/20250101010101.png",
@@ -196,10 +210,36 @@ async def init_database_user():
             LOGGER.error(f"创建用户失败: {user_in.alias}, username: {user_in.username}: {e}")
 
 
+async def ensure_autotest_detail_menu(menu_crud: MenuCrud) -> None:
+    """存量环境幂等补建[执行明细]菜单：菜单初始化表非空即跳过，新增页面需单独补齐。"""
+    parent_menu = await menu_crud.model.filter(path="/autotest", parent_id=0).first()
+    if not parent_menu:
+        LOGGER.warning("[菜单]补建[执行明细]跳过，未找到[自动化测试]父级目录")
+        return
+    if await menu_crud.model.filter(parent_id=parent_menu.id, name="执行明细").exists():
+        return
+    await menu_crud.create_menu(
+        MenuCreate(
+            menu_type=MenuType.MENU,
+            name="执行明细",
+            path="detail",
+            order=6,
+            parent_id=parent_menu.id,
+            icon="mdi:format-list-group",
+            is_hidden=False,
+            component="/autotest/detail",
+            keepalive=True,
+            created_user=INIT_CREATED_USER,
+        )
+    )
+    LOGGER.info("创建[执行明细]菜单成功")
+
+
 async def init_database_menu():
     menu_crud = MenuCrud()
     if await menu_crud.model.exists():
         LOGGER.info("[菜单]已有数据，跳过初始化")
+        await ensure_autotest_detail_menu(menu_crud)
         return
     # 系统设置菜单配置
     system_parent_menu = await menu_crud.create_menu(
@@ -502,6 +542,19 @@ async def init_database_menu():
             ,
             created_user=INIT_CREATED_USER
         ),
+        Menu(
+            menu_type=MenuType.MENU,
+            name="执行明细",
+            path="detail",
+            order=6,
+            parent_id=autotest_parent_menu.id,
+            icon="mdi:format-list-group",
+            is_hidden=False,
+            component="/autotest/detail",
+            keepalive=True
+            ,
+            created_user=INIT_CREATED_USER
+        ),
     ]
     await Menu.bulk_create(autotest_children_menu)
     LOGGER.info(f"创建[自动化测试]目录及子菜单成功")
@@ -622,7 +675,6 @@ async def init_database_menu():
     ]
     await Menu.bulk_create(perf_children_menu)
     LOGGER.info(f"创建[性能测试]目录及子菜单成功")
-
 
     # 任务管理菜单配置
     task_parent_menu = await menu_crud.create_menu(

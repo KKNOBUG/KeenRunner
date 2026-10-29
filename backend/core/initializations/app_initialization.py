@@ -27,17 +27,19 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
 from backend.configure import PROJECT_CONFIG, LOGGER
+from backend.core.exceptions import NoPermissionException
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
+    no_permission_exception_handler,
     null_point_exception_handler,
     app_exception_handler,
 )
 from backend.core.middlewares.app_middleware import logging_middleware
 from backend.core.middlewares.auth_middleware import auth_middleware
 from backend.core.middlewares.request_context_middleware import request_context_middleware
-from backend.services import DependPermission, DependOptionalAuth
+from backend.services import DependPermission
 
 
 def _migration_app_dir() -> str:
@@ -163,6 +165,11 @@ def register_exceptions(app: FastAPI) -> None:
         exc_class_or_status_code=HTTPException,
         handler=http_exception_handler
     )
+    # 业务层数据越权(如删除他人数据)统一映射为403，须先于通用Exception兜底注册
+    app.add_exception_handler(
+        exc_class_or_status_code=NoPermissionException,
+        handler=no_permission_exception_handler
+    )
     # 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常
     app.add_exception_handler(
         exc_class_or_status_code=DoesNotExist,
@@ -243,7 +250,7 @@ def register_routers(app: FastAPI) -> None:
     # 导入路由蓝图
     from backend.applications.base.views import base_public, base_secure, router_secure, menu_secure, role_secure, audit_secure, file_secure
     from backend.applications.department.views.department_view import dept
-    from backend.applications.user.views.user_view import user_public, user_secure
+    from backend.applications.user.views.user_view import user_secure
     from backend.applications.toolbox.views import toolbox
     from backend.applications.autotest.views import autotest
     from backend.applications.performance.views import performance
@@ -256,7 +263,6 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(router=role_secure, prefix="/base", tags=["系统管理:角色"], dependencies=[DependPermission])
     app.include_router(router=audit_secure, prefix="/base", tags=["系统管理:审计"], dependencies=[DependPermission])
     app.include_router(router=file_secure, prefix="/base", tags=["系统管理:文件"], dependencies=[DependPermission])
-    app.include_router(router=user_public, prefix="/user", tags=["系统管理:用户"], dependencies=[DependOptionalAuth])
     app.include_router(router=user_secure, prefix="/user", tags=["系统管理:用户"], dependencies=[DependPermission])
     app.include_router(router=dept, prefix="/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
