@@ -24,6 +24,7 @@ from backend.celery_scheduler.celery_worker import celery
 from backend.common import AsyncEventLoopContextIOPool
 from backend.configure import LOGGER
 from backend.enums import AutoTestCaseType, AutoTestStepType
+from backend.services import DataScope
 from backend.services.ctx import CTX_USERNAME
 
 # 生成脚本沿用源接口的表头字段白名单：执行快照字段(case_state/case_last_time/case_version)与
@@ -173,7 +174,10 @@ async def _generate_single_script(
         raise ValueError(f"步骤树结构校验失败: {error_msg}")
     _assign_step_nos(tree_in.steps, 1)
     async with in_transaction():
-        case_result = await services.case_curd.batch_update_or_create_cases([tree_in.case])
+        case_result = await services.case_curd.batch_update_or_create_cases(
+            cases_data=[tree_in.case],
+            scope=DataScope.system()
+        )
         new_case_id: Optional[int] = (case_result.get("success_detail") or [{}])[0].get("case_id")
         if not new_case_id:
             raise ValueError("脚本用例落库失败, 未获取到新用例ID")

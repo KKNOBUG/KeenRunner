@@ -25,6 +25,7 @@ from backend.core.exceptions import (
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -34,6 +35,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse
 )
+from backend.services import DataScope, DependTagScope
 
 autotest_tag = APIRouter()
 
@@ -42,16 +44,18 @@ autotest_tag = APIRouter()
 async def create_tag(
         tag_in: AutoTestTagCreate = Body(..., description="标签信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增标签。
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，恢复软删标签时要求创建人允许当前用户写入
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.tag_curd.create_tag(tag_in=tag_in)
+        instance = await services.tag_curd.create_tag(tag_in=tag_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -62,10 +66,14 @@ async def create_tag(
             replace_fields={"id": "tag_id"}
         )
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
@@ -78,6 +86,7 @@ async def delete_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code删除标签。
@@ -85,10 +94,11 @@ async def delete_tag(
     :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除创建人为自己的标签
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.tag_curd.delete_tag(tag_id=tag_id, tag_code=tag_code)
+        instance = await services.tag_curd.delete_tag(scope=scope, tag_id=tag_id, tag_code=tag_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -99,10 +109,14 @@ async def delete_tag(
             replace_fields={"id": "tag_id"}
         )
         return SuccessResponse(message="删除成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:  # 存在用例引用时禁止删除
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除标签信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
@@ -112,17 +126,21 @@ async def delete_tag(
 async def batch_delete_tags(
         tag_in: AutoTestTagDelete = Body(..., description="标签信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code列表删除标签。
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除创建人为自己的标签
     :return: 统一HTTP响应
     """
     try:
-        count = await services.tag_curd.delete_tags(tag_in=tag_in)
+        count = await services.tag_curd.delete_tags(tag_in=tag_in, scope=scope)
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -138,16 +156,18 @@ async def batch_delete_tags(
 async def update_tag(
         tag_in: AutoTestTagUpdate = Body(..., description="标签信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code更新标签。
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改创建人为自己的标签
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.tag_curd.update_tag(tag_in=tag_in)
+        instance = await services.tag_curd.update_tag(tag_in=tag_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -158,6 +178,8 @@ async def update_tag(
             replace_fields={"id": "tag_id"}
         )
         return SuccessResponse(data=data, message="更新成功", total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -176,6 +198,7 @@ async def get_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code查询标签。
@@ -183,6 +206,7 @@ async def get_tag(
     :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验标签创建人可见性
     :return: 统一HTTP响应
     """
     try:
@@ -190,6 +214,10 @@ async def get_tag(
             instance = await services.tag_curd.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
         else:
             instance = await services.tag_curd.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
+        if not scope.can_read(instance.created_user):  # 详情需收口到可见范围
+            raise NoPermissionException(
+                message=f"查询标签失败, 标签[{instance.tag_code}]创建人[{instance.created_user}]不在当前用户可见范围"
+            )
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -200,6 +228,8 @@ async def get_tag(
             replace_fields={"id": "tag_id"}
         )
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -213,6 +243,7 @@ async def get_tag(
 async def search_tags(
         tag_in: AutoTestTagSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件查询标签。
@@ -238,6 +269,9 @@ async def search_tags(
         if tag_in.updated_user:
             q &= Q(updated_user=tag_in.updated_user)
         q &= Q(state=tag_in.state)
+        owner_q = scope.read_q("created_user")
+        if owner_q is not None:
+            q &= owner_q
         total, instances = await services.tag_curd.select_tags(
             search=q,
             page=tag_in.page,
@@ -260,8 +294,9 @@ async def search_tags(
                     state__not=1
                 ).values_list("id", "project_name")
             )
-        for item in data:
+        for item, obj in zip(data, instances):
             item["tag_project_name"] = project_name_map.get(item.get("tag_project"), "")
+            item["can_delete"] = scope.can_delete(obj.created_user)
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

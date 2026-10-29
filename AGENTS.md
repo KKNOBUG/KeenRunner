@@ -58,6 +58,24 @@ frontend/
 - **数据源**：步骤面板 → `/autotest/data_source/{build,save_or_update,update_fields,...}` → `DataSourceService` 准入/矩阵清洗 → `DataSourceMatrixParser` → 落库；执行期 `DatasetLoader` 按 `dataset_name` 查库取场景（`cache_key` 仅落库，不参与读取）。
 - **性能压测**：场景编辑页唯一保存入口 `/perf/scene/save_wizard`（场景+负载预设事务内 upsert）；执行 `/perf/load_preset/run` → `run_perf_preset`（perf 队列）→ `PerfExecuteService.execute_pipeline`（建报告→拉起 Locust→轮询→分片聚合→落终态）。
 
+### 3.2 权限控制面（菜单 / 接口 / 数据行）
+
+- 角色是唯一权限载体：菜单由 `krun_role_menus` 绑定、接口由 `krun_role_routers` 绑定、数据行按资源族标签在「标签范围」配置；新角色不自动绑定任何权限，必须显式配置。
+- 管理员角色（`BuiltinRoleCode.ADMIN`=`Administrators`）与超管同权：`usermenu`/`get_user_routers`/`PermissionControl.has_permission`/`DependSuperUser`/`DataScope` 均直接全量放行，不依赖绑定记录；其角色编码不可修改、角色不可删除、绑定不可保存。内置角色码只从 `backend/enums/role_enum.py` 取，禁止散落字符串。
+- 资源锚点是路由声明的资源族标签（`一级目录:二级模块`，如 `自动化测试:用例`），由 `resolve_request_tag` 从 `request.scope["route"].tags` 显式读取，**禁止用 URL 前缀推断**；未声明标签归入 `legacy`。标签清单由 `krun_router.tags` 汇总，新增/调整标签后必须 `POST /base/router/refresh` 同步。
+- 角色三字段：`krun_role.select_scope`（可见）/`update_scope`（可写）/`delete_scope`（可删），取值 `ALL / DEPT_AND_CHILD / DEPT / SELF`，多角色取最宽（ALL > DEPT_AND_CHILD > DEPT > SELF）；新建角色默认 `DEPT_AND_CHILD/SELF/SELF`（schema 与库默认值一致）；超管与管理员角色不受限。
+- 标签覆盖：`krun_role_tag_scope(role_id, tag)` 每个标签可单独配置三范围，字段为空表示按角色默认范围生效（`krun_role` 三字段），三字段均未设置的标签不落库；管理端「标签范围」Tab 未覆盖的行直接回显角色默认枚举，选中具体值保存后才生成覆盖记录。
+- 未配置标签回落到角色默认范围；用户未挂角色时回退 SELF/SELF/SELF，超管、管理员角色与系统内部流程不受限。
+- 写/删范围始终收敛到可见范围（运行期 `_clamp_to_read`、保存期 `scope_covers` 校验），保证不可写入不可读取的数据。
+- 后端唯一入口 `backend/services/data_scope.py` 的 `DataScope`：`read_q(owner_field)` 构造列表过滤（`None` 表示不限），`can_write/can_delete(owner)` 判定归属，`for_tag(tag)` 按父资源族重解析，`DataScope.system()` 供任务执行、引擎回写等内部可信路径。部门范围按归属人**当前部门**动态解析，不落业务表快照。
+- 父资源可读校验（B 级）：用例/任务/标签/环境/环境配置的创建与配置更新经 `autotest_scope_guard` 校验所属项目/环境对当前用户可读，避免向不可见父资源挂载子资源。
+- 服务层写方法把 `scope: DataScope` 作为必填参数，越权抛 `NoPermissionException`；view 注入 `DependTagScope` 并 `except NoPermissionException: raise`（否则被 `except Exception` 吞掉），由全局处理器返回 403（`code=400403`，HTTP 200）。
+- 归属口径：用例为 `owner_user`（转让后变更），其余资源为 `created_user`；步骤与数据源归属跟随所属用例；环境字典 `created_user/updated_user` 取登录态，忽略请求体。用例转让始终仅当前所属人本人可操作；性能压测模块不参与数据权限收口。
+- 读过滤只作用于各资源**列表/主列表**接口；报告/明细批次下钻（`batch_code`/`task_code`）、项目/环境下拉、步骤树（按 `case_id`）不过滤。用例列表对 `PUBLIC_SCRIPT`/`PUBLIC_API` 放行。
+- 内置角色接口绑定：Guests 在业务域（应用/自动化/任务/工具）全部放行，系统域只读；接口放行不等于可删他人数据，删除归属校验在 service 层兜底。
+- 报告/明细写接口（create/update）仅超管或管理员角色可直调（`DependSuperUser`），执行引擎/内部流程走 service 直写；删除仍按归属人 + 接口权限双闸门。
+- 审计中间件只记录写/删/执行类动作（`common/permission_action.py` 的 `AUDITED_ACTIONS`），查询/下载直接透传，避免日志膨胀。
+
 ## 4. 编码规范（评审基准）
 
 ### 后端
@@ -75,7 +93,9 @@ frontend/
 ### 前端
 - Vue3 `<script setup>` 组合式 API；复杂页面逻辑拆到 `composables/useXXX.js`。
 - 业务路由不是手写静态表：由 `/base/auth/usermenu` 下发菜单动态生成，组件按 `/src/views{component}/index.vue` 解析；新增页面必须同步菜单记录，页面 `defineOptions({name})` 与菜单名一致（KeepAlive 的 include 依赖它）。
-- 接口权限键统一 `apiPermissionKey(method, path)`（`method + VITE_BASE_API + path`），按钮级用 `v-permission`；超管直通。
+- 接口权限键统一 `apiPermissionKey(method, path)`（`method + VITE_BASE_API + path`），按钮级用 `v-permission`；超管与管理员角色直通。
+- 行级删除显隐用 `userStore.canDeleteData(owner, can_delete)`：优先采用列表接口注入的 `can_delete`（后端按当前资源族的删除范围判定，含部门范围），缺失时回落归属账号比对；autotest 共享编辑不再按写入范围隐藏编辑入口。批量删除统一经 `composables/useBatchDeleteGuard` 的 `pickDeletableIds` 按同一结论过滤后再提交，避免整批被后端拒绝。
+- 接口权限显隐统一用 `composables/useApiPermission` 的 `hasApiPermission(method, path)`（或 `v-permission` 指令）；受限角色不应看到必然 403 的新增/批量删除/导入导出/下载按钮。角色表单的范围选项复用 `src/constants/dataScope.js`。
 - 请求统一走 `src/api/index.js` 与现有 request 工具，禁止新封装 axios 实例。成功判定为 `code === '000000' && status === 'success'`，401 自动登出；文件下载用裸 axios（带 token）+ `downloadBlobResponse`，不要套默认响应拦截器。
 - 弹层/表格/表单等复用现有通用组件与 Naive UI 组件，不重复造轮子。
 - 样式治理：`views/autotest` 是统一样式基准；基础 UI 样式优先复用 `styles/autotest-theme.scss` 全局类（`.step-editor-card`、`.log-item`、`.debug-loading` 等）；禁止在 scoped 样式里重复定义全局已有样式；多页面相似样式必须上收到全局基线并加作用域前缀。

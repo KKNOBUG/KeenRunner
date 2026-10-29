@@ -23,6 +23,7 @@ from backend.core.exceptions import (
     ParameterException,
     DataAlreadyExistsException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -32,6 +33,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
 )
+from backend.services import DataScope, DependTagScope
 
 autotest_case_transfer = APIRouter()
 
@@ -61,7 +63,7 @@ async def transfer_case(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"转让用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"转让失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"转让失败，异常描述: {e}")
 
 
@@ -69,24 +71,34 @@ async def transfer_case(
 async def get_case_transfer(
         transfer_id: Optional[int] = Query(None, description="转让记录ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据转让记录ID查询单条转让记录。
 
     :param transfer_id: 转让记录主键ID
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，转让双方或记录创建人可见
     :return: 统一HTTP响应
     """
     try:
         instance = await services.case_transfer_curd.get_by_id(transfer_id=transfer_id, on_error=True)
+        visible: bool = any(
+            scope.can_read(owner)
+            for owner in (instance.prev_owner_user, instance.next_owner_user, instance.created_user)
+        )
+        if not visible:  # 转让记录包含用例归属流转信息，仅相关人可见
+            raise NoPermissionException(message=f"查询转让记录失败, 记录[{transfer_id}]不在当前用户可见范围")
         data = await instance.to_dict(replace_fields={"id": "transfer_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"查询用例转让记录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -94,16 +106,24 @@ async def get_case_transfer(
 async def search_case_transfers(
         transfer_in: AutoTestCaseTransferSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件分页查询转让记录。
 
     :param transfer_in: 查询入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅返回转让双方或创建人在可见范围内的记录
     :return: 统一HTTP响应
     """
     try:
         q = Q()
+        if scope.read_owners is not None:
+            q &= (
+                    scope.read_q("prev_owner_user")
+                    | scope.read_q("next_owner_user")
+                    | scope.read_q("created_user")
+            )
         if transfer_in.transfer_id:
             q &= Q(id=transfer_in.transfer_id)
         if transfer_in.case_id:
@@ -138,5 +158,5 @@ async def search_case_transfers(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"分页查询用例转让记录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")

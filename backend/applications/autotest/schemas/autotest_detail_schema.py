@@ -364,3 +364,9 @@ class AutoTestDetailTreeSelect(BaseModel):
     only_failed: bool = Field(default=False, description="仅保留失败步骤及其祖先链")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     state: Optional[int] = Field(default=0, description="状态")
+
+
+class AutoTestDetailBatchDelete(BaseModel):
+    """批量删除执行明细入参。"""
+
+    detail_ids: List[int] = Field(..., min_length=1, description="明细ID列表")

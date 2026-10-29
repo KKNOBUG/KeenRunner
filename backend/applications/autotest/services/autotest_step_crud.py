@@ -34,6 +34,10 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
 from backend.applications.autotest.services.autotest_report_crud import AutoTestReportCrud
+from backend.applications.autotest.services.autotest_scope_guard import (
+    CASE_TAG,
+    assert_parent_readable,
+)
 from backend.applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -43,6 +47,7 @@ from backend.core.exceptions import (
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
+    NoPermissionException,
 )
 from backend.enums import (
     AutoTestCaseType,
@@ -52,6 +57,7 @@ from backend.enums import (
     AutoTestSessionTransfer,
     PUBLIC_CASE_TYPES
 )
+from backend.services import DataScope
 
 STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
     "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_form_file", "request_body",
@@ -169,12 +175,18 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             return await self.get_by_code(step_code=step_code, on_error=True, **kwargs)
         raise ParameterException(message="查询步骤信息失败, 参数[step_id, step_code]不允许同时为空")
 
-    async def get_case_tree(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseStepTreeLoadResult:
+    async def get_case_tree(
+            self,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None,
+            scope: Optional[DataScope] = None,
+    ) -> AutoTestCaseStepTreeLoadResult:
         """
         根据用例ID或case_code获取该用例的步骤树(含引用脚本步骤及统计)。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
+        :param scope: 数据权限上下文，传入时校验用例所属人的读范围
         :return: AutoTestCaseStepTreeLoadResult(根步骤为AutoTestStepTreeUpdateItem)
         """
         case_crud = AutoTestCaseCrud()
@@ -183,6 +195,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         else:
             case_instance: Optional[AutoTestCaseModel] = await case_crud.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id: int = case_instance.id
+
+        # 公共脚本/公共接口对所有用户可见，不随数据范围收窄；步骤权限跟随所属用例（父资源族）
+        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
 
         from collections import defaultdict
         roots_by_case: Dict[int, List[AutoTestStepModel]] = defaultdict(list)
@@ -351,15 +366,21 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             case_only_when_no_steps=case_only,
         )
 
-    async def get_copy_tree(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> Dict[str, Any]:
+    async def get_copy_tree(
+            self,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None,
+            scope: Optional[DataScope] = None,
+    ) -> Dict[str, Any]:
         """
         获取用例步骤树完整副本，用于复制后编辑且尚未落库。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
+        :param scope: 数据权限上下文，传入时校验用例所属人的读范围
         :return: {"case": {...}, "steps": [...]}，case中case_id/case_code置空
         """
-        load = await self.get_case_tree(case_id=case_id, case_code=case_code)
+        load = await self.get_case_tree(case_id=case_id, case_code=case_code, scope=scope)
 
         def strip_step_for_copy_model(step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
             """
@@ -399,12 +420,18 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         return {"case": case_info or {}, "steps": steps}
 
-    async def get_cases_splice_tree(self, case_ids: Optional[List[int]] = None, case_codes: Optional[List[str]] = None) -> Tuple[Dict[str, Any], int]:
+    async def get_cases_splice_tree(
+            self,
+            case_ids: Optional[List[int]] = None,
+            case_codes: Optional[List[str]] = None,
+            scope: Optional[DataScope] = None,
+    ) -> Tuple[Dict[str, Any], int]:
         """
         批量查询多用例步骤树并按用例顺序拼接为一个列表。
 
         :param case_ids: 用例主键ID列表，与case_codes二选一(同时传递时以case_ids为准)
         :param case_codes: 用例标识代码列表，与case_ids二选一
+        :param scope: 数据权限上下文，传入时逐个校验用例所属人的读范围
         :return: (拼接结果, 所有用例步骤总数)
         """
         if not case_ids and not case_codes:
@@ -421,7 +448,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         # gather结果与targets顺序严格一致，保证拼接顺序稳定；
         # 任一用例查询异常(如不存在)直接抛出并取消其余任务，语义与串行一致。
         loads = await asyncio.gather(*[
-            self.get_case_tree(case_id=target_id, case_code=target_code)
+            self.get_case_tree(case_id=target_id, case_code=target_code, scope=scope)
             for target_id, target_code in targets
         ])
 
@@ -444,15 +471,21 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         LOGGER.info(f"多用例步骤树拼接完成: 用例数={len(targets)}, 拼接节点数={len(details)}, 步骤总数={total_steps}")
         return {"details": details, "indexes": indexes}, total_steps
 
-    async def get_step_usage_projects(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> List[int]:
+    async def get_step_usage_projects(
+            self,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None,
+            scope: Optional[DataScope] = None,
+    ) -> List[int]:
         """
         从步骤树提取请求相关步骤所选应用ID并去重。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
+        :param scope: 数据权限上下文，传入时校验用例所属人的读范围
         :return: 去重后的project_id列表(升序)
         """
-        load = await self.get_case_tree(case_id=case_id, case_code=case_code)
+        load = await self.get_case_tree(case_id=case_id, case_code=case_code, scope=scope)
         project_ids: Set[int] = set()
 
         def _norm_step_type(st: Any) -> Optional[AutoTestStepType]:
@@ -504,17 +537,24 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         return sorted(project_ids)
 
-    async def create_step(self, step_in: AutoTestStepCreate) -> AutoTestStepModel:
+    async def create_step(self, step_in: AutoTestStepCreate, scope: DataScope) -> AutoTestStepModel:
         """
-        创建单条步骤，校验用例存在、父步骤存在且同用例，若同用例下step_no已存在则恢复并更新。
+        创建单条步骤，校验用例存在且允许当前用户写入、父步骤存在且同用例，若同用例下step_no已存在则恢复并更新。
 
         :param step_in: 步骤创建schema
+        :param scope: 数据权限上下文，步骤归属跟随用例所属人
         :return: 创建后的步骤实例
         """
         case_id: int = step_in.case_id
         step_no: int = step_in.step_no
         case_crud = AutoTestCaseCrud()
-        await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
+        case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
+        # 父用例可见是子资源准入前提，写范围仍按步骤当前标签收敛
+        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
+        if not scope.can_write(case_instance.owner_user):
+            error_message: str = f"新增步骤信息失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
         if step_in.parent_step_id:
             parent_step_id: int = step_in.parent_step_id
@@ -551,6 +591,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 raise DataBaseStorageException(message=error_message) from e
 
         try:
+            # 恢复软删步骤不得覆盖原创建人
+            step_dict.pop("created_user", None)
             step_dict["state"] = 0
             instance: AutoTestStepModel = await self.update(id=existing_step.id, obj_in=step_dict)
             return instance
@@ -559,11 +601,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_step(self, step_in: AutoTestStepUpdate) -> AutoTestStepModel:
+    async def update_step(self, step_in: AutoTestStepUpdate, scope: DataScope) -> AutoTestStepModel:
         """
-        更新单条步骤，支持根据step_id或step_code定位；校验step_no唯一、父步骤存在且无循环引用。
+        更新单条步骤，支持根据step_id或step_code定位；校验写入权限、step_no唯一、父步骤存在且无循环引用。
 
         :param step_in: 步骤更新schema
+        :param scope: 数据权限上下文，步骤归属跟随用例所属人(含迁移后的目标用例)
         :return: 更新后的步骤实例
         """
         step_id: Optional[int] = step_in.step_id
@@ -588,6 +631,16 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         if not update_dict:
             return instance
 
+        target_case = await AutoTestCaseCrud().get_by_id(
+            case_id=step_in.case_id or instance.case_id, on_error=True, state__not=1
+        )
+        # 迁移目标用例同样需可见，写范围仍按步骤当前标签收敛
+        await assert_parent_readable(scope, CASE_TAG, target_case, "用例")
+        if not scope.can_write(target_case.owner_user):
+            error_message: str = f"更新步骤信息失败, 用例[{target_case.case_name}]所属人[{target_case.owner_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+
         if "step_no" in update_dict:
             case_id = update_dict.get("case_id", instance.case_id)
             step_no = update_dict.get("step_no", instance.step_no)
@@ -602,10 +655,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 )
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
-
-        if "case_id" in update_dict:
-            case_id: int = update_dict.get("case_id", instance.case_id)
-            await AutoTestCaseCrud().get_by_id(case_id=case_id, on_error=True, state__not=1)
 
         if "parent_step_id" in update_dict:
             parent_step_id: Optional[int] = update_dict["parent_step_id"]
@@ -675,19 +724,32 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_step(self, step_id: Optional[int] = None, step_code: Optional[str] = None) -> AutoTestStepModel:
+    async def delete_step(
+            self,
+            scope: DataScope,
+            step_id: Optional[int] = None,
+            step_code: Optional[str] = None,
+    ) -> AutoTestStepModel:
         """
-        软删除单条步骤，需无子步骤。
+        物理删除单条步骤，需无子步骤；关联数据源与数据生成记录一并清理。
 
+        :param scope: 数据权限上下文，步骤归属跟随用例所属人
         :param step_id: 步骤主键ID，与step_code二选一
         :param step_code: 步骤标识代码，与step_id二选一
-        :return: 软删除后的步骤实例
+        :return: 删除前的步骤实例快照
         """
         if step_id:
             instance = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(step_code=step_code, on_error=True, state__not=1)
             step_id: int = instance.id
+
+        case_instance = await AutoTestCaseCrud().get_by_id(case_id=instance.case_id, on_error=True, state__not=1)
+        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
+        if not scope.can_write(case_instance.owner_user):
+            error_message: str = f"删除步骤信息失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
         children_count = await self.model.filter(parent_step_id=step_id, state__not=1).count()
         if children_count > 0:
@@ -698,7 +760,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        instance = await self.soft_delete(id=instance.id)
+        # 单删步骤与单删用例一致为物理删除，软删语义仅保留在批量与淘汰链路
+        await instance.delete()
         # 同步硬删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
         from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
         await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
@@ -946,6 +1009,15 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             else:
                 step_instance = None
 
+            # 步骤只属于定位到的那条用例：跨用例传入 step_id 会把他人步骤迁走，必须前置拒绝
+            if step_instance and step_data.case_id and int(step_instance.case_id or 0) != int(step_data.case_id):
+                error_message: str = (
+                    f"第{sid}步骤更新失败, 步骤[{step_code}]不属于用例[case_id={step_data.case_id}], "
+                    f"不允许跨用例迁移"
+                )
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+
             # 步骤不存在，执行新增，及验证必填字段
             if not step_instance:
                 if not case_id:
@@ -968,19 +1040,19 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     on_error=True,
                 )
 
-                existing_step_instance: Optional[AutoTestStepModel] = await self.get_by_conditions(
-                    only_one=True,
-                    on_error=False,
-                    state__not=1,
+                # 同一用例内 step_no 必须全局唯一（前端树序列化按全树前序统一编号）：
+                # 新增步骤尚未生成 step_code，若把 step_code=None 拼进查询条件会退化为 step_code IS NULL，
+                # 查不到库中已有记录，重复序号会被静默放行并落库成两条
+                existing_step_instance: Optional[AutoTestStepModel] = await self.model.filter(
                     case_id=case_id,
                     step_no=step_no,
-                    step_code=step_code,
-                )
+                    state__not=1,
+                ).first()
                 if existing_step_instance:
                     error_message: str = (
                         f"第{sid}步骤新增失败, "
                         f"根据(case_id={case_id}, step_no={step_no})条件查询步骤信息失败, "
-                        f"同一用例下步骤序号不允许重复"
+                        f"同一用例下步骤序号不允许重复(已存在step_code={existing_step_instance.step_code})"
                     )
                     LOGGER.error(error_message)
                     raise DataAlreadyExistsException(message=error_message)
@@ -1096,7 +1168,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                             )
                             created_count += child_result["created_count"]
                             updated_count += child_result["updated_count"]
-                            processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                            processed_step_codes[case_id].update(child_result["process_detail"].get(case_id, set()))
                             success_detail.extend(child_result.get("success_detail", []))
                 else:
                     children: List[AutoTestStepTreeUpdateItem] = step_data.children
@@ -1109,7 +1181,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                         )
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
-                        processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                        processed_step_codes[case_id].update(child_result["process_detail"].get(case_id, set()))
                         success_detail.extend(child_result.get("success_detail", []))
 
             # 步骤存在，执行更新
@@ -1287,9 +1359,17 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     stale_children_qs = self.model.filter(parent_step_id=step_id)
                     if retained_child_ids:
                         stale_children_qs = stale_children_qs.exclude(id__in=retained_child_ids)
-                    stale_ids = await stale_children_qs.values_list("id", flat=True)
-                    if stale_ids:
-                        await self.model.filter(id__in=list(stale_ids)).delete()
+                    stale_rows: List[Dict[str, Any]] = await stale_children_qs.values(
+                        "id", "step_code", "case_id"
+                    )
+                    if stale_rows:
+                        await self.model.filter(id__in=[row["id"] for row in stale_rows]).delete()
+                        # 分支子步骤同属淘汰步骤：同步硬删其数据源与生成记录，避免残留孤儿数据源
+                        from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
+                        await delete_step_create(
+                            case_id=int(stale_rows[0]["case_id"] or 0),
+                            step_code_list=[row["step_code"] for row in stale_rows if row["step_code"]],
+                        )
                     for bi, branch in enumerate(step_data.branch_items):
                         if branch.branch_children:
                             child_result = await self.batch_update_or_create_steps(
@@ -1301,7 +1381,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                             )
                             created_count += child_result["created_count"]
                             updated_count += child_result["updated_count"]
-                            processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                            processed_step_codes[case_id].update(child_result["process_detail"].get(case_id, set()))
                             success_detail.extend(child_result.get("success_detail", []))
                 else:
                     children: List[AutoTestStepTreeUpdateItem] = step_data.children
@@ -1314,7 +1394,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                         )
                         created_count += child_result["created_count"]
                         updated_count += child_result["updated_count"]
-                        processed_step_codes[case_id].update(child_result["process_detail"][case_id])
+                        processed_step_codes[case_id].update(child_result["process_detail"].get(case_id, set()))
                         success_detail.extend(child_result.get("success_detail", []))
 
         return {
@@ -1436,7 +1516,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 case_id=case_id,
                 case_state=case_state,
                 case_last_time=case_last_time,
-            ))
+            ), scope=DataScope.system())
         return {
             "success": statistics.get("failed_steps", 0) == 0,
             "total_steps": statistics.get("total_steps", 0),

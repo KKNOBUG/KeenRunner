@@ -36,6 +36,10 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
 )
 from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
 from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
+from backend.applications.autotest.services.autotest_scope_guard import (
+    CASE_TAG,
+    assert_parent_readable,
+)
 from backend.applications.autotest.services.autotest_step_debug_service import StepDebugService, StepDebugException
 from backend.applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
@@ -46,6 +50,7 @@ from backend.core.exceptions import (
     TypeRejectException,
     DataBaseStorageException,
     DataAlreadyExistsException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -56,7 +61,8 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     BadReqResponse
 )
-from backend.enums import AutoTestReportType, AutoTestStepType
+from backend.enums import AutoTestReportType, AutoTestStepType, PUBLIC_CASE_TYPES
+from backend.services import DataScope, DependTagScope
 
 autotest_step = APIRouter()
 
@@ -65,16 +71,18 @@ autotest_step = APIRouter()
 async def create_step(
         step_in: AutoTestStepCreate = Body(..., description="步骤信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增步骤。
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，步骤归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.step_curd.create_step(step_in)
+        instance = await services.step_curd.create_step(step_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -93,6 +101,8 @@ async def create_step(
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
         LOGGER.error(f"新增步骤失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
@@ -103,6 +113,7 @@ async def delete_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code删除步骤。
@@ -110,10 +121,11 @@ async def delete_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，步骤归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.step_curd.delete_step(step_id=step_id, step_code=step_code)
+        instance = await services.step_curd.delete_step(scope=scope, step_id=step_id, step_code=step_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -132,6 +144,8 @@ async def delete_step(
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
         LOGGER.error(f"根据id或code删除步骤信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
@@ -141,16 +155,18 @@ async def delete_step(
 async def update_step(
         step_in: AutoTestStepUpdate = Body(..., description="步骤信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code更新步骤。
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，步骤归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.step_curd.update_step(step_in)
+        instance = await services.step_curd.update_step(step_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -169,6 +185,8 @@ async def update_step(
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
         LOGGER.error(f"根据id或code更新步骤信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
@@ -179,6 +197,7 @@ async def get_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code查询步骤。
@@ -186,6 +205,7 @@ async def get_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验步骤所属用例是否在当前用户可见范围
     :return: 统一HTTP响应
     """
     try:
@@ -193,6 +213,9 @@ async def get_step(
             instance = await services.step_curd.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
             instance = await services.step_curd.get_by_code(step_code=step_code, on_error=True, state__not=1)
+        case_instance = await services.case_curd.get_by_id(case_id=instance.case_id, on_error=True, state__not=1)
+        # 公共脚本/公共接口对所有用户可见；步骤权限跟随所属用例（父资源族）
+        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -203,6 +226,8 @@ async def get_step(
             replace_fields={"id": "step_id"}
         )
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -216,12 +241,14 @@ async def get_step(
 async def search_steps(
         step_in: AutoTestStepSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件查询步骤。
 
     :param step_in: 步骤入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅返回所属用例在当前用户可见范围内的步骤
     :return: 统一HTTP响应
     """
     try:
@@ -244,6 +271,13 @@ async def search_steps(
         if step_in.quote_case_id:
             q &= Q(quote_case_id=step_in.quote_case_id)
         q &= Q(state=step_in.state)
+        owner_q = (await scope.for_tag(CASE_TAG)).read_q("owner_user")
+        if owner_q is not None:
+            # 公共脚本/公共接口对所有用户可见，不随数据范围收窄
+            visible_case_ids = await services.case_curd.model.filter(
+                owner_q | Q(case_type__in=PUBLIC_CASE_TYPES)
+            ).values_list("id", flat=True)
+            q &= Q(case_id__in=list(visible_case_ids) or [-1])
         total, instances = await services.step_curd.select_steps(
             search=q,
             page=step_in.page,
@@ -274,6 +308,7 @@ async def get_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code查询步骤树。
@@ -281,10 +316,11 @@ async def get_step_tree(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验用例所属人的读范围
     :return: 统一HTTP响应
     """
     try:
-        load = await services.step_curd.get_case_tree(case_id=case_id, case_code=case_code)
+        load = await services.step_curd.get_case_tree(case_id=case_id, case_code=case_code, scope=scope)
         if load.root_steps:
             data = [s.model_dump(mode="json") for s in load.root_steps]
         elif load.case_only_when_no_steps is not None:
@@ -293,6 +329,8 @@ async def get_step_tree(
             data = []
         total = load.step_counter.total_steps
         return SuccessResponse(message="查询成功", data=data, total=total)
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -307,6 +345,7 @@ async def copy_step_tree(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     复制用例步骤树（返回未保存的副本）。
@@ -314,13 +353,16 @@ async def copy_step_tree(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验用例所属人的读范围
     :return: 统一HTTP响应
     """
     try:
         if not case_id and not case_code:
             return BadReqResponse(message="参数[case_id, case_code]不允许为空")
-        copy_data = await services.step_curd.get_copy_tree(case_id=case_id, case_code=case_code)
+        copy_data = await services.step_curd.get_copy_tree(case_id=case_id, case_code=case_code, scope=scope)
         return SuccessResponse(message="复制成功", data=copy_data)
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -334,6 +376,7 @@ async def copy_step_tree(
 async def splice_step_tree(
         splice_in: AutoTestStepTreeSplice = Body(..., description="拼接查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     批量查询多用例步骤树并拼接为一个列表。
@@ -343,6 +386,7 @@ async def splice_step_tree(
 
     :param splice_in: 拼接查询入参(case_ids与case_codes二选一)
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，逐个校验用例所属人的读范围
     :return: 统一HTTP响应
     """
     try:
@@ -351,8 +395,11 @@ async def splice_step_tree(
         data, total = await services.step_curd.get_cases_splice_tree(
             case_ids=splice_in.case_ids,
             case_codes=splice_in.case_codes,
+            scope=scope,
         )
         return SuccessResponse(message="查询成功", data=data, total=total)
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -366,12 +413,14 @@ async def splice_step_tree(
 async def batch_update_steps_tree(
         tree_in: AutoTestStepTreeUpdateList = Body(..., description="步骤树数据(包含case和steps)"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     更新用例级步骤树。
 
     :param tree_in: 步骤树入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许保存所属人为自己的用例
     :return: 统一HTTP响应
     """
     try:
@@ -379,12 +428,12 @@ async def batch_update_steps_tree(
         case_data: AutoTestCaseUpdate = tree_in.case
         steps_data: List[AutoTestStepTreeUpdateItem] = tree_in.steps
 
-        # 1. 校验步骤树结构合法性
+        # 1. 校验步骤树结构合法性；详情同时回传 data，便于前端直接提示具体节点
         is_valid, error_msg = AutoTestToolService.validate_step_tree_structure(steps_data)
         if not is_valid:
             error_message: str = f"步骤树结构校验失败: {error_msg}"
             LOGGER.error(error_message)
-            return BadReqResponse(message=f"步骤树结构校验失败", data=error_msg)
+            return BadReqResponse(message=error_message, data=error_msg)
 
         # 1.5 校验数据源场景列名一致性（HTTP/TCP步骤 + 引用公共接口壳上挂载的数据源；含树上尚未带回 data_source_id、但库中已落库的数据源）
         def _walk_data_source_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
@@ -455,13 +504,15 @@ async def batch_update_steps_tree(
                     LOGGER.error(error_detail)
                     return BadReqResponse(message="数据源场景名称不一致，请先统一各步骤数据源的场景名称", data=error_detail)
 
+        # 用例与步骤共用树结构入口：用例落库按用例资源族校验写范围，避免借步骤标签绕过父用例边界
+        case_scope: DataScope = await scope.for_tag(CASE_TAG)
         try:
             # 2. 使用事务执行批量更新/新增
             async with in_transaction():
                 # 2.1 处理用例信息
                 cases_data: List[AutoTestCaseUpdate] = [case_data]
                 if cases_data:
-                    case_result: Dict[str, Any] = await services.case_curd.batch_update_or_create_cases(cases_data)
+                    case_result: Dict[str, Any] = await services.case_curd.batch_update_or_create_cases(cases_data, scope=case_scope)
                     created_case_count: int = case_result['created_count']
                     updated_case_count: int = case_result['updated_count']
                     success_case_detail: List[Dict[str, Any]] = case_result['success_detail']
@@ -569,6 +620,8 @@ async def batch_update_steps_tree(
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
         LOGGER.error(f"更新或创建用例级步骤树结构失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新用例及步骤树失败，异常描述: {e}")
@@ -743,12 +796,14 @@ async def debug_redis_request(
 async def execute_step_tree(
         exec_in: AutoTestStepTreeExecute = Body(..., description="步骤树数据"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     执行或调试步骤树。无steps为运行模式，有steps为调试模式。
 
     :param exec_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，执行会写报告/明细并回写用例，需先校验用例可见性
     :return: 统一HTTP响应
     """
     try:
@@ -765,6 +820,15 @@ async def execute_step_tree(
             return BadReqResponse(
                 message="必须提供case_id参数，运行模式不传递steps，调试模式需要传递steps"
             )
+
+        # 执行/调试都会写报告与明细并回写用例状态：先按标签可见范围校验用例归属
+        case_instance: AutoTestCaseModel = await services.case_curd.get_by_id(
+            case_id=case_id,
+            on_error=True,
+            state__not=1
+        )
+        # 执行/调试都会写报告与明细并回写用例状态：先按用例资源族校验归属
+        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
 
         def serialize_result(r: Any) -> Dict[str, Any]:
             """递归序列化步骤执行结果（含children）。"""
@@ -795,6 +859,7 @@ async def execute_step_tree(
                         steps_execute_config=steps_execute_config,
                         initial_variables=initial_variables,
                         report_type=AutoTestReportType.ASYNC_EXEC,
+                        preloaded_case=case_instance,
                     )
                     # 单次执行无"下一条数据源"，剔除变量池保持响应结构不变
                     result_data.pop("session_variables", None)
@@ -864,6 +929,8 @@ async def execute_step_tree(
                 return NotFoundResponse(message=str(e.message))
             except ParameterException as e:
                 return BadReqResponse(message=str(e.message))
+            except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+                raise
             except Exception as e:
                 error_message: str = (
                     f"执行步骤过程中发生异常，事务已回滚: "
@@ -884,11 +951,6 @@ async def execute_step_tree(
                 "case_name": first_step.get("case_name"),
             }
         if not case_info:
-            case_instance: AutoTestCaseModel = await services.case_curd.get_by_id(
-                case_id=case_id,
-                on_error=True,
-                state__not=1
-            )
             case_info = {
                 "case_id": case_id,
                 "case_code": case_instance.case_code,
@@ -935,7 +997,8 @@ async def execute_step_tree(
                     case_id=case_id,
                     case_state=case_state,
                     case_last_time=case_last_time,
-                )
+                ),
+                scope=DataScope.system(),
             )
 
         final_m: Dict[str, StepVariablesBase] = {}
@@ -975,6 +1038,8 @@ async def execute_step_tree(
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except Exception as e:
         LOGGER.error(f"执行或调试步骤树失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"执行或调试步骤树失败，异常描述: {e}")
@@ -984,16 +1049,30 @@ async def execute_step_tree(
 async def batch_execute_cases(
         batch_in: AutoTestBatchExecuteCases = Body(..., description="批量执行请求参数"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     批量执行用例。
 
     :param batch_in: 业务入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，执行会写报告/明细，需先校验全部用例可见性
     :return: 统一HTTP响应
     """
     try:
         case_ids = batch_in.case_ids
+        # 一次性载入全部用例校验归属，避免循环内查库；用例归属按用例资源族收敛
+        case_instances = await AutoTestCaseModel.filter(id__in=case_ids, state__not=1)
+        case_scope: DataScope = await scope.for_tag(CASE_TAG)
+        for case_instance in case_instances:
+            if case_instance.case_type in PUBLIC_CASE_TYPES or case_scope.can_read(case_instance.owner_user):
+                continue
+            error_message: str = (
+                f"用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]不在当前用户可见范围"
+            )
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+
         initial_variables = batch_in.initial_variables or []
         if batch_in.env_name:
             LOGGER.warning(
@@ -1008,6 +1087,8 @@ async def batch_execute_cases(
         )
         LOGGER.info(f"批量执行用例任务挂载成功, case_ids={case_ids}")
         return SuccessResponse(message="任务挂载成功, 请稍候至报告中心查看结果", data=exec_result)
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except Exception as e:
         LOGGER.error(f"批量执行用例失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"批量执行失败，异常描述: {e}")

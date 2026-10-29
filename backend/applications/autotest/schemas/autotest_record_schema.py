@@ -101,3 +101,9 @@ class AutoTestRecordSelect(BaseModel):
     celery_start_time_end: Optional[str] = Field(None, max_length=32, description="Celery开始时间止")
     celery_end_time_begin: Optional[str] = Field(None, max_length=32, description="Celery结束时间起")
     celery_end_time_end: Optional[str] = Field(None, max_length=32, description="Celery结束时间止")
+
+
+class AutoTestRecordBatchDelete(BaseModel):
+    """批量删除执行记录入参。"""
+
+    record_ids: List[int] = Field(..., min_length=1, description="执行记录ID列表")

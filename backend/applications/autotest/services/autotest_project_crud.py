@@ -28,7 +28,9 @@ from backend.core.exceptions import (
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
+    NoPermissionException,
 )
+from backend.services import DataScope
 
 
 class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCreate, AutoTestProjectUpdate]):
@@ -132,11 +134,12 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_project(self, project_in: AutoTestProjectCreate) -> AutoTestProjectModel:
+    async def create_project(self, project_in: AutoTestProjectCreate, scope: Optional[DataScope] = None) -> AutoTestProjectModel:
         """
-        创建应用；同名软删记录恢复并更新，活跃同名报错。
+        创建应用；同名软删记录在写权限内恢复并更新，活跃同名报错。
 
         :param project_in: 应用创建schema
+        :param scope: 数据权限上下文，恢复软删应用时要求创建人允许当前用户写入
         :return: 创建或恢复后的应用实例
         """
         project_name: str = project_in.project_name
@@ -166,7 +169,14 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
+        # 软删恢复不得跨写范围接管他人应用，且不覆盖原创建人
+        if scope is not None and not scope.can_write(existing_project.created_user):
+            error_message: str = f"新增应用信息失败, 应用[{project_name}]创建人[{existing_project.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+
         try:
+            project_dict.pop("created_user", None)
             project_dict["state"] = 0
             instance: AutoTestProjectModel = await self.update(id=existing_project.id, obj_in=project_dict)
             return instance
@@ -175,11 +185,12 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_project(self, project_in: AutoTestProjectUpdate) -> AutoTestProjectModel:
+    async def update_project(self, project_in: AutoTestProjectUpdate, scope: DataScope) -> AutoTestProjectModel:
         """
         更新应用，根据project_id或project_code定位并校验名称唯一。
 
         :param project_in: 应用更新schema
+        :param scope: 数据权限上下文，仅允许修改创建人为自己的应用
         :return: 更新后的应用实例
         """
         project_id: Optional[int] = project_in.project_id
@@ -193,6 +204,11 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         else:
             instance = await self.get_by_code(project_code=project_code, on_error=True, state__not=1)
             project_id = instance.id
+
+        if not scope.can_write(instance.created_user):
+            error_message: str = f"更新应用信息失败, 应用[{instance.project_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
         update_dict: Dict[str, Any] = project_in.model_dump(
             exclude_none=True,
@@ -225,17 +241,57 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
+    async def assert_project_deletable(self, instance: AutoTestProjectModel) -> None:
+        """
+        校验应用不存在引用关系：用例、标签、环境绑定、环境配置、任务。
+
+        :param instance: 待删除应用实例
+        :raises DataBaseStorageException: 存在引用关系时拒绝删除
+        """
+        from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
+
+        pid: int = instance.id
+        cases_count = await AutoTestCaseCrud().model.filter(case_project=pid, state__not=1).count()
+        if cases_count > 0:
+            msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
+            LOGGER.error(msg)
+            raise DataBaseStorageException(message=msg)
+        env_bind_ids = await AutoTestEnvBindModel.filter(project_id=pid, state__not=1).values_list("id", flat=True)
+        if env_bind_ids:
+            config_count = await AutoTestEnvConfigModel.filter(
+                env_bind_id__in=list(env_bind_ids), state__not=1
+            ).count()
+            if config_count > 0:
+                msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
+                LOGGER.error(msg)
+                raise DataBaseStorageException(message=msg)
+            msg = f"应用[name={instance.project_name}]存在{len(env_bind_ids)}条环境绑定, 无法直接删除"
+            LOGGER.error(msg)
+            raise DataBaseStorageException(message=msg)
+        tag_count = await AutoTestTagCrud().model.filter(tag_project=pid, state__not=1).count()
+        if tag_count > 0:
+            msg = f"应用[name={instance.project_name}]存在{tag_count}个标签信息, 无法直接删除"
+            LOGGER.error(msg)
+            raise DataBaseStorageException(message=msg)
+        task_count = await AutoTestTaskModel.filter(task_project=pid, state__not=1).count()
+        if task_count > 0:
+            msg = f"应用[name={instance.project_name}]存在{task_count}个任务, 无法直接删除"
+            LOGGER.error(msg)
+            raise DataBaseStorageException(message=msg)
+
     async def delete_project(
             self,
+            scope: DataScope,
             project_id: Optional[int] = None,
             project_code: Optional[str] = None
     ) -> AutoTestProjectModel:
         """
-        软删除应用；需无关联用例、环境配置明细、标签。
+        物理删除应用；需无关联用例、环境绑定、标签、任务。
 
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
         :param project_id: 应用主键ID，与project_code二选一
         :param project_code: 应用标识代码，与project_id二选一
-        :return: 软删除后的应用实例
+        :return: 删除后的应用实例快照
         """
         if not project_id and not project_code:
             error_message: str = "删除应用信息失败, 参数[project_id, project_code]不允许同时为空"
@@ -246,35 +302,21 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         else:
             instance = await self.get_by_code(project_code=project_code, on_error=True, state__not=1)
 
-        pid: int = instance.id
-        cases_count = await AutoTestCaseCrud().model.filter(case_project=pid, state__not=1).count()
-        if cases_count > 0:
-            msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
-            LOGGER.error(msg)
-            raise DataBaseStorageException(message=msg)
-        config_count = 0
-        env_bind_ids = await AutoTestEnvBindModel.filter(project_id=pid, state__not=1).values_list("id", flat=True)
-        if env_bind_ids:
-            config_count = await AutoTestEnvConfigModel.filter(
-                env_bind_id__in=list(env_bind_ids), state__not=1
-            ).count()
-        if config_count > 0:
-            msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
-            LOGGER.error(msg)
-            raise DataBaseStorageException(message=msg)
-        tag_count = await AutoTestTagCrud().model.filter(tag_project=pid, state__not=1).count()
-        if tag_count > 0:
-            msg = f"应用[name={instance.project_name}]存在{tag_count}个标签信息, 无法直接删除"
-            LOGGER.error(msg)
-            raise DataBaseStorageException(message=msg)
+        if not scope.can_delete(instance.created_user):
+            error_message: str = f"删除应用信息失败, 应用[{instance.project_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
-        return await self.soft_delete(id=instance.id)
+        await self.assert_project_deletable(instance)
+        await instance.delete()
+        return instance
 
-    async def delete_projects(self, project_in: AutoTestProjectDelete) -> int:
+    async def delete_projects(self, project_in: AutoTestProjectDelete, scope: DataScope) -> int:
         """
-        根据ID或code列表批量软删除应用；逐条复用单删关联校验。
+        根据ID或code列表批量软删除应用；软删与物理删同样拒绝存在引用关系的应用。
 
         :param project_in: 应用删除schema
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
         :return: 更新条数
         """
         project_ids: Optional[List[int]] = project_in.project_ids
@@ -317,31 +359,14 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
                     raise NotFoundException(message=error_message)
                 targets.append(instance)
 
-        # 逐条复用单删关联校验(校验与软删逐项交错，保持失败时前序项已删的原行为)；
-        # 软删走批量入口消除单条soft_delete内部的冗余SELECT
+        if not all(scope.can_delete(instance.created_user) for instance in targets):
+            error_message: str = "删除应用信息失败, 存在非当前用户创建的应用, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+        # 软删同样受引用关系约束：先全量校验再落库，保证批量操作全有或全无
         for instance in targets:
-            pid: int = instance.id
-            cases_count = await AutoTestCaseCrud().model.filter(case_project=pid, state__not=1).count()
-            if cases_count > 0:
-                msg = f"应用[name={instance.project_name}]存在{cases_count}个用例, 无法直接删除"
-                LOGGER.error(msg)
-                raise DataBaseStorageException(message=msg)
-            config_count = 0
-            env_bind_ids = await AutoTestEnvBindModel.filter(project_id=pid, state__not=1).values_list("id", flat=True)
-            if env_bind_ids:
-                config_count = await AutoTestEnvConfigModel.filter(
-                    env_bind_id__in=list(env_bind_ids), state__not=1
-                ).count()
-            if config_count > 0:
-                msg = f"应用[name={instance.project_name}]存在{config_count}条环境配置, 无法直接删除"
-                LOGGER.error(msg)
-                raise DataBaseStorageException(message=msg)
-            tag_count = await AutoTestTagCrud().model.filter(tag_project=pid, state__not=1).count()
-            if tag_count > 0:
-                msg = f"应用[name={instance.project_name}]存在{tag_count}个标签信息, 无法直接删除"
-                LOGGER.error(msg)
-                raise DataBaseStorageException(message=msg)
-            await self.soft_delete_batch(ids=[pid])
+            await self.assert_project_deletable(instance)
+        await self.soft_delete_batch(ids=[instance.id for instance in targets])
         return len(targets)
 
     async def select_projects(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestProjectModel]]:
@@ -361,15 +386,24 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def get_all_project(self, page: int = 1, page_size: int = 10000) -> Tuple[List[Dict[str, Any]], int]:
+    async def get_all_project(
+            self,
+            page: int = 1,
+            page_size: int = 10000,
+            scope: Optional[DataScope] = None,
+    ) -> Tuple[List[Dict[str, Any]], int]:
         """
         分页查询全部启用应用。
 
         :param page: 页码
         :param page_size: 每页条数
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的应用
         :return: ([{project_id, project_name, project_mark}], total)；project_id为应用主键id，project_mark取project_code
         """
         query = self.model.filter(state=0)
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        if owner_q is not None:
+            query = query.filter(owner_q)
         total = await query.count()
         rows = await query.offset((page - 1) * page_size).limit(page_size).values(
             "id", "project_name", "project_code"

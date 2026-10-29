@@ -38,12 +38,17 @@ from backend.applications.autotest.schemas.autotest_data_source_schema import (
 from backend.applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
+from backend.applications.autotest.services.autotest_scope_guard import (
+    CASE_TAG,
+    assert_parent_readable,
+)
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import (
     NotFoundException,
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -56,7 +61,7 @@ from backend.core.responses import (
     FileExtensionResponse
 )
 from backend.enums import AutoTestStepType, PUBLIC_CASE_TYPES
-from backend.services import get_current_username
+from backend.services import DataScope, DependTagScope, get_current_username
 from backend.services.file_transfer import FileTransfer
 
 autotest_data_source = APIRouter()
@@ -77,6 +82,23 @@ async def _serialize_data_source(instance: AutoTestDataSourceModel) -> Dict[str,
     )
     # Excel/pandas可能留下NaN，标准JSON无法序列化
     return DataSourceMatrixParser.json_safe_value(data)
+
+
+async def _assert_case_readable(
+        services: AutoTestServices,
+        scope: DataScope,
+        case_id: Optional[int] = None,
+        case_code: Optional[str] = None,
+) -> None:
+    """数据源严格归属于用例，读接口统一按用例所属人校验可见范围。"""
+    if case_id:
+        case_instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
+    elif (case_code or "").strip():
+        case_instance = await services.case_curd.get_by_code(case_code=case_code.strip(), on_error=True, state__not=1)
+    else:
+        raise ParameterException(message="参数[case_id, case_code]不允许为空")
+    # 公共脚本/公共接口对所有用户可见；数据源权限跟随所属用例（父资源族）
+    await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
 
 
 async def _remove_upload_file(file_path: str) -> None:
@@ -161,6 +183,7 @@ def _stream_xlsx_response(output: io.BytesIO, file_name: str) -> StreamingRespon
 async def create_data_source(
         data_source_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     为指定用例步骤创建数据源。
@@ -170,6 +193,7 @@ async def create_data_source(
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
@@ -182,6 +206,11 @@ async def create_data_source(
         )
         DataSourceService.ensure_request_step(step, case=case)
         DataSourceService.ensure_case_allows_data_source(case)
+        await assert_parent_readable(scope, CASE_TAG, case, "用例")
+        if not scope.can_write(case.owner_user):
+            raise NoPermissionException(
+                message=f"新增数据源失败, 用例[{case.case_name}]所属人[{case.owner_user}]非当前用户, 无权操作"
+            )
         parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         effective = data_source_in
         if parsed:
@@ -211,8 +240,10 @@ async def create_data_source(
         return ParameterResponse(message=str(e))
     except ValueError as e:
         return BadReqResponse(message=f"解析表格数据失败: {e}")
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"新增数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"新增失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
@@ -225,6 +256,7 @@ async def delete_data_source(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     删除数据源并清空对应步骤的data_source_id/name/desc。
@@ -238,6 +270,7 @@ async def delete_data_source(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
@@ -251,6 +284,7 @@ async def delete_data_source(
             step_code=step_code,
             on_error=True,
         )
+        await DataSourceService.ensure_data_source_writable(services, instance=instance, scope=scope)
         async with in_transaction():
             deleted = await services.data_source_curd.hard_delete(id=instance.id)
             await DataSourceService.clear_step_data_source_meta(services, case_id=instance.case_id, step_code=instance.step_code)
@@ -260,8 +294,10 @@ async def delete_data_source(
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"软删除数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -269,12 +305,14 @@ async def delete_data_source(
 async def unbind_case_data_source(
         data_in: AutoTestDataSourceUnbindCase = Body(..., description="用例定位"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     解绑指定用例下全部HTTP/TCP请求步骤的数据源：软删记录并清空步骤指针。
 
     :param data_in: case_id或case_code
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
@@ -283,6 +321,11 @@ async def unbind_case_data_source(
             case_code=data_in.case_code,
             state__not=1
         )
+        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
+        if not scope.can_write(case_instance.owner_user):
+            raise NoPermissionException(
+                message=f"解绑用例数据源失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
+            )
         async with in_transaction():
             source_ids = await services.data_source_curd.model.filter(
                 case_id=case_instance.id,
@@ -295,8 +338,10 @@ async def unbind_case_data_source(
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"解绑用例下全部数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"解绑失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"解绑失败，异常描述: {e}")
 
 
@@ -304,12 +349,14 @@ async def unbind_case_data_source(
 async def update_data_source(
         data_source_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     更新已存在的数据源。定位规则与删除相同；记录不存在则失败，不新建。
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
@@ -323,6 +370,7 @@ async def update_data_source(
             step_code=data_source_in.step_code,
             on_error=True,
         )
+        await DataSourceService.ensure_data_source_writable(services, instance=existing, scope=scope)
         parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         updates: Dict[str, Any] = {
             "data_source_id": existing.id,
@@ -353,8 +401,10 @@ async def update_data_source(
         return ParameterResponse(message=str(e))
     except ValueError as e:
         return BadReqResponse(message=f"解析表格数据失败: {e}")
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"更新数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -362,6 +412,7 @@ async def update_data_source(
 async def save_or_update_data_source(
         data_source_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     保存或更新数据源。
@@ -372,6 +423,7 @@ async def save_or_update_data_source(
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
@@ -380,7 +432,7 @@ async def save_or_update_data_source(
             parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         except ParameterException:
             # 空表格保存视为解绑意图：软删已有数据源记录并清空步骤指针
-            unbound = await _unbind_empty_data_source(services, data_source_in, has_ds_locator)
+            unbound = await _unbind_empty_data_source(services, data_source_in, has_ds_locator, scope)
             return SuccessResponse(message="数据源场景数据为空, 尝试解绑该步骤的数据源", data={"unbound": unbound}, total=1)
 
         if parsed:
@@ -393,10 +445,11 @@ async def save_or_update_data_source(
                     data_source_code=data_source_in.data_source_code,
                     on_error=True,
                 )
-                # 定位分支绕过创建准入：归属用例类型/步骤可挂载/入参归属一致须补校验
+                # 定位分支绕过创建准入：归属用例类型/步骤可挂载/入参归属一致/写入权限须补校验
                 await DataSourceService.ensure_data_source_writable(
                     services,
                     instance=existing,
+                    scope=scope,
                     case_id=data_source_in.case_id,
                     case_code=data_source_in.case_code,
                 )
@@ -416,6 +469,11 @@ async def save_or_update_data_source(
                 )
                 DataSourceService.ensure_request_step(step, case=case)
                 DataSourceService.ensure_case_allows_data_source(case)
+                await assert_parent_readable(scope, CASE_TAG, case, "用例")
+                if not scope.can_write(case.owner_user):
+                    raise NoPermissionException(
+                        message=f"保存数据源失败, 用例[{case.case_name}]所属人[{case.owner_user}]非当前用户, 无权操作"
+                    )
                 existing = await services.data_source_curd.get_by_case_step(
                     case_id=case.id,
                     step_code=step.step_code,
@@ -462,8 +520,10 @@ async def save_or_update_data_source(
         return ParameterResponse(message=str(e))
     except ValueError as e:
         return BadReqResponse(message=f"解析表格数据失败: {e}")
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"保存或更新数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"保存失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"保存失败，异常描述: {e}")
 
 
@@ -471,13 +531,15 @@ async def _unbind_empty_data_source(
         services: AutoTestServices,
         data_source_in: AutoTestDataSourceSaveOrUpdate,
         has_ds_locator: bool,
+        scope: DataScope,
 ) -> bool:
     """
-    空表格保存时的解绑处理：定位已绑定记录则软删并清空步骤指针。
+    空表格保存时的解绑处理：定位已绑定记录且当前用户可写则软删并清空步骤指针。
 
     :param services: 自动化测试CRUD依赖聚合
     :param data_source_in: 数据源入参(用于定位用例/步骤)
     :param has_ds_locator: 入参是否携带data_source_id或data_source_code
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 是否实际执行了解绑(定位到并软删了记录)
     """
     kwargs: Dict[str, Any] = {"services": services, "on_error": True}
@@ -496,6 +558,7 @@ async def _unbind_empty_data_source(
     instance: Optional[AutoTestDataSourceModel] = await DataSourceService.resolve_enabled_data_source(**kwargs)
     if instance is None:
         return False
+    await DataSourceService.ensure_data_source_writable(services, instance=instance, scope=scope)
     async with in_transaction():
         await services.data_source_curd.soft_delete(id=instance.id)
         await DataSourceService.clear_step_data_source_meta(
@@ -511,6 +574,7 @@ async def _unbind_empty_data_source(
 async def update_data_source_fields(
         data_in: AutoTestDataSourceUpdateFields = Body(..., description="数据源定位"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     按步骤当前报文同步数据源矩阵字段。
@@ -520,6 +584,7 @@ async def update_data_source_fields(
 
     :param data_in: 数据源定位入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     try:
@@ -547,6 +612,7 @@ async def update_data_source_fields(
         await DataSourceService.ensure_data_source_writable(
             services,
             instance=instance,
+            scope=scope,
             case_id=case.id,
             case_code=case.case_code,
         )
@@ -560,8 +626,10 @@ async def update_data_source_fields(
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"同步数据源字段失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"同步失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"同步失败，异常描述: {e}")
 
 
@@ -569,6 +637,7 @@ async def update_data_source_fields(
 async def build_data_source(
         build_in: AutoTestDataSourceBuild = Body(..., description="数据源矩阵构建定位条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     获取用例下指定步骤的数据源结构，只查询不落库。
@@ -577,6 +646,7 @@ async def build_data_source(
 
     :param build_in: 数据源矩阵构建定位条件
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按数据源所属用例校验可见范围
     :return: 统一HTTP响应
     """
     try:
@@ -588,6 +658,7 @@ async def build_data_source(
                 data_source_code=build_in.data_source_code,
                 on_error=True,
             )
+            await _assert_case_readable(services, scope, case_id=instance.case_id)
             data = await _serialize_data_source(instance)
             data["data_original"] = await _collect_report_original(services, instance)
             return SuccessResponse(message="查询成功", data=data, total=1)
@@ -599,6 +670,7 @@ async def build_data_source(
             step_id=build_in.step_id,
             step_code=build_in.step_code,
         )
+        await _assert_case_readable(services, scope, case_id=case.id)
         DataSourceService.ensure_request_step(step, case=case)
         existing = await services.data_source_curd.get_by_case_step(
             case_id=case.id,
@@ -634,12 +706,14 @@ async def build_data_source(
             "data_original": DataSourceService.collect_step_report_original(datagram_step),
         }
         return SuccessResponse(message="构建成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message), data=getattr(e, "data", None))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"构建数据源矩阵失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -652,6 +726,7 @@ async def get_data_source(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件查询单条数据源信息。
@@ -665,6 +740,7 @@ async def get_data_source(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按数据源所属用例校验可见范围
     :return: 统一HTTP响应
     """
     try:
@@ -689,14 +765,17 @@ async def get_data_source(
             return ParameterResponse(message="请提供数据源标识或用例与步骤标识进行查询")
         if isinstance(instance, list):
             return ParameterResponse(message="当前条件匹配多条记录，请改用列表查询接口")
+        await _assert_case_readable(services, scope, case_id=instance.case_id)
         data = await _serialize_data_source(instance)
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message), data=e.data)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件查询单条数据源信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -704,6 +783,7 @@ async def get_data_source(
 async def get_dataset_names(
         case_id: int = Form(..., description="用例ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     案例数据场景查询。
@@ -712,11 +792,13 @@ async def get_dataset_names(
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 统一HTTP响应
     """
     if not case_id:
         return ParameterResponse(message="参数[case_id]不允许为空")
 
+    await _assert_case_readable(services, scope, case_id=case_id)
     data_source_instances = await services.data_source_curd.model.filter(
         case_id=case_id,
         state__not=1
@@ -738,16 +820,22 @@ async def get_dataset_names(
 async def search_data_sources(
         data_source_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件分页查询数据源。
 
     :param data_source_in: 数据源查询入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按所属用例所属人过滤可见范围
     :return: 统一HTTP响应
     """
     try:
         q = Q()
+        owner_q = (await scope.for_tag(CASE_TAG)).read_q("owner_user")
+        if owner_q is not None:
+            visible_case_ids = await services.case_curd.model.filter(owner_q).values_list("id", flat=True)
+            q &= Q(case_id__in=list(visible_case_ids) or [-1])
         if data_source_in.data_source_id:
             q &= Q(id=data_source_in.data_source_id)
         if data_source_in.data_source_code:
@@ -779,7 +867,7 @@ async def search_data_sources(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件分页查询数据源列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -790,6 +878,7 @@ async def get_data_source_by_case_step(
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 
 ):
     """
@@ -802,9 +891,11 @@ async def get_data_source_by_case_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 统一HTTP响应
     """
     try:
+        await _assert_case_readable(services, scope, case_id=case_id, case_code=case_code)
         result = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
             case_code=case_code,
@@ -818,12 +909,14 @@ async def get_data_source_by_case_step(
             return SuccessResponse(message="查询成功", data=serializes, total=len(serializes))
         data = await _serialize_data_source(result)
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据用例与步骤查询数据源失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -832,6 +925,7 @@ async def get_scene_names_by_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     返回当前用例下所有已落库数据源的场景列名信息，用于无数据源绑定步骤生成空白模板。
@@ -839,6 +933,7 @@ async def get_scene_names_by_case(
     :param case_id: 用例主键ID
     :param case_code: 用例标识代码
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 统一HTTP响应
     """
     try:
@@ -857,6 +952,7 @@ async def get_scene_names_by_case(
 
         if not effective_case_id:
             return NotFoundResponse(message="未找到对应用例信息")
+        await _assert_case_readable(services, scope, case_id=effective_case_id)
 
         # 查询该用例下所有未软删的数据源
         data_source_instances = await services.data_source_curd.get_by_case_step(
@@ -917,12 +1013,14 @@ async def get_scene_names_by_case(
         if not data_source_len:
             data_source_scenes["default"] = DataSourceService.build_blank_vertical_matrix()
         return SuccessResponse(message="查询成功", data=data_source_scenes, total=data_source_len)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据用例查询已落库数据源场景列名失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -932,6 +1030,7 @@ async def get_dataset_scenario(
         step_code: str = Query(..., description="步骤标识代码"),
         dataset_name: str = Query(..., description="数据集/场景名称"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     查询某步骤下单个数据集场景。
@@ -940,9 +1039,11 @@ async def get_dataset_scenario(
     :param step_code: 步骤业务标识
     :param dataset_name: 数据集场景名称
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 统一HTTP响应
     """
     try:
+        await _assert_case_readable(services, scope, case_id=case_id)
         scenario = await services.data_source_curd.get_dataset_scenario(
             case_id=case_id,
             step_code=step_code,
@@ -952,8 +1053,10 @@ async def get_dataset_scenario(
         if scenario is None:
             return SuccessResponse(message="未找到场景数据", data=None, total=0)
         return SuccessResponse(message="查询成功", data=scenario, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except Exception as e:
-        LOGGER.error(f"查询某步骤下单个数据集场景失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -990,6 +1093,7 @@ async def single_step_dataset_upload(
         file_desc: Optional[str] = Form(None, description="数据源文件描述"),
         file: UploadFile = File(..., description="数据源文件(仅支持.xlsx后缀, 单步骤模式仅读取第1个Sheet页)"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     参数化驱动-单步骤数据集上传。
@@ -1000,6 +1104,7 @@ async def single_step_dataset_upload(
     :param file_desc: 文件描述
     :param file: 上传文件
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     if not (file.filename or "").endswith(".xlsx"):
@@ -1037,6 +1142,11 @@ async def single_step_dataset_upload(
         return FailureResponse(message=f"查询用例失败，异常描述: {e}")
     if case_instance.case_type in PUBLIC_CASE_TYPES:
         return BadReqResponse(message="公共脚本/公共接口不允许使用数据源")
+    await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
+    if not scope.can_write(case_instance.owner_user):
+        error_message: str = f"数据源文件上传失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
+        LOGGER.error(error_message)
+        raise NoPermissionException(message=error_message)
 
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
@@ -1129,6 +1239,7 @@ async def single_step_dataset_download(
         step_id: int = Query(..., description="步骤ID"),
         step_code: str = Query(..., description="步骤标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据用例步骤导出数据源xlsx，sheet名为步骤名称。
@@ -1139,9 +1250,11 @@ async def single_step_dataset_download(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 文件流响应
     """
     try:
+        await _assert_case_readable(services, scope, case_id=case_id)
         instance = await services.data_source_curd.get_by_case_step(
             case_id=case_id,
             step_id=step_id,
@@ -1162,6 +1275,8 @@ async def single_step_dataset_download(
 
         file_name = f"数据源导出_{step_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -1177,6 +1292,7 @@ async def single_step_template_download(
         step_id: int = Query(..., description="步骤ID"),
         step_code: str = Query(..., description="步骤标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     下载步骤数据源模板xlsx：按当前HTTP/TCP步骤报文构建默认原始数据(垂直矩阵)，值留空。
@@ -1187,9 +1303,11 @@ async def single_step_template_download(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 文件流响应
     """
     try:
+        await _assert_case_readable(services, scope, case_id=case_id)
         # 模板矩阵依赖请求报文字段，需加载完整步骤记录
         step_instance = await services.step_curd.model.filter(
             id=step_id, case_id=case_id, step_code=step_code, state__not=1
@@ -1226,6 +1344,7 @@ async def batch_step_dataset_upload(
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
         file: UploadFile = File(..., description="xlsx 文件(每个 sheet 名须对应步骤树中一个可挂载数据源步骤(HTTP/TCP/引用公共接口)的步骤名)"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     参数化驱动-多步骤数据集批量上传。
@@ -1240,6 +1359,7 @@ async def batch_step_dataset_upload(
     :param file_desc: 文件描述
     :param file: 上传文件
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，数据源归属跟随用例所属人
     :return: 统一HTTP响应
     """
     if not case_id:
@@ -1284,6 +1404,11 @@ async def batch_step_dataset_upload(
         return FailureResponse(message=f"查询用例失败，异常描述: {e}")
     if case_instance.case_type in PUBLIC_CASE_TYPES:
         return BadReqResponse(message="公共脚本/公共接口不允许使用数据源，无法批量上传数据源")
+    await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
+    if not scope.can_write(case_instance.owner_user):
+        error_message: str = f"批量上传数据源失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
+        LOGGER.error(error_message)
+        raise NoPermissionException(message=error_message)
 
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
@@ -1401,6 +1526,7 @@ async def batch_step_dataset_upload(
 async def batch_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     汇总导出用例下所有可挂载数据源步骤(HTTP/TCP/引用公共接口)绑定的数据源为单个xlsx。
@@ -1409,9 +1535,11 @@ async def batch_step_dataset_download(
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 文件流响应
     """
     try:
+        await _assert_case_readable(services, scope, case_id=case_id)
         data_sources = await services.data_source_curd.get_by_case_step(case_id=case_id, state__not=1)
         if not data_sources:
             return BadReqResponse(message="该脚本当前没有测试数据，无法下载，如有需要可进行模板下载")
@@ -1444,6 +1572,8 @@ async def batch_step_dataset_download(
 
         file_name = f"数据源汇总_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -1458,6 +1588,7 @@ async def batch_step_dataset_download(
 async def batch_step_template_download(
         case_id: int = Query(..., description="用例ID"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     汇总下载用例下所有可挂载数据源步骤(HTTP/TCP/引用公共接口)的默认原始数据模板，一个步骤一个sheet（sheet名=步骤名）。
@@ -1465,9 +1596,11 @@ async def batch_step_template_download(
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 文件流响应
     """
     try:
+        await _assert_case_readable(services, scope, case_id=case_id)
         # 模板矩阵依赖请求报文字段，需加载完整步骤记录
         all_steps = await services.step_curd.model.filter(case_id=case_id, state__not=1)
         request_steps = [
@@ -1495,6 +1628,8 @@ async def batch_step_template_download(
 
         file_name = f"数据源模板_{case_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         return _stream_xlsx_response(output, file_name)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except Exception as e:
         LOGGER.error(f"汇总下载数据源模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下载失败，异常描述: {e}")

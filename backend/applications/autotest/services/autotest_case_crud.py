@@ -16,6 +16,7 @@ from backend.applications.autotest.models.autotest_case_model import AutoTestCas
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseCreate, AutoTestCaseUpdate
+from backend.applications.autotest.services.autotest_scope_guard import load_readable_project
 from backend.applications.autotest.services.autotest_tag_crud import AutoTestTagCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
@@ -24,6 +25,7 @@ from backend.core.exceptions import (
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
+    NoPermissionException,
 )
 from backend.enums import (
     AutoTestCaseType,
@@ -32,7 +34,7 @@ from backend.enums import (
     NO_TAG_CASE_TYPES,
     AutoTestReqArgsType
 )
-from backend.services import get_current_username
+from backend.services import DataScope, get_current_username
 
 
 def _normalize_case_tags(case_type: Optional[AutoTestCaseType], case_tags: Optional[List[int]], *, context: str = "用例") -> Optional[List[int]]:
@@ -197,11 +199,12 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         overwrite["case_version"] = (existing.case_version or 1) + 1
         return await self.update(id=existing.id, obj_in=overwrite)
 
-    async def create_case(self, case_in: AutoTestCaseCreate) -> AutoTestCaseModel:
+    async def create_case(self, case_in: AutoTestCaseCreate, scope: Optional[DataScope] = None) -> AutoTestCaseModel:
         """
         创建用例。同应用同所属人同名(脚本组跨类型互斥、公共接口独立)：启用则拒绝，同类型软删则恢复并覆盖表头。
 
         :param case_in: 用例创建schema
+        :param scope: 数据权限上下文，用于校验父资源(应用)是否可读
         :return: 创建或恢复后的用例实例
         """
         case_name: str = case_in.case_name
@@ -215,6 +218,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             error_message: str = "新增用例信息失败, 所属人员不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
+
+        # B级父资源校验：应用必须存在且对当前用户可读，避免向不可见项目挂载用例
+        await load_readable_project(scope, case_project)
 
         if case_tags:
             await AutoTestTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
@@ -283,11 +289,12 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         if updated_count:
             LOGGER.info(f"公共接口[id={case_instance.id}]级联对齐请求步骤所属应用[{case_instance.case_project}]")
 
-    async def update_case(self, case_in: AutoTestCaseUpdate) -> AutoTestCaseModel:
+    async def update_case(self, case_in: AutoTestCaseUpdate, scope: DataScope) -> AutoTestCaseModel:
         """
         更新用例，根据case_id或case_code定位并递增case_version。
 
         :param case_in: 用例更新schema，需含case_id或case_code
+        :param scope: 数据权限上下文，校验用例所属人是否允许当前用户写入
         :return: 更新后的用例实例
         """
         case_id: Optional[int] = case_in.case_id
@@ -303,6 +310,15 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         else:
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id = instance.id
+
+        if not scope.can_write(instance.owner_user):
+            error_message: str = f"更新用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+
+        # 跨应用迁移同样属于挂载子资源，目标应用必须对当前用户可读
+        if case_in.case_project is not None and int(case_in.case_project) != int(instance.case_project):
+            await load_readable_project(scope, case_in.case_project)
 
         original_case_type: Optional[AutoTestCaseType] = instance.case_type
         update_dict = case_in.model_dump(
@@ -391,13 +407,19 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-    async def delete_case(self, case_id: Optional[int] = None, case_code: Optional[str] = None) -> AutoTestCaseModel:
+    async def delete_case(
+            self,
+            scope: DataScope,
+            case_id: Optional[int] = None,
+            case_code: Optional[str] = None,
+    ) -> AutoTestCaseModel:
         """
-        软删除用例，并软删除该用例下所有步骤；公共脚本需无引用。
+        物理删除用例及其全部步骤，并清理步骤关联的数据源/生成记录/本地文件；公共接口/公共脚本需无引用。
 
+        :param scope: 数据权限上下文，校验用例所属人是否允许当前用户写入
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
-        :return: 软删除后的用例实例
+        :return: 删除前的用例实例快照
         """
         if not case_id and not case_code:
             error_message: str = "删除用例信息失败, 参数[case_id]或[case_code]不允许为空"
@@ -409,6 +431,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id = instance.id
 
+        if not scope.can_delete(instance.owner_user):
+            error_message: str = f"删除用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+
         case_type: AutoTestCaseType = instance.case_type
         if case_type in PUBLIC_CASE_TYPES:
             quote_steps_count = await AutoTestStepModel.filter(quote_case_id=case_id, state__not=1).count()
@@ -417,11 +444,89 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
+        # 硬删用例时步骤不再保留任何痕迹：先清理步骤关联的数据源/生成记录/上传文件，再删步骤与用例
+        from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
         from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
+
         step_crud = AutoTestStepCrud()
-        step_ids = await step_crud.model.filter(case_id=case_id, state__not=1).values_list("id", flat=True)
+        step_codes: List[str] = await step_crud.model.filter(case_id=case_id).values_list("step_code", flat=True)
+        await step_crud.model.filter(case_id=case_id).delete()
+        if step_codes:
+            await delete_step_create(case_id=case_id, step_code_list=list(step_codes))
+        await instance.delete()
+        return instance
+
+    async def delete_cases(
+            self,
+            scope: DataScope,
+            case_ids: Optional[List[int]] = None,
+            case_codes: Optional[List[str]] = None,
+    ) -> int:
+        """
+        批量软删除用例及其步骤（批量入口保持软删除，与单条硬删除区分）。
+
+        :param scope: 数据权限上下文，逐条校验用例所属人是否允许当前用户写入
+        :param case_ids: 用例主键列表，与case_codes二选一
+        :param case_codes: 用例标识代码列表，与case_ids二选一
+        :return: 实际软删除的用例数量
+        """
+        if not case_ids and not case_codes:
+            error_message: str = "批量删除用例失败, 参数[case_ids]或[case_codes]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        targets: List[AutoTestCaseModel] = []
+        if case_ids:
+            id_map: Dict[int, AutoTestCaseModel] = {
+                obj.id: obj for obj in await self.model.filter(id__in=case_ids, state__not=1)
+            }
+            for cid in case_ids:
+                instance = id_map.get(cid)
+                if not instance:
+                    error_message: str = f"批量删除用例失败, 记录[id={cid}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
+        else:
+            code_map: Dict[str, AutoTestCaseModel] = {
+                obj.case_code: obj for obj in await self.model.filter(case_code__in=case_codes, state__not=1)
+            }
+            for ccode in case_codes:
+                instance = code_map.get(ccode)
+                if not instance:
+                    error_message: str = f"批量删除用例失败, 记录[code={ccode}]不存在"
+                    LOGGER.error(error_message)
+                    raise NotFoundException(message=error_message)
+                targets.append(instance)
+
+        from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
+
+        step_crud = AutoTestStepCrud()
+        target_case_ids: List[int] = [instance.id for instance in targets]
+        for instance in targets:
+            if not scope.can_delete(instance.owner_user):
+                error_message: str = f"批量删除用例失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]非当前用户, 无权操作"
+                LOGGER.error(error_message)
+                raise NoPermissionException(message=error_message)
+        # 公共用例仍被引用步骤时不允许下线：与单删一致，避免软删后引用方执行期找不到用例
+        public_case_ids: List[int] = [
+            instance.id for instance in targets if instance.case_type in PUBLIC_CASE_TYPES
+        ]
+        if public_case_ids:
+            quoted_case_ids = set(await AutoTestStepModel.filter(
+                quote_case_id__in=public_case_ids, state__not=1
+            ).values_list("quote_case_id", flat=True))
+            if quoted_case_ids:
+                error_message: str = (
+                    f"批量删除用例失败, 公共用例[id={sorted(quoted_case_ids)}]仍被引用, 请先解除引用"
+                )
+                LOGGER.error(error_message)
+                raise DataAlreadyExistsException(message=error_message)
+        step_ids: List[int] = await step_crud.model.filter(
+            case_id__in=target_case_ids, state__not=1
+        ).values_list("id", flat=True)
         await step_crud.soft_delete_batch(ids=list(step_ids))
-        return await self.soft_delete(id=instance.id)
+        return await self.soft_delete_batch(ids=target_case_ids)
 
     async def select_cases(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestCaseModel]]:
         """
@@ -466,11 +571,16 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-    async def batch_update_or_create_cases(self, cases_data: List[AutoTestCaseUpdate]) -> Dict[str, Any]:
+    async def batch_update_or_create_cases(
+            self,
+            cases_data: List[AutoTestCaseUpdate],
+            scope: DataScope,
+    ) -> Dict[str, Any]:
         """
         批量新增或更新用例：无case_id/case_code则新增，有则更新。
 
         :param cases_data: 用例更新schema列表
+        :param scope: 数据权限上下文，校验待更新用例所属人是否允许当前用户写入
         :return: 含created_count、updated_count、success_detail的字典
         """
         created_count: int = 0
@@ -491,13 +601,14 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             if not case_id and not case_code:
                 case_instance = None
             else:
-                case_instance: Optional[AutoTestCaseModel] = await self.get_by_conditions(
-                    only_one=True,
-                    on_error=False,
-                    id=case_id,
-                    case_code=case_code,
-                    state__not=1
-                )
+                # id 与 code 为二选一定位键：id 优先、code 兜底，避免 OR 命中另一条记录
+                case_lookup: Q = Q(id=case_id) if case_id else Q(case_code=case_code)
+                case_instance: Optional[AutoTestCaseModel] = await self.model.filter(
+                    case_lookup, state__not=1
+                ).first()
+                if case_instance:
+                    # 仅以 case_code 定位时回填真实主键，后续更新与结果回写都依赖它
+                    case_id = case_instance.id
 
             if not case_instance:
                 case_tags = _normalize_case_tags(case_type, case_tags, context=f"第{cid}条用例新增失败")
@@ -511,6 +622,8 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                     error_message: str = f"第{cid}条用例新增失败, 参数[case_project]不允许为空"
                     LOGGER.error(error_message)
                     raise ParameterException(message=error_message)
+                # 批量保存链路与单条创建一致：应用必须可读，避免向不可见应用挂载用例
+                await load_readable_project(scope, case_project)
                 owner_user = get_current_username()
                 if not owner_user:
                     error_message: str = f"第{cid}条用例新增失败, 所属人员不允许为空"
@@ -574,6 +687,13 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 success_detail.append(case_dict)
 
             else:
+                if not scope.can_write(case_instance.owner_user):
+                    error_message = f"第{cid}条用例更新失败, 用例所属人[{case_instance.owner_user}]非当前用户, 无权操作"
+                    LOGGER.error(error_message)
+                    raise NoPermissionException(message=error_message)
+                # 批量更新同样支持跨应用迁移：目标应用必须对当前用户可读
+                if case_project is not None and int(case_project) != int(case_instance.case_project):
+                    await load_readable_project(scope, case_project)
                 if case_type == AutoTestCaseType.PUBLIC_API and case_instance.case_type != AutoTestCaseType.PUBLIC_API:
                     await self._validate_switch_to_public_api(case_instance)
                     await self._ensure_no_mounted_data_source(case_instance, AutoTestCaseType.PUBLIC_API)

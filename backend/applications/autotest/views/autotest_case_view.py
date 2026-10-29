@@ -19,6 +19,7 @@ from tortoise.expressions import Q
 from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.schemas.autotest_case_schema import (
     AutoTestCaseCreate,
+    AutoTestCaseDelete,
     AutoTestCaseScriptGenerate,
     AutoTestCaseSelect,
     AutoTestCaseUpdate
@@ -34,6 +35,7 @@ from backend.core.exceptions import (
     ParameterException,
     DataAlreadyExistsException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -44,8 +46,8 @@ from backend.core.responses import (
     DataAlreadyExistsResponse,
     FileExtensionResponse
 )
-from backend.enums import AutoTestReportType, AutoTestStepType, AutoTestCaseType
-from backend.services import get_current_username
+from backend.enums import AutoTestReportType, AutoTestStepType, AutoTestCaseType, PUBLIC_CASE_TYPES
+from backend.services import DataScope, DependTagScope, get_current_username
 from backend.services.file_transfer import FileTransfer
 
 autotest_case = APIRouter()
@@ -55,16 +57,18 @@ autotest_case = APIRouter()
 async def create_case(
         case_in: AutoTestCaseCreate = Body(..., description="用例信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增用例。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验用例所属应用是否可读
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.case_curd.create_case(case_in)
+        instance = await services.case_curd.create_case(case_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -75,6 +79,8 @@ async def create_case(
             replace_fields={"id": "case_id"}
         )
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except NoPermissionException:  # 父资源越权需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -84,26 +90,28 @@ async def create_case(
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"新增用例失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"新增失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
-@autotest_case.delete("/delete", summary="删除用例", description="根据id或code软删除用例及其步骤")
+@autotest_case.delete("/delete", summary="删除用例", description="根据id或code硬删除用例及其步骤")
 async def delete_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
-    根据id或code软删除用例及其步骤。
+    根据id或code硬删除用例及其步骤。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除所属人为自己的用例
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.case_curd.delete_case(case_id=case_id, case_code=case_code)
+        instance = await services.case_curd.delete_case(scope=scope, case_id=case_id, case_code=case_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -120,8 +128,42 @@ async def delete_case(
         return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"根据id或code软删除用例及其步骤失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"删除失败，异常描述: {e}")
+
+
+@autotest_case.post("/deletes", summary="批量删除用例", description="根据id或code列表批量软删除用例及其步骤")
+async def batch_delete_cases(
+        case_in: AutoTestCaseDelete = Body(..., description="用例信息"),
+        services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
+):
+    """
+    根据id或code列表批量软删除用例及其步骤。
+
+    :param case_in: 用例删除入参
+    :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除所属人为自己的用例
+    :return: 统一HTTP响应
+    """
+    try:
+        count = await services.case_curd.delete_cases(
+            scope=scope, case_ids=case_in.case_ids, case_codes=case_in.case_codes
+        )
+        return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except Exception as e:
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -129,16 +171,18 @@ async def delete_case(
 async def update_case(
         case_in: AutoTestCaseUpdate = Body(..., description="用例信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code更新用例信息。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改所属人为自己的用例
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.case_curd.update_case(case_in)
+        instance = await services.case_curd.update_case(case_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -157,8 +201,10 @@ async def update_case(
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
+    except NoPermissionException:
+        raise
     except Exception as e:
-        LOGGER.error(f"根据id或code更新用例信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -167,6 +213,7 @@ async def get_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code查询用例信息。
@@ -174,6 +221,7 @@ async def get_case(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验用例所属人的读范围
     :return: 统一HTTP响应
     """
     try:
@@ -181,6 +229,11 @@ async def get_case(
             instance = await services.case_curd.get_by_id(case_id=case_id, on_error=True, state__not=1)
         else:
             instance = await services.case_curd.get_by_code(case_code=case_code, on_error=True, state__not=1)
+        # 公共脚本/公共接口对所有用户可见，不随数据范围收窄
+        if instance.case_type not in PUBLIC_CASE_TYPES and not scope.can_read(instance.owner_user):
+            error_message: str = f"查询用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]不在当前用户可见范围"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -215,12 +268,14 @@ async def get_case(
             ) for obj in await services.tag_curd.get_by_ids(tag_ids=tag_ids, on_error=True, state__not=1)
         ] if tag_ids else []
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code查询用例信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -304,12 +359,14 @@ def _protocol_from_step_type(step_type: Any) -> Optional[str]:
 async def search_cases(
         case_in: AutoTestCaseSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件分页查询用例列表信息。
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按所属人过滤可见范围，公共用例全员可见
     :return: 统一HTTP响应
     """
     try:
@@ -345,6 +402,10 @@ async def search_cases(
         if case_in.updated_user:
             q &= Q(updated_user=case_in.updated_user)
         q &= Q(state=case_in.state)
+        owner_q = scope.read_q("owner_user")
+        if owner_q is not None:
+            # 公共脚本/公共接口对所有用户可见可复制，不随数据范围收窄
+            q &= owner_q | Q(case_type__in=PUBLIC_CASE_TYPES)
         if case_in.step_type is not None or case_in.request_args_type is not None:
             matched_case_ids: Optional[List[int]] = await services.case_curd.get_case_ids_by_request_step(
                 step_type=case_in.step_type,
@@ -416,6 +477,8 @@ async def search_cases(
             )
             if is_public_api_query or instance_type == AutoTestCaseType.PUBLIC_API.value:
                 serialize["step_type"] = _protocol_from_step_type(case_step_type_map.get(case_id))
+            # 用例归属口径为 owner_user（转让后变更），行级可删标记由后端按当前资源族判定
+            serialize["can_delete"] = scope.can_delete(instance.owner_user)
             case_serializes.append(serialize)
         return SuccessResponse(message="查询成功", data=case_serializes, total=total)
     except NotFoundException as e:
@@ -423,7 +486,7 @@ async def search_cases(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据条件分页查询用例列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -432,6 +495,7 @@ async def get_request_step_selected_project_ids(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     从步骤树中提取以下步骤类型所选择的应用ID并去重返回。
@@ -445,21 +509,25 @@ async def get_request_step_selected_project_ids(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验用例所属人的读范围
     :return: 统一HTTP响应
     """
     try:
         project_ids: List[int] = await services.step_curd.get_step_usage_projects(
             case_id=case_id,
             case_code=case_code,
+            scope=scope,
         )
         project_ids_len: int = len(project_ids)
         return SuccessResponse(message="查询成功", data=project_ids, total=project_ids_len)
+    except NoPermissionException:  # 读范围校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id或code获取步骤树中请求步骤选择的应用ID列表失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
@@ -517,7 +585,7 @@ async def generate_case_scripts_async(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"公共接口转脚本任务下发失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"下发脚本生成任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下发脚本生成任务失败，异常描述: {e}")
 
 
@@ -581,7 +649,7 @@ async def import_case_scripts_async(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"下发导入公共接口脚本任务失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"下发导入任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下发导入任务失败，异常描述: {e}")
 
 
@@ -623,7 +691,7 @@ async def export_case_datagram_async(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"异步导出公共接口用例请求头与请求体为xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"下发导出任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")
 
 
@@ -666,5 +734,5 @@ async def export_case_scripts_async(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"异步导出公共接口脚本为模板xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"下发导出任务失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"下发导出任务失败，异常描述: {e}")

@@ -7,7 +7,7 @@
 @DateTime: 2025/11/27 14:25
 """
 import traceback
-from typing import Any, Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List, Tuple, Set
 
 from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
@@ -15,7 +15,8 @@ from tortoise.expressions import Q
 from backend.applications.autotest.models.autotest_detail_model import AutoTestDetailModel
 from backend.applications.autotest.schemas.autotest_detail_schema import (
     AutoTestDetailCreate,
-    AutoTestDetailUpdate
+    AutoTestDetailUpdate,
+    AutoTestDetailBatchDelete,
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.autotest.services.autotest_report_crud import AutoTestReportCrud
@@ -25,16 +26,19 @@ from backend.core.exceptions import (
     NotFoundException,
     ParameterException,
     DataBaseStorageException,
+    NoPermissionException,
 )
+from backend.services import DataScope
 
 
 class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate, AutoTestDetailUpdate]):
     # 明细轻量列清单：分页查询与树模式全量查询共用，保证两模式返回字段结构一致
     DETAIL_LIGHT_COLUMNS: Tuple[str, ...] = (
-        "id", "case_id", "parent_step_id",
-        "step_id", "step_no", "step_name", "step_type", "step_state", "step_elapsed", "step_exec_except",
-        "loop_cycles", "branch_index", "branch_match", "dataset_name", "response_elapsed",
-        "request_env_name", "request_config_name", "database_operates",
+        "id", "case_id", "case_code", "report_code", "parent_step_id",
+        "step_id", "step_no", "step_code", "step_name", "step_type", "step_state", "step_elapsed",
+        "step_exec_except", "loop_cycles", "branch_index", "branch_match", "dataset_name",
+        "response_elapsed", "request_env_name", "request_config_name", "database_operates",
+        "step_st_time", "created_user",
     )
 
     def __init__(self):
@@ -153,11 +157,12 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_detail(self, detail_in: AutoTestDetailUpdate) -> AutoTestDetailModel:
+    async def update_detail(self, detail_in: AutoTestDetailUpdate, scope: DataScope) -> AutoTestDetailModel:
         """
         更新明细，需提供detail_id或(report_code, step_code)定位。
 
         :param detail_in: 明细更新schema
+        :param scope: 数据权限上下文，仅允许修改创建人为自己的明细
         :return: 更新后的明细实例
         """
         case_id: Optional[int] = detail_in.case_id
@@ -188,7 +193,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if detail_id:
-            await self.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
+            instance = await self.get_by_id(detail_id=detail_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_conditions(
                 only_one=True,
@@ -198,6 +203,10 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
                 state__not=1,
             )
             detail_id = instance.id
+        if not scope.can_write(instance.created_user):
+            error_message: str = f"更新明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
         try:
             update_dict = detail_in.model_dump(
                 exclude_none=True,
@@ -213,17 +222,19 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
     async def delete_detail(
             self,
+            scope: DataScope,
             detail_id: Optional[int] = None,
             step_code: Optional[str] = None,
             report_code: Optional[str] = None
     ) -> AutoTestDetailModel:
         """
-        软删除明细，需提供detail_id或(report_code, step_code)。
+        物理删除明细，需提供detail_id或(report_code, step_code)。
 
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的明细
         :param detail_id: 明细主键ID，与(report_code, step_code)二选一
         :param step_code: 步骤标识代码
         :param report_code: 报告标识代码
-        :return: 软删除后的明细实例
+        :return: 删除前的明细实例快照
         """
         if not detail_id and (not report_code or not step_code):
             error_message: str = f"参数[detail_id]或[report_code, step_code]不允许为空"
@@ -240,7 +251,41 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
                 step_code=step_code,
                 state__not=1,
             )
-        return await self.soft_delete(id=instance.id)
+        if not scope.can_delete(instance.created_user):
+            error_message: str = f"删除明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+        await instance.delete()
+        return instance
+
+    async def delete_details(self, scope: DataScope, detail_in: AutoTestDetailBatchDelete) -> int:
+        """
+        批量物理删除明细；先全量校验归属，任一明细无权则整批拒绝。
+
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的明细
+        :param detail_in: 明细ID列表入参
+        :return: 实际删除的明细数量
+        """
+        detail_ids: List[int] = list(dict.fromkeys(int(did) for did in detail_in.detail_ids))
+        targets: List[AutoTestDetailModel] = await self.model.filter(id__in=detail_ids, state__not=1).all()
+        target_ids: Set[int] = {instance.id for instance in targets}
+        missing_ids: List[int] = [did for did in detail_ids if did not in target_ids]
+        if missing_ids:
+            error_message: str = f"批量删除明细失败, 记录[id={missing_ids}]不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+
+        # 全有或全无：先逐条校验归属，避免部分明细已删、后续被拒
+        for instance in targets:
+            if not scope.can_delete(instance.created_user):
+                error_message: str = (
+                    f"批量删除明细失败, 明细[{instance.step_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+                )
+                LOGGER.error(error_message)
+                raise NoPermissionException(message=error_message)
+
+        await self.model.filter(id__in=list(target_ids)).delete()
+        return len(target_ids)
 
     async def select_details(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[Dict[str, Any]]]:
         """

@@ -28,6 +28,7 @@ from backend.core.exceptions import (
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -37,6 +38,8 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse
 )
+from backend.applications.autotest.services.autotest_scope_guard import PROJECT_TAG
+from backend.services import DataScope, DependTagScope
 
 autotest_env = APIRouter()
 
@@ -45,19 +48,23 @@ autotest_env = APIRouter()
 async def create_environment(
         env_in: AutoTestEnvCreate = Body(..., description="环境信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增环境。
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，恢复软删环境时要求创建人允许当前用户写入
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_curd.create_env(env_in=env_in, strict_duplicate=True)
+        instance = await services.env_curd.create_env(env_in=env_in, strict_duplicate=True, scope=scope)
         data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"新增环境成功, 结果明细: {data}")
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
@@ -76,6 +83,7 @@ async def delete_environment(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code删除环境。
@@ -83,13 +91,16 @@ async def delete_environment(
     :param env_id: 环境主键ID
     :param env_code: 环境业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除创建人为自己的环境
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_curd.delete_env(env_id=env_id, env_code=env_code)
+        instance = await services.env_curd.delete_env(scope=scope, env_id=env_id, env_code=env_code)
         data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"根据id或code删除环境成功, 结果明细: {data}")
         return SuccessResponse(message="删除成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
@@ -105,18 +116,26 @@ async def delete_environment(
 async def delete_environments(
         env_in: AutoTestEnvDelete = Body(..., description="环境信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code列表删除环境。
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除创建人为自己的环境
     :return: 统一HTTP响应
     """
     try:
-        count = await services.env_curd.delete_envs(env_in=env_in)
+        count = await services.env_curd.delete_envs(env_in=env_in, scope=scope)
         LOGGER.info(f"根据id或code列表删除环境成功, 数量: {count}")
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
@@ -128,19 +147,23 @@ async def delete_environments(
 async def update_environment(
         env_in: AutoTestEnvUpdate = Body(..., description="环境信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code更新环境。
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_curd.update_env(env_in=env_in)
+        instance = await services.env_curd.update_env(env_in=env_in, scope=scope)
         data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"根据id或code更新环境成功, 结果明细: {data}")
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -157,6 +180,7 @@ async def get_environment(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code查询环境。
@@ -164,6 +188,7 @@ async def get_environment(
     :param env_id: 环境主键ID
     :param env_code: 环境业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验环境创建人可见性
     :return: 统一HTTP响应
     """
     try:
@@ -171,9 +196,15 @@ async def get_environment(
             instance = await services.env_curd.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
             instance = await services.env_curd.get_by_code(env_code=env_code, on_error=True, state__not=1)
+        if not scope.can_read(instance.created_user):  # 详情读取需收口到可见范围
+            raise NoPermissionException(
+                message=f"查询环境失败, 环境[{instance.env_code}]创建人[{instance.created_user}]不在当前用户可见范围"
+            )
         data = await services.env_curd.serialize_env(instance)
         LOGGER.info(f"根据id或code查询环境成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -186,15 +217,17 @@ async def get_environment(
 @autotest_env.get("/get_names", summary="查询环境名称", description="查询去重后的环境名称列表")
 async def get_environment_names(
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     查询环境名称(去重)。
 
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅返回可见环境的名称
     :return: 统一HTTP响应
     """
     try:
-        names: List[str] = await services.env_curd.list_env_names()
+        names: List[str] = await services.env_curd.list_env_names(scope=scope)
         LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except Exception as e:
@@ -206,6 +239,7 @@ async def get_environment_names(
 async def search_environments(
         env_in: AutoTestEnvSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件查询环境。
@@ -230,6 +264,9 @@ async def search_environments(
         if env_in.updated_user:
             q &= Q(updated_user__iexact=env_in.updated_user)
         q &= Q(state=env_in.state)
+        owner_q = scope.read_q("created_user")
+        if owner_q is not None:
+            q &= owner_q
         total, instances = await services.env_curd.select_envs(
             search=q,
             page=env_in.page,
@@ -237,6 +274,9 @@ async def search_environments(
             order=env_in.order
         )
         env_serializes: List[Dict[str, Any]] = await services.env_curd.serialize_envs(instances, with_audit=True)
+        # 行级可删标记：按当前资源族的删除范围判定（含部门范围），前端不复算归属
+        for item, obj in zip(env_serializes, instances):
+            item["can_delete"] = scope.can_delete(obj.created_user)
         LOGGER.info(f"根据条件查询环境成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=env_serializes, total=total)
     except ParameterException as e:
@@ -250,18 +290,21 @@ async def search_environments(
 async def classify_environment_configs(
         env_config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     按应用ID列表查询环境配置并分类返回。
 
     :param env_config_in: 含project_ids的查询入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按配置创建人过滤可见范围
     :return: 统一HTTP响应
     """
     try:
         data = await services.env_config_curd.query_classified_by_project_ids(
             project_ids=env_config_in.project_ids,
             config_names=env_config_in.config_names,
+            scope=scope,
         )
         total_configs: int = sum(
             len(names)
@@ -281,16 +324,18 @@ async def classify_environment_configs(
 async def list_environments(
         env_in: AutoTestEnvListQuery = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     按节点类型/应用聚合环境名称。
 
     :param env_in: 可选应用ID列表
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按环境创建人过滤可见范围
     :return: 统一HTTP响应
     """
     try:
-        result_data = await services.env_curd.get_envs(env_in.project_id)
+        result_data = await services.env_curd.get_envs(env_in.project_id, scope=scope)
         return SuccessResponse(message="查询成功", data=result_data)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -303,16 +348,18 @@ async def list_environments(
 async def page_environments(
         page_in: AutoTestEnvPageSelect = Body(..., description="环境分页查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     按应用/环境/节点类型/配置名称聚合后分页查询。
 
     :param page_in: 环境分页查询入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，按创建人过滤可见范围
     :return: 统一HTTP响应
     """
     try:
-        total, data = await services.env_curd.get_env_search_list(query_in=page_in)
+        total, data = await services.env_curd.get_env_search_list(query_in=page_in, scope=scope)
         return SuccessResponse(data=data, total=total, message="查询成功")
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -326,6 +373,7 @@ async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
         page_size: int = Query(10000, ge=1, description="每页条数"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     获取全部启用应用列表。
@@ -333,10 +381,14 @@ async def get_all_apps(
     :param page: 页码
     :param page_size: 每页条数
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅返回可见范围内的应用
     :return: 统一HTTP响应
     """
     try:
-        data, total = await services.project_curd.get_all_project(page, page_size)
+        # 接口位于环境路由但返回的是项目列表，必须按项目资源族收敛，否则会以环境标签的默认范围泄出全部项目
+        data, total = await services.project_curd.get_all_project(
+            page, page_size, scope=await scope.for_tag(PROJECT_TAG)
+        )
         LOGGER.info(f"获取所有应用成功, 结果明细: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:

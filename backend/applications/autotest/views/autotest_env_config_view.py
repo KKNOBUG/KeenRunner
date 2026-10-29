@@ -33,6 +33,7 @@ from backend.core.exceptions import (
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -43,6 +44,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
 )
 from backend.enums import AutoTestConfigNodeType
+from backend.services import DataScope, DependTagScope
 
 autotest_env_config = APIRouter()
 
@@ -59,6 +61,7 @@ async def _serialize_config_response(services: AutoTestServices, instance, env_n
 async def create_app_config(
         config_in: APPEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增APP类型环境配置信息。
@@ -68,9 +71,11 @@ async def create_app_config(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.create_config(config_in)
+        instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增APP配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -88,6 +93,7 @@ async def create_app_config(
 async def create_file_config(
         config_in: FILEEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增FILE类型环境配置信息。
@@ -97,9 +103,11 @@ async def create_file_config(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.create_config(config_in)
+        instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增FILE配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -117,6 +125,7 @@ async def create_file_config(
 async def create_db_config(
         config_in: DBEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增DB类型环境配置信息。
@@ -126,9 +135,11 @@ async def create_db_config(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.create_config(config_in)
+        instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增DB配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -146,6 +157,7 @@ async def create_db_config(
 async def create_redis_config(
         config_in: RedisEnvConfigCreate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增REDIS类型环境配置信息。
@@ -155,9 +167,11 @@ async def create_redis_config(
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.create_config(config_in)
+        instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增Redis配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -175,18 +189,22 @@ async def create_redis_config(
 async def update_redis_config(
         config_in: RedisEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     更新REDIS类型环境配置信息。
 
     :param config_in: Redis环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in)
+        instance = await services.env_config_curd.update_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="修改Redis配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -204,22 +222,28 @@ async def update_redis_config(
 async def delete_env_config(
         config_in: AutoTestEnvConfigTypedDelete = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     删除指定子表环境配置信息。
 
     :param config_in: 环境配置删除入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除创建人为自己的环境配置
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.delete_config(config_in)
+        instance = await services.env_config_curd.delete_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance)
         return SuccessResponse(message="删除配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:  # 存在步骤引用时禁止删除
+        return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"删除配置失败: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除配置失败, 错误描述: {e}")
@@ -229,18 +253,22 @@ async def delete_env_config(
 async def update_app_config(
         config_in: APPEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     更新APP类型环境配置信息。
 
     :param config_in: APP环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in)
+        instance = await services.env_config_curd.update_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="修改APP配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -258,18 +286,22 @@ async def update_app_config(
 async def update_file_config(
         config_in: FILEEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     更新FILE类型环境配置信息。
 
     :param config_in: FILE环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in)
+        instance = await services.env_config_curd.update_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="修改FILE配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -287,18 +319,22 @@ async def update_file_config(
 async def update_db_config(
         config_in: DBEnvConfigUpdate = Body(..., description="环境配置信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     更新DB类型环境配置信息。
 
     :param config_in: DB环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in)
+        instance = await services.env_config_curd.update_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="修改DB配置成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
@@ -317,6 +353,7 @@ async def get_env_config(
         config_id: Optional[int] = Query(None, description="环境配置ID"),
         config_code: Optional[str] = Query(None, description="环境配置标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code查询环境配置信息。
@@ -324,6 +361,7 @@ async def get_env_config(
     :param config_id: 环境配置主键ID
     :param config_code: 环境配置业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，配置含凭据信息需校验创建人可见性
     :return: 统一HTTP响应
     """
     try:
@@ -331,6 +369,10 @@ async def get_env_config(
             instance = await services.env_config_curd.get_by_id(config_id=config_id, on_error=True, state__not=1)
         else:
             instance = await services.env_config_curd.get_by_code(config_code=config_code, on_error=True, state__not=1)
+        if not scope.can_read(instance.created_user):  # 配置含凭据信息，详情需收口到可见范围
+            raise NoPermissionException(
+                message=f"查询环境配置失败, 配置[{instance.config_code}]创建人[{instance.created_user}]不在当前用户可见范围"
+            )
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -341,6 +383,8 @@ async def get_env_config(
             replace_fields={"id": "config_id"}
         )
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -354,6 +398,7 @@ async def get_env_config(
 async def search_env_configs(
         config_in: AutoTestEnvConfigSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件分页查询环境配置列表信息。
@@ -387,6 +432,9 @@ async def search_env_configs(
         if config_in.updated_user:
             q &= Q(updated_user=config_in.updated_user)
         q &= Q(state=config_in.state)
+        owner_q = scope.read_q("created_user")
+        if owner_q is not None:
+            q &= owner_q
         total, instances = await services.env_config_curd.select_config(
             search=q,
             page=config_in.page,
@@ -415,6 +463,7 @@ async def search_env_configs(
                 bind_map.get(obj.env_bind_id),
             )
             item["project_name"] = project_name_map.get(item.get("project_id"), "")
+            item["can_delete"] = scope.can_delete(obj.created_user)
             data.append(item)
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
@@ -430,6 +479,7 @@ async def get_env_config_names(
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
         env_type: Optional[AutoTestConfigNodeType] = Query(None, description="节点类型，可选"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     获取去重后的配置名称列表。
@@ -438,6 +488,7 @@ async def get_env_config_names(
     :param env_id: 环境主键ID
     :param env_type: 配置类型
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅返回可见配置的名称
     :return: 统一HTTP响应
     """
     try:
@@ -446,6 +497,7 @@ async def get_env_config_names(
             project_id=project_id,
             env_id=env_id,
             env_type=env_type_val,
+            scope=scope,
         )
         return SuccessResponse(message="查询成功", data=data, total=len(data))
     except Exception as e:
@@ -457,16 +509,18 @@ async def get_env_config_names(
 async def query_assign_config_envs(
         query_in: QueryAssignConfigEnv = Body(..., description="指派配置环境查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据应用/配置名称/节点类型查询符合的环境名称列表。
 
     :param query_in: 指派配置环境查询入参(三条件均可选)
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅返回可见配置对应的环境名称
     :return: 统一HTTP响应
     """
     try:
-        data = await services.env_config_curd.query_assign_config_env_names(query_in=query_in)
+        data = await services.env_config_curd.query_assign_config_env_names(query_in=query_in, scope=scope)
         LOGGER.info(f"查询指派配置的环境名称成功, 结果明细: {data}")
         return SuccessResponse(message="查询成功", data=data, total=len(data))
     except Exception as e:
@@ -482,6 +536,7 @@ async def list_env_configs(
         page: int = Query(1, description="页码", ge=1),
         page_size: int = Query(10, description="每页条数", ge=1, le=100),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     按条件分页查询子表环境配置列表。
@@ -492,6 +547,7 @@ async def list_env_configs(
     :param page: 页码
     :param page_size: 每页条数
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，配置含凭据信息需按创建人过滤
     :return: 统一HTTP响应
     """
     try:
@@ -501,7 +557,11 @@ async def list_env_configs(
             env_type=env_type,
             page=page,
             page_size=page_size,
+            scope=scope,
         )
+        # 行级可删标记：配置归属 created_user，按当前资源族的删除范围判定
+        for item in data:
+            item["can_delete"] = scope.can_delete(item.get("created_user"))
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -514,12 +574,14 @@ async def list_env_configs(
 async def test_db_connection(
         config_in: TestDBConnectionRequest = Body(..., description="连接测试入参"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据入参测试数据库连接是否可用。
 
     :param config_in: 数据库连接测试入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，要求配置创建人在可见范围内
     :return: 统一HTTP响应
     """
     try:
@@ -529,8 +591,11 @@ async def test_db_connection(
             env_name=config_in.env_name,
             config_name=config_in.config_name,
             database_name=config_in.database_name,
+            scope=scope,
         )
         return SuccessResponse(message="数据库连接成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:

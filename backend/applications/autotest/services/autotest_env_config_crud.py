@@ -24,7 +24,7 @@ from backend.applications.autotest.schemas.autotest_env_config_schema import (
 )
 from backend.applications.autotest.schemas.autotest_env_schema import AutoTestEnvCreate
 from backend.applications.autotest.services.autotest_env_crud import AutoTestEnvCrud
-from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
+from backend.applications.autotest.services.autotest_scope_guard import ENV_TAG, assert_parent_readable, load_readable_project
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.common.database.database_connection_pool import get_app_database_pool
 from backend.configure import LOGGER
@@ -33,8 +33,10 @@ from backend.core.exceptions import (
     ParameterException,
     DataAlreadyExistsException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.enums import AutoTestConfigNodeType
+from backend.services import DataScope
 
 
 class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConfigCreate, AutoTestEnvConfigUpdate]):
@@ -83,17 +85,19 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_config(self, config_in: AutoTestEnvConfigCreate) -> AutoTestEnvConfigModel:
+    async def create_config(self, config_in: AutoTestEnvConfigCreate, scope: Optional[DataScope] = None) -> AutoTestEnvConfigModel:
         """
-        创建环境配置；同名软删记录则恢复启用。
+        创建环境配置；同名软删记录在写权限内恢复启用。
 
         :param config_in: 环境配置创建schema（project_id/env_name/env_type用于解析绑定，不落配置表）
+        :param scope: 数据权限上下文，恢复软删配置时要求创建人允许当前用户写入
         :return: 配置ORM实例
         """
         env_type = config_in.env_type
         project_id = int(config_in.project_id)
         config_name = config_in.config_name
-        await AutoTestProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
+        # B级父资源校验：应用必须可读，向后挂载的配置才能被当前用户感知
+        await load_readable_project(scope, project_id)
 
         env_bind = await self._get_or_create_env_bind(
             project_id=project_id,
@@ -101,6 +105,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             env_type=env_type,
             created_user=config_in.created_user,
         )
+        await assert_parent_readable(scope, ENV_TAG, env_bind, "环境")
         payload = config_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
@@ -111,6 +116,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         if existing:
             if existing.state == 0:
                 raise DataAlreadyExistsException(message="相同应用和环境下, 配置名称不允许重复")
+            # 软删恢复不得跨写范围接管他人配置，且不覆盖原创建人
+            if scope is not None and not scope.can_write(existing.created_user):
+                error_message = f"新增环境配置失败, 配置[{config_name}]创建人[{existing.created_user}]非当前用户, 无权操作"
+                LOGGER.error(error_message)
+                raise NoPermissionException(message=error_message)
+            payload.pop("created_user", None)
             try:
                 return await self.update(id=existing.id, obj_in=payload)
             except (DoesNotExist, IntegrityError) as e:
@@ -130,11 +141,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_config(self, config_in: AutoTestEnvConfigUpdate) -> AutoTestEnvConfigModel:
+    async def update_config(self, config_in: AutoTestEnvConfigUpdate, scope: DataScope) -> AutoTestEnvConfigModel:
         """
         更新环境配置，根据config_id或config_code定位。
 
         :param config_in: 环境配置更新schema
+        :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
         :return: 配置ORM实例
         """
         config_id: Optional[int] = config_in.config_id
@@ -148,6 +160,11 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         else:
             instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
             config_id = instance.id
+
+        if not scope.can_write(instance.created_user):
+            error_message = f"更新环境配置失败, 配置[{instance.config_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
         bind = await AutoTestEnvBindModel.filter(id=instance.env_bind_id).first()
         if not bind:
@@ -171,6 +188,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             env_type=env_type,
             created_user=config_in.updated_user,
         )
+        await assert_parent_readable(scope, ENV_TAG, env_bind, "环境")
         update_dict = config_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
@@ -199,12 +217,63 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_config(self, config_in: AutoTestEnvConfigTypedDelete) -> AutoTestEnvConfigModel:
+    async def _assert_configs_not_referenced(self, targets: List[AutoTestEnvConfigModel]) -> None:
         """
-        按节点类型软删除环境配置；已删除则直接返回。
+        校验环境配置未被步骤按名称引用：请求配置、数据库操作、Redis操作三处。
+
+        同应用的配置合并扫描，单次取出步骤行后按配置名匹配，避免逐条查库。
+
+        :param targets: 待删除的环境配置实例列表
+        :raises DataAlreadyExistsException: 任一配置被步骤引用时拒绝删除
+        """
+        if not targets:
+            return
+        from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
+        from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
+
+        bind_map: Dict[int, int] = {
+            obj.id: obj.project_id
+            for obj in await AutoTestEnvBindModel.filter(id__in=[item.env_bind_id for item in targets])
+        }
+        # 配置名只在所属应用的用例步骤中生效，按项目归组后统一扫描
+        names_by_project: Dict[int, List[str]] = {}
+        for instance in targets:
+            project_id = bind_map.get(instance.env_bind_id)
+            if project_id is None:
+                raise NotFoundException(message=f"配置[{instance.config_name}]关联的环境信息不存在")
+            names_by_project.setdefault(project_id, []).append(instance.config_name)
+
+        for project_id, config_names in names_by_project.items():
+            case_ids = await AutoTestCaseModel.filter(
+                case_project=project_id, state__not=1
+            ).values_list("id", flat=True)
+            if not case_ids:
+                continue
+            step_rows = await AutoTestStepModel.filter(
+                case_id__in=list(case_ids), state__not=1
+            ).values("request_config_name", "database_operates", "redis_operates")
+            for config_name in config_names:
+                ref_count: int = sum(
+                    1 for row in step_rows
+                    if row["request_config_name"] == config_name
+                    or any(
+                        isinstance(operate, dict) and operate.get("config_name") == config_name
+                        for field in ("database_operates", "redis_operates")
+                        for operate in (row[field] if isinstance(row[field], list) else [])
+                    )
+                )
+                if ref_count > 0:
+                    error_message: str = f"删除环境配置失败, 配置[{config_name}]被{ref_count}个步骤引用"
+                    LOGGER.error(error_message)
+                    raise DataAlreadyExistsException(message=error_message)
+
+    async def delete_config(self, config_in: AutoTestEnvConfigTypedDelete, scope: DataScope) -> AutoTestEnvConfigModel:
+        """
+        按节点类型物理删除环境配置；被步骤引用时禁止删除。
 
         :param config_in: 删除入参
-        :return: 软删除后的配置ORM实例
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的环境配置
+        :return: 删除后的配置实例快照
         """
         instance = await self.get_by_id(config_id=config_in.config_id, on_error=True)
         bind = await AutoTestEnvBindModel.filter(id=instance.env_bind_id).first()
@@ -212,15 +281,22 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             raise NotFoundException(message="配置关联的环境信息不存在")
         if bind.env_type != config_in.env_type:
             raise ParameterException(message="配置关联的环境节点不匹配")
-        if instance.state == 1:
-            return instance
-        return await self.soft_delete(id=instance.id, updated_user=config_in.updated_user)
+        if not scope.can_delete(instance.created_user):
+            error_message: str = f"删除环境配置失败, 配置[{instance.config_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
-    async def delete_configs(self, config_in: AutoTestEnvConfigDelete) -> int:
+        await self._assert_configs_not_referenced([instance])
+
+        await instance.delete()
+        return instance
+
+    async def delete_configs(self, config_in: AutoTestEnvConfigDelete, scope: DataScope) -> int:
         """
-        根据ID或code列表批量软删除环境配置。
+        根据ID或code列表批量软删除环境配置；软删与物理删同样拒绝被步骤引用的配置。
 
         :param config_in: 环境配置批量删除schema
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的环境配置
         :return: 更新条数
         """
         config_ids: Optional[List[int]] = config_in.config_ids
@@ -262,7 +338,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                     raise NotFoundException(message=error_message)
                 targets.append(instance)
 
-        # 删除无逐项前置校验，收敛为单次批量软删
+        if not all(scope.can_delete(instance.created_user) for instance in targets):
+            error_message: str = "删除环境配置失败, 存在非当前用户创建的环境配置, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+        # 软删同样受引用关系约束：先全量校验再落库，保证批量操作全有或全无
+        await self._assert_configs_not_referenced(targets)
         await self.soft_delete_batch(ids=[instance.id for instance in targets])
         return len(targets)
 
@@ -287,12 +368,14 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             self,
             project_ids: List[int],
             config_names: Optional[List[str]] = None,
+            scope: Optional[DataScope] = None,
     ) -> Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]]:
         """
         按应用ID列表查询未删除配置并分类。
 
         :param project_ids: 应用ID列表
         :param config_names: 配置名称列表(可选)；非空时仅返回这些配置所在的环境及其配置
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置
         :return: project_id -> env_name -> api|file|database|redis -> config_name -> 主机信息
         """
         if not project_ids:
@@ -327,7 +410,11 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         config_filter: Dict[str, Any] = {"env_bind_id__in": env_bind_ids, "state__not": 1}
         if distinct_config_names:
             config_filter["config_name__in"] = list(dict.fromkeys(distinct_config_names))
-        env_config_rows: List[Dict[str, Any]] = await self.model.filter(**config_filter).values(
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        config_qs = self.model.filter(**config_filter)
+        if owner_q is not None:
+            config_qs = config_qs.filter(owner_q)
+        env_config_rows: List[Dict[str, Any]] = await config_qs.values(
             "id", "env_bind_id", "config_name", "config_host", "config_port", "database_name"
         )
         if not env_config_rows:
@@ -366,6 +453,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             project_id: Optional[int] = None,
             env_id: Optional[int] = None,
             env_type: Optional[str] = None,
+            scope: Optional[DataScope] = None,
     ) -> List[str]:
         """
         未删除配置中config_name去重后的列表。
@@ -373,9 +461,13 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param project_id: 应用ID，经绑定表过滤
         :param env_id: 环境绑定主键
         :param env_type: 节点类型，经绑定表过滤
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置名称
         :return: 去重且升序排列的配置名称列表
         """
         stmt: QuerySet = self.model.filter(state__not=1)
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        if owner_q is not None:
+            stmt = stmt.filter(owner_q)
         if env_id is not None:
             stmt = stmt.filter(env_bind_id=env_id)
         elif project_id is not None or env_type is not None:
@@ -389,14 +481,22 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         names = await stmt.values_list("config_name", flat=True)
         return sorted(set(names))
 
-    async def query_assign_config_env_names(self, query_in: QueryAssignConfigEnv) -> List[str]:
+    async def query_assign_config_env_names(
+            self,
+            query_in: QueryAssignConfigEnv,
+            scope: Optional[DataScope] = None,
+    ) -> List[str]:
         """
         按应用/配置名称/节点类型查询符合的环境名称列表。
 
         :param query_in: 指派配置环境查询入参(三条件均可选)
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置所对应的环境名称
         :return: 去重且升序排列的环境名称列表
         """
         stmt: QuerySet = self.model.filter(state__not=1)
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        if owner_q is not None:
+            stmt = stmt.filter(owner_q)
         if query_in.config_name:
             stmt = stmt.filter(config_name=query_in.config_name)
         if query_in.project_id is not None or query_in.env_type is not None:
@@ -511,6 +611,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             env_type: Optional[Union[AutoTestConfigNodeType, str]] = None,
             page: int = 1,
             page_size: int = 10,
+            scope: Optional[DataScope] = None,
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """
         分页查询环境配置；project/env_name/env_type经绑定表过滤。
@@ -520,11 +621,15 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param env_type: 节点类型(app/file/database/redis)
         :param page: 页码
         :param page_size: 每页条数
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置（含凭据信息）
         :return: (总条数, 当前页列表)
         """
         try:
             env_crud = AutoTestEnvCrud()
             query = self.model.filter(state=0)
+            owner_q = scope.read_q("created_user") if scope is not None else None
+            if owner_q is not None:
+                query = query.filter(owner_q)
             need_bind_filter = project_id is not None or env_name or env_type is not None
             if need_bind_filter:
                 env_enum_ids = None
@@ -569,6 +674,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             env_name: str,
             config_name: str,
             database_name: str,
+            scope: Optional[DataScope] = None,
     ) -> Dict[str, Any]:
         """
         校验DB配置存在后创建连接池。
@@ -578,6 +684,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param env_name: 环境名称
         :param config_name: 配置名称
         :param database_name: 数据库名称
+        :param scope: 数据权限上下文，传入时要求配置创建人在可见范围内
         :return: 连接成功时的摘要信息
         """
         env_row = await AutoTestEnvCrud().get_bind_by_env_name(
@@ -597,6 +704,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         ).first()
         if not config:
             raise NotFoundException(message="配置表未找到对应记录，请检查")
+
+        # 连接测试会暴露主机端口等凭据信息，必须限制在可见范围内
+        if scope is not None and not scope.can_read(config.created_user):
+            error_message = f"测试数据库连接失败, 配置[{config_name}]创建人[{config.created_user}]不在当前用户可见范围"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
         try:
             await get_app_database_pool().get_or_create_pool(

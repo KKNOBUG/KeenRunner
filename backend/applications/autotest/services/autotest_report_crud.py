@@ -26,6 +26,7 @@ from backend.applications.autotest.schemas.autotest_report_schema import (
     AutoTestReportBatchScriptSelect,
     AutoTestReportBatchScriptItem,
     AutoTestReportScriptReportSelect,
+    AutoTestReportBatchDelete,
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.autotest.services.autotest_task_crud import AutoTestTaskCrud
@@ -35,8 +36,10 @@ from backend.core.exceptions import (
     ParameterException,
     NotFoundException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.enums import AutoTestTaskStatus
+from backend.services import DataScope
 
 
 class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate, AutoTestReportUpdate]):
@@ -113,21 +116,27 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def update_report(self, report_in: AutoTestReportUpdate) -> AutoTestReportModel:
+    async def update_report(self, report_in: AutoTestReportUpdate, scope: DataScope) -> AutoTestReportModel:
         """
         更新报告，根据report_id或report_code定位。
 
         :param report_in: 报告更新schema
+        :param scope: 数据权限上下文，仅允许修改创建人为自己的报告
         :return: 更新后的报告实例
         """
         report_id: Optional[int] = report_in.report_id
         report_code: Optional[str] = report_in.report_code
 
         if report_id:
-            await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
+            instance = await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
             report_id: int = instance.id
+
+        if not scope.can_write(instance.created_user):
+            error_message: str = f"更新报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
         try:
             update_dict = report_in.model_dump(
@@ -142,30 +151,95 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
-    async def delete_report(self, report_id: Optional[int] = None, report_code: Optional[str] = None) -> AutoTestReportModel:
+    async def delete_report(
+            self,
+            scope: DataScope,
+            report_id: Optional[int] = None,
+            report_code: Optional[str] = None,
+    ) -> AutoTestReportModel:
         """
-        软删除报告，并同步软删除该报告下所有明细。
+        物理删除报告，并同步物理删除该报告下所有明细。
 
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的报告
         :param report_id: 报告主键ID，与report_code二选一
         :param report_code: 报告标识代码，与report_id二选一
-        :return: 软删除后的报告实例
+        :return: 删除前的报告实例快照
         """
         if report_id:
             instance = await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
             instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
 
+        if not scope.can_delete(instance.created_user):
+            error_message: str = f"删除报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
+
         async with in_transaction():
             report_code = instance.report_code
             from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
             detail_crud = AutoTestDetailCrud()
-            detail_ids = await detail_crud.model.filter(
-                report_code=report_code, state__not=1
-            ).values_list("id", flat=True)
-            count = await detail_crud.soft_delete_batch(ids=list(detail_ids))
+            # 明细与报告均物理删除，同事务避免明细已删而报告未删的中间态
+            count = await detail_crud.model.filter(
+                report_code=report_code
+            ).delete()
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
-            # 报告软删与明细软删必须同事务，避免明细已删而报告未删的中间态
-            return await self.soft_delete(id=instance.id)
+            await instance.delete()
+            return instance
+
+    async def delete_reports(self, scope: DataScope, report_in: AutoTestReportBatchDelete) -> int:
+        """
+        批量物理删除报告及其全部明细；先全量校验归属，任一报告无权则整批拒绝。
+
+        :param scope: 数据权限上下文，仅允许删除创建人为自己的报告
+        :param report_in: 报告ID列表或报告标识代码列表
+        :return: 实际删除的报告数量
+        """
+        report_ids: Optional[List[int]] = report_in.report_ids
+        report_codes: Optional[List[str]] = report_in.report_codes
+        if not report_ids and not report_codes:
+            error_message: str = "批量删除报告失败, 参数[report_ids]或[report_codes]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        targets: List[AutoTestReportModel] = []
+        if report_ids:
+            unique_ids: List[int] = list(dict.fromkeys(int(rid) for rid in report_ids))
+            targets = list(await self.model.filter(id__in=unique_ids, state__not=1))
+            found_ids: Set[int] = {obj.id for obj in targets}
+            missing_ids: List[int] = [rid for rid in unique_ids if rid not in found_ids]
+            if missing_ids:
+                error_message: str = f"批量删除报告失败, 记录[id={missing_ids}]不存在"
+                LOGGER.error(error_message)
+                raise NotFoundException(message=error_message)
+        else:
+            unique_codes: List[str] = list(dict.fromkeys(str(code) for code in report_codes))
+            targets = list(await self.model.filter(report_code__in=unique_codes, state__not=1))
+            found_codes: Set[str] = {obj.report_code for obj in targets}
+            missing_codes: List[str] = [code for code in unique_codes if code not in found_codes]
+            if missing_codes:
+                error_message: str = f"批量删除报告失败, 记录[report_code={missing_codes}]不存在"
+                LOGGER.error(error_message)
+                raise NotFoundException(message=error_message)
+
+        # 全有或全无：先逐条校验归属，避免部分报告已删、后续被拒
+        for instance in targets:
+            if not scope.can_delete(instance.created_user):
+                error_message: str = (
+                    f"批量删除报告失败, 报告[{instance.report_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+                )
+                LOGGER.error(error_message)
+                raise NoPermissionException(message=error_message)
+
+        target_ids: List[int] = [instance.id for instance in targets]
+        target_codes: List[str] = [instance.report_code for instance in targets]
+        from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
+        detail_crud = AutoTestDetailCrud()
+        async with in_transaction():
+            # 明细与报告均物理删除，同事务避免明细已删而报告未删的中间态
+            detail_count = await detail_crud.model.filter(report_code__in=target_codes).delete()
+            LOGGER.warning(f"批量删除报告{target_ids}关联的{detail_count}条明细信息")
+            return await self.model.filter(id__in=target_ids).delete()
 
     async def select_reports(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[AutoTestReportModel]]:
         """
@@ -299,7 +373,11 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         last_execute_state: Optional[AutoTestTaskStatus] = task_rows[0].get("last_execute_state")
         return task_name, task_case_ids, last_execute_state
 
-    async def search_task_batches(self, batch_in: AutoTestReportBatchSelect) -> Tuple[int, List[AutoTestReportBatchItem]]:
+    async def search_task_batches(
+            self,
+            batch_in: AutoTestReportBatchSelect,
+            scope: Optional[DataScope] = None,
+    ) -> Tuple[int, List[AutoTestReportBatchItem]]:
         """
         任务执行历史查询(任务维度): 按task_code把报告聚合成批次列表, 一行代表一次任务执行, 供/search_task_batches接口渲染执行历史。
 
@@ -312,6 +390,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         脚本/报告维度的下钻由/search_batch_scripts与/search_script_round_reports接口承担。
 
         :param batch_in: 批次查询入参
+        :param scope: 数据权限上下文，传入时仅聚合可见范围内的报告
         :return: (批次总数, 当前页批次列表)
         """
         batch_count: int = 0
@@ -322,10 +401,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         # 第1层：按batch_code分组, 每个批次只取最早开始时间这一行, 行数=批次数, 用来排序和分页
         state: int = 0 if batch_in.state is None else batch_in.state
-        report_batch_statement: List[Dict[str, Any]] = await self.model.filter(
-            task_code=task_code,
-            state=state,
-        ).annotate(
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        batch_filter: Q = Q(task_code=task_code, state=state)
+        if owner_q is not None:
+            # 按可见范围聚合，避免不可见报告影响批次排序与分页
+            batch_filter &= owner_q
+        report_batch_statement: List[Dict[str, Any]] = await self.model.filter(batch_filter).annotate(
             first_case_st_time=Min("case_st_time")
         ).group_by("batch_code").values("batch_code", "first_case_st_time")
         if not report_batch_statement:
@@ -358,11 +439,14 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         details_by_batch: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         if page_batch_codes:
             # 第2层：脚本汇总, 当前页批次内按batch_code+case_id分组, 一行=一个脚本, 轮次总数/成功轮次数/起止时间
-            script_rows: List[Dict[str, Any]] = await self.model.filter(
+            script_filter: Q = Q(
                 task_code=task_code,
                 state=state,
                 batch_code__in=page_batch_codes,
-            ).annotate(
+            )
+            if owner_q is not None:
+                script_filter &= owner_q
+            script_rows: List[Dict[str, Any]] = await self.model.filter(script_filter).annotate(
                 round_total=Count("id"),
                 round_passed=Count("id", _filter=Q(case_state=True)),
                 first_case_st_time=Min("case_st_time"),
@@ -376,11 +460,14 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
                 scripts_by_batch[row["batch_code"]].append(row)
 
             # 第3层：报告明细, 当前页批次内逐行取执行人/环境/耗时(耗时是字符串只能取回来求和), 按开始时间升序
-            detail_rows: List[Dict[str, Any]] = await self.model.filter(
+            detail_filter: Q = Q(
                 task_code=task_code,
                 state=state,
                 batch_code__in=page_batch_codes,
-            ).order_by("case_st_time").values(
+            )
+            if owner_q is not None:
+                detail_filter &= owner_q
+            detail_rows: List[Dict[str, Any]] = await self.model.filter(detail_filter).order_by("case_st_time").values(
                 "batch_code",
                 "case_st_time", "case_elapsed",
                 "created_user", "involve_envs",
@@ -406,13 +493,18 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             batches.append(batch)
         return len(batch_sorted_statement), batches
 
-    async def search_batch_scripts(self, script_in: AutoTestReportBatchScriptSelect) -> Tuple[int, List[AutoTestReportBatchScriptItem]]:
+    async def search_batch_scripts(
+            self,
+            script_in: AutoTestReportBatchScriptSelect,
+            scope: Optional[DataScope] = None,
+    ) -> Tuple[int, List[AutoTestReportBatchScriptItem]]:
         """
         批次内脚本维度下钻查询：按批次标识聚合脚本执行信息(一行=一个脚本), 供/search_batch_scripts接口渲染“脚本执行信息”抽屉。
         脚本行按最早开始时间升序排列, 自上而下即执行先后顺序: 串行模式等价于任务绑定顺序, 并行模式呈现脚本被调度的先后。
         轮次列表由前端按case_execute_count构建, 轮次内数据源名称由/search_script_round_reports按全轮次计算返回。
 
         :param script_in: 脚本维度查询入参
+        :param scope: 数据权限上下文，传入时仅聚合可见范围内的报告
         :return: (脚本总数, 当前页脚本行列表)
         """
         batch_code: str = (script_in.batch_code or "").strip()
@@ -420,10 +512,11 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             raise ParameterException(message="参数[batch_code]不允许为空")
 
         state: int = 0 if script_in.state is None else script_in.state
-        aggregate_rows: List[Dict[str, Any]] = await self.model.filter(
-            batch_code=batch_code,
-            state=state,
-        ).order_by("case_st_time").values(
+        aggregate_filter: Q = Q(batch_code=batch_code, state=state)
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        if owner_q is not None:
+            aggregate_filter &= owner_q
+        aggregate_rows: List[Dict[str, Any]] = await self.model.filter(aggregate_filter).order_by("case_st_time").values(
             "case_id", "case_state", "case_st_time", "case_ed_time",
             "created_user", "case_elapsed", "involve_envs", "round_no", "dataset_name",
         )
@@ -506,7 +599,11 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         script_total: int = len(script_items)
         return script_total, page_items
 
-    async def search_script_round_reports(self, report_in: AutoTestReportScriptReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
+    async def search_script_round_reports(
+            self,
+            report_in: AutoTestReportScriptReportSelect,
+            scope: Optional[DataScope] = None,
+    ) -> Tuple[int, List[Dict[str, Any]]]:
         """
         脚本执行明细分页查询(报告维度)：按批次标识+用例ID分页返回执行报告(一行记录代表一次场景执行), 供/search_script_round_reports接口渲染明细表格。
 
@@ -514,6 +611,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         两种形态统一按执行时间升序排列。
 
         :param report_in: 脚本明细查询入参
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的报告
         :return: (报告总数, 当前页报告行列表)
         """
         batch_code: str = (report_in.batch_code or "").strip()
@@ -524,6 +622,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         state: int = 0 if report_in.state is None else report_in.state
         query: Q = Q(batch_code=batch_code) & Q(case_id=report_in.case_id) & Q(state=state)
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        if owner_q is not None:
+            query &= owner_q
         if report_in.round_no:
             # 轮次形态：命中复合索引(batch_code, case_id, round_no)全列
             query &= Q(round_no=report_in.round_no)
@@ -644,6 +745,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             batch_code: str,
             state: int,
             case_id: Optional[int] = None,
+            scope: Optional[DataScope] = None,
     ) -> Tuple[int, List[Dict]]:
         """
         报告维度下钻查询：按批次标识精确分页返回同批次全部报告(一行=一条报告, 不做批次唯一化), 供/search_batch_reports接口渲染“执行报告”抽屉。
@@ -654,11 +756,15 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param batch_code: 批次标识代码(精确等值, 命中batch_code索引)
         :param state: 状态(0:启用, 1:禁用)
         :param case_id: 用例ID(可选, 传入时按用例过滤, 与batch_code命中复合索引(batch_code, case_id, round_no)左前缀)
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的报告
         :return: (报告总数, 当前页报告行列表)
         """
         q: Q = Q(batch_code=batch_code) & Q(state=state)
         if case_id:
             q &= Q(case_id=case_id)
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        if owner_q is not None:
+            q &= owner_q
         select_result: Tuple[int, List[AutoTestReportModel]] = await self.select_reports(
             search=q,
             page=page,

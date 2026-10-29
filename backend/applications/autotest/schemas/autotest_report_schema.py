@@ -158,3 +158,10 @@ class AutoTestReportBatchItem(BaseModel):
     task_elapsed: float = Field(default=0.0, description="任务执行耗时")
     involve_envs: List[str] = Field(default_factory=list, description="涉及应用环境列表")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="执行人员")
+
+
+class AutoTestReportBatchDelete(BaseModel):
+    """批量删除报告入参：报告ID列表与报告标识代码列表二选一。"""
+
+    report_ids: Optional[List[int]] = Field(None, description="报告ID列表")
+    report_codes: Optional[List[str]] = Field(None, max_length=64, description="报告标识代码列表")

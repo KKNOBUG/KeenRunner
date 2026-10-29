@@ -117,6 +117,13 @@ class AutoTestCaseScriptGenerate(BaseModel):
         return self
 
 
+class AutoTestCaseDelete(BaseModel):
+    """批量删除用例入参：批量删除保持软删除，case_ids与case_codes二选一。"""
+
+    case_ids: Optional[List[int]] = Field(None, description="用例ID列表")
+    case_codes: Optional[List[str]] = Field(None, description="用例标识代码列表")
+
+
 class AutoTestCaseSelect(AutoTestCaseMeta, AutoTestCaseBase):
     """分页查询用例入参。"""
 

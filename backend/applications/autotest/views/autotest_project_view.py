@@ -26,6 +26,7 @@ from backend.core.exceptions import (
     DataAlreadyExistsException,
     ParameterException,
     DataBaseStorageException,
+    NoPermissionException,
 )
 from backend.core.responses import (
     SuccessResponse,
@@ -35,6 +36,7 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse
 )
+from backend.services import DataScope, DependTagScope
 
 autotest_project = APIRouter()
 
@@ -70,16 +72,18 @@ async def _fuzzy_json_list_ids(
 async def create_project(
         project_in: AutoTestProjectCreate = Body(..., description="应用信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     新增应用。
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，恢复软删应用时要求创建人允许当前用户写入
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.project_curd.create_project(project_in=project_in)
+        instance = await services.project_curd.create_project(project_in=project_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -90,6 +94,10 @@ async def create_project(
             replace_fields={"id": "project_id"}
         )
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
@@ -102,6 +110,7 @@ async def delete_project(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code删除应用信息。
@@ -109,10 +118,11 @@ async def delete_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.project_curd.delete_project(project_id=project_id, project_code=project_code)
+        instance = await services.project_curd.delete_project(scope=scope, project_id=project_id, project_code=project_code)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -123,6 +133,8 @@ async def delete_project(
             replace_fields={"id": "project_id"}
         )
         return SuccessResponse(message="删除成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -138,17 +150,21 @@ async def delete_project(
 async def batch_delete_projects(
         project_in: AutoTestProjectDelete = Body(..., description="项目信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code列表删除应用信息。
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
     :return: 统一HTTP响应
     """
     try:
-        count = await services.project_curd.delete_projects(project_in=project_in)
+        count = await services.project_curd.delete_projects(project_in=project_in, scope=scope)
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -164,16 +180,18 @@ async def batch_delete_projects(
 async def update_project(
         project_in: AutoTestProjectUpdate = Body(..., description="应用信息"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code更新应用信息。
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅允许修改创建人为自己的应用
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.project_curd.update_project(project_in=project_in)
+        instance = await services.project_curd.update_project(project_in=project_in, scope=scope)
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -184,6 +202,8 @@ async def update_project(
             replace_fields={"id": "project_id"}
         )
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -202,6 +222,7 @@ async def get_project(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据id或code查询应用信息。
@@ -209,6 +230,7 @@ async def get_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，校验应用创建人可见性
     :return: 统一HTTP响应
     """
     try:
@@ -216,6 +238,10 @@ async def get_project(
             instance = await services.project_curd.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
             instance = await services.project_curd.get_by_code(project_code=project_code, on_error=True, state__not=1)
+        if not scope.can_read(instance.created_user):  # 详情需收口到可见范围
+            raise NoPermissionException(
+                message=f"查询应用失败, 应用[{instance.project_code}]创建人[{instance.created_user}]不在当前用户可见范围"
+            )
         data = await instance.to_dict(
             exclude_fields={
                 "state",
@@ -226,6 +252,8 @@ async def get_project(
             replace_fields={"id": "project_id"}
         )
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
+        raise
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -238,15 +266,21 @@ async def get_project(
 @autotest_project.get("/get_names", summary="查询应用名称", description="查询去重后的应用名称列表")
 async def get_project_names(
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     查询去重后的应用名称列表。
 
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，仅返回可见范围内的应用名称
     :return: 统一HTTP响应
     """
     try:
-        names: List[str] = await services.project_curd.model.filter(state__not=1).distinct().values_list("project_name", flat=True)
+        project_query = services.project_curd.model.filter(state__not=1)
+        owner_q = scope.read_q("created_user")
+        if owner_q is not None:
+            project_query = project_query.filter(owner_q)
+        names: List[str] = await project_query.distinct().values_list("project_name", flat=True)
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except Exception as e:
         LOGGER.error(f"查询去重后的应用名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -257,6 +291,7 @@ async def get_project_names(
 async def search_projects(
         project_in: AutoTestProjectSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     根据条件分页查询应用列表信息。
@@ -297,6 +332,9 @@ async def search_projects(
         if project_in.updated_user:
             q &= Q(updated_user=project_in.updated_user)
         q &= Q(state=project_in.state)
+        owner_q = scope.read_q("created_user")
+        if owner_q is not None:
+            q &= owner_q
         total, instances = await services.project_curd.select_projects(
             search=q,
             page=project_in.page,
@@ -315,6 +353,10 @@ async def search_projects(
             )
             for obj in instances
         ]
+        # 行级可删标记由后端按当前资源族的删除范围判定：部门范围无法在前端复算，
+        # 且响应已排除 created_user，前端不能再按归属人自行比对
+        for item, obj in zip(data, instances):
+            item["can_delete"] = scope.can_delete(obj.created_user)
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
