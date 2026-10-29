@@ -9,6 +9,7 @@
 import traceback
 
 from fastapi import APIRouter, Body, Query, Depends
+from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from backend.applications.department.dependencies import get_dept_crud
@@ -37,11 +38,10 @@ from backend.core.responses import (
 )
 from backend.services import CTX_USER_ID, verify_password, get_password_hash
 
-user_public = APIRouter()
 user_secure = APIRouter()
 
 
-@user_public.post("/create", summary="新增用户", description="新增用户信息")
+@user_secure.post("/create", summary="新增用户", description="新增用户信息")
 async def create_user(
         user_in: UserCreate = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -55,13 +55,19 @@ async def create_user(
     """
     try:
         instance = await user_crud.create_user(user_in=user_in)
-        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
+        data = await instance.to_dict(
+            exclude_fields=["password"],
+            replace_fields={"id": "user_id"}
+        )
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except IntegrityError as e:
+        LOGGER.error(f"新增失败, 用户已存在: {e}\n{traceback.format_exc()}")
+        return DataAlreadyExistsResponse(message="新增失败, 用户已存在")
     except Exception as e:
-        LOGGER.error(f"新增用户失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {e}")
+        LOGGER.error(f"新增失败, 异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"新增失败, 异常描述: {e}")
 
 
 @user_secure.delete("/delete", summary="删除用户", description="根据id删除用户信息")
@@ -78,14 +84,17 @@ async def delete_user(
     """
     try:
         instance = await user_crud.delete_user(user_id)
-        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
+        data = await instance.to_dict(
+            exclude_fields=["password"],
+            replace_fields={"id": "user_id"}
+        )
         return SuccessResponse(message="删除成功", data=data, total=1)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -106,7 +115,7 @@ async def batch_delete_users(
         deleted_num = len(deleted_ids)
         return SuccessResponse(message="删除成功", data={"deleted": deleted_ids}, total=deleted_num)
     except Exception as e:
-        LOGGER.error(f"根据id列表删除用户失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -124,13 +133,17 @@ async def update_user(
     """
     try:
         instance = await user_crud.update_user(user_in=user_in)
-        await user_crud.update_roles(instance, user_in.role_ids)
-        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
+        if "role_ids" in user_in.model_fields_set:
+            await user_crud.update_roles(instance, user_in.role_ids)
+        data = await instance.to_dict(
+            exclude_fields=["password"],
+            replace_fields={"id": "user_id"}
+        )
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id列表更新用户失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -166,7 +179,7 @@ async def get_user(
             data["dept"] = {}
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
-        LOGGER.error(f"根据id查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -189,7 +202,7 @@ async def get_user_by_username(
         data: dict = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
-        LOGGER.error(f"根据username查询用户失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -251,11 +264,21 @@ async def search_users(
             q &= Q(is_superuser=is_superuser)
         if dept_id is not None:
             q &= Q(dept_id=dept_id)
+
         total, user_objs = await user_crud.list(
-            page=page, page_size=page_size, order=order, search=q
+            page=page,
+            page_size=page_size,
+            order=order,
+            search=q
         )
-        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"},
-                                  m2m_replace_fields={"roles": {"id": "role_id"}}) for obj in user_objs]
+        data = [
+            await obj.to_dict(
+                m2m=True,
+                exclude_fields=["password"],
+                replace_fields={"id": "user_id"},
+                m2m_replace_fields={"roles": {"id": "role_id"}}
+            ) for obj in user_objs
+        ]
         for item in data:
             dept_id = item.pop("dept_id", None)
             if dept_id:
@@ -265,7 +288,7 @@ async def search_users(
                 item["dept"] = {}
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
-        LOGGER.error(f"根据条件分页查询用户列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -313,11 +336,21 @@ async def list_users(
             q &= Q(state=user_in.state)
         else:
             q &= Q(state=0)
+
         total, instances = await user_crud.list(
-            page=user_in.page, page_size=user_in.page_size, search=q, order=user_in.order
+            page=user_in.page,
+            page_size=user_in.page_size,
+            search=q,
+            order=user_in.order
         )
-        data = [await obj.to_dict(m2m=True, exclude_fields=["password"], replace_fields={"id": "user_id"},
-                                  m2m_replace_fields={"roles": {"id": "role_id"}}) for obj in instances]
+        data = [
+            await obj.to_dict(
+                m2m=True,
+                exclude_fields=["password"],
+                replace_fields={"id": "user_id"},
+                m2m_replace_fields={"roles": {"id": "role_id"}}
+            ) for obj in instances
+        ]
         for item in data:
             dept_id = item.pop("dept_id", None)
             if dept_id:
@@ -327,7 +360,7 @@ async def list_users(
                 item["dept"] = {}
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
-        LOGGER.error(f"根据条件分页查询用户列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -349,12 +382,16 @@ async def update_user_password(
         verified = verify_password(req_in.old_password, instance.password)
         if not verified:
             return FailureResponse(message="旧密码验证错误")
+
         instance.password = get_password_hash(req_in.new_password)
         await instance.save()
-        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
+        data = await instance.to_dict(
+            exclude_fields=["password"],
+            replace_fields={"id": "user_id"}
+        )
         return SuccessResponse(message="更新成功", data=data, total=1)
     except Exception as e:
-        LOGGER.error(f"根据当前登录用户ID修改密码失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -374,7 +411,7 @@ async def reset_password(
         data = await user_crud.reset_password(user_id)
         return SuccessResponse(message="重置成功", data=data, total=1)
     except Exception as e:
-        LOGGER.error(f"根据id重置用户密码失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"重置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"重置失败，异常描述: {e}")
 
 
@@ -391,8 +428,11 @@ async def logout(
     user_id = CTX_USER_ID.get()
     try:
         instance = await user_crud.logout(user_id=user_id)
-        data = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
+        data = await instance.to_dict(
+            exclude_fields=["password"],
+            replace_fields={"id": "user_id"}
+        )
         return SuccessResponse(message="登出成功", data=data, total=1)
     except Exception as e:
-        LOGGER.error(f"签退当前登录用户的所有会话信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"登出失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"登出失败，异常描述: {e}")

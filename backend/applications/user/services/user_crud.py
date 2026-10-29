@@ -136,13 +136,16 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         email = user_in.email
         username = user_in.username
-        instances = await self.get_by_conditions(only_one=True, on_error=False, email=email, username=username)
-        if instances:
-            error_message: str = f"新增用户信息失败, 记录[email={email}, username={username}]已存在"
+        if await self.model.filter(username=username).exists():
+            error_message: str = f"新增用户信息失败, 记录[username={username}]已存在"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        # 使用create_dict排除role_ids，并显式写入哈希后的密码，避免明文落库
+        if await self.model.filter(email=email).exists():
+            error_message: str = f"新增用户信息失败, 记录[email={email}]已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
+
         user_data = user_in.create_dict()
         user_data["password"] = get_password_hash(password=user_in.password)
         instance = await self.create(user_data)
@@ -255,7 +258,6 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :return: 更新后的用户实例
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
-        # 吊销用户所有Token
         instance.token_version += 1
         await instance.save()
         return instance

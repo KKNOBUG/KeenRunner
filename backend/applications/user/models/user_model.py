@@ -14,7 +14,7 @@ from backend.applications.base.services.scaffold import ScaffoldModel, MaintainM
 class User(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
     """系统用户模型。"""
 
-    username = fields.CharField(max_length=32, unique=True, description="用户账号")
+    username = fields.CharField(max_length=16, unique=True, description="用户账号")
     password = fields.CharField(max_length=255, description="用户密码")
     alias = fields.CharField(max_length=64, description="用户姓名")
     email = fields.CharField(max_length=64, description="用户邮箱")

@@ -16,7 +16,7 @@ from backend.applications.base.services.scaffold import UpperStr
 class UserBase(BaseModel):
     """用户公共字段。"""
 
-    username: Optional[str] = Field(default=None, max_length=32, description="用户账号")
+    username: Optional[str] = Field(default=None, max_length=16, description="用户账号")
     alias: Optional[str] = Field(default=None, max_length=32, description="用户姓名")
     phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
     email: Optional[EmailStr] = Field(default=None, max_length=64, description="用户邮箱")
@@ -35,7 +35,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """新增用户入参。"""
 
-    username: str = Field(..., max_length=32, description="用户账号")
+    username: str = Field(..., max_length=16, description="用户账号")
     password: str = Field(..., max_length=255, description="用户密码")
     alias: str = Field(..., max_length=32, description="用户姓名")
     email: EmailStr = Field(..., max_length=64, description="用户邮箱")
