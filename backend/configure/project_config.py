@@ -71,13 +71,14 @@ class ProjectConfig(BaseSettings):
 ## 认证与权限
 
 - JWT 无状态认证（argon2 密码加密），Token 可吊销
-- 按 summary 前缀识别接口行为，为管理员/标准用户/宾客用户三类内置角色自动绑定路由与菜单
+- 按 summary 前缀识别接口行为，为管理员/标准用户/访客用户三类内置角色自动绑定路由与菜单
 
 ## 接口规范
 
 - 路由 `tags` 采用「一级目录:二级模块」（如 `自动化测试:用例`），与侧边栏菜单对齐
 - `summary` 必须以行为动词开头（查询/新增/更新/删除/执行/导入/刷新），权限自动绑定依赖该前缀分类
     """
+
     APP_DOCS_URL: str = "/KeenRunner/docs"
     APP_REDOC_URL: str = "/KeenRunner/redoc"
     APP_OPENAPI_URL: str = "/KeenRunner/openapi_url"
