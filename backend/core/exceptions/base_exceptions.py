@@ -142,6 +142,13 @@ class ParameterException(BaseExceptions):
         super().__init__(**kwargs)
 
 
+class NoAuthenticateException(BaseExceptions):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("errenum", BaseErrorEnum.BASE401)
+        kwargs.setdefault("code", BaseErrorEnum.BASE401.code)
+        super().__init__(**kwargs)
+
+
 class NoPermissionException(BaseExceptions):
     def __init__(self, **kwargs):
         kwargs.setdefault("errenum", BaseErrorEnum.BASE403)
