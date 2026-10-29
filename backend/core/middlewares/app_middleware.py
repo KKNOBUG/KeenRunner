@@ -17,8 +17,60 @@ from starlette.datastructures import FormData
 
 from backend.applications.base.models.audit_model import Audit
 from backend.applications.user.models.user_model import User
+from backend.common.permission_action import AUDITED_ACTIONS, classify_summary_action
 from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER, ROUTER_SUMMARY, ROUTER_TAGS
 from backend.services import AuthControl
+
+# 审计脱敏：凭证类字段在入库前遮蔽，避免拥有审计读权限的角色（Users 系统域只读）取到他人登录态与密码
+MASKED_HEADER_KEYS: frozenset = frozenset({
+    "auth",
+    "token",
+    "secret",
+    "authorization",
+    "cookie",
+    "proxy-authorization",
+    "proxy-authenticate",
+    "www-authenticate",
+    "x-api-key",
+    "x-auth-token",
+    "x-access-token",
+    "x-refresh-token",
+    "x-secret-key",
+    "x-signature",
+})
+MASKED_FIELD_KEYWORDS: frozenset = frozenset({
+    "pwd",
+    "passwd",
+    "password",
+    "secret",
+    "auth",
+    "authorization",
+    "token",
+    "auth_token",
+    "access_token",
+    "refresh_token",
+})
+MASKED_VALUE: str = "******"
+
+
+def _mask_sensitive(payload: Any) -> Any:
+    """递归遮蔽字典/列表中的凭证字段，保留原始结构以保留审计可读性。
+
+    :param payload: 已解析的请求体或表单数据
+    :returns: 脱敏后的同结构数据
+    """
+    if isinstance(payload, dict):
+        return {
+            key: (
+                MASKED_VALUE
+                if any(word in str(key).lower() for word in MASKED_FIELD_KEYWORDS)
+                else _mask_sensitive(value)
+            )
+            for key, value in payload.items()
+        }
+    if isinstance(payload, list):
+        return [_mask_sensitive(item) for item in payload]
+    return payload
 
 
 def is_upload_request(request: Request) -> bool:
@@ -114,7 +166,10 @@ async def logging_middleware(request: Request, call_next):
     # 记录请求信息
     request_method: str = request.method
     request_router: str = request.url.path
-    request_header: dict = dict(request.headers)
+    request_header: dict = {
+        key: (MASKED_VALUE if key.lower() in MASKED_HEADER_KEYS else value)
+        for key, value in request.headers.items()
+    }
     if "referer" in request_header and request_header["referer"]:
         try:
             request_header["referer"] = unquote(request_header["referer"])
@@ -128,6 +183,19 @@ async def logging_middleware(request: Request, call_next):
 
     # 请求流传递并获取响应
     response = await call_next(request)
+
+    # 按路由声明的标签与摘要归类行为：审计只记录写/删/执行类请求，
+    # 查询类直接透传，避免日志膨胀，也避免为审计而复制大响应体
+    route = request.scope.get("route")
+    route_tags = [str(tag).strip() for tag in (getattr(route, "tags", None) or []) if str(tag or "").strip()]
+    if route_tags:
+        request_tags = ",".join(route_tags)
+    action: str = classify_summary_action(
+        getattr(route, "summary", None) or request_summary,
+        request_method,
+    )
+    if action not in AUDITED_ACTIONS:
+        return response
 
     # 判断是否管控响应
     is_download: bool = is_download_response(response)
@@ -174,6 +242,14 @@ async def logging_middleware(request: Request, call_next):
         response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(end_time))
         response_elapsed = f"{end_time - start_time:.2f}s"
 
+        # 仅审计写请求额外承担一次JSON解析：凭证字段（密码/令牌等）入库前脱敏，
+        # 非JSON请求体（如XML原文）无法结构化处理则原样记录
+        body_text: str = request_body.decode("utf-8", errors="ignore") if isinstance(request_body, bytes) else (request_body or "")
+        try:
+            masked_body: str = orjson.dumps(_mask_sensitive(orjson.loads(body_text))).decode()
+        except orjson.JSONDecodeError:
+            masked_body = body_text
+
         # 记录日志
         audit_log: Dict[str, Any] = {
             "request_time": request_time,
@@ -183,35 +259,40 @@ async def logging_middleware(request: Request, call_next):
             "request_router": request_router,
             "request_client": request_client,
             "request_header": request_header,
-            "request_params": request_body or request_params,
+            "request_params": masked_body or request_params,
             "response_time": response_time,
             "response_header": response_header,
             "response_elapsed": response_elapsed
         }
-        if isinstance(response_body, str):
-            _response = orjson.loads(response_body)
+        if isinstance(response_body, str) and response_body:
+            try:
+                _response = orjson.loads(response_body)
+            except orjson.JSONDecodeError:
+                # 非JSON响应(如纯文本)不阻断审计，仅跳过响应体解析
+                _response = {}
             audit_log["response_code"] = _response.get("code", "")
             audit_log["response_message"] = _response.get("message", "")[:512]
             audit_log["response_params"] = response_body
             del _response
 
-        request_message: str = f"\n> > > > > > > > > > > > > > > > > > > >\n" \
-                               f"请求时间：{audit_log.get('request_time')}\n" \
-                               f"请求模块：{audit_log.get('request_tags')}\n" \
-                               f"请求接口：{audit_log.get('request_summary')}\n" \
-                               f"请求方式：{audit_log.get('request_method')}\n" \
-                               f"请求路由：{audit_log.get('request_router')}\n" \
-                               f"请求来源：{audit_log.get('request_client')}\n" \
-                               f"请求头部：{audit_log.get('request_header')}\n" \
-                               f"请求参数：{audit_log.get('request_params')}\n" \
-                               f"响应头部：{audit_log.get('response_header')}\n" \
-                               f"响应代码：{audit_log.get('response_code')}\n" \
-                               f"响应消息：{audit_log.get('response_message')}\n" \
-                               f"响应参数：{audit_log.get('response_params')}\n" \
-                               f"响应时间：{audit_log.get('response_time')}\n" \
-                               f"响应耗时：{audit_log.get('response_elapsed')}\n" \
-                               f"< < < < < < < < < < < < < < < < < < < < "
-
+        request_message: str = (
+            f"\n> > > > > > > > > > > > > > > > > > > >\n"
+            f"请求时间：{audit_log.get('request_time')}\n"
+            f"请求模块：{audit_log.get('request_tags')}\n"
+            f"请求接口：{audit_log.get('request_summary')}\n"
+            f"请求方式：{audit_log.get('request_method')}\n"
+            f"请求路由：{audit_log.get('request_router')}\n"
+            f"请求来源：{audit_log.get('request_client')}\n"
+            f"请求头部：{audit_log.get('request_header')}\n"
+            f"请求参数：{audit_log.get('request_params')}\n"
+            f"响应头部：{audit_log.get('response_header')}\n"
+            f"响应代码：{audit_log.get('response_code')}\n"
+            f"响应消息：{audit_log.get('response_message')}\n"
+            f"响应参数：{audit_log.get('response_params')}\n"
+            f"响应时间：{audit_log.get('response_time')}\n"
+            f"响应耗时：{audit_log.get('response_elapsed')}\n"
+            f"< < < < < < < < < < < < < < < < < < < < "
+        )
         LOGGER.info(request_message)
 
         try:
