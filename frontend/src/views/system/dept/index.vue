@@ -258,7 +258,7 @@ const columns = [
                       ),
                       [[vPermission, apiPermissionKey('delete', '/dept/delete')]]
                   ),
-              default: () => h('div', {}, '确定删除该部门吗?'),
+              default: () => h('div', {}, '确定删除该部门吗? 存在子部门或在用用户时无法删除。'),
             }
         ),
       ]

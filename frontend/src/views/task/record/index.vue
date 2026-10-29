@@ -3,12 +3,16 @@
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
+        :query-bar-props="queryBarProps"
         :is-pagination="true"
         :remote="true"
         :columns="columns"
         :get-data="getTaskRecordList"
         :scroll-x="3050"
         :single-line="true"
+        row-key="record_id"
+        @query-bar-delete="handleBatchDelete"
     >
       <template #queryBar>
         <QueryBarItem label="调度ID：">
@@ -102,7 +106,7 @@
 </template>
 
 <script setup>
-import { h, ref } from 'vue'
+import { h, ref, computed } from 'vue'
 import { NButton, NDropdown, NInput, NSelect, NTag } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -111,7 +115,7 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import TextPreviewModal from '@/components/common/TextPreviewModal.vue'
 
 import api from '@/api'
-import { useApiPermission } from '@/composables'
+import { useApiPermission, useBatchDeleteGuard } from '@/composables'
 import { formatDateTime, formatJsonBrief, resultPayloadOf, toPrettyJson } from '@/utils'
 
 defineOptions({ name: '执行记录' })
@@ -124,6 +128,51 @@ function hasDownloadPermission() {
 
 const $table = ref(null)
 const queryItems = ref({})
+const checkedRowKeys = ref([])
+const { pickDeletableIds } = useBatchDeleteGuard()
+
+/** 批量删除入口按接口权限下发，与行内删除同一归属口径 */
+const queryBarProps = computed(() => ({
+  addReset: true,
+  addSearch: true,
+  addCreate: false,
+  addDelete: hasApiPermission('post', '/autotest/task/record/deletes'),
+  actionMode: 'split',
+}))
+
+/** 终态状态集合：仅终态记录后端允许删除，非终态行先在前端剔除 */
+const FINAL_STATUSES = ['成功', '失败', '部分成功']
+
+async function handleBatchDelete() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选执行记录')
+    return
+  }
+  const rows = $table.value?.tableData || []
+  const deletableIds = pickDeletableIds({ ids, rows, keyField: 'record_id', label: '执行记录' })
+  const rowMap = new Map(rows.map((row) => [row.record_id, row]))
+  const finalIds = deletableIds.filter((id) => FINAL_STATUSES.includes(rowMap.get(id)?.celery_status))
+  const notFinal = deletableIds.length - finalIds.length
+  if (notFinal) {
+    window.$message?.warning?.(`已过滤 ${notFinal} 条未到终态的执行记录`)
+  }
+  if (!finalIds.length) {
+    window.$message?.warning?.('选中的执行记录均不可删除(非终态或不在可删范围)')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${finalIds.length} 条执行记录吗？将同时清理产物文件，删除后不可恢复`,
+    async confirm() {
+      await api.deleteApiTaskRecordBatch({ record_ids: finalIds })
+      window.$message?.success?.('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
 
 /** 结果摘要查看弹框（共用 TextPreviewModal） */
 const previewShow = ref(false)
@@ -258,6 +307,7 @@ const formatCaseIds = (ids) => {
 }
 
 const columns = [
+  { type: 'selection', fixed: 'left', width: 48 },
   { title: '任务名称', key: 'task_name', width: 300, align: 'center', ellipsis: { tooltip: true } },
   { title: '任务类型', key: 'task_type', width: 200, align: 'center', ellipsis: { tooltip: true } },
   {

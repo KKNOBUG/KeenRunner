@@ -3,12 +3,15 @@
     <CrudTable
         ref="$table"
         v-model:query-items="queryItems"
+        v-model:checked-row-keys="checkedRowKeys"
+        :query-bar-props="queryBarProps"
         :columns="columns"
         :get-data="getAsyncCenterRecordList"
         :extra-params="extraParams"
         :scroll-x="1440"
         :single-line="true"
         row-key="record_id"
+        @query-bar-delete="handleBatchDelete"
         @pagination-meta="onPaginationMeta"
     >
       <template #queryBar>
@@ -54,7 +57,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import api from '@/api'
-import { useApiPermission } from '@/composables'
+import { useApiPermission, useBatchDeleteGuard } from '@/composables'
 import { useUserStore } from '@/store'
 import { formatDateTime, renderIcon } from '@/utils'
 import {
@@ -67,7 +70,17 @@ defineOptions({ name: '异步中心' })
 const $table = ref(null)
 const userStore = useUserStore()
 const {hasApiPermission} = useApiPermission()
+const { pickDeletableIds } = useBatchDeleteGuard()
 const queryItems = ref({})
+const checkedRowKeys = ref([])
+/** 批量删除入口按接口权限下发，与行内删除同一归属口径 */
+const queryBarProps = computed(() => ({
+  addReset: true,
+  addSearch: true,
+  addCreate: false,
+  addDelete: hasApiPermission('post', '/autotest/task/record/deletes'),
+  actionMode: 'split',
+}))
 /** 非脚本执行类任务类型集合：本页仅展示异步中心范围记录，固定随请求下发 */
 const extraParams = { task_type_in: ASYNC_CENTER_TASK_TYPE_VALUES }
 const taskTypeOptions = ASYNC_CENTER_TASK_TYPE_OPTIONS
@@ -198,9 +211,42 @@ const removeRow = async (row) => {
   }
 }
 
+/** 批量删除：先剔除无权或非终态行，再二次确认后整批提交 */
+async function handleBatchDelete() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选异步任务记录')
+    return
+  }
+  const rows = $table.value?.tableData || []
+  const deletableIds = pickDeletableIds({ ids, rows, keyField: 'record_id', label: '异步任务记录' })
+  const rowMap = new Map(rows.map((row) => [rowKeyOf(row), row]))
+  const finalIds = deletableIds.filter((id) => isFinal(rowMap.get(id) || {}))
+  const notFinal = deletableIds.length - finalIds.length
+  if (notFinal) {
+    window.$message?.warning?.(`已过滤 ${notFinal} 条未到终态的异步任务记录`)
+  }
+  if (!finalIds.length) {
+    window.$message?.warning?.('选中的异步任务记录均不可删除(非终态或不在可删范围)')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${finalIds.length} 条异步任务记录吗？将同时清理产物文件，删除后不可恢复`,
+    async confirm() {
+      await api.deleteApiTaskRecordBatch({ record_ids: finalIds })
+      window.$message?.success?.('删除成功')
+      checkedRowKeys.value = []
+      $table.value?.handleSearch?.()
+    },
+  })
+}
+
 /* ---------- 列定义 ---------- */
 
 const columns = [
+  { type: 'selection', fixed: 'left', width: 48 },
   {
     title: '序号',
     key: 'index',

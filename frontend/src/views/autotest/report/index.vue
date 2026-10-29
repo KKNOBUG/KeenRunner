@@ -26,6 +26,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import ReportDetailDrawer from '@/components/autotest/ReportDetailDrawer.vue'
 import { apiPermissionKey, formatDateTime, renderIcon } from '@/utils'
 import { useUserStore } from '@/store'
+import { useApiPermission, useBatchDeleteGuard } from '@/composables'
 import api from '@/api'
 import { isCaseSuccess } from '@/views/autotest/utils/reportBatchRows'
 
@@ -35,13 +36,42 @@ const userStore = useUserStore()
 
 const queryItems = ref({})
 const vPermission = resolveDirective('permission')
+const { hasApiPermission } = useApiPermission()
+const { pickDeletableIds } = useBatchDeleteGuard()
+const checkedRowKeys = ref([])
 
-const queryBarProps = {
+/** 批量删除入口按接口权限下发，与行内删除同一归属口径 */
+const queryBarProps = computed(() => ({
   addReset: true,
   addSearch: true,
   addCreate: false,
-  addDelete: false,
+  addDelete: hasApiPermission('post', '/autotest/report/deletes'),
   actionMode: 'split',
+}))
+
+/** 批量删除：先剔除无权行，再二次确认后整批硬删(后端同事务级联清理明细) */
+async function handleBatchDelete() {
+  const ids = [...(checkedRowKeys.value || [])]
+  if (!ids.length) {
+    window.$message?.warning?.('请先勾选报告')
+    return
+  }
+  const deletableIds = pickDeletableIds({ ids, rows: reportRows.value || [], keyField: 'report_id', label: '报告' })
+  if (!deletableIds.length) {
+    window.$message?.warning?.('选中的报告均不在可删范围，无法删除')
+    return
+  }
+  await $dialog.confirm({
+    title: '提示',
+    type: 'warning',
+    content: `确定删除选中的 ${deletableIds.length} 份报告吗？关联执行明细将一并删除，删除后不可恢复`,
+    async confirm() {
+      await api.deleteApiReportBatch({ report_ids: deletableIds })
+      window.$message?.success?.('删除成功')
+      checkedRowKeys.value = []
+      await handleQuery()
+    },
+  })
 }
 
 const getTodayRange = () => {
@@ -270,6 +300,7 @@ onMounted(() => {
 })
 
 const batchColumns = computed(() => [
+  { type: 'selection', fixed: 'left', width: 48 },
   {
     title: '序号',
     key: '_index',
@@ -602,6 +633,7 @@ const datasetColumns = [
         v-bind="queryBarProps"
         @search="handleSearch"
         @reset="handleReset"
+        @delete="handleBatchDelete"
       >
         <QueryBarItem label="用例ID：">
           <NInput
@@ -685,10 +717,11 @@ const datasetColumns = [
 
       <div min-w-0>
         <NDataTable
+          v-model:checked-row-keys="checkedRowKeys"
           :loading="tableLoading"
           :columns="batchColumns"
           :data="reportRows"
-          :row-key="(r) => r.report_code || r.report_id"
+          :row-key="(r) => r.report_id"
           :scroll-x="2200"
           :single-line="true"
           striped

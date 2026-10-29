@@ -223,6 +223,8 @@ export default {
     if (params.report_code) queryParams.push(`report_code=${params.report_code}`)
     return request.get(`/autotest/report/get${queryParams.length ? '?' + queryParams.join('&') : ''}`)
   },
+  /** Body：{ report_ids?: number[] } 或 { report_codes?: string[] } —— 批量硬删报告及其明细 */
+  deleteApiReportBatch: (data = {}) => request.post('/autotest/report/deletes', data),
   // 明细相关
   getApiDetailList: (data = {}) => request.post('/autotest/detail/search', data),
   getApiDetailTree: (data = {}) => request.post('/autotest/detail/tree', data),
@@ -231,6 +233,8 @@ export default {
     if (params.detail_id) queryParams.push(`detail_id=${params.detail_id}`)
     return request.get(`/autotest/detail/get${queryParams.length ? '?' + queryParams.join('&') : ''}`)
   },
+  /** Body：{ detail_ids: number[] } —— 批量硬删执行明细 */
+  deleteApiDetailBatch: (data = {}) => request.post('/autotest/detail/deletes', data),
 
   // 任务相关
   getApiTaskList: (data = {}) => request.post('/autotest/task/search', data),
@@ -256,6 +260,8 @@ export default {
   getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
   /** params：record_id —— 删除终态执行记录并物理清理产物文件 */
   deleteApiTaskRecord: (recordId) => request.delete(`/autotest/task/record/delete?record_id=${recordId}`),
+  /** Body：{ record_ids: number[] } —— 批量删除终态执行记录并物理清理产物文件 */
+  deleteApiTaskRecordBatch: (data = {}) => request.post('/autotest/task/record/deletes', data),
   /** params：record_id、key —— 下载执行记录附件（blob） */
   downloadApiTaskRecordAttachment: (recordId, key = 'main') => axios.get(
       `${import.meta.env.VITE_BASE_API}/autotest/task/record/${recordId}/attachments/${encodeURIComponent(key)}/download`,

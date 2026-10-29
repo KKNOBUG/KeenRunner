@@ -531,7 +531,7 @@ const columns = computed(() => {
                         ),
                         [[vPermission, apiPermissionKey('delete', '/base/role/delete')]]
                     ),
-                default: () => h('div', {}, '确定删除该角色吗?'),
+                default: () => h('div', {}, '确定删除该角色吗? 存在用户绑定时无法删除。'),
               }
           ),
         ]
