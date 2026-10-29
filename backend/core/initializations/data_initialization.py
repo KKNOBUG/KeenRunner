@@ -69,7 +69,7 @@ async def init_database_role():
     user_role = await role_crud.create_role(
         RoleCreate(
             code=PermissionRule.ROLE_CODE_USER,
-            name="标准用户",
+            name="普通用户",
             description="系统域只读，业务域增删改查全开；不可操作系统写操作与角色权限变更",
             select_scope=DataScopeEnum.DEPT_AND_CHILD,
             update_scope=DataScopeEnum.SELF,
@@ -180,7 +180,7 @@ async def init_database_user():
         UserCreate(
             username="tester",
             password="KFuser01@!",
-            alias="标准用户",
+            alias="普通用户",
             email="tester@test.com",
             phone="18888888888",
             avatar="/static/avatar/default/20250101010101.png",

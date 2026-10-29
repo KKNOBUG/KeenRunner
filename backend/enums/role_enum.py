@@ -20,7 +20,7 @@ class BuiltinRoleCode(StringEnum):
     """
 
     ADMIN = ("Administrators", "管理员")
-    USER = ("Users", "标准用户")
+    USER = ("Users", "普通用户")
     GUEST = ("Guests", "访客用户")
 
     @classmethod
