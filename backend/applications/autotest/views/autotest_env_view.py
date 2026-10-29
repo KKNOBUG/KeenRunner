@@ -389,7 +389,6 @@ async def get_all_apps(
         data, total = await services.project_curd.get_all_project(
             page, page_size, scope=await scope.for_tag(PROJECT_TAG)
         )
-        LOGGER.info(f"获取所有应用成功, 结果明细: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"获取所有应用失败，异常描述: {e}\n{traceback.format_exc()}")

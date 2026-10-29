@@ -22,7 +22,7 @@ class RoleTag(ScaffoldModel, MaintainMixin, TimestampMixin):
     delete_scope = fields.CharEnumField(DataScopeEnum, null=True, default=None, max_length=16, description="数据可删范围(空表示按角色默认)")
 
     class Meta:
-        table = "krun_role_tag_scope"
+        table = "krun_role_tags"
         unique_together = (
             ("role", "tag"),
         )
