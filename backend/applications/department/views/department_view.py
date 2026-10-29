@@ -57,7 +57,7 @@ async def create_department(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"新增部门失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"新增失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
@@ -77,10 +77,12 @@ async def delete_department(
         instance = await dept_crud.delete_department(department_id)
         data = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="删除成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"删除部门失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -99,10 +101,13 @@ async def batch_delete_departments(
     try:
         deleted_ids = await dept_crud.delete_departments(department_in=department_in)
         deleted_num = len(deleted_ids)
-        LOGGER.info(f"根据id列表批量删除部门信息成功, 结果数量: {deleted_num}")
         return SuccessResponse(message="删除成功", data={"deleted": deleted_ids}, total=deleted_num)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id列表批量删除部门信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -127,7 +132,7 @@ async def update_department(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id更新部门信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
@@ -151,7 +156,7 @@ async def get_department(
         data: dict = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
-        LOGGER.error(f"根据id查询部门信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -171,7 +176,7 @@ async def list_departments(
         dept_tree = await dept_crud.get_dept_tree(name)
         return SuccessResponse(message="查询成功", data=dept_tree, total=len(dept_tree))
     except Exception as e:
-        LOGGER.error(f"根据name查询部门列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -210,9 +215,9 @@ async def search_departments(
         if updated_user:
             q &= Q(updated_user=updated_user)
         q &= Q(state=0)
-        total, instances = await dept_crud.list(page=page, page_size=page_size, search=q, order=order)
+        total, instances = await dept_crud.list(page=page, page_size=page_size, order=order, search=q)
         data = [await obj.to_dict(replace_fields={"id": "dept_id"}) for obj in instances]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
-        LOGGER.error(f"根据条件分页查询部门列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")

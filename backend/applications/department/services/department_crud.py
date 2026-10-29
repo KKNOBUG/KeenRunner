@@ -7,13 +7,15 @@
 @DateTime: 2025/2/3 16:31
 """
 import datetime
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.department.models.dept_model import Department, DeptStruct
 from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate, DepartmentBatchDelete
+from backend.applications.user.models.user_model import User
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 
@@ -109,15 +111,43 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         await self.update_dept_closure(instance)
         return instance
 
+    async def _assert_department_not_referenced(self, instance: Department) -> None:
+        """
+        校验部门不存在引用关系：启用的子部门、未删除的用户。
+
+        parent_id 与 krun_user.dept_id 均无外键约束，物理删除后引用方会指向不存在的部门，
+        只能在应用层前置拦截。
+
+        :param instance: 待删除部门实例
+        :raises ParameterException: 存在启用子部门或在用用户
+        """
+        child_count: int = await self.model.filter(parent_id=instance.id, state=0).count()
+        if child_count > 0:
+            error_message: str = f"删除部门信息失败, 部门[name={instance.name}]存在{child_count}个子部门, 无法直接删除"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
+        user_count: int = await User.filter(dept_id=instance.id, state=0).count()
+        if user_count > 0:
+            error_message: str = f"删除部门信息失败, 部门[name={instance.name}]存在{user_count}个用户, 无法直接删除"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
     async def delete_department(self, department_id: int) -> Optional[Department]:
         """
-        软删除单个部门并清除闭包表中以该节点为descendant的关系。
+        物理删除单个部门：存在子部门或在用用户时拒绝，事务内同步清理闭包表关系。
 
         :param department_id: 部门ID
-        :return: 更新后的部门实例
+        :return: 被删除的部门实例
+        :raises ParameterException: 存在启用子部门或在用用户
+        :raises NotFoundException: 部门不存在或已软删除
         """
-        instance = await self.soft_delete(id=department_id)
-        await DeptStruct.filter(descendant=department_id).delete()
+        instance = await self.get_by_id(department_id=department_id, on_error=True, state=0)
+        await self._assert_department_not_referenced(instance)
+        async with in_transaction() as conn:
+            # 闭包表无外键约束，与部门删除同事务清理，避免残留关系使部门树层级错乱
+            await DeptStruct.filter(Q(ancestor=instance.id) | Q(descendant=instance.id)).using_db(conn).delete()
+            await instance.delete(using_db=conn)
         return instance
 
     async def update_department(self, department_in: DepartmentUpdate) -> Department:
@@ -176,7 +206,8 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             fmt = lambda x: datetime.datetime.strftime(x, "%Y-%m-%d %H:%M:%S") if isinstance(x, datetime.datetime) else x
             return [
                 {
-                    "id": dept.id,
+                    # 与部门其它接口一致统一返回dept_id，前端树/下拉均按该字段取值
+                    "dept_id": dept.id,
                     "code": dept.code,
                     "name": dept.name,
                     "description": dept.description,
@@ -217,20 +248,30 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def delete_departments(self, department_in: DepartmentBatchDelete) -> List[int]:
         """
-        根据ID列表软删除部门。
+        根据ID列表软删除部门；软删与物理删同样拒绝存在子部门或在用用户的部门。
 
         :param department_in: 含department_ids的批量删除入参
-        :return: 实际删除成功的条数
+        :return: 实际删除成功的部门ID列表
         """
-        department_ids: Optional[List[int]] = department_in.user_ids
+        department_ids: Optional[List[int]] = department_in.department_ids
         if not department_ids:
             return []
 
-        deleted_ids: List[int] = []
-        for did in deleted_ids:
-            try:
-                await self.delete_department(int(did))
-                deleted_ids.append(int(did))
-            except NotFoundException:
+        # 先全量校验引用关系，避免前序节点已软删、后续节点被拦截时留下部分成功
+        targets: List[Department] = []
+        for did in dict.fromkeys(int(did) for did in department_ids):
+            instance = await self.model.filter(id=did, state=0).first()
+            if not instance:
                 continue
-        return deleted_ids
+            await self._assert_department_not_referenced(instance)
+            targets.append(instance)
+        if not targets:
+            return []
+
+        target_ids: List[int] = [instance.id for instance in targets]
+        update_fields: Dict[str, Any] = self.soft_delete_values()
+        async with in_transaction() as conn:
+            # 闭包表无外键约束，与软删同事务清理，避免残留关系使部门树层级错乱
+            await self.model.filter(id__in=target_ids, state=0).using_db(conn).update(**update_fields)
+            await DeptStruct.filter(descendant__in=target_ids).using_db(conn).delete()
+        return target_ids
