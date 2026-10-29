@@ -9,6 +9,7 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from backend.enums import DataScopeEnum
 
 
 class Role(ScaffoldModel, MaintainMixin, TimestampMixin):
@@ -17,6 +18,9 @@ class Role(ScaffoldModel, MaintainMixin, TimestampMixin):
     code = fields.CharField(max_length=16, unique=True, description="角色代码")
     name = fields.CharField(max_length=64, unique=True, description="角色名称")
     description = fields.TextField(null=True, description="角色描述")
+    select_scope = fields.CharEnumField(DataScopeEnum, default=DataScopeEnum.DEPT_AND_CHILD, max_length=16, description="数据可见范围")
+    update_scope = fields.CharEnumField(DataScopeEnum, default=DataScopeEnum.SELF, max_length=16, description="数据可写范围")
+    delete_scope = fields.CharEnumField(DataScopeEnum, default=DataScopeEnum.SELF, max_length=16, description="数据可删范围")
     menus = fields.ManyToManyField(
         model_name="models.Menu",
         related_name="role_menus",

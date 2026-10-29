@@ -11,6 +11,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from backend.applications.base.services.scaffold import UpperStr
+from backend.enums import DataScopeEnum
 
 
 class RoleBase(BaseModel):
@@ -27,6 +28,9 @@ class RoleCreate(RoleBase):
     code: str = Field(..., max_length=16, description="角色代码")
     name: str = Field(..., max_length=64, description="角色名称")
     description: Optional[str] = Field(default="", description="角色描述")
+    select_scope: DataScopeEnum = Field(default=DataScopeEnum.DEPT_AND_CHILD, description="数据可见范围")
+    update_scope: DataScopeEnum = Field(default=DataScopeEnum.SELF, description="数据可写范围")
+    delete_scope: DataScopeEnum = Field(default=DataScopeEnum.SELF, description="数据可删范围")
     created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
     def create_dict(self):
@@ -42,6 +46,9 @@ class RoleUpdate(RoleBase):
     """更新角色入参。"""
 
     id: int = Field(..., description="角色ID")
+    select_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可见范围")
+    update_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可写范围")
+    delete_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可删范围")
     updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
 
     def update_dict(self):
@@ -63,12 +70,22 @@ class RoleSelect(RoleBase):
     updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
 
 
+class RoleTagScopeItem(BaseModel):
+    """角色标签范围覆盖项；范围为空表示按角色默认范围生效。"""
+
+    tag: str = Field(..., max_length=64, description="资源族标签(一级目录:二级模块)")
+    select_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可见范围")
+    update_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可写范围")
+    delete_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可删范围")
+
+
 class RoleUpdateMenusRouters(BaseModel):
     """更新角色菜单与路由绑定入参。"""
 
     id: int = Field(..., description="角色ID")
     menu_ids: List[int] = Field(default_factory=list, description="菜单ID列表")
     router_infos: List[dict] = Field(default_factory=list, description="路由信息列表")
+    tag_scopes: Optional[List[RoleTagScopeItem]] = Field(default=None, description="标签范围覆盖列表")
 
 
 class RoleBatchDelete(BaseModel):

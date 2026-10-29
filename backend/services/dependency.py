@@ -12,9 +12,10 @@ import jwt
 from fastapi import Depends, Header, HTTPException, Request
 
 from backend.applications.base.models.role_model import Role
+from backend.applications.base.models.router_model import Router
 from backend.applications.user.models.user_model import User
 from backend.configure import PROJECT_CONFIG
-from backend.enums import HTTPMethod
+from backend.enums import BuiltinRoleCode, HTTPMethod
 from backend.services import CTX_USER_ID, CTX_USERNAME
 
 
@@ -61,9 +62,41 @@ class AuthControl:
 
 
 class PermissionControl:
+    @staticmethod
+    def _path_matches(template: str, path: str) -> bool:
+        """
+        路由模板与请求路径匹配：`{param}` 视为单段通配。
+
+        :param template: krun_router 中登记的路由路径，可含 `{param}` 占位
+        :param path: 实际请求路径
+        :return: 匹配返回True
+        """
+        if template == path:
+            return True
+        if "{" not in template:
+            return False
+        template_parts = template.strip("/").split("/")
+        path_parts = path.strip("/").split("/")
+        if len(template_parts) != len(path_parts):
+            return False
+        for template_part, path_part in zip(template_parts, path_parts):
+            if template_part.startswith("{") and template_part.endswith("}"):
+                if not path_part:
+                    return False
+                continue
+            if template_part != path_part:
+                return False
+        return True
+
     @classmethod
     async def has_permission(cls, request: Request, current_user: User = Depends(AuthControl.is_authed)) -> None:
         if current_user.is_superuser:
+            return
+        roles: List[Role] = await current_user.roles
+        if not roles:
+            raise HTTPException(status_code=403, detail="请求服务不被接受, 暂无任何角色策略")
+        # 管理员角色与超管同权：全量接口放行，不依赖菜单/路由绑定记录
+        if BuiltinRoleCode.includes_admin(role.code for role in roles):
             return
         # 使用枚举value，避免 str(HTTPMethod.POST)=="HTTPMethod.POST" 与库内 "POST" 匹配失败
         method = HTTPMethod(request.method).value
@@ -71,24 +104,30 @@ class PermissionControl:
         path = request.url.path
         if path != "/" and path.endswith("/"):
             path = path.rstrip("/")
-        roles: List[Role] = await current_user.roles
-        if not roles:
-            raise HTTPException(status_code=403, detail="请求服务不被接受, 暂无任何角色策略")
-        # role.routers 保存了该角色可访问的接口（method + path）
-        routers = [await role.routers for role in roles]
-        permission_apis = list(
-            set(
-                (
-                    (router.method.value if hasattr(router.method, "value") else str(router.method)),
-                    router.path,
-                )
-                for router in sum(routers, [])
-            )
-        )
-        if (method, path) not in permission_apis:
+        # 多角色接口一次查出并集，避免按角色逐条查询造成 N+1
+        permission_apis = await Router.filter(
+            role_routers__id__in=[role.id for role in roles]
+        ).values_list("method", "path")
+        # 路由模板可含 {param} 占位，需按段匹配；否则含路径参数的接口对非超管永久 403
+        if not any(
+                method == (router_method.value if hasattr(router_method, "value") else str(router_method))
+                and cls._path_matches(router_path, path)
+                for router_method, router_path in permission_apis
+        ):
             raise HTTPException(status_code=403, detail=f"请求服务不被接受, Method:{method} Path:{path}")
+
+
+async def get_superuser(current_user: User = Depends(AuthControl.is_authed)) -> User:
+    """仅任务执行引擎、超管或管理员角色可调用的内部写接口守卫。"""
+    if current_user.is_superuser:
+        return current_user
+    roles: List[Role] = await current_user.roles
+    if BuiltinRoleCode.includes_admin(role.code for role in roles):
+        return current_user
+    raise HTTPException(status_code=403, detail="请求服务不被接受, 仅任务执行引擎或管理员可调用")
 
 
 DependAuth = Depends(AuthControl.is_authed)
 DependOptionalAuth = Depends(AuthControl.is_authed_optional)
 DependPermission = Depends(PermissionControl.has_permission)
+DependSuperUser = Depends(get_superuser)

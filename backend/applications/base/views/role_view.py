@@ -38,6 +38,7 @@ from backend.core.responses import (
     NotFoundResponse,
     DataBaseStorageResponse
 )
+from backend.enums import BuiltinRoleCode
 
 role = APIRouter()
 
@@ -58,10 +59,16 @@ async def create_role(
         instance = await role_crud.create_role(role_in=role_in)
         data: dict = await instance.to_dict(replace_fields={"id": "role_id"})
         return SuccessResponse(message="新增成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except IntegrityError as e:
+        error_message: str = f"新增失败, 违反约束规则: {e}"
+        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        return DataBaseStorageResponse(message=error_message)
     except Exception as e:
-        LOGGER.error(f"新增角色失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"新增失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"新增失败，异常描述: {e}")
 
 
@@ -86,7 +93,7 @@ async def delete_role(
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id删除角色信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -109,8 +116,10 @@ async def batch_delete_roles(
         )
         deleted_num = len(deleted_ids_or_codes)
         return SuccessResponse(message="删除成功", data={"deleted": deleted_ids_or_codes}, total=deleted_num)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据角色id或code列表删除失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
@@ -130,10 +139,12 @@ async def update_role(
         instance = await role_crud.update_role(role_in=role_in)
         data: dict = await instance.to_dict(replace_fields={"id": "role_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
     except IntegrityError as e:
-        error_message: str = f"根据id更新角色信息失败, 违反约束规则: {e}"
+        error_message: str = f"更新失败, 违反约束规则: {e}"
         LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
         return DataBaseStorageResponse(message=error_message)
     except DataBaseStorageException as e:
@@ -141,8 +152,8 @@ async def update_role(
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据id更新角色信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新角色失败，异常描述: {e}")
+        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"更新失败，异常描述: {e}")
 
 
 @role.get("/get", summary="查询角色", description="根据角色id或code或name查询角色信息")
@@ -177,7 +188,7 @@ async def get_role(
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据角色id或code或name查询角色信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -209,7 +220,7 @@ async def search_roles(
         data = [await obj.to_dict(replace_fields={"id": "role_id"}) for obj in role_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
-        LOGGER.error(f"根据角色name查询角色信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -240,7 +251,7 @@ async def search_roles_by_body(
         data = [await obj.to_dict(replace_fields={"id": "role_id"}) for obj in role_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
-        LOGGER.error(f"根据条件分页查询角色列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -266,9 +277,12 @@ async def get_role_authorized(
                 "routers": {"id": "router_id"}
             }
         )
+        data["tag_scopes"] = await role_crud.list_tag_scopes(role_id=id)
+        # 管理员角色运行期固定全量权限，前端据此渲染只读提示并隐藏保存入口
+        data["builtin_admin"] = role_obj.code == BuiltinRoleCode.ADMIN.value
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
-        LOGGER.error(f"根据角色id查询角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -286,6 +300,12 @@ async def update_role_authorized(
     """
     try:
         role_obj = await role_crud.get_by_id(role_id=role_in.id, on_error=True)
+        # 管理员角色始终拥有全量权限，保存绑定只会造成“配了但不生效”的误解，直接拒绝
+        if role_obj.code == BuiltinRoleCode.ADMIN.value:
+            return ParameterResponse(message="管理员角色固定拥有全部菜单、接口与数据权限，无需配置")
+        # 标签范围先保存：非法范围在此处拒绝，避免先重置菜单/路由造成部分更新
+        if role_in.tag_scopes is not None:
+            await role_crud.save_tag_scopes(role_id=role_in.id, items=role_in.tag_scopes)
         await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
         return SuccessResponse(message="更新成功")
     except ParameterException as e:
@@ -293,5 +313,5 @@ async def update_role_authorized(
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception as e:
-        LOGGER.error(f"根据角色id更新角色权限失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")

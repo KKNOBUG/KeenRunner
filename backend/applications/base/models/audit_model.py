@@ -16,7 +16,7 @@ class Audit(ScaffoldModel, TimestampMixin):
     """审计日志模型。"""
 
     user_id = fields.BigIntField(index=True, description="用户ID")
-    username = fields.CharField(max_length=32, index=True, description="用户名称")
+    username = fields.CharField(max_length=16, index=True, description="用户名称")
     request_time = fields.DatetimeField(index=True, description="请求时间")
     request_tags = fields.CharField(max_length=255, default="", null=True, index=True, description="请求模块")
     request_summary = fields.CharField(max_length=255, default="", null=True, index=True, description="请求接口")

@@ -7,35 +7,6 @@
 @DateTime: 2025/1/12 19:39
 """
 from .app_enum import Code, Message, Status
-from .perf_enum import (
-    PerfLoadMode,
-    PerfPresetStatus,
-    PerfReportStatus,
-    PerfApiRole,
-    PerfRunMode,
-    PerfDelayMode,
-    PerfPhaseExecution,
-    PerfDatasetStrategy,
-    PerfDatasetSource,
-    PerfJobType,
-    PerfJobStatus,
-    PerfApiSource,
-    PerfAssertMode,
-    PerfDebugState,
-    PerfStoppedReason,
-    PerfTargetScope,
-    PerfTargetMetric,
-    PerfTargetOp,
-    PerfTargetSeverity,
-    PerfComparisonMode,
-    PERF_BUSINESS_ROLES,
-    PERF_BARRIER_TIMEOUT_SECONDS,
-    PERF_MIN_SAMPLES_FOR_COMPARE,
-    PERF_MIN_DURATION_FOR_SLA,
-    PERF_RESERVOIR_SIZE,
-    PERF_WARMUP_DEFAULT_MAX,
-    PERF_BATCH_HEADER_NAME,
-)
 from .autotest_enum import (
     AutoTestCaseAttr,
     AutoTestCaseType,
@@ -67,7 +38,38 @@ from .base_error_enum import BaseErrorEnum
 from .file_size_enum import FileSizeEum
 from .http_enum import HTTPMethod
 from .menu_enum import MenuType
+from .perf_enum import (
+    PerfLoadMode,
+    PerfPresetStatus,
+    PerfReportStatus,
+    PerfApiRole,
+    PerfRunMode,
+    PerfDelayMode,
+    PerfPhaseExecution,
+    PerfDatasetStrategy,
+    PerfDatasetSource,
+    PerfJobType,
+    PerfJobStatus,
+    PerfApiSource,
+    PerfAssertMode,
+    PerfDebugState,
+    PerfStoppedReason,
+    PerfTargetScope,
+    PerfTargetMetric,
+    PerfTargetOp,
+    PerfTargetSeverity,
+    PerfComparisonMode,
+    PERF_BUSINESS_ROLES,
+    PERF_BARRIER_TIMEOUT_SECONDS,
+    PERF_MIN_SAMPLES_FOR_COMPARE,
+    PERF_MIN_DURATION_FOR_SLA,
+    PERF_RESERVOIR_SIZE,
+    PERF_WARMUP_DEFAULT_MAX,
+    PERF_BATCH_HEADER_NAME,
+)
+from .permission_enum import DataScopeEnum
 from .program_env_enum import TestCasePriorityEnum
+from .role_enum import BuiltinRoleCode
 from .testcase_priority_enum import TestCasePriorityEnum
 
 __all__ = (
@@ -94,6 +96,8 @@ __all__ = (
     AutoTestTaskStatus,
     AutoTestReqArgsType,
     BaseErrorEnum,
+    BuiltinRoleCode,
+    DataScopeEnum,
     FileSizeEum,
     HTTPMethod,
     TestCasePriorityEnum,

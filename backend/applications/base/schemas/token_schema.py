@@ -44,7 +44,7 @@ class JWTOut(TokenBase):
     alias: str = Field(..., max_length=64, description="用户姓名")
     email: str = Field(..., max_length=64, description="用户邮箱")
     phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
-    avatar: str = Field(..., max_length=255, description="用户头像")
+    avatar: Optional[str] = Field(default=None, max_length=255, description="用户头像")
     state: int = Field(..., description="状态(0:启用, 1:禁用)")
     is_superuser: bool = Field(..., description="是否为超级管理员")
     last_login: Optional[datetime] = Field(default=None, description="最后一次登录时间")

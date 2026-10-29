@@ -28,7 +28,8 @@ from backend.core.responses import (
     ParameterResponse,
     ForbiddenResponse
 )
-from backend.services import CTX_USER_ID
+from backend.enums import BuiltinRoleCode
+from backend.services import CTX_USER_ID, DataScope
 from backend.services import create_access_token
 
 auth_public = APIRouter()
@@ -87,7 +88,7 @@ async def get_login_access_token(
         )
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception as e:
-        LOGGER.error(f"验证用户密码和状态并生成令牌失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"登录失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"登录失败，异常描述: {e}")
 
 
@@ -101,15 +102,15 @@ async def get_user_menu():
     try:
         user_id = CTX_USER_ID.get()
         user_obj = await User.filter(id=user_id).first()
-        menus: List[Menu] = []
-        if user_obj.is_superuser:
-            menus = await Menu.all()
+        role_objs: List[Role] = await user_obj.roles
+        # 超管与管理员角色直接拿到全量菜单，不依赖角色菜单绑定
+        if user_obj.is_superuser or BuiltinRoleCode.includes_admin(role.code for role in role_objs):
+            menus: List[Menu] = await Menu.all()
+        elif role_objs:
+            # 多角色菜单一次查出并去重，避免按角色逐条查询造成 N+1
+            menus = await Menu.filter(role_menus__id__in=[role.id for role in role_objs]).distinct()
         else:
-            role_objs: List[Role] = await user_obj.roles
-            for role_obj in role_objs:
-                menu = await role_obj.menus
-                menus.extend(menu)
-            menus = list(set(menus))
+            menus = []
         parent_menus: List[Menu] = []
         for menu in menus:
             if menu.parent_id == 0:
@@ -122,10 +123,9 @@ async def get_user_menu():
                 if menu.parent_id == parent_menu.id:
                     parent_menu_dict["children"].append(await menu.to_dict(replace_fields={"id": "menu_id"}))
             res.append(parent_menu_dict)
-        LOGGER.info(f"查询当前用户菜单成功, user_id: {user_id}, 数量: {len(res)}")
         return SuccessResponse(message="查询成功", data=res)
     except Exception as e:
-        LOGGER.error(f"查询当前用户菜单失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -143,9 +143,16 @@ async def get_user_info(
         user_id = CTX_USER_ID.get()
         user_obj = await user_crud.get_by_id(user_id=user_id, on_error=True)
         data = await user_obj.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
+        select_scope, update_scope, _ = await DataScope.effective_scopes(user_obj)
+        data["select_scope"] = select_scope.value
+        data["update_scope"] = update_scope.value
+        # 管理员角色与超管同权，前端据此放开行级删除等归属限制
+        data["is_admin"] = user_obj.is_superuser or BuiltinRoleCode.includes_admin(
+            role.code for role in await user_obj.roles
+        )
         return SuccessResponse(message="查询成功", data=data)
     except Exception as e:
-        LOGGER.error(f"查询当前用户信息失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -159,17 +166,17 @@ async def get_user_router():
     try:
         user_id = CTX_USER_ID.get()
         user_obj = await User.filter(id=user_id).first()
-        if user_obj.is_superuser:
-            router_objs: List[Router] = await Router.all()
-            routers = [router.method.lower() + router.path for router in router_objs]
-            return SuccessResponse(message="查询成功", data=routers)
         role_objs: List[Role] = await user_obj.roles
-        routers = []
-        for role_obj in role_objs:
-            router_objs: List[Router] = await role_obj.routers
-            routers.extend([router.method.lower() + router.path for router in router_objs])
-        routers = list(set(routers))
+        # 超管与管理员角色直接拿到全量接口，不依赖角色路由绑定
+        if user_obj.is_superuser or BuiltinRoleCode.includes_admin(role.code for role in role_objs):
+            router_objs: List[Router] = await Router.all()
+        elif role_objs:
+            # 多角色接口一次查出并去重，避免按角色逐条查询造成 N+1
+            router_objs = await Router.filter(role_routers__id__in=[role.id for role in role_objs]).distinct()
+        else:
+            router_objs = []
+        routers = sorted({router.method.lower() + router.path for router in router_objs})
         return SuccessResponse(message="查询成功", data=routers)
     except Exception as e:
-        LOGGER.error(f"查询当前用户路由失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")

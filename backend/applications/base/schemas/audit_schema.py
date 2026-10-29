@@ -18,7 +18,7 @@ class AuditBase(BaseModel):
     """审计日志公共字段。"""
 
     user_id: Optional[int] = Field(default=None, description="用户ID")
-    username: Optional[str] = Field(default=None, max_length=32, description="用户名称")
+    username: Optional[str] = Field(default=None, max_length=16, description="用户名称")
     request_time: Optional[datetime] = Field(default=None, description="请求时间")
     request_tags: Optional[str] = Field(default=None, max_length=255, description="请求模块")
     request_summary: Optional[str] = Field(default=None, max_length=255, description="请求接口")
@@ -39,7 +39,7 @@ class AuditCreate(AuditBase):
     """新增审计日志入参。"""
 
     user_id: int = Field(..., description="用户ID")
-    username: str = Field(..., max_length=32, description="用户名称")
+    username: str = Field(..., max_length=16, description="用户名称")
     request_time: datetime = Field(..., description="请求时间")
     request_method: HTTPMethod = Field(..., description="请求方式")
     request_router: str = Field(..., max_length=255, description="请求路由")

@@ -11,7 +11,14 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 from backend.applications.base.models.menu_model import Menu
 from backend.applications.base.models.role_model import Role
 from backend.applications.base.models.router_model import Router
+from backend.common.permission_action import (
+    ACTION_OPS,
+    ACTION_READ,
+    ALL_SUMMARY_PREFIXES,
+    classify_summary_action,
+)
 from backend.configure import LOGGER
+from backend.enums import BuiltinRoleCode
 
 
 class PermissionRule:
@@ -21,15 +28,16 @@ class PermissionRule:
     职责与约束：
     - 按 summary 前缀动词判定路由行为类型，权限初始化与「刷新路由」的自动补绑均依赖该判定，
       summary 写法不规范会导致角色权限漏绑或错绑
-    - 内置三角色(Administrators/Users/Guests)的路由放行规则与补绑(只追加，不回收)
+    - 内置三角色(Administrators/Users/Guests)的路由放行规则与补绑(只追加，不回收)；
+      管理员角色运行期本就全量放行，补绑仅让其菜单/路由可见，不参与鉴权判定
     - 无实例状态，常量与规则集中为类属性，调用方统一经 PermissionRule 入口访问
     """
 
     # ==================== 常量：内置角色码 ====================
-    ROLE_CODE_ADMIN: str = "Administrators"
-    ROLE_CODE_USER: str = "Users"
-    ROLE_CODE_GUEST: str = "Guests"
-    BUILTIN_ROLE_CODES: Tuple[str, ...] = (ROLE_CODE_ADMIN, ROLE_CODE_USER, ROLE_CODE_GUEST)
+    ROLE_CODE_ADMIN: str = BuiltinRoleCode.ADMIN.value
+    ROLE_CODE_USER: str = BuiltinRoleCode.USER.value
+    ROLE_CODE_GUEST: str = BuiltinRoleCode.GUEST.value
+    BUILTIN_ROLE_CODES: Tuple[str, ...] = tuple(BuiltinRoleCode.get_values())
 
     # ==================== 常量：路由域前缀与个人白名单 ====================
     SYSTEM_PREFIX: str = "系统管理:"
@@ -38,32 +46,6 @@ class PermissionRule:
     # 个人白名单（标准/宾客可绑）；另含不告警的公开接口 summary
     SELF_SERVICE_SUMMARIES: frozenset = frozenset({"更新用户密码(个人)", "用户登出"})
     SUMMARY_NO_WARN_EXACT: frozenset = SELF_SERVICE_SUMMARIES | frozenset({"生成访问令牌"})
-
-    # ==================== 常量：动作类型 ====================
-    ACTION_OPS: str = "ops"
-    ACTION_READ: str = "read"
-    ACTION_CREATE: str = "create"
-    ACTION_UPDATE: str = "update"
-    ACTION_DELETE: str = "delete"
-    ACTION_UPLOAD: str = "upload"
-    ACTION_EXECUTE: str = "execute"
-    ACTION_UNKNOWN: str = "unknown"
-    ACTION_DOWNLOAD: str = "download"
-
-    # 判定优先级：靠前优先匹配
-    _ACTION_RULES: Tuple[Tuple[Tuple[str, ...], str], ...] = (
-        (("刷新",), ACTION_OPS),
-        (("查询",), ACTION_READ),
-        (("更新",), ACTION_UPDATE),
-        (("新增",), ACTION_CREATE),
-        (("导入", "上传"), ACTION_UPLOAD),
-        (("导出", "下载"), ACTION_DOWNLOAD),
-        (("删除", "批量删除",), ACTION_DELETE),
-        (("执行", "调试", "启动", "停止"), ACTION_EXECUTE),
-    )
-    _ALL_SUMMARY_PREFIXES: Tuple[str, ...] = tuple(
-        prefix for prefixes, _ in _ACTION_RULES for prefix in prefixes
-    )
 
     # ==================== 内部工具(不对外暴露) ====================
     @staticmethod
@@ -78,10 +60,6 @@ class PermissionRule:
         if hasattr(method, "value"):
             return str(method.value).upper()
         return str(method).upper()
-
-    @staticmethod
-    def _startswith_any(text: str, prefixes: Sequence[str]) -> bool:
-        return any(text.startswith(prefix) for prefix in prefixes)
 
     @classmethod
     def _tag_parts(cls, router: Router) -> List[str]:
@@ -105,7 +83,7 @@ class PermissionRule:
             return False
         if summary in cls.SUMMARY_NO_WARN_EXACT:
             return True
-        return cls._startswith_any(summary, cls._ALL_SUMMARY_PREFIXES)
+        return summary.startswith(ALL_SUMMARY_PREFIXES)
 
     # ==================== 行为判定 ====================
     @classmethod
@@ -118,17 +96,7 @@ class PermissionRule:
         :param router: 路由记录
         :return: 动作类型(ACTION_* 常量之一)
         """
-        summary = cls._norm_text(router.summary)
-        method = cls._method_value(router)
-
-        if method == "DELETE":
-            return cls.ACTION_DELETE
-        for prefixes, action in cls._ACTION_RULES:
-            if cls._startswith_any(summary, prefixes):
-                return action
-        if method == "GET":
-            return cls.ACTION_READ
-        return cls.ACTION_UNKNOWN
+        return classify_summary_action(cls._norm_text(router.summary), cls._method_value(router))
 
     # ==================== 角色放行规则 ====================
     @classmethod
@@ -144,7 +112,7 @@ class PermissionRule:
             return True
 
         action = cls.classify_router_action(router)
-        if action == cls.ACTION_OPS:
+        if action == ACTION_OPS:
             return False
         if cls._norm_text(router.summary) in cls.SELF_SERVICE_SUMMARIES:
             return True
@@ -152,12 +120,13 @@ class PermissionRule:
         business = cls._is_business_router(router)
         if role_code == cls.ROLE_CODE_USER:
             # 业务全开；系统及未知域仅读
-            return True if business else action == cls.ACTION_READ
+            return True if business else action == ACTION_READ
         if role_code == cls.ROLE_CODE_GUEST:
-            # 业务仅查/增；系统及未知域仅读
+            # autotest 共享策略：业务域全部放行(含执行/调试/上传/下载)，
+            # 数据删除由 service 层按归属人收口，接口权限不再阻断共享操作
             if business:
-                return action in (cls.ACTION_READ, cls.ACTION_CREATE)
-            return action == cls.ACTION_READ
+                return True
+            return action == ACTION_READ
         return False
 
     @classmethod
