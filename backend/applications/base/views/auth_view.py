@@ -18,9 +18,15 @@ from backend.applications.base.models.router_model import Router
 from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
 from backend.applications.user.dependencies import get_user_crud
 from backend.applications.user.models.user_model import User
+from backend.applications.user.schemas.user_schema import UserCreate
 from backend.applications.user.services.user_crud import UserCrud
 from backend.configure import LOGGER, PROJECT_CONFIG
-from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException
+from backend.core.exceptions import (
+    NotFoundException,
+    NoPermissionException,
+    ParameterException,
+    NoAuthenticateException
+)
 from backend.core.responses import (
     SuccessResponse,
     NotFoundResponse,
@@ -64,7 +70,69 @@ async def get_login_access_token(
 
         access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         expire = datetime.now(timezone.utc) + access_token_expires
+        data = JWTOut(
+            access_token=create_access_token(
+                data=JWTPayload(
+                    user_id=user.id,
+                    username=user.username,
+                    state=user.state,
+                    is_superuser=user.is_superuser,
+                    token_version=user.token_version,
+                    exp=expire,
+                ),
+                token_version=user.token_version,
+            ),
+            username=user.username,
+            alias=user.alias,
+            email=user.email,
+            phone=user.phone,
+            avatar=user.avatar,
+            state=user.state,
+            is_superuser=user.is_superuser,
+            last_login=user.last_login
+        )
+        return SuccessResponse(message="登录成功", data=data.model_dump())
+    except Exception as e:
+        LOGGER.error(f"登录失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"登录失败，异常描述: {e}")
 
+
+@auth_public.post("/access_token_transfer", summary="生成访问令牌", description="账号不存在时按第三方平台校验并接纳为新用户后生成令牌")
+async def get_login_access_token_transfer(
+        credentials: CredentialsSchema = Body(..., description="用户信息"),
+        user_crud: UserCrud = Depends(get_user_crud),
+):
+    """
+    第三方平台用户迁移登录：本地账号不存在时按第三方平台校验并接纳为新用户后生成令牌。
+
+    与/access_token的差异仅在于账号不存在分支：校验第三方账号真实性并自动注册，
+    其余口令/状态校验与令牌签发逻辑与原接口一致；稳定后可直接覆盖原接口。
+
+    :param credentials: 登录凭证入参
+    :param user_crud: 用户CRUD服务
+    :return: 统一HTTP响应
+    """
+    try:
+        try:
+            user: User = await user_crud.authenticate(credentials)
+        except NotFoundException as e:
+            valid, third_user = await user_crud.confirm_user_authenticate(username=credentials.username)
+            if not valid:
+                return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
+            user = await user_crud.create_user(user_in=UserCreate(password=credentials.password, **third_user))
+        except NoAuthenticateException as e:
+            return ForbiddenResponse(message=str(e.message), data=credentials.model_dump())
+        except NoPermissionException as e:
+            return ForbiddenResponse(message=str(e.message), data=credentials.model_dump())
+        try:
+            await user_crud.update_last_login(user_id=user.id)
+        except ParameterException as e:
+            return ParameterResponse(message=str(e.message), data=credentials.model_dump())
+        except NotFoundException as e:
+            return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
+
+        access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + access_token_expires
         data = JWTOut(
             access_token=create_access_token(
                 data=JWTPayload(

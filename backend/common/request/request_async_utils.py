@@ -52,6 +52,8 @@ class AsyncHttpUtils:
                 params=self.params, data=self.data, json=self.json,
                 timeout=self.timeout, headers=self.headers, **self.kwargs
             )
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ReqInvalidException(message=f"{e}")
 
@@ -68,6 +70,8 @@ class AsyncHttpUtils:
             elif isinstance(self.client, HttpxClient):
                 response = await self.execute()
                 return response.json()
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ResInvalidException(message=f"{e}")
 
@@ -84,6 +88,8 @@ class AsyncHttpUtils:
             elif isinstance(self.client, HttpxClient):
                 response = await self.execute()
                 return response.text
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ResInvalidException(message=f"{e}")
 
@@ -100,6 +106,8 @@ class AsyncHttpUtils:
             elif isinstance(self.client, HttpxClient):
                 response = await self.execute()
                 return response.content
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ResInvalidException(message=f"{e}")
 
@@ -119,6 +127,8 @@ class AsyncHttpUtils:
                 response = await self.execute()
                 async for chunk in response.aiter_bytes(chunk_size):
                     yield chunk
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ResInvalidException(message=f"{e}")
 
@@ -139,6 +149,8 @@ class AsyncHttpUtils:
                 headers = response.headers
                 body = response.json()
                 return body, headers
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ResInvalidException(message=f"{e}")
 
@@ -230,6 +242,8 @@ class AioHttpClient:
                     timeout=timeout, headers=headers,
                     **kwargs
                 )
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ReqInvalidException(message=f"{e}")
 
@@ -415,6 +429,8 @@ class HttpxClient:
                 timeout=timeout, headers=headers,
                 **kwargs
             )
+        except ResInvalidException:
+            raise
         except Exception as e:
             raise ResInvalidException(message=f"{e}")
 

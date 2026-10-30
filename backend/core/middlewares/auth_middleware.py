@@ -76,6 +76,7 @@ async def auth_middleware(request: Request, call_next):
     whitelist = [
         # login
         "POST /base/auth/access_token",
+        "POST /base/auth/access_token_transfer",
 
         # root
         "GET /",

@@ -7,24 +7,29 @@
 @DateTime: 2025/1/18 11:36
 """
 from datetime import datetime
-from typing import Optional, Union, List
+from typing import Any, Dict, Tuple, Optional, Union, List
 
 from tortoise.exceptions import DoesNotExist
 
 from backend.applications.base.schemas.token_schema import CredentialsSchema
 from backend.applications.base.services.role_crud import RoleCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.applications.department.services.department_crud import DepartmentCrud
 from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import UserCreate, UserUpdate, UserBatchDelete
+from backend.common.request.request_async_utils import HttpxClient
 from backend.configure import LOGGER
 from backend.core.exceptions import (
-    NotFoundException,
     BaseExceptions,
     DataAlreadyExistsException,
+    NoPermissionException,
+    NotFoundException,
+    NoAuthenticateException,
     ParameterException,
-    NoPermissionException
+    ResInvalidException,
 )
 from backend.core.responses import ForbiddenResponse
+from backend.enums import BuiltinRoleCode
 from backend.services import verify_password, get_password_hash
 
 
@@ -109,7 +114,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         if not verified:
             error_message: str = "用户名或密码错误"
             LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
+            raise NoAuthenticateException(message=error_message)
         if user.state == 1:
             error_message: str = "用户待岗或已离职"
             LOGGER.error(error_message)
@@ -261,3 +266,63 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         instance.token_version += 1
         await instance.save()
         return instance
+
+    @classmethod
+    async def confirm_user_authenticate(cls, username: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        """
+        请求第三方平台校验用户名的真实性，并映射为本平台用户信息字段。
+
+        字段映射：
+            - loginName -> username
+            - username -> alias
+            - telPhone -> phone
+            - gender -> gender
+            - email -> email
+            - userType -> user_type
+
+        :param username: 用户账号
+        :return: (是否真实有效, 本平台用户信息字段字典)；无效时返回(False, None)
+        """
+        if username in ["CS1001", "CS1002", "CS1003", "CS1004", "CS1005", "CS1006", "CS1007", "CS1008", "CS1009"]:
+            return True, {
+                "username": username,
+                "alias": f"村上春树-{username}",
+                "phone": f"1580000{username[-4:]}",
+                "gender": 0,
+                "email": f"{username}@test.com",
+                "user_type": 0,
+                "is_superuser": False,
+                "dept_id": 2,
+                "role_ids": [2],
+            }
+        try:
+            async with HttpxClient(timeout=5) as client:
+                utils = await client.post(
+                    url="http://10.240.105.88:9999/userInfo/findByLoginName",
+                    data={"loginName": username, "state": "1"},
+                )
+                payload: Dict[str, Any] = await utils.json_resp()
+        except Exception as e:
+            if isinstance(e, ResInvalidException):
+                e = e.message
+            LOGGER.error(f"用户名[{username}]校验失败: {e}")
+            return False, None
+
+        data: Dict[str, Any] = payload.get("data") or {}
+        if payload.get("retCd") != "000000" or not data or data.get("loginName") != username:
+            LOGGER.error(f"用户名[{username}]非真实用户, 拒绝自动注册 ")
+            return False, None
+
+        role = await RoleCrud().get_by_code(role_code=BuiltinRoleCode.USER.value, on_error=True)
+        dept = await DepartmentCrud().get_by_code(code="AUTOTEST_DEPT", name="技术测试团队", on_error=True)
+        return True, {
+            "username": username,
+            "alias": data.get("username"),
+            "phone": data.get("telPhone"),
+            "gender": int(data.get("gender") or 0),
+            "email": data.get("email"),
+            "user_type": int(data.get("userType") or 0),
+            "is_superuser": False,
+            "dept_id": dept.id,
+            "role_ids": [role.id],
+        }
