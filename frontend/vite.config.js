@@ -6,7 +6,6 @@ import {convertEnv, getRootPath, getSrcPath} from './build/utils'
 import {viteDefine} from './build/config'
 import {createVitePlugins} from './build/plugin'
 import {OUTPUT_DIR, PROXY_CONFIG, EXTRA_DEV_PROXY} from './build/constant'
-import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 const copyDirRecursive = (src, dest) => {
   if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true })
@@ -60,10 +59,9 @@ export default defineConfig(({command, mode}) => {
         },
         define: viteDefine,
         plugins:[
+            // Monaco worker 由 src/components/monaco/index.vue 自行按 ?worker 导入并设置 MonacoEnvironment，
+            // 无需 vite-plugin-monaco-editor（该插件会另注入一份 MonacoEnvironment 并在 dev 启动时清理缓存目录）
             createVitePlugins(viteEnv, isBuild),
-            monacoEditorPlugin({
-                languageWorkers: ['editorWorkerService', 'json', 'typescript'],
-            }),
             isBuild ? copyLuckysheetDistPlugin() : null,
         ].filter(Boolean),
         server: {

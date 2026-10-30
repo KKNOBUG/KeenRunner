@@ -1,18 +1,23 @@
 import { defineConfig, presetAttributify, presetUno } from 'unocss'
 
 export default defineConfig({
-  exclude: [
-    'node_modules',
-    '.git',
-    '.github',
-    '.husky',
-    '.vscode',
-    'build',
-    'dist',
-    'mock',
-    'public',
-    './stats.html',
-  ],
+  // 旧版顶层 exclude 已废弃，等价迁移到 content.pipeline.exclude（内部走同一个 createFilter，行为不变）
+  content: {
+    pipeline: {
+      exclude: [
+        'node_modules',
+        '.git',
+        '.github',
+        '.husky',
+        '.vscode',
+        'build',
+        'dist',
+        'mock',
+        'public',
+        './stats.html',
+      ],
+    },
+  },
   presets: [presetUno(), presetAttributify()],
   shortcuts: [
     ['wh-full', 'w-full h-full'],
