@@ -305,17 +305,17 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         except Exception as e:
             if isinstance(e, ResInvalidException):
                 e = e.message
-            LOGGER.error(f"用户名[{username}]校验失败: {e}")
+            LOGGER.error(f"用户名[{username}]真实性校验异常: {e}")
             return False, None
 
         data: Dict[str, Any] = payload.get("data") or {}
         if payload.get("retCd") != "000000" or not data or data.get("loginName") != username:
-            LOGGER.error(f"用户名[{username}]非真实用户, 拒绝自动注册 ")
+            LOGGER.error(f"用户名[{username}]真实性校验失败, 拒绝自动注册")
             return False, None
 
         role = await RoleCrud().get_by_code(role_code=BuiltinRoleCode.USER.value, on_error=True)
         dept = await DepartmentCrud().get_by_code(code="AUTOTEST_DEPT", name="技术测试团队", on_error=True)
-        return True, {
+        build_user: Dict[str, Any] = {
             "username": username,
             "alias": data.get("username"),
             "phone": data.get("telPhone"),
@@ -326,3 +326,5 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             "dept_id": dept.id,
             "role_ids": [role.id],
         }
+        LOGGER.info(f"用户名[{username}]真实性校验成功: {build_user}")
+        return True, build_user

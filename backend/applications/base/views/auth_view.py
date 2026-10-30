@@ -120,6 +120,7 @@ async def get_login_access_token_transfer(
             if not valid:
                 return NotFoundResponse(message=str(e.message), data=credentials.model_dump())
             user = await user_crud.create_user(user_in=UserCreate(password=credentials.password, **third_user))
+            LOGGER.info(f"用户名[{credentials.username}]注册成功")
         except NoAuthenticateException as e:
             return ForbiddenResponse(message=str(e.message), data=credentials.model_dump())
         except NoPermissionException as e:
