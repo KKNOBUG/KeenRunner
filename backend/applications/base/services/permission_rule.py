@@ -43,8 +43,8 @@ class PermissionRule:
     SYSTEM_PREFIX: str = "系统管理:"
     BUSINESS_PREFIXES: Tuple[str, ...] = ("应用管理:", "自动化测试:", "任务管理:", "便捷工具:")
 
-    # 个人白名单（标准/宾客可绑）；另含不告警的公开接口 summary
-    SELF_SERVICE_SUMMARIES: frozenset = frozenset({"更新用户密码(个人)", "用户登出"})
+    # 个人白名单（普通用户/访客用户可绑）；
+    SELF_SERVICE_SUMMARIES: frozenset = frozenset({"更新用户密码(个人)", "注销访问令牌"})
     SUMMARY_NO_WARN_EXACT: frozenset = SELF_SERVICE_SUMMARIES | frozenset({"更新访问令牌"})
 
     # ==================== 内部工具(不对外暴露) ====================

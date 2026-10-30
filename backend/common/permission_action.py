@@ -27,7 +27,7 @@ ACTION_RULES: Tuple[Tuple[Tuple[str, ...], str], ...] = (
     (("新增",), ACTION_CREATE),
     (("导入", "上传"), ACTION_UPLOAD),
     (("导出", "下载"), ACTION_DOWNLOAD),
-    (("删除", "批量删除",), ACTION_DELETE),
+    (("注销", "删除", "批量删除",), ACTION_DELETE),
     (("执行", "调试", "启动", "停止"), ACTION_EXECUTE),
 )
 

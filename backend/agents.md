@@ -263,7 +263,7 @@ views (/http_debugging, /tcp_debugging)
 - 权限载体：角色是唯一权限载体，菜单（`krun_role_menus`）、接口（`krun_role_routers`）与标签范围（`krun_role_tag_scope`）都挂在角色上；新建角色默认零绑定，必须由管理员显式配置。
 - 管理员角色：`Administrators` 与超管同权，`usermenu`/`get_user_routers`/`PermissionControl.has_permission`/`DependSuperUser`/`DataScope` 均运行期直接全量放行，不依赖绑定记录；其角色编码不可修改、角色不可删除、绑定不可保存（`/base/role/authorized` 直接返回参数提示）。
 - 管理员入口：`GET/POST /base/role/authorized` 在原有菜单/路由之外增删 `tag_scopes`（每项 tag + 三范围，空值=按角色默认），由 `RoleCrud.list_tag_scopes/save_tag_scopes` 事务内重建。
-- 审计：`common/permission_action.py` 的 `classify_summary_action` + `AUDITED_ACTIONS` 为唯一分类源，`permission_rule.py` 与 `app_middleware.py` 共用；中间件仅对写/删/执行类落库，查询/下载直接透传。新增接口的 summary 必须沿用标准动词前缀（新增/更新/删除/批量删除/执行/调试/导入/上传/刷新），否则既不会进入审计也会被权限规则告警。
+- 审计：`common/permission_action.py` 的 `classify_summary_action` + `AUDITED_ACTIONS` 为唯一分类源，`permission_rule.py` 与 `app_middleware.py` 共用；中间件仅对写/删/执行类落库，查询/下载直接透传。新增接口的 summary 必须沿用标准动词前缀（刷新/查询/更新/新增/导入/上传/导出/下载/注销/删除/批量删除/执行/调试/启动/停止，以 `permission_action.ACTION_RULES` 为准），否则既不会进入审计也会被权限规则告警。
 - 报告/明细写接口：HTTP `create/update` 加 `DependSuperUser`，仅超管、管理员角色或执行引擎可直调；引擎内部经 service 直写不走 HTTP。环境字典 `created_user/updated_user` 取登录态，忽略请求体回传。
 - 内置角色接口绑定：Guests 业务域（应用/自动化/任务/工具）全部放行（含执行/调试/上传/下载），系统域只读；接口放行不代表可删他人数据，删除归属由 service 层 `can_delete` 兜底。
 - 归属字段：用例用 `owner_user`（转让后变更，转让始终仅当前所属人本人可操作）；步骤与数据源以所属用例 `owner_user` 为准；项目/标签/环境/环境配置/任务/报告/明细/执行记录用 `created_user`。
