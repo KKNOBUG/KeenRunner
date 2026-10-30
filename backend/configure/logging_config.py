@@ -225,7 +225,7 @@ def wire_standard_loggers() -> None:
         stdlog.setLevel(logging.INFO)
 
 
-def loguru_logging() -> logger:
+def loguru_logging() -> logging.Logger:
     """
     初始化 Loguru：移除默认 handler，注册文件 sink、可选控制台 sink，并接管 stdlib。
 
