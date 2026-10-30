@@ -45,7 +45,7 @@ class PermissionRule:
 
     # 个人白名单（标准/宾客可绑）；另含不告警的公开接口 summary
     SELF_SERVICE_SUMMARIES: frozenset = frozenset({"更新用户密码(个人)", "用户登出"})
-    SUMMARY_NO_WARN_EXACT: frozenset = SELF_SERVICE_SUMMARIES | frozenset({"生成访问令牌"})
+    SUMMARY_NO_WARN_EXACT: frozenset = SELF_SERVICE_SUMMARIES | frozenset({"更新访问令牌"})
 
     # ==================== 内部工具(不对外暴露) ====================
     @staticmethod
