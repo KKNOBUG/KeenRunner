@@ -35,20 +35,20 @@ ALL_SUMMARY_PREFIXES: Tuple[str, ...] = tuple(
     prefix for prefixes, _ in ACTION_RULES for prefix in prefixes
 )
 
-# 审计只记录会改变数据或触发执行的行为，查询/下载/未知不落库，避免日志膨胀
+# 审计日志仅记录会改变数据或存在数据外流的动作；
 AUDITED_ACTIONS: frozenset = frozenset({
-    ACTION_CREATE,
     ACTION_UPDATE,
+    ACTION_CREATE,
+    ACTION_UPLOAD,
+    ACTION_DOWNLOAD,
     ACTION_DELETE,
     ACTION_EXECUTE,
-    ACTION_UPLOAD,
-    ACTION_OPS,
 })
 
 
 def classify_summary_action(summary: Optional[str], method: Optional[str]) -> str:
     """
-    按 summary 前缀识别接口行为；DELETE 方法视为删除，GET 无法匹配时回落为查询。
+    按路由summary前缀识别接口行为；DELETE方法视为删除、GET无法匹配时回落为查询。
 
     :param summary: 接口摘要
     :param method: HTTP 方法

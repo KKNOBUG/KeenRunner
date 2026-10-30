@@ -98,7 +98,7 @@ async def delete_user(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@user_secure.post("/deletes", summary="删除用户(批量)", description="根据id列表批量删除用户信息")
+@user_secure.post("/deletes", summary="批量删除用户", description="根据id列表批量删除用户信息")
 async def batch_delete_users(
         user_in: UserBatchDelete = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -183,7 +183,7 @@ async def get_user(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@user_secure.get("/by_username", summary="查询用户", description="根据username查询用户信息")
+@user_secure.get("/by_username", summary="查询用户(按用户名)", description="根据username查询用户信息")
 async def get_user_by_username(
         username: str = Query(..., description="用户名称"),
         user_crud: UserCrud = Depends(get_user_crud),
@@ -206,7 +206,7 @@ async def get_user_by_username(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@user_secure.get("/list", summary="查询用户列表", description="根据条件分页查询用户列表信息(Query)")
+@user_secure.get("/list", summary="查询用户列表(Query)", description="根据条件分页查询用户列表信息(Query)")
 async def search_users(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -292,7 +292,7 @@ async def search_users(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@user_secure.post("/search", summary="查询用户列表", description="根据条件分页查询用户列表信息(Body)")
+@user_secure.post("/search", summary="查询用户列表(Body)", description="根据条件分页查询用户列表信息(Body)")
 async def list_users(
         user_in: UserSelect = Body(..., description="查询条件"),
         user_crud: UserCrud = Depends(get_user_crud),

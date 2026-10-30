@@ -1286,7 +1286,7 @@ async def single_step_dataset_download(
         return FailureResponse(message=f"导出失败，异常描述: {e}")
 
 
-@autotest_data_source.get("/single_step_template_download", summary="下载数据源模板", description="按步骤报文构建默认原始数据模板xlsx")
+@autotest_data_source.get("/single_step_template_download", summary="下载单步骤数据源模板", description="按步骤报文构建默认原始数据模板xlsx")
 async def single_step_template_download(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),

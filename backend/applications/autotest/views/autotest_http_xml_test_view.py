@@ -233,7 +233,7 @@ async def http_xml_test(
     return FastAPIResponse(content=response_xml, media_type="application/xml; charset=utf-8")
 
 
-@autotest_http_xml_test.get("/sample/request", summary="查询XML请求示例报文", description="获取HTTP/XML测试接口的理赔申请请求示例")
+@autotest_http_xml_test.get("/sample/request", summary="查询HTTP/XML请求示例报文", description="获取HTTP/XML测试接口的理赔申请请求示例")
 async def get_http_xml_sample_request():
     """
     获取HTTP/XML测试接口的请求报文示例（保险理赔申请）。

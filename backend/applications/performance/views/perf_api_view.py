@@ -314,7 +314,7 @@ async def build_perf_api_matrix(
         return FailureResponse(message=f"推导失败，异常描述: {str(e)}")
 
 
-@perf_api.get("/template_download", summary="下载数据源模板", description="按接口报文构建数据源模板xlsx(HEAD/BODY分区path key字段行, 值留空, 样式与功能数据源模板一致)")
+@perf_api.get("/template_download", summary="下载压测数据源模板", description="按接口报文构建数据源模板xlsx(HEAD/BODY分区path key字段行, 值留空, 样式与功能数据源模板一致)")
 async def download_perf_api_template(
         api_id: Optional[int] = Query(None, description="接口ID"),
         api_code: Optional[str] = Query(None, description="接口标识代码"),

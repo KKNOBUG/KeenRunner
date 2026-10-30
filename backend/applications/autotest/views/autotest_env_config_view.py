@@ -394,7 +394,7 @@ async def get_env_config(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.post("/search", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Body)")
+@autotest_env_config.post("/search", summary="查询环境配置列表(Body)", description="根据条件分页查询环境配置列表信息(Body)")
 async def search_env_configs(
         config_in: AutoTestEnvConfigSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -528,7 +528,7 @@ async def query_assign_config_envs(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.get("/list", summary="查询环境配置列表", description="根据条件分页查询环境配置列表信息(Query)")
+@autotest_env_config.get("/list", summary="查询环境配置列表(Query)", description="根据条件分页查询环境配置列表信息(Query)")
 async def list_env_configs(
         project_id: Optional[int] = Query(None, description="应用ID"),
         env_name: Optional[str] = Query(None, description="环境名称"),

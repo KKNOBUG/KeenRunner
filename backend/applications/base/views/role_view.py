@@ -97,7 +97,7 @@ async def delete_role(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@role.post("/deletes", summary="删除角色(批量)", description="根据角色id或code列表删除")
+@role.post("/deletes", summary="批量删除角色", description="根据角色id或code列表删除")
 async def batch_delete_roles(
         role_in: RoleBatchDelete = Body(..., description="id或code列表"),
         role_crud: RoleCrud = Depends(get_role_crud),
@@ -192,7 +192,7 @@ async def get_role(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@role.get("/list", summary="查询角色列表", description="根据角色name查询角色信息")
+@role.get("/list", summary="查询角色列表(Query)", description="根据角色name查询角色信息")
 async def search_roles(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -224,7 +224,7 @@ async def search_roles(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@role.post("/search", summary="查询角色列表", description="根据条件分页查询角色列表信息(Body)")
+@role.post("/search", summary="查询角色列表(Body)", description="根据条件分页查询角色列表信息(Body)")
 async def search_roles_by_body(
         role_in: RoleSelect = Body(..., description="查询条件"),
         role_crud: RoleCrud = Depends(get_role_crud),

@@ -74,7 +74,7 @@ frontend/
 - 读过滤只作用于各资源**列表/主列表**接口；报告/明细批次下钻（`batch_code`/`task_code`）、项目/环境下拉、步骤树（按 `case_id`）不过滤。用例列表对 `PUBLIC_SCRIPT`/`PUBLIC_API` 放行。
 - 内置角色接口绑定：Guests 在业务域（应用/自动化/任务/工具）全部放行，系统域只读；接口放行不等于可删他人数据，删除归属校验在 service 层兜底。
 - 报告/明细写接口（create/update）仅超管或管理员角色可直调（`DependSuperUser`），执行引擎/内部流程走 service 直写；删除仍按归属人 + 接口权限双闸门。
-- 审计中间件只记录写/删/执行类动作（`common/permission_action.py` 的 `AUDITED_ACTIONS`），查询/下载直接透传，避免日志膨胀。
+- 审计中间件记录新增/更新/删除/执行/上传/下载类动作（`common/permission_action.py` 的 `AUDITED_ACTIONS`），刷新与查询直接透传；下载只记占位符，避免日志膨胀。
 
 ## 4. 编码规范（评审基准）
 

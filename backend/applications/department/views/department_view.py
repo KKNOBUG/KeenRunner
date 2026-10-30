@@ -86,7 +86,7 @@ async def delete_department(
         return FailureResponse(message=f"删除失败，异常描述: {e}")
 
 
-@dept.post("/deletes", summary="删除部门(批量)", description="根据id列表批量删除部门信息")
+@dept.post("/deletes", summary="批量删除部门", description="根据id列表批量删除部门信息")
 async def batch_delete_departments(
         department_in: DepartmentBatchDelete = Body(..., description="批量删除参数"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
@@ -160,7 +160,7 @@ async def get_department(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@dept.get("/list", summary="查询部门列表", description="根据name查询部门列表信息")
+@dept.get("/list", summary="查询部门列表(Query)", description="根据name查询部门列表信息")
 async def list_departments(
         name: str = Query(default=None, description="部门名称"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
@@ -180,7 +180,7 @@ async def list_departments(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@dept.post("/search", summary="查询部门列表", description="根据条件分页查询部门列表信息(Body)")
+@dept.post("/search", summary="查询部门列表(Body)", description="根据条件分页查询部门列表信息(Body)")
 async def search_departments(
         department_in: DepartmentSelect = Body(..., description="查询条件"),
         dept_crud: DepartmentCrud = Depends(get_dept_crud),

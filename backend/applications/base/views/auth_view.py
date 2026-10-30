@@ -97,7 +97,7 @@ async def get_login_access_token(
         return FailureResponse(message=f"登录失败，异常描述: {e}")
 
 
-@auth_public.post("/access_token_transfer", summary="更新访问令牌", description="账号不存在时按第三方平台校验并接纳为新用户后生成令牌")
+@auth_public.post("/access_token_transfer", summary="更新访问令牌(第三方迁移)", description="账号不存在时按第三方平台校验并接纳为新用户后生成令牌")
 async def get_login_access_token_transfer(
         credentials: CredentialsSchema = Body(..., description="用户信息"),
         user_crud: UserCrud = Depends(get_user_crud),

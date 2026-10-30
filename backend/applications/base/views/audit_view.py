@@ -107,7 +107,7 @@ async def _serialize_audit_list(audit_log_objs) -> list:
     ]
 
 
-@audit.get("/list", summary="查询日志列表", description="根据条件分页查询日志信息(Query)")
+@audit.get("/list", summary="查询日志列表(Query)", description="根据条件分页查询日志信息(Query)")
 async def list_audit(
         page: int = Query(default=1, ge=1, description="页码"),
         page_size: int = Query(default=10, ge=10, description="每页数量"),
@@ -159,7 +159,7 @@ async def list_audit(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@audit.post("/search", summary="查询日志列表", description="根据条件分页查询日志信息(Body)")
+@audit.post("/search", summary="查询日志列表(Body)", description="根据条件分页查询日志信息(Body)")
 async def search_audit(
         audit_in: AuditSelect = Body(..., description="查询条件"),
         audit_crud: AuditCrud = Depends(get_audit_crud),

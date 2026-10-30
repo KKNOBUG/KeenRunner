@@ -184,8 +184,7 @@ async def logging_middleware(request: Request, call_next):
     # 请求流传递并获取响应
     response = await call_next(request)
 
-    # 按路由声明的标签与摘要归类行为：审计只记录写/删/执行类请求，
-    # 查询类直接透传，避免日志膨胀，也避免为审计而复制大响应体
+    # 按路由声明的标签与摘要归类行为：审计记录写/删/执行/上传/下载类请求，刷新与查询直接透传，避免日志膨胀；下载响应仅记占位符，不复制大响应体
     route = request.scope.get("route")
     route_tags = [str(tag).strip() for tag in (getattr(route, "tags", None) or []) if str(tag or "").strip()]
     if route_tags:
