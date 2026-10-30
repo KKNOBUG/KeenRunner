@@ -415,7 +415,7 @@ async def reset_password(
         return FailureResponse(message=f"重置失败，异常描述: {e}")
 
 
-@user_secure.post("/logout", summary="用户登出", description="签退当前登录用户的所有会话信息")
+@user_secure.post("/logout", summary="用户登出", description="注销当前登录用户的所有会话信息")
 async def logout(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
