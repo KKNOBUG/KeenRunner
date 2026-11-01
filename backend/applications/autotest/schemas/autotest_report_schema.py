@@ -63,7 +63,7 @@ class AutoTestReportSelect(BaseModel):
     """分页查询报告信息入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=5, description="每页数量")
+    page_size: int = Field(default=10, ge=5, le=99999, description="每页数量")
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_code: Optional[str] = Field(None, description="用例标识代码")

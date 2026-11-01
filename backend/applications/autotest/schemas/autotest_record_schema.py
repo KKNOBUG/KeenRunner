@@ -81,7 +81,7 @@ class AutoTestRecordSelect(BaseModel):
     """分页查询任务执行记录入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-celery_start_time", "-id"], description="排序字段")
 
     task_id: Optional[int] = Field(None, description="任务ID")

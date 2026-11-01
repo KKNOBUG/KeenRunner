@@ -11,7 +11,13 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.applications.base.services.scaffold import UpperStr
-from backend.enums import AutoTestCaseType, AutoTestCaseAttr, AutoTestStepType, AutoTestReqArgsType, AutoTestSessionTransfer
+from backend.enums import (
+    AutoTestCaseType,
+    AutoTestCaseAttr,
+    AutoTestStepType,
+    AutoTestReqArgsType,
+    AutoTestSessionTransfer
+)
 
 
 class AutoTestCaseMeta(BaseModel):
@@ -128,7 +134,7 @@ class AutoTestCaseSelect(AutoTestCaseMeta, AutoTestCaseBase):
     """分页查询用例入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
     case_ids: Optional[List[int]] = Field(None, description="用例ID列表")
 

@@ -17,6 +17,7 @@ class AutoTestProjectBase(BaseModel):
     """应用信息公共字段。"""
 
     project_name: Optional[str] = Field(None, max_length=255, description="应用名称")
+    project_mark: Optional[str] = Field(None, max_length=255, description="应用标识")
     project_desc: Optional[str] = Field(None, max_length=2048, description="应用描述")
     project_state: Optional[str] = Field(None, max_length=64, description="应用状态")
     project_phase: Optional[str] = Field(None, max_length=64, description="应用阶段")
@@ -26,12 +27,28 @@ class AutoTestProjectBase(BaseModel):
     project_testers: Optional[List[str]] = Field(None, description="应用测试人员列表")
     project_current_month_env: Optional[Union[UpperStr, str]] = Field(None, max_length=64, description="应用当前月版环境")
 
+    @field_validator("project_mark", mode="before")
+    @classmethod
+    def _normalize_project_mark(cls, value):
+        """应用标识去空白：缺省落空串，保证(名称,标识)联合唯一键参与判重。"""
+        return value.strip() if isinstance(value, str) else value
+
 
 class AutoTestProjectCreate(AutoTestProjectBase):
     """创建应用信息入参。"""
 
     project_name: str = Field(..., max_length=255, description="应用名称")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
+
+    @field_validator("project_name", mode="before")
+    @classmethod
+    def _validate_project_name(cls, value):
+        """应用名称去空白；空白名称直接拒绝，避免绕过同名唯一约束。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[project_name]不允许为空")
+        return value
 
     @field_validator('project_dev_owners', 'project_developers', 'project_test_owners', 'project_testers', mode='before')
     @classmethod
@@ -58,6 +75,16 @@ class AutoTestProjectUpdate(AutoTestProjectBase):
     project_code: Optional[str] = Field(None, max_length=64, description="应用标识代码")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
+    @field_validator("project_name", mode="before")
+    @classmethod
+    def _validate_project_name(cls, value):
+        """更新时同样禁止把应用名称改成空白。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[project_name]不允许为空")
+        return value
+
 
 class AutoTestProjectDelete(BaseModel):
     """删除应用信息入参。"""
@@ -70,7 +97,7 @@ class AutoTestProjectSelect(AutoTestProjectBase):
     """分页查询应用信息入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
 
     project_id: Optional[int] = Field(None, description="应用ID")

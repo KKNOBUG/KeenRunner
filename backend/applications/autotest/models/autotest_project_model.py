@@ -19,8 +19,8 @@ from backend.applications.base.services.scaffold import (
 
 
 class AutoTestProjectModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
-    project_name = fields.CharField(max_length=255, null=True, description="应用名称")
-    project_mark = fields.CharField(max_length=255, null=True, description="应用标识")
+    project_name = fields.CharField(max_length=255, default="", description="应用名称")
+    project_mark = fields.CharField(max_length=255, default="", description="应用标识")
     project_desc = fields.CharField(max_length=2048, null=True, description="应用描述")
     project_state = fields.CharField(max_length=64, null=True, description="应用状态")
     project_phase = fields.CharField(max_length=64, null=True, description="应用阶段")

@@ -467,7 +467,7 @@ class AutoTestStepSelect(BaseModel):
     """分页查询步骤入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["case_id", "step_no"], description="排序字段")
 
     step_id: Optional[int] = Field(None, description="步骤ID")
