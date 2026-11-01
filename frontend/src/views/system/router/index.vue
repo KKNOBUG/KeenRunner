@@ -332,7 +332,7 @@ const columns = computed(() => {
       <!-- 与 QueryBar操作区同一行，紧跟其后 -->
       <template #queryBarAfterActions>
         <NButton
-            v-permission="'post/api/v1/router/refresh'"
+            v-permission="ROUTER_REFRESH_PERM"
             secondary
             type="primary"
             size="small"

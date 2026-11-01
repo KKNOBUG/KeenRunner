@@ -91,7 +91,7 @@ async def delete_step_detail(
     :param step_code: 步骤业务标识
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的明细
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
     :return: 统一HTTP响应
     """
     try:
@@ -133,7 +133,7 @@ async def delete_step_details(
 
     :param detail_in: 明细ID列表
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的明细
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
     :return: 统一HTTP响应，data为实际删除的明细数量
     """
     try:
@@ -217,6 +217,7 @@ async def get_step_detail(
                 on_error=True,
                 conditions={"step_code": step_code, "report_code": report_code}
             )
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 明细含报文快照，详情需收口到可见范围
             raise NoPermissionException(
                 message=f"查询明细失败, 明细[{instance.id}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -290,6 +291,7 @@ async def search_step_details(
             page_size=detail_in.page_size,
             order=detail_in.order
         )
+        await scope.load_owners([row.get("created_user") for row in instances])
         for row in instances:
             row["detail_id"] = row.pop("id")
             # 列表页行级删除按钮依据：与单删接口同一归属口径，避免展示后点击才报无权限
@@ -302,7 +304,7 @@ async def search_step_details(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@autotest_detail.post("/tree", summary="查询明细树", description="根据报告标识查询完整明细树(后端组装, 不分页)")
+@autotest_detail.post("/search_tree", summary="查询明细树", description="根据报告标识查询完整明细树(后端组装, 不分页)")
 async def search_step_detail_tree(
         detail_in: AutoTestDetailTreeSelect = Body(..., description="查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),

@@ -34,25 +34,7 @@ from backend.enums import (
     NO_TAG_CASE_TYPES,
     AutoTestReqArgsType
 )
-from backend.services import DataScope, get_current_username
-
-
-def _normalize_case_tags(case_type: Optional[AutoTestCaseType], case_tags: Optional[List[int]], *, context: str = "用例") -> Optional[List[int]]:
-    """打标签管控：公共接口禁止打标签；用户脚本必选标签；公共脚本允许打标签(可选)。"""
-    if case_type in NO_TAG_CASE_TYPES:
-        if case_tags:
-            error_message: str = f"{context}, 用例类型为[公共接口]时不支持打标签"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        return None
-    if not case_tags:
-        # 公共脚本标签可选：未选择时直接透传空值，其余类型保持必选
-        if case_type == AutoTestCaseType.PUBLIC_SCRIPT:
-            return None
-        error_message: str = f"{context}, 参数[case_tags]不允许为空"
-        LOGGER.error(error_message)
-        raise ParameterException(message=error_message)
-    return case_tags
+from backend.services import DataScope, get_current_username, normalize_username
 
 
 class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoTestCaseUpdate]):
@@ -156,7 +138,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         按业务唯一键查找用例，含软删，不滤state。
 
-        唯一性类型范围按用例类型分组：公共脚本与用户脚本同组(组内不允许同名)，公共接口独立成组(可与脚本类型同名)。
+        唯一性按精确用例类型判定：公共脚本、用户脚本、公共接口两两允许同名，仅同精确类型冲突。
         命中多行时按启用态(state=0)优先、再按最近更新返回，确保调用方先看到启用态冲突再考虑软删复活。
 
         :param case_project: 所属应用
@@ -174,12 +156,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         query = self.model.filter(
             case_project=case_project,
             case_name=case_name,
+            case_type=case_type,
             owner_user=owner_user,
         )
-        if case_type in (AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PRIVATE_SCRIPT):
-            query = query.filter(case_type__in=[AutoTestCaseType.PUBLIC_SCRIPT, AutoTestCaseType.PRIVATE_SCRIPT])
-        else:
-            query = query.filter(case_type=case_type)
         if exclude_id:
             query = query.exclude(id=exclude_id)
         return await query.order_by("state", "-updated_time").first()
@@ -199,9 +178,33 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         overwrite["case_version"] = (existing.case_version or 1) + 1
         return await self.update(id=existing.id, obj_in=overwrite)
 
-    async def create_case(self, case_in: AutoTestCaseCreate, scope: Optional[DataScope] = None) -> AutoTestCaseModel:
+    @classmethod
+    def _normalize_case_tags(
+            cls,
+            case_type: Optional[AutoTestCaseType],
+            case_tags: Optional[List[int]],
+            *,
+            context: str = "用例"
+    ) -> Optional[List[int]]:
+        """打标签管控：公共接口禁止打标签；用户脚本必选标签；公共脚本允许打标签(可选)。"""
+        if case_type in NO_TAG_CASE_TYPES:
+            if case_tags:
+                error_message: str = f"{context}, 用例类型为[公共接口]时不支持打标签"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+            return None
+        if not case_tags:
+            # 公共脚本标签可选：未选择时直接透传空值，其余类型保持必选
+            if case_type == AutoTestCaseType.PUBLIC_SCRIPT:
+                return None
+            error_message: str = f"{context}, 参数[case_tags]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        return case_tags
+
+    async def create_case(self, case_in: AutoTestCaseCreate, scope: DataScope) -> AutoTestCaseModel:
         """
-        创建用例。同应用同所属人同名(脚本组跨类型互斥、公共接口独立)：启用则拒绝，同类型软删则恢复并覆盖表头。
+        创建用例。同应用同所属人同名且同类型：启用则拒绝，软删则恢复并覆盖表头，跨类型同名允许。
 
         :param case_in: 用例创建schema
         :param scope: 数据权限上下文，用于校验父资源(应用)是否可读
@@ -210,10 +213,10 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
         case_type: Optional[AutoTestCaseType] = case_in.case_type
-        case_tags = _normalize_case_tags(case_type, case_in.case_tags, context="新增用例信息失败")
+        case_tags = self._normalize_case_tags(case_type, case_in.case_tags, context="新增用例信息失败")
         owner_user = get_current_username()
         if not owner_user and case_in.created_user:
-            owner_user = str(case_in.created_user).strip().upper()[:16]
+            owner_user = normalize_username(case_in.created_user)
         if not owner_user:
             error_message: str = "新增用例信息失败, 所属人员不允许为空"
             LOGGER.error(error_message)
@@ -238,17 +241,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 f"查询条件: [case_project={case_project}, case_name={case_name}, case_type={case_type}, owner_user={owner_user}]"
             )
             raise DataAlreadyExistsException(message=message_error)
-
-        # 分组命中的可能是异类型软删记录(如新建公共脚本却命中软删的用户脚本)：复活须落到同精确类型的软删行，
-        # 否则会撞DB唯一键(case_project+case_name+case_type+owner_user)或产生两条启用态同名脚本
-        if existing_case and existing_case.case_type != case_type:
-            existing_case = await self.model.filter(
-                case_project=case_project,
-                case_name=case_name,
-                case_type=case_type,
-                owner_user=owner_user,
-                state=1,
-            ).first()
 
         try:
             case_dict = case_in.model_dump(exclude_none=True, exclude_unset=True)
@@ -311,8 +303,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id = instance.id
 
+        await scope.load_owners([instance.owner_user])
         if not scope.can_write(instance.owner_user):
-            error_message: str = f"更新用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]非当前用户, 无权操作"
+            error_message: str = f"更新用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -340,7 +333,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             update_dict["case_tags"] = None
         elif "case_tags" in update_dict or ("case_type" in update_dict and original_case_type in NO_TAG_CASE_TYPES):
             raw_tags = update_dict.get("case_tags", instance.case_tags)
-            normalized_tags = _normalize_case_tags(effective_type, raw_tags, context="更新用例信息失败")
+            normalized_tags = self._normalize_case_tags(effective_type, raw_tags, context="更新用例信息失败")
             update_dict["case_tags"] = normalized_tags
             # 公共脚本标签可选：normalized_tags可能为空，get_by_ids不接受空列表
             if normalized_tags:
@@ -431,8 +424,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             instance = await self.get_by_code(case_code=case_code, on_error=True, state__not=1)
             case_id = instance.id
 
+        await scope.load_owners([instance.owner_user])
         if not scope.can_delete(instance.owner_user):
-            error_message: str = f"删除用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]非当前用户, 无权操作"
+            error_message: str = f"删除用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -503,9 +497,10 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
         step_crud = AutoTestStepCrud()
         target_case_ids: List[int] = [instance.id for instance in targets]
+        await scope.load_owners([instance.owner_user for instance in targets])
         for instance in targets:
             if not scope.can_delete(instance.owner_user):
-                error_message: str = f"批量删除用例失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]非当前用户, 无权操作"
+                error_message: str = f"批量删除用例失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]不在当前用户可删除范围内, 无权操作"
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
         # 公共用例仍被引用步骤时不允许下线：与单删一致，避免软删后引用方执行期找不到用例
@@ -588,6 +583,16 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         processed_case: Set[Tuple[Optional[int], Optional[str]]] = set()  # 用于去重（仅针对已有id的用例）
         success_detail: List[Dict[str, Any]] = []  # 存储处理成功的用例信息（附带输入映射）
 
+        # 批量预取待更新用例的归属人，避免在循环内逐条反查用户表
+        lookup_ids: List[int] = [item.case_id for item in cases_data if item.case_id]
+        lookup_codes: List[str] = [item.case_code for item in cases_data if not item.case_id and item.case_code]
+        if lookup_ids or lookup_codes:
+            owner_lookup: Q = (Q(id__in=lookup_ids) if lookup_ids else Q()) | (
+                Q(case_code__in=lookup_codes) if lookup_codes else Q()
+            )
+            batch_owners = await self.model.filter(owner_lookup, state__not=1).values_list("owner_user", flat=True)
+            await scope.load_owners(batch_owners)
+
         for cid, case_data in enumerate(cases_data, start=1):
             case_id: Optional[int] = case_data.case_id
             case_code: Optional[str] = case_data.case_code
@@ -611,7 +616,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                     case_id = case_instance.id
 
             if not case_instance:
-                case_tags = _normalize_case_tags(case_type, case_tags, context=f"第{cid}条用例新增失败")
+                case_tags = self._normalize_case_tags(case_type, case_tags, context=f"第{cid}条用例新增失败")
                 if case_tags:
                     await AutoTestTagCrud().get_by_ids(tag_ids=case_tags, on_error=True, state__not=1)
                 if not case_name:
@@ -650,15 +655,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         f"case_type={case_type}, owner_user={owner_user}]"
                     )
                     raise DataAlreadyExistsException(message=message_error)
-                # 分组命中的异类型软删记录不可直接复活：改落到同精确类型的软删行，避免撞DB唯一键或产生两条启用态同名脚本
-                if existing_case_instance and existing_case_instance.case_type != case_type:
-                    existing_case_instance = await self.model.filter(
-                        case_project=case_project,
-                        case_name=case_name,
-                        case_type=case_type,
-                        owner_user=owner_user,
-                        state=1,
-                    ).first()
                 try:
                     if existing_case_instance:
                         new_case_instance = await self._restore_and_overwrite_case(
@@ -688,7 +684,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
             else:
                 if not scope.can_write(case_instance.owner_user):
-                    error_message = f"第{cid}条用例更新失败, 用例所属人[{case_instance.owner_user}]非当前用户, 无权操作"
+                    error_message = f"第{cid}条用例更新失败, 用例所属人[{case_instance.owner_user}]不在当前用户可操作范围内, 无权操作"
                     LOGGER.error(error_message)
                     raise NoPermissionException(message=error_message)
                 # 批量更新同样支持跨应用迁移：目标应用必须对当前用户可读
@@ -730,7 +726,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         "case_type" in update_case_dict and case_instance.case_type in NO_TAG_CASE_TYPES
                 ):
                     raw_tags = update_case_dict.get("case_tags", case_instance.case_tags)
-                    normalized_tags = _normalize_case_tags(effective_type, raw_tags, context=f"第{cid}条用例更新失败")
+                    normalized_tags = self._normalize_case_tags(effective_type, raw_tags, context=f"第{cid}条用例更新失败")
                     update_case_dict["case_tags"] = normalized_tags
                     # 公共脚本标签可选：normalized_tags可能为空，get_by_ids不接受空列表
                     if normalized_tags:

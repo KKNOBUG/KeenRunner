@@ -19,6 +19,7 @@ from backend.applications.base.services.audit_crud import AuditCrud
 from backend.configure import GLOBAL_CONFIG, LOGGER
 from backend.core.exceptions import NotFoundException
 from backend.core.responses import FailureResponse, NotFoundResponse, SuccessResponse
+from backend.enums import ResourceTag
 
 audit = APIRouter()
 
@@ -64,7 +65,13 @@ def _build_audit_search_q(
         # 前缀匹配可利用username索引；全模糊改为startswith
         q &= Q(username__startswith=username)
     if request_tags:
-        q &= Q(request_tags__contains=request_tags)
+        # 新数据存资源族 code，历史数据存中文标签；两种口径同时匹配
+        matched_tags = {request_tags, ResourceTag.label_of(request_tags)}
+        tag_q = Q()
+        for value in matched_tags:
+            if value:
+                tag_q |= Q(request_tags__contains=value)
+        q &= tag_q
     if request_summary:
         q &= Q(request_summary__contains=request_summary)
     if request_method:
@@ -92,9 +99,10 @@ def _build_audit_search_q(
 
 
 async def _serialize_audit_list(audit_log_objs) -> list:
-    """列表序列化：显式排除大字段，避免only()后触发惰性补查。"""
-    return [
-        await audit_log.to_dict(
+    """列表序列化：显式排除大字段，并把资源族 code 映射为展示 label。"""
+    result = []
+    for audit_log in audit_log_objs:
+        data = await audit_log.to_dict(
             exclude_fields={
                 "request_header",
                 "request_params",
@@ -103,14 +111,15 @@ async def _serialize_audit_list(audit_log_objs) -> list:
             },
             replace_fields={"id": "audit_id"}
         )
-        for audit_log in audit_log_objs
-    ]
+        data["request_tags_label"] = ResourceTag.label_of(data.get("request_tags"))
+        result.append(data)
+    return result
 
 
 @audit.get("/list", summary="查询日志列表(Query)", description="根据条件分页查询日志信息(Query)")
 async def list_audit(
         page: int = Query(default=1, ge=1, description="页码"),
-        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        page_size: int = Query(default=10, ge=10, le=99999, description="每页数量"),
         order: list = Query(default_factory=lambda: ["-created_time"], description="排序字段"),
         username: str = Query(default=None, description="用户名称(前缀匹配)"),
         request_tags: str = Query(default=None, description="请求模块"),
@@ -209,6 +218,7 @@ async def get_audit(
     try:
         instance = await audit_crud.get_by_id(audit_id=audit_id)
         data = await instance.to_dict(replace_fields={"id": "audit_id"})
+        data["request_tags_label"] = ResourceTag.label_of(data.get("request_tags"))
         return SuccessResponse(message="查询成功", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -221,7 +231,7 @@ async def get_audit(
 async def get_audit_by_user(
         user_id: int = Query(..., description="用户ID"),
         page: int = Query(default=1, ge=1, description="页码"),
-        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        page_size: int = Query(default=10, ge=10, le=99999, description="每页数量"),
         order: list = Query(default_factory=lambda: ["-created_time"], description="排序字段"),
         start_time: str = Query(default=None, description="开始时间"),
         end_time: str = Query(default=None, description="结束时间"),

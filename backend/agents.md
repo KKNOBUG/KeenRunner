@@ -63,8 +63,7 @@ backend/
 │  ├─ global_config.py      # 全局常量
 │  ├─ database_config.py    # 数据库配置
 │  ├─ celery_config.py      # Celery 配置（队列名 = {port}_default / _autotest / _perf）
-│  ├─ logging_config.py     # loguru 配置
-│  └─ router_registry.py    # 路由注册表（ROUTER_SUMMARY/ROUTER_TAGS）
+│  └─ logging_config.py     # loguru 配置
 │
 ├─ core/                    # 框架核心（统一响应/异常/中间件/初始化/装饰器）
 │  ├─ responses/            # SuccessResponse/FailureResponse/ParameterResponse/...
@@ -75,7 +74,7 @@ backend/
 │
 ├─ enums/                   # 枚举集中（autotest/perf/http/menu/app/...）
 ├─ services/                # 顶层服务（ctx/dependency/file_transfer/password）
-├─ migrations/models/       # aerich 迁移产物（当前 11 个版本文件，以目录现状为准）
+├─ migrations/models/       # aerich 迁移产物（版本文件以目录现状为准）
 ├─ scripts/                 # 运维/修复脚本（aerich 对齐、redoc slug 等）
 ├─ static/                  # 静态资源（avatar/pythonHelpDoc/redoc/swagger-ui）
 └─ output/                  # 运行时产物（download/logs/jmx/upload 等不入 git；template/ 为部署模板资产）
@@ -145,7 +144,7 @@ views/autotest_data_source_view.py (/autotest/data_source/*)
 
 **执行记录与异步中心**：
 - 异步导入/导出/脚本生成统一写 `krun_autotest_record`：`task_type` 分类、`task_summary` 结果快照（含 `attachments` 信封）、失败态也回填；终态以 `celery_status` 为准，`task_summary.success` 仅表示全部成功，失败/部分成功的 `task_error` 与 `task_summary.error` 写同一摘要，`task_summary.raw` 保留任务原始返回；异步中心按 `AutoTestTaskType` 的 `task_type_in` 过滤。
-- 报告读模型：`/report/search`（手工报告）、`/report/search_task_batches`（task_code 批次）、`/report/search_batch_scripts`（batch_code 脚本维度）、`/report/search_script_round_reports`（batch_code+case_id+round_no）、`/report/search_batch_reports`；报告明细树由 `/detail/tree` 后端组装。
+- 报告读模型：`/report/search`（手工报告）、`/report/search_task_batches`（task_code 批次）、`/report/search_batch_scripts`（batch_code 脚本维度）、`/report/search_script_round_reports`（batch_code+case_id+round_no）、`/report/search_batch_reports`；报告明细树由 `/detail/search_tree` 后端组装。
 - 列表页与删除入口：报告 `/report/search`、执行明细 `/detail/search`（菜单 `/autotest/detail`）、执行记录 `/task/record/search`（菜单 `/task/record`）、异步中心（同执行记录接口 + `task_type_in` 过滤）；四页均支持列表多选批量删除，行级删除按钮按后端回传的 `can_delete` 控制。
 
 **调试模式**（不落库，顺序严格对齐执行模式）：
@@ -201,16 +200,16 @@ views (/http_debugging, /tcp_debugging)
 - `models/`：audit（审计）、menu（菜单）、role（角色）、router（路由）
 - `services/`：
   - `scaffold.py`：**所有业务表继承的脚手架**（id/state/created_time/updated_time/created_user/updated_user/reserve_1~3）+ `unique_identify()` 生成 `*_code`
-  - `permission_rule.py`：权限规则
+  - `permission_rule.py`：内置角色接口放行规则（资源域 × 行为）与补绑/管理员专属回收
   - `*_crud.py`：菜单/角色/路由/审计 CRUD
-- `views/`：auth（登录/鉴权）、menu、role、router、audit、file_transfer
-- `Role` 含数据权限三字段：`select_scope`（可见范围，默认 DEPT_AND_CHILD）、`update_scope`（可写范围，默认 SELF）与 `delete_scope`（可删范围，默认 SELF），即角色默认范围；标签级覆盖见 `RoleTagScope`（`krun_role_tag_scope`），详见 4.5。
+- `views/`：menu、role、router、audit、file_transfer；登录与当前用户接口在 `applications/user/views/user_view.py`（`user_public`/`user_self`/`user_secure` 三个路由）
+- `Role` 含数据权限三字段：`select_scope`（可见范围，默认 DEPT_AND_CHILD）、`update_scope`（可写范围，默认 SELF）与 `delete_scope`（可删范围，默认 SELF），即角色默认范围；标签级覆盖见 `RoleTag`（`krun_role_tags`），详见 4.5。
 - 内置角色码统一定义在 `enums/role_enum.py` 的 `BuiltinRoleCode`（`Administrators` / `Users` / `Guests`），判断逻辑用 `BuiltinRoleCode.includes_admin(role_codes)`，禁止在业务代码里散落角色码字符串。
 - 删除语义：角色单删与批量删除均为**物理删除**（`krun_role` 无 `state` 字段）；管理员角色不可删除；存在未删除用户绑定（`krun_user_role`，该表为级联外键，删角色会静默清空用户权限）时整体拒绝，单删与批量删除口径一致。
 
 ### 3.4 user / department / toolbox
 
-- `user/`：用户模型 + CRUD + 视图；单删与批量删除均为**软删除**（`state=1` 并递增 `token_version` 吊销 Token）；`/user/update` 仅在显式传 `role_ids` 时重建角色绑定，局部更新（如调岗）不清空既有授权。
+- `user/`：用户模型 + CRUD + 视图；单删与批量删除均为**软删除**（`state=1` 并递增 `token_version` 吊销 Token）；`/user/update` 仅在显式传 `role_ids` 时重建角色绑定，局部更新（如调岗）不清空既有授权。登录与当前用户自身接口收在 `user_view.py`：公开 `POST /user/login`、`POST /user/transfer_login`；仅认证 `POST /user/get_userinfo`、`POST /user/menu/list`、`POST /user/get_user_routers`、`POST /user/update_password`、`POST /user/logout`（不做 RBAC 鉴权，也不能被角色绑定）。
 - `department/`：部门模型 + CRUD + 视图；单删为**物理删除**，批量删除为**软删除**（`state=1`）；两条路径都拒绝存在启用子部门或在用用户的部门，删除时在事务内清理闭包表 `krun_dept_nest`
 - `toolbox/`：代码生成等辅助工具（`views/generate_view.py`）
 
@@ -241,29 +240,33 @@ views (/http_debugging, /tcp_debugging)
 
 ### 4.3 中间件（core/middlewares/）
 
-- `app_middleware.py`：应用级（CORS/日志等）
-- `auth_middleware.py`：鉴权
+- `app_middleware.py`：应用级日志与审计；仅 `AUDITED_ACTIONS`/`unknown` 落库，查询透传；取用户复用认证缓存，不再重复查库。
+- `auth_middleware.py`：非白名单请求统一先认证，**不做 RBAC**（RBAC 在路由依赖 `DependPermission`）；401 明细透传（含临时令牌过期提示），其余异常记录 `LOGGER.error` 后返回 500（不能用 401，否则前端会误登出）；白名单仅登录、根路径、docs 与 static。
 - `request_context_middleware.py`：请求上下文（用户/租户注入）
+- 认证结果请求级缓存：`AuthControl.is_authed` 命中 `request.state.current_user` 时只重建 `CTX_USER_ID`/`CTX_USERNAME` 不查库；Starlette `BaseHTTPMiddleware` 与端点共享同一 `scope["state"]`，中间件 → 路由依赖 → 审计三处调用只查一次用户表。
+- 开发用临时令牌 `AUTH_TEMPORARY_TOKEN`：必须是**预签发的长效 JWT**（与登录令牌同密钥/算法，必含 `exp`/`user_id`/`token_version` 三个声明，`jwt.decode` 以 `options={"require": ...}` 强制校验），不是任意字符串；空值表示禁用；比对用 `hmac.compare_digest` 常量时间；启用时启动打印安全 WARNING，生产必须置空。
 
 ### 4.4 初始化（core/initializations/）
 
 - `app_initialization.py`：`register_database` / `register_exceptions` / `register_middlewares` / `register_routers` / `init_database_table`
+- `permission_contract.py`：启动时为每个路由绑定一次权限元数据（资源族/行为/认证模式/管理员专属），运行期只读，详见 4.6
 - `data_initialization.py`：初始数据灌入（角色种子含数据范围：管理员 ALL/ALL/ALL，标准用户与宾客 DEPT_AND_CHILD/SELF/SELF；存量库启动时校正管理员三范围为 ALL）
 
 ### 4.5 数据权限（services/data_scope.py）
 
 - 枚举：`enums/permission_enum.py` 的 `DataScopeEnum`（`ALL / DEPT_AND_CHILD / DEPT / SELF`）。
-- 模型：`Role.select_scope`（可见，默认 DEPT_AND_CHILD）/`Role.update_scope`（可写，默认 SELF）/`Role.delete_scope`（可删，默认 SELF），aerich 自动迁移；`RoleTagScope`（表 `krun_role_tag_scope`，唯一键 `role_id + tag`，同名字段承载标签级覆盖，字段为空表示按角色默认范围生效）
-- 资源锚点：路由 tags 声明 `一级目录:二级模块`，`resolve_request_tag` 直接读取 `request.scope["route"].tags`，**不做 URL 前缀推断**；未声明归入 `legacy`。标签清单从 `krun_router.tags` 汇总，改标签后需 `POST /base/router/refresh`。
-- 解析：`DataScope.from_user` 超管与管理员角色（`BuiltinRoleCode.ADMIN`）固定三范围全部数据；其余用户按标签两层解析「标签覆盖 > 角色默认范围」，逐字段回落，多角色取最宽，再解析为归属人集合（`None` 表示不限）。部门范围按归属人**当前部门**动态解析：`DEPT` 取本部门，`DEPT_AND_CHILD` 借闭包表 `DeptStruct` 展开。
+- 模型：`Role.select_scope`（可见，默认 DEPT_AND_CHILD）/`Role.update_scope`（可写，默认 SELF）/`Role.delete_scope`（可删，默认 SELF），aerich 自动迁移；`RoleTag`（表 `krun_role_tags`，唯一键 `role_id + tag`，同名字段承载标签级覆盖，字段为空表示按角色默认范围生效）
+- 资源锚点：视图注册统一 `tags=[ResourceTag.X.desc]`（禁止手写中文字面量），启动时由 `bind_route_contracts` 精确匹配成 `route.resource`，`DependTagScope` 只读该契约，**不做 URL 前缀推断**；未声明或未登记归入 `legacy`。`ResourceTag` 的 code（如 `autotest.case`）是持久化与判定的唯一口径，`desc` 仅用于路由 tags 与展示；`RoleTag.tag` 存 code，与运行期解析同源，中文名由 `ResourceTag.label_of` 转出。
+- 可配置范围：`ResourceTag.scope_aware=True` 的资源族才进入「标签范围」配置（当前为 `application.project/env/env_config/tag`、`autotest.case/report/detail`、`task.task`）；步骤与数据源无独立归属，范围跟随所属用例，不单独配置；其写校验统一走 `assert_case_writable`（按 `autotest.case` 资源族同时校验可读与可写），禁止用自身 `STEP`/`DATASET` 标签判定；新增资源族若要参与数据权限，必须同时接入 `DependTagScope` 与归属字段过滤后再置 `scope_aware=True`，否则不展示，避免生成配置了却不生效的空项。
+- 解析：`DataScope.from_user` 超管与管理员角色（`BuiltinRoleCode.ADMIN`）固定三范围全部数据；其余用户按标签两层解析「标签覆盖 > 角色默认范围」，逐字段回落，多角色取最宽，再解析为**部门ID集合**（`read/write/delete_depts`，`None` 表示不限，空集表示仅本人）。部门范围按归属人**当前部门**动态解析：`DEPT` 取本部门，`DEPT_AND_CHILD` 借闭包表 `DeptStruct` 展开；不再把部门成员展开为内存集合，避免大部门下超大 IN。
 - 写/删 ≤ 读：运行期 `_clamp_to_read` 收敛，保存期 `RoleCrud._assert_tag_scope_order` 用 `scope_covers` 拒绝超出可见范围的配置；未显式设置的字段按角色默认范围参与校验，避免“回读显示默认值、运行期被收敛”的不一致。
-- 使用：`read_q(owner_field)` 产出列表过滤 `Q`（空集合用空串占位，规避 MySQL `IN ()` 语法限制）；`can_write(owner)`/`can_delete(owner)` 按归属账号（大写 16 位截断）判定；`for_tag(tag)` 按父资源族重解析；`DataScope.system()` 表示任务执行、引擎回写等内部可信路径。视图经 `DependTagScope` 注入，单请求只解析一次。列表响应在 view 层为每行注入 `can_delete`（`scope.can_delete(归属人)`），前端按钮显隐直接采用，禁止按归属人自行比对（部门范围无法在前端复算，且部分列表已排除 `created_user`）。
+- 使用：`read_q(owner_field)` 产出列表过滤 `Q`：本人等值 OR 部门成员子查询（`LEFT(UPPER(TRIM(username)),16)`，与 `normalize_username` 同源），SQL 长度与部门人数无关；`can_read/can_write/can_delete(owner)` 按归属人当前部门判定，**调用前必须 `await scope.load_owners(owners)` 预取**（单条传单个归属人，批量在循环前一次传全集，未预取按不在范围处理并告警）；`for_tag(tag)` 按父资源族重解析；`DataScope.system()` 表示任务执行、引擎回写等内部可信路径。视图经 `DependTagScope` 注入，单请求只解析一次。列表响应在 view 层为每行注入 `can_delete`（`scope.can_delete(归属人)`），前端按钮显隐直接采用，禁止按归属人自行比对（部门范围无法在前端复算，且部分列表已排除 `created_user`）。
 - 父资源可读校验（B 级）：`services/autotest_scope_guard.py` 的 `load_readable_project`/`assert_parent_readable` 校验所属项目/环境对当前用户可读，接入用例/任务/标签/环境/环境配置的创建与配置更新。
-- 写校验约定：service 写方法将 `scope: DataScope` 设为必填参数，越权抛 `NoPermissionException`；view 注入 scope 并在 `except Exception` **之前**加 `except NoPermissionException: raise`，否则异常被吞。
-- 权限载体：角色是唯一权限载体，菜单（`krun_role_menus`）、接口（`krun_role_routers`）与标签范围（`krun_role_tag_scope`）都挂在角色上；新建角色默认零绑定，必须由管理员显式配置。
-- 管理员角色：`Administrators` 与超管同权，`usermenu`/`get_user_routers`/`PermissionControl.has_permission`/`DependSuperUser`/`DataScope` 均运行期直接全量放行，不依赖绑定记录；其角色编码不可修改、角色不可删除、绑定不可保存（`/base/role/authorized` 直接返回参数提示）。
-- 管理员入口：`GET/POST /base/role/authorized` 在原有菜单/路由之外增删 `tag_scopes`（每项 tag + 三范围，空值=按角色默认），由 `RoleCrud.list_tag_scopes/save_tag_scopes` 事务内重建。
-- 审计：`common/permission_action.py` 的 `classify_summary_action` + `AUDITED_ACTIONS` 为唯一分类源，`permission_rule.py` 与 `app_middleware.py` 共用；中间件对新增/更新/删除/执行/上传/下载落库，**刷新(ops)与查询直接透传**（下载响应仅记 `<FILE DOWNLOAD>` 占位符，不复制文件流）。新增接口的 summary 必须沿用标准动词前缀（刷新/查询/更新/新增/导入/上传/导出/下载/注销/删除/批量删除/执行/调试/启动/停止，以 `permission_action.ACTION_RULES` 为准），否则既不会进入审计也会被权限规则告警。
+- 写校验约定：service 写方法（create/update/delete/copy 及子资源写入）将 `scope: DataScope` 设为必填参数，越权抛 `NoPermissionException`；只读查询可 `Optional` 缺省仅供内部可信路径，不得从视图透传缺省；view 注入 scope 并在 `except Exception` **之前**加 `except NoPermissionException: raise`，否则异常被吞。
+- 权限载体：角色是唯一权限载体，菜单（`krun_role_menus`）、接口（`krun_role_routers`）与标签范围（`krun_role_tags`）都挂在角色上；新建角色默认零绑定，必须由管理员显式配置。
+- 管理员角色：`Administrators` 与超管同权，`/user/menu/list`/`/user/get_user_routers`/`PermissionControl.has_permission`/`DependSuperUser`/`DataScope` 均运行期直接全量放行，不依赖绑定记录；其角色编码不可修改、角色不可删除、绑定不可保存（`/base/role/authorized` 直接返回参数提示）。
+- 管理员入口：`GET/POST /base/role/authorized` 在原有菜单/路由之外增删 `tag_scopes`（每项 tag=资源族编码 + tag_label 展示名 + 三范围，空值=按角色默认）；菜单、接口与标签范围同属一次授权，统一由 `RoleCrud.save_authorization` 先全量校验、再单事务重建三张关联表；两个方向都叠加 `DependSuperUser`，非管理员不可读也不可写。
+- 审计：`common/permission_action.py` 的 `derive_action` + `AUDITED_ACTIONS` 为唯一分类源，`permission_rule.py` 与 `app_middleware.py` 共用；中间件对新增/更新/删除/执行/上传/下载落库，**刷新(ops)与查询直接透传**（下载响应仅记 `<FILE DOWNLOAD>` 占位符，不复制文件流）。行为由路径末段动词判定（见 4.6），新增接口必须让路径末段带已知动词，否则既不进审计也会被契约校验告警。
 - 报告/明细写接口：HTTP `create/update` 加 `DependSuperUser`，仅超管、管理员角色或执行引擎可直调；引擎内部经 service 直写不走 HTTP。环境字典 `created_user/updated_user` 取登录态，忽略请求体回传。
 - 内置角色接口绑定：Guests 业务域（应用/自动化/任务/工具）全部放行（含执行/调试/上传/下载），系统域只读；接口放行不代表可删他人数据，删除归属由 service 层 `can_delete` 兜底。
 - 归属字段：用例用 `owner_user`（转让后变更，转让始终仅当前所属人本人可操作）；步骤与数据源以所属用例 `owner_user` 为准；项目/标签/环境/环境配置/任务/报告/明细/执行记录用 `created_user`。
@@ -272,8 +275,16 @@ views (/http_debugging, /tcp_debugging)
   - **单删物理 + 批量软删**：应用（`autotest/project`）、标签、环境、环境配置、用例、步骤。两条路径都拒绝存在引用关系的数据：应用→用例/标签/环境绑定/环境配置/任务；标签→用例 `case_tags`；环境→环境配置/任务环境名；环境配置→步骤的请求配置/数据库/Redis 操作；用例→公共用例被引用步骤。用例单删连带物理删除其步骤，批量删除连带软删除其步骤；步骤无独立批量删除入口。
   - 批量删除一律「全有或全无」：先全量校验行级 `can_delete` 与引用关系，再单次落库，禁止边校验边删除导致部分成功。
   - 步骤树保存（`/autotest/step/update_or_create_tree`）的淘汰步骤为**物理删除**（含 IF 分支缩减的子步骤），并同步清理数据源与数据生成记录；同一用例内 `step_no` 必须唯一（前端按全树前序统一编号）。
-- 读过滤边界：仅各资源列表/主列表接口注入；报告/明细批次下钻（`batch_code`/`task_code`）、项目/环境下拉、步骤树（按 `case_id`）不过滤；用例列表对公共用例放行。
+- 读过滤边界：资源列表/下拉/聚合查询与报告/明细批次下钻（`batch_code`、`report_code` 明细树）均按对应资源族 `read_q` 收窄；步骤列表按父用例 `owner_user` 过滤，步骤树/单条步骤按父用例可见性校验；用例列表对公共用例（`PUBLIC_CASE_TYPES`）放行。
 - 不参与：性能压测模块。
+
+### 4.6 接口契约与认证模式（core/initializations/permission_contract.py）
+
+- 启动时 `bind_route_contracts` 给每个 `APIRoute` 绑定 `resource`（`enums/resource_enum.py` 的 `ResourceTag`，按 tag label 精确匹配）/`action`/`auth_mode`/`available_only_admin`；运行期消费方只读契约，不再解析 tags、路径或 summary。
+- 认证模式按路由级依赖判定：含 `DependPermission` → permission（写 `krun_router`、参与角色绑定）；含 `DependAuth` → self（仅认证，不下发角色）；都无 → public。公开与仅认证接口不进入权限体系。`krun_router` 只存 path/method/summary/tags/available_only_admin，资源族编码由启动契约 `route.resource` 承载，不落库副本（避免与枚举漂移）。
+- 路径即行为契约：路径末段按 `_` 分词后取**位置最后的已知动词**，归入 `新增/更新/删除/上传/下载/执行/查询/运维` 八组（`common/permission_action.py` 的 `VERB_ACTIONS`）；DELETE 一律删除，GET 无动词回落查询，其余方法无动词为 `unknown`。
+- `validate_route_contracts` 对「资源族未登记」「路径末段缺已知动词」输出 **ERROR 日志但不阻断启动**，`PermissionRule.warn_unclassified_routers` 在刷新路由时按同一规则告警；开发者必须修正，禁止长期留存 unknown。
+- 管理员专属接口在 `DependPermission` 之外叠加 `DependSuperUser`：契约标记 `available_only_admin`，内置角色自动绑定跳过，`RoleCrud.save_authorization` 忽略该分配，刷新时 `PermissionRule.drop_available_only_admin_bindings` 回收非管理员角色上的残留。`DependSuperUser` 声明在 include_router、路由装饰器或视图参数任一处均可被识别（`_route_dependency_funcs` 递归遍历 `route.dependant`）。当前为 `GET/POST /base/role/authorized`、`POST /base/router/refresh` 与报告/明细写接口 `POST /autotest/report/create|update`、`POST /autotest/detail/create|update`（共 7 条）。`available_only_admin` 只影响权限配置面，运行期放行由 `DependSuperUser` 决定，禁止手改库中该字段。
 
 ---
 
@@ -285,7 +296,6 @@ views (/http_debugging, /tcp_debugging)
 - `celery_config.py`：队列名 = `{port}_default` / `{port}_autotest` / `{port}_perf`（端口前缀派生）；`task_routes` 统一路由
 - `database_config.py`：MySQL 连接
 - `logging_config.py`：loguru 格式与轮转
-- `router_registry.py`：`ROUTER_SUMMARY` / `ROUTER_TAGS`（OpenAPI 文档增强）
 
 ---
 
@@ -332,6 +342,7 @@ views (/http_debugging, /tcp_debugging)
 - `perf_enum.py`：`PerfRunMode`/`PerfLoadMode`/`PerfPresetStatus`/`PerfReportStatus`/`PerfAssertMode`/`PerfApiRole`/`PerfTargetMetric`/...
 - `http_enum.py`：HTTP 方法/状态码
 - `menu_enum.py`：菜单类型
+- `resource_enum.py`：权限资源族（code/label/domain，`ResourceTag` 单一事实源）
 - `app_enum.py`：应用级
 - `base_enum_cls.py`：枚举基类（StringEnum 与 str 值等价比较）
 - `base_error_enum.py`：错误码
@@ -408,7 +419,6 @@ models → schemas → services → views(router)
 | FastAPI 应用入口 | `backend_main.py` |
 | 项目配置 | `configure/project_config.py` |
 | Celery 配置 | `configure/celery_config.py` |
-| 路由注册 | `configure/router_registry.py` |
 | 统一响应 | `core/responses/` |
 | 异常体系 | `core/exceptions/` |
 | 脚手架基类 | `applications/base/services/scaffold.py` |
@@ -421,7 +431,9 @@ models → schemas → services → views(router)
 | 初始菜单/路由灌入 | `core/initializations/data_initialization.py` |
 | 权限规则 | `applications/base/services/permission_rule.py` |
 | 数据权限范围 | `services/data_scope.py`、`enums/permission_enum.py` |
-| 当前用户菜单/路由 | `applications/base/views/auth_view.py` |
+| 当前用户菜单/路由 | `applications/user/views/user_view.py` |
+| 接口契约绑定/校验 | `core/initializations/permission_contract.py` |
+| 资源族枚举 | `enums/resource_enum.py` |
 | autotest 步骤引擎 | `applications/autotest/services/autotest_step_engine.py` |
 | autotest 调试服务 | `applications/autotest/services/autotest_step_debug_service.py` |
 | perf 执行管线 | `applications/performance/services/perf_execute_service.py` |
@@ -445,11 +457,11 @@ models → schemas → services → views(router)
 6. 复用 `core/responses` 与 `core/exceptions`，禁止自造返回/错误结构
 7. 配置一律来自 `.env` → `PROJECT_CONFIG`，禁止硬编码
 8. Celery 队列名统一，`apply_async` 不得硬编码 queue
-9. 受数据权限管控的写操作：service 必传 `scope`，view 注入 `DependTagScope`（按路由标签解析）或 `DependDataScope`（按角色全局）并 `except NoPermissionException: raise`
+9. 受数据权限管控的写操作：service 必传 `scope`，view 注入 `DependTagScope`（按路由绑定的资源族编码解析）并 `except NoPermissionException: raise`
 
 新增页面/接口额外检查：
-10. 菜单：`krun_menu` 写入/更新（component 指向 `/xxx`、keepalive、order、parent_id），否则前端无路由；菜单初始化是「表非空即跳过」，存量环境的新页面必须像 `ensure_autotest_detail_menu` 一样写幂等补建（按 parent_id + name 判定）
-11. 接口：`POST /base/router/refresh` 同步 `krun_router`，核对 summary 前缀分类与角色补绑
+10. 菜单：`krun_menu` 写入/更新（component 指向 `/xxx`、keepalive、order、parent_id），否则前端无路由；`path` 允许跨父级重复，但**同父级唯一**（`uid_krun_menu_parent_path`，重复会让前端注册出同 URL 路由、后注册者不可达），`menu_crud` 创建/更新（含换父）先做同级预校验、`(name, path)` 唯一索引保留做同名幂等；菜单初始化是「表非空即跳过」，存量环境的新页面必须像 `ensure_autotest_detail_menu` 一样写幂等补建（按 parent_id + name 判定）
+11. 接口：`POST /base/router/refresh` 同步 `krun_router`，路径末段必须带已知动词（启动日志无契约 ERROR），并核对角色补绑结果
 12. 异步任务：record 写入 `task_type`、`task_summary`（含 attachments 信封），并纳入异步中心类型过滤
 
 交付前：

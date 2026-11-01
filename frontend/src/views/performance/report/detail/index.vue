@@ -2,7 +2,7 @@
   压测报告详情页 — 一次施压的不可变结论（只读快照，独立标签页展示）
 
   由「压测报告」列表页「详情」跳转进入（隐藏菜单，query 传 report_code），替代原抽屉展示。
-  报告是只读不可变快照；指标曲线经 /perf/report/metrics 代理 VictoriaMetrics 拉取。
+  报告是只读不可变快照；指标曲线经 /perf/report/get_metrics 代理 VictoriaMetrics 拉取。
   区块顺序参考 BrickCoreAI 报告页：概要 → 可信度风险 → 全局指标 → SLA 判定 → 基线对比 →
   指标曲线 → 接口维度 → 事务维度 → 准备与抽查 → 错误归因 → 失败原因 → 数据作业 → 原始产物 → 附录。
 -->

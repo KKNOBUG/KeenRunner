@@ -118,7 +118,7 @@ async def delete_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
     :return: 统一HTTP响应
     """
     try:
@@ -157,7 +157,7 @@ async def batch_delete_projects(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的应用
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
     :return: 统一HTTP响应
     """
     try:
@@ -187,7 +187,7 @@ async def update_project(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的应用
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的应用
     :return: 统一HTTP响应
     """
     try:
@@ -238,6 +238,7 @@ async def get_project(
             instance = await services.project_curd.get_by_id(project_id=project_id, on_error=True, state__not=1)
         else:
             instance = await services.project_curd.get_by_code(project_code=project_code, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 详情需收口到可见范围
             raise NoPermissionException(
                 message=f"查询应用失败, 应用[{instance.project_code}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -355,6 +356,7 @@ async def search_projects(
         ]
         # 行级可删标记由后端按当前资源族的删除范围判定：部门范围无法在前端复算，
         # 且响应已排除 created_user，前端不能再按归属人自行比对
+        await scope.load_owners([obj.created_user for obj in instances])
         for item, obj in zip(data, instances):
             item["can_delete"] = scope.can_delete(obj.created_user)
         return SuccessResponse(message="查询成功", data=data, total=total)

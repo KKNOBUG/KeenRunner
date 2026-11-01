@@ -55,9 +55,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> BaseRe
 
     if exc.status_code == status.HTTP_403_FORBIDDEN:
         detail = str(exc.detail) if hasattr(exc, "detail") and exc.detail else None
-        return ForbiddenResponse(
-            message=detail or f"请求服务 {request.method} 未被授权"
-        )
+        # 403 拒绝事件必须进审计：响应回到中间件后只剩响应体，拒绝信号在此写入共享的 request.state
+        request.state.audit_denied = True
+        return ForbiddenResponse(message=detail or f"请求服务 {request.method} 未被授权")
 
     elif exc.status_code == status.HTTP_404_NOT_FOUND:
         return NotFoundResponse(message=f"请求资源 {request.url.path} 不可访达")
@@ -86,6 +86,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> BaseRe
 
 async def no_permission_exception_handler(request: Request, exc: NoPermissionException) -> BaseResponse:
     """业务层拒绝数据越权操作时统一返回403，避免被通用异常处理成500。"""
+    # 与接口权限拒绝同口径标记，由审计中间件统一落库
+    request.state.audit_denied = True
     return ForbiddenResponse(message=exc.message)
 
 

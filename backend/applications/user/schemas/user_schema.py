@@ -8,7 +8,7 @@
 """
 from typing import Optional, List
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from backend.applications.base.services.scaffold import UpperStr
 
@@ -35,8 +35,8 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """新增用户入参。"""
 
-    username: str = Field(..., max_length=16, description="用户账号")
-    password: str = Field(..., max_length=255, description="用户密码")
+    username: str = Field(..., min_length=1, max_length=16, description="用户账号")
+    password: str = Field(..., min_length=1, max_length=255, description="用户密码")
     alias: str = Field(..., max_length=32, description="用户姓名")
     email: EmailStr = Field(..., max_length=64, description="用户邮箱")
     gender: int = Field(default=0, ge=0, le=2, description="用户性别: 0未知 1男 2女")
@@ -45,6 +45,16 @@ class UserCreate(UserBase):
     is_superuser: bool = Field(default=False, description="是否为超级管理员")
     role_ids: Optional[List[int]] = Field(default_factory=list, description="角色ID列表")
     created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def _validate_username(cls, value):
+        """用户账号去空白；空白账号直接拒绝，避免写入不可登录的脏账号。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[username]不允许为空")
+        return value
 
     def create_dict(self):
         """
@@ -64,6 +74,16 @@ class UserUpdate(UserBase):
     state: Optional[int] = Field(default=None, description="状态(0:启用, 1:禁用)")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
+    @field_validator("username", mode="before")
+    @classmethod
+    def _validate_username(cls, value):
+        """更新时同样禁止把账号改成空白。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[username]不允许为空")
+        return value
+
 
 class UserBatchDelete(BaseModel):
     """批量删除用户入参。"""
@@ -75,7 +95,7 @@ class UserSelect(UserBase):
     """分页查询用户入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")
 

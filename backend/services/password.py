@@ -27,9 +27,9 @@ def get_password_hash(password: str) -> str:
 def generate_password() -> str:
     return pwd.genword()
 
-def create_access_token(*, data: JWTPayload, token_version: int = 0):
-    payload = data.model_dump().copy()
-    payload["token_version"] = token_version
+def create_access_token(*, data: JWTPayload) -> str:
+    """签发访问令牌；仅序列化实际声明，避免空字段进入 JWT 载荷。"""
+    payload: dict = data.model_dump(exclude_none=True)
     encoded_jwt = jwt.encode(
         payload,
         PROJECT_CONFIG.AUTH_SECRET_KEY,

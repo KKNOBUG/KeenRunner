@@ -85,7 +85,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_config(self, config_in: AutoTestEnvConfigCreate, scope: Optional[DataScope] = None) -> AutoTestEnvConfigModel:
+    async def create_config(self, config_in: AutoTestEnvConfigCreate, scope: DataScope) -> AutoTestEnvConfigModel:
         """
         创建环境配置；同名软删记录在写权限内恢复启用。
 
@@ -100,6 +100,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         await load_readable_project(scope, project_id)
 
         env_bind = await self._get_or_create_env_bind(
+            scope=scope,
             project_id=project_id,
             env_name=config_in.env_name,
             env_type=env_type,
@@ -117,8 +118,9 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             if existing.state == 0:
                 raise DataAlreadyExistsException(message="相同应用和环境下, 配置名称不允许重复")
             # 软删恢复不得跨写范围接管他人配置，且不覆盖原创建人
-            if scope is not None and not scope.can_write(existing.created_user):
-                error_message = f"新增环境配置失败, 配置[{config_name}]创建人[{existing.created_user}]非当前用户, 无权操作"
+            await scope.load_owners([existing.created_user])
+            if not scope.can_write(existing.created_user):
+                error_message = f"新增环境配置失败, 配置[{config_name}]创建人[{existing.created_user}]不在当前用户可操作范围内, 无权操作"
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
             payload.pop("created_user", None)
@@ -146,7 +148,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         更新环境配置，根据config_id或config_code定位。
 
         :param config_in: 环境配置更新schema
-        :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
+        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
         :return: 配置ORM实例
         """
         config_id: Optional[int] = config_in.config_id
@@ -161,8 +163,9 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             instance = await self.get_by_code(config_code=config_code, on_error=True, state__not=1)
             config_id = instance.id
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message = f"更新环境配置失败, 配置[{instance.config_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message = f"更新环境配置失败, 配置[{instance.config_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -183,6 +186,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             raise ParameterException(message="参数[env_name]不允许为空")
 
         env_bind = await self._get_or_create_env_bind(
+            scope=scope,
             project_id=int(bind.project_id),
             env_name=env_name,
             env_type=env_type,
@@ -272,7 +276,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         按节点类型物理删除环境配置；被步骤引用时禁止删除。
 
         :param config_in: 删除入参
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的环境配置
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境配置
         :return: 删除后的配置实例快照
         """
         instance = await self.get_by_id(config_id=config_in.config_id, on_error=True)
@@ -281,8 +285,9 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             raise NotFoundException(message="配置关联的环境信息不存在")
         if bind.env_type != config_in.env_type:
             raise ParameterException(message="配置关联的环境节点不匹配")
+        await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除环境配置失败, 配置[{instance.config_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"删除环境配置失败, 配置[{instance.config_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -296,7 +301,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         根据ID或code列表批量软删除环境配置；软删与物理删同样拒绝被步骤引用的配置。
 
         :param config_in: 环境配置批量删除schema
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的环境配置
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境配置
         :return: 更新条数
         """
         config_ids: Optional[List[int]] = config_in.config_ids
@@ -338,8 +343,9 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                     raise NotFoundException(message=error_message)
                 targets.append(instance)
 
+        await scope.load_owners([instance.created_user for instance in targets])
         if not all(scope.can_delete(instance.created_user) for instance in targets):
-            error_message: str = "删除环境配置失败, 存在非当前用户创建的环境配置, 无权操作"
+            error_message: str = "删除环境配置失败, 存在不在当前用户可删除范围内的环境配置, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         # 软删同样受引用关系约束：先全量校验再落库，保证批量操作全有或全无
@@ -540,6 +546,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
     async def _get_or_create_env_bind(
             self,
             *,
+            scope: DataScope,
             project_id: int,
             env_name: str,
             env_type: Union[AutoTestConfigNodeType, str],
@@ -548,6 +555,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         """
         按应用+环境名+节点类型获取或创建环境绑定记录。
 
+        :param scope: 数据权限上下文，透传给环境绑定创建以校验应用可读与写范围
         :param project_id: 应用ID
         :param env_name: 环境名称（会规范化为大写）
         :param env_type: 节点类型(app/file/database/redis)
@@ -564,7 +572,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                 env_type=env_type,
                 created_user=created_user,
                 env_desc="",
-            )
+            ),
+            scope=scope,
         )
 
     async def _assert_host_unique(
@@ -706,6 +715,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             raise NotFoundException(message="配置表未找到对应记录，请检查")
 
         # 连接测试会暴露主机端口等凭据信息，必须限制在可见范围内
+        if scope is not None:
+            await scope.load_owners([config.created_user])
         if scope is not None and not scope.can_read(config.created_user):
             error_message = f"测试数据库连接失败, 配置[{config_name}]创建人[{config.created_user}]不在当前用户可见范围"
             LOGGER.error(error_message)

@@ -16,6 +16,17 @@
       </template>
     </QueryBar>
 
+    <n-alert
+        v-if="loadError"
+        :type="loadError.level"
+        :title="loadError.title"
+        show-icon
+        style="margin-bottom: 8px;"
+    >
+      {{ loadError.detail }}
+      <n-button text type="primary" style="margin-left: 8px;" @click="handleQuery">重新加载</n-button>
+    </n-alert>
+
     <n-data-table
         :remote="remote"
         :loading="loading"
@@ -27,7 +38,13 @@
         :pagination="isPagination ? pagination : false"
         @update:checked-row-keys="onCheckedRowKeysUpdate"
         @update:page="onPageChange"
-    />
+    >
+      <template #empty>
+        <n-empty
+            :description="loadError ? '数据暂不可用，按上方提示处理后重新加载' : '暂无数据'"
+        />
+      </template>
+    </n-data-table>
   </div>
 </template>
 
@@ -112,6 +129,21 @@ const loading = ref(false)
 const localCheckedRowKeys = ref([])
 const initQuery = { ...props.queryItems }
 const tableData = ref([])
+/** 加载失败态：区分无权限/服务异常，持久展示直到重新加载成功 */
+const loadError = ref(null)
+
+function resolveLoadError(error) {
+  // 拦截器失败分支透传业务 code（如 400403）或 axios/HTTP 状态码，按此区分无权限与服务异常
+  const code = String(error?.code ?? '')
+  const denied = code === '400403' || code === '403'
+  return {
+    level: denied ? 'warning' : 'error',
+    title: denied ? '无权限访问' : '数据加载失败',
+    detail: denied
+        ? '当前账号没有该列表的查询权限，请联系管理员分配后重新加载'
+        : error?.message || '服务暂时不可用，请稍后重新加载',
+  }
+}
 
 const mergedCheckedRowKeys = computed(() =>
     props.checkedRowKeys !== undefined ? props.checkedRowKeys : localCheckedRowKeys.value
@@ -156,9 +188,11 @@ async function handleQuery() {
     })
     tableData.value = data
     pagination.itemCount = total || 0
+    loadError.value = null
   } catch (error) {
     tableData.value = []
     pagination.itemCount = 0
+    loadError.value = resolveLoadError(error)
   } finally {
     emit('onDataChange', tableData.value)
     if (props.isPagination && props.remote) {

@@ -6,19 +6,9 @@
 @Module  : resource_policy.py
 @DateTime: 2026/10/28
 """
-from typing import Dict, Tuple
+from typing import Dict
 
 from backend.enums import DataScopeEnum
-
-# 资源族标签前缀：路由以「一级目录:二级模块」注册，作为数据权限的资源锚点
-RESOURCE_TAG_PREFIXES: Tuple[str, ...] = (
-    "系统管理:",
-    "应用管理:",
-    "自动化测试:",
-    "任务管理:",
-    "便捷工具:",
-    "性能测试:",
-)
 
 # 无法识别资源族的路由归入 legacy，回落角色全局范围
 LEGACY_TAG: str = "legacy"

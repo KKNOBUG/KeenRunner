@@ -7,10 +7,11 @@
 @DateTime: 2025/1/31 17:36
 """
 from typing import Optional, List
+import traceback
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
-from tortoise.exceptions import DoesNotExist
+from tortoise.exceptions import DoesNotExist, IntegrityError
 
 from backend.applications.base.models.router_model import Router
 from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate
@@ -44,86 +45,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
             raise NotFoundException(message=error_message)
         return instance
 
-    async def get_by_path(self, path: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
-        """
-        根据路径查询路由列表(同一path可能对应多种method)。
-
-        :param path: 路由路径
-        :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
-        :return: 路由实例列表；无匹配且on_error为False时为空列表
-        """
-        if not path:
-            error_message: str = "查询路由信息失败, 参数[path]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        instance = await self.model.filter(path=path, **kwargs).all()
-        if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 记录[path={path}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
-    async def get_by_method(self, method: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
-        """
-        根据HTTP方法查询路由列表。
-
-        :param method: HTTP方法(如GET、POST)
-        :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
-        :return: 路由实例列表；无匹配且on_error为False时为空列表
-        """
-        if not method:
-            error_message: str = "查询路由信息失败, 参数[method]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        instance = await self.model.filter(method=method, **kwargs).all()
-        if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 记录[method={method}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
-    async def get_by_summary(self, summary: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
-        """
-        根据接口摘要查询路由列表。
-
-        :param summary: 接口摘要
-        :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
-        :return: 路由实例列表；无匹配且on_error为False时为空列表
-        """
-        if not summary:
-            error_message: str = "查询路由信息失败, 参数[summary]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        instance = await self.model.filter(summary=summary, **kwargs).all()
-        if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 记录[summary={summary}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
-    async def get_by_tags(self, tags: str, on_error: bool = True, **kwargs) -> Optional[List[Router]]:
-        """
-        根据标签字符串查询路由列表。
-
-        :param tags: 标签(库内逗号拼接存储)
-        :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
-        :return: 路由实例列表；无匹配且on_error为False时为空列表
-        """
-        if not tags:
-            error_message: str = "查询路由信息失败, 参数[tags]不允许为空"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
-        instance = await self.model.filter(tags=tags, **kwargs).all()
-        if not instance and on_error:
-            error_message: str = f"查询路由信息失败, 记录[tags={tags}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
-        return instance
-
     async def create_router(self, router_in: RouterCreate) -> Router:
         """
         创建路由：校验path+method唯一性后落库。
@@ -139,7 +60,13 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        instance = await self.create(router_in)
+        try:
+            instance = await self.create(router_in)
+        except IntegrityError as e:
+            # 并发创建同 method+path：预校验会同时通过，靠唯一索引收敛为业务已存在
+            error_message: str = f"新增路由信息失败, 记录[path={path}, method={method}]信息已存在"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataAlreadyExistsException(message=error_message) from e
         return instance
 
     async def delete_router(self, router_id: int, **kwargs) -> Router:
@@ -169,44 +96,62 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
             error_message: str = f"更新路由信息失败, 记录[id={router_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
+        except IntegrityError as e:
+            # 并发改名/改路径撞唯一索引与创建同口径，返回已存在而非服务异常
+            error_message: str = f"更新路由信息失败, 记录[id={router_id}]与已有[path+method]冲突"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataAlreadyExistsException(message=error_message) from e
 
         return instance
 
     async def refresh_router(self, app: FastAPI, sync_role_bindings: bool = True) -> List[Router]:
         """
-        根据FastAPI应用当前路由同步数据库：删除废弃项，新增或更新现有项，同步完成后可按规则为内置角色补绑路由。
+        根据FastAPI应用当前路由同步数据库：只收录需要 RBAC 的接口，
+        删除废弃项并清理角色绑定，新增或更新现有项，最后按规则为内置角色补绑路由。
 
         :param app: FastAPI应用实例
-        :param sync_role_bindings: 是否按权限规则补绑角色路由与菜单，并对无法分类的summary告警
+        :param sync_role_bindings: 是否按权限规则补绑角色路由（不触碰角色菜单人工配置）
         :return: 同步后的全部路由列表
         """
-        # 获取全部路由数据
-        all_router_list = []
-        for route in app.routes:
-            # 只更新有鉴权的路由
-            if isinstance(route, APIRoute) and route.methods not in ("OPTIONS",) and route.path_format not in ('/',):
-                all_router_list.append((list(route.methods)[0], route.path_format))
+        from backend.core.initializations.permission_contract import AUTH_MODE_PERMISSION
 
-        # 删除废弃路由数据
+        # 只收录需要 RBAC 的路由；公开与仅认证接口不进入权限体系
+        contracts = []
+        for route in app.routes:
+            if not isinstance(route, APIRoute):
+                continue
+            if getattr(route, "auth_mode", None) != AUTH_MODE_PERMISSION:
+                continue
+            methods = [method for method in route.methods if method not in ("OPTIONS", "HEAD")]
+            if not methods or route.path_format == "/":
+                continue
+            contracts.append((methods[0], route.path_format, route))
+
+        valid_keys = {(method, path) for method, path, _ in contracts}
+
+        # 删除废弃路由及其角色绑定（含路径改名后的旧记录）
         for router in await self.model.all():
-            if (router.method, router.path) not in all_router_list:
-                await self.model.filter(method=router.method, path=router.path).delete()
+            if (router.method.value, router.path) in valid_keys:
+                continue
+            await router.role_routers.clear()
+            await router.delete()
+            LOGGER.info(f"[路由刷新]删除废弃路由 method={router.method.value}, path={router.path}")
 
-        # 更新路由数据
-        for route in app.routes:
-            if isinstance(route, APIRoute) and route.methods not in ("OPTIONS",) and route.path_format not in ('/',):
-                data = {
-                    'path': route.path_format,
-                    'method': list(route.methods)[0],
-                    'summary': route.summary,
-                    'tags': ','.join(list(route.tags)),
-                    'description': route.description
-                }
-                instance = await self.model.filter(method=data["method"], path=data["path"]).first()
-                if instance:
-                    await self.update(id=instance.id, obj_in=data)
-                else:
-                    await self.create(data)
+        # 更新或新增路由
+        for method, path, route in contracts:
+            data = {
+                'path': path,
+                'method': method,
+                'summary': route.summary,
+                'tags': ','.join(list(route.tags or [])),
+                'description': route.description,
+                'available_only_admin': bool(getattr(route, "available_only_admin", False))
+            }
+            instance = await self.model.filter(method=method, path=path).first()
+            if instance:
+                await self.update(id=instance.id, obj_in=data)
+            else:
+                await self.create(data)
 
         routers = await self.model.all()
         if sync_role_bindings:

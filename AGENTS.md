@@ -51,7 +51,7 @@ frontend/
 
 ### 3.1 关键链路（前端 → API → 后端 → 反馈）
 
-- **动态路由/权限**：`main.js` → `setupRouter` → `/base/auth/usermenu` 生成菜单路由 + `/base/auth/get_user_routers` 生成接口权限键；菜单组件路径为 `/src/views{component}/index.vue`，KeepAlive 的 `include` 匹配 `defineOptions({name})`，即菜单名必须与组件名一致。
+- **动态路由/权限**：`main.js` → `setupRouter` → `/user/menu/list` 生成菜单路由 + `/user/get_user_routers` 生成接口权限键；菜单组件路径为 `/src/views{component}/index.vue`，KeepAlive 的 `include` 匹配 `defineOptions({name})`，即菜单名必须与组件名一致。
 - **用例编辑保存**：用例列表 → `/autotest/steps?case_id&case_code` → `/autotest/step/tree` → 前端树编辑/校验 → **先保存数据源**（新步骤无 `step_code` 时跳过）→ `useStepTreeSerialization.buildUpdateOrCreateTreePayload` → `/autotest/step/update_or_create_tree` → 用 `success_detail` 回写 `step_id/step_code`，被跳过的数据源在拿到 `step_code` 后补存。离开页签由 `useDirtyCheck` 拦截。
 - **任务执行**：`/autotest/task/run` → `run_autotest_task`（autotest 队列）→ worker → `AutoTestStepCrud.batch_execute_cases` → `AutoTestStepExecutionEngine.execute_case` → 写 report/details、回填 case/task；Beat 每 60 秒扫描到期任务（default 队列）。
 - **异步导入/导出/生成**：视图校验 → Celery 任务 → `krun_autotest_record`（`task_summary` 结果快照，附件以 attachments 信封存放）→ 异步中心查询/下载。异步中心按 `task_type_in` 过滤五类任务。
@@ -61,10 +61,10 @@ frontend/
 ### 3.2 权限控制面（菜单 / 接口 / 数据行）
 
 - 角色是唯一权限载体：菜单由 `krun_role_menus` 绑定、接口由 `krun_role_routers` 绑定、数据行按资源族标签在「标签范围」配置；新角色不自动绑定任何权限，必须显式配置。
-- 管理员角色（`BuiltinRoleCode.ADMIN`=`Administrators`）与超管同权：`usermenu`/`get_user_routers`/`PermissionControl.has_permission`/`DependSuperUser`/`DataScope` 均直接全量放行，不依赖绑定记录；其角色编码不可修改、角色不可删除、绑定不可保存。内置角色码只从 `backend/enums/role_enum.py` 取，禁止散落字符串。
-- 资源锚点是路由声明的资源族标签（`一级目录:二级模块`，如 `自动化测试:用例`），由 `resolve_request_tag` 从 `request.scope["route"].tags` 显式读取，**禁止用 URL 前缀推断**；未声明标签归入 `legacy`。标签清单由 `krun_router.tags` 汇总，新增/调整标签后必须 `POST /base/router/refresh` 同步。
+- 管理员角色（`BuiltinRoleCode.ADMIN`=`Administrators`）与超管同权：`/user/menu/list`、`/user/get_user_routers`、`PermissionControl.has_permission`、`DependSuperUser`/`DataScope` 均直接全量放行，不依赖绑定记录；其角色编码不可修改、角色不可删除、绑定不可保存。内置角色码只从 `backend/enums/role_enum.py` 取，禁止散落字符串。
+- 资源锚点是路由标签对应的资源族（`backend/enums/resource_enum.py` 的 `ResourceTag`，code 形如 `autotest.case`，中文 desc 仅用于展示与路由 tags）：启动时 `bind_route_contracts` 解析成 `route.resource/action/auth_mode`，`DependTagScope` 只读该契约，**禁止用 URL 前缀推断**；新增标签必须先在 `ResourceTag` 登记，否则不参与自动绑定并输出 ERROR 日志。
 - 角色三字段：`krun_role.select_scope`（可见）/`update_scope`（可写）/`delete_scope`（可删），取值 `ALL / DEPT_AND_CHILD / DEPT / SELF`，多角色取最宽（ALL > DEPT_AND_CHILD > DEPT > SELF）；新建角色默认 `DEPT_AND_CHILD/SELF/SELF`（schema 与库默认值一致）；超管与管理员角色不受限。
-- 标签覆盖：`krun_role_tag_scope(role_id, tag)` 每个标签可单独配置三范围，字段为空表示按角色默认范围生效（`krun_role` 三字段），三字段均未设置的标签不落库；管理端「标签范围」Tab 未覆盖的行直接回显角色默认枚举，选中具体值保存后才生成覆盖记录。
+- 标签覆盖：`krun_role_tags(role_id, tag)` 的 `tag` 存资源族 code（与请求期 `route.resource` 同源，中文名由 `label_of` 展示），每个标签可单独配置三范围，字段为空表示按角色默认范围生效（`krun_role` 三字段），三字段均未设置的标签不落库；只有 `ResourceTag.scope_aware=True` 的资源族（已接入 `DataScope` 归属过滤）才进入「标签范围」配置项，未接入的资源族不展示，避免配置了却不生效；管理端未覆盖的行直接回显角色默认枚举，选中具体值保存后才生成覆盖记录。
 - 未配置标签回落到角色默认范围；用户未挂角色时回退 SELF/SELF/SELF，超管、管理员角色与系统内部流程不受限。
 - 写/删范围始终收敛到可见范围（运行期 `_clamp_to_read`、保存期 `scope_covers` 校验），保证不可写入不可读取的数据。
 - 后端唯一入口 `backend/services/data_scope.py` 的 `DataScope`：`read_q(owner_field)` 构造列表过滤（`None` 表示不限），`can_write/can_delete(owner)` 判定归属，`for_tag(tag)` 按父资源族重解析，`DataScope.system()` 供任务执行、引擎回写等内部可信路径。部门范围按归属人**当前部门**动态解析，不落业务表快照。
@@ -74,7 +74,10 @@ frontend/
 - 读过滤只作用于各资源**列表/主列表**接口；报告/明细批次下钻（`batch_code`/`task_code`）、项目/环境下拉、步骤树（按 `case_id`）不过滤。用例列表对 `PUBLIC_SCRIPT`/`PUBLIC_API` 放行。
 - 内置角色接口绑定：Guests 在业务域（应用/自动化/任务/工具）全部放行，系统域只读；接口放行不等于可删他人数据，删除归属校验在 service 层兜底。
 - 报告/明细写接口（create/update）仅超管或管理员角色可直调（`DependSuperUser`），执行引擎/内部流程走 service 直写；删除仍按归属人 + 接口权限双闸门。
+- 接口路径即行为契约：末段按 `_` 分词的最后一个已知动词决定动作（`新增/更新/删除/上传/下载/执行/查询/运维` 八组，见 `common/permission_action.py`），DELETE 一律删除、GET 无动词回落查询、其余无动词为 unknown；启动时 `validate_route_contracts` 只打 ERROR 不阻断，`POST /base/router/refresh` 会按同一规则告警，必须修正后再上线。
+- 认证模式三分：公开（无路由依赖，不写 `krun_router`）、仅认证（`DependAuth`，不下发到角色）、权限（`DependPermission`，写库并参与角色绑定）。管理员专属接口在 `DependPermission` 之外叠加 `DependSuperUser`（如 `/base/role/authorized`、`/base/router/refresh`、`/autotest/report/create|update`、`/autotest/detail/create|update`），契约标记 `available_only_admin`，非管理员角色即使被勾选也会拒绝保存并在刷新时回收绑定。
 - 审计中间件记录新增/更新/删除/执行/上传/下载类动作（`common/permission_action.py` 的 `AUDITED_ACTIONS`），刷新与查询直接透传；下载只记占位符，避免日志膨胀。
+- 认证先于鉴权：`auth_middleware` 对非白名单请求统一认证（401 明细透传），RBAC 由路由依赖 `DependPermission` 完成；认证结果缓存在 `request.state.current_user`，同一请求的中间件/依赖/审计只查一次用户表。开发用临时令牌 `AUTH_TEMPORARY_TOKEN` 必须是预签发的长效 JWT（含 `exp`/`token_version`，仍走完整 RBAC），空值即禁用，启用时启动打印安全 WARNING。
 
 ## 4. 编码规范（评审基准）
 
@@ -87,12 +90,12 @@ frontend/
 - 数据与逻辑分离：常量、枚举、注册表独立声明，不内联在业务函数里；服务文件用「分区注释 + 分区内函数组」组织。
 - 容器式字段/步骤类型变更必须四处同步：model 注释、schema 定义、执行引擎、前端 `useStepTreeSerialization.js`；遗漏任一处即断链。
 - 禁止循环内查库/远程请求；复用现有连接池；队列名统一 `{port}_default`、`{port}_autotest`、`{port}_perf`，经 `task_routes` 路由，禁止硬编码 queue。
-- 新增/修改接口后：FastAPI 路由需经 `POST /base/router/refresh` 同步 `krun_router`，并按 `PermissionRule` 的 summary 前缀规则确认角色补绑；新增页面还需在菜单管理写入 `krun_menu`（组件路径、keepalive、排序）。
+- 新增/修改接口后：FastAPI 路由需经 `POST /base/router/refresh` 同步 `krun_router`，并按 `PermissionRule` 的路径末段动词规则确认角色补绑；新增页面还需在菜单管理写入 `krun_menu`（组件路径、keepalive、排序）。
 - autotest 异步任务（导入/导出/脚本生成）统一写 `krun_autotest_record`（`task_summary` 结果快照，附件以 attachments 信封存放），失败态也要回填；终态以 `celery_status` 为准，`task_summary.success` 仅表示全部成功，失败/部分成功的 `task_error` 与 `task_summary.error` 写同一摘要，`task_summary.raw` 保留任务原始返回；异步中心按 `AutoTestTaskType` 过滤与展示。性能压测走 `perf_report` / `perf_load_preset` 自有状态链。
 
 ### 前端
 - Vue3 `<script setup>` 组合式 API；复杂页面逻辑拆到 `composables/useXXX.js`。
-- 业务路由不是手写静态表：由 `/base/auth/usermenu` 下发菜单动态生成，组件按 `/src/views{component}/index.vue` 解析；新增页面必须同步菜单记录，页面 `defineOptions({name})` 与菜单名一致（KeepAlive 的 include 依赖它）。
+- 业务路由不是手写静态表：由 `/user/menu/list` 下发菜单动态生成，组件按 `/src/views{component}/index.vue` 解析；新增页面必须同步菜单记录，页面 `defineOptions({name})` 与菜单名一致（KeepAlive 的 include 依赖它）。
 - 接口权限键统一 `apiPermissionKey(method, path)`（`method + VITE_BASE_API + path`），按钮级用 `v-permission`；超管与管理员角色直通。
 - 行级删除显隐用 `userStore.canDeleteData(owner, can_delete)`：优先采用列表接口注入的 `can_delete`（后端按当前资源族的删除范围判定，含部门范围），缺失时回落归属账号比对；autotest 共享编辑不再按写入范围隐藏编辑入口。批量删除统一经 `composables/useBatchDeleteGuard` 的 `pickDeletableIds` 按同一结论过滤后再提交，避免整批被后端拒绝。
 - 接口权限显隐统一用 `composables/useApiPermission` 的 `hasApiPermission(method, path)`（或 `v-permission` 指令）；受限角色不应看到必然 403 的新增/批量删除/导入导出/下载按钮。角色表单的范围选项复用 `src/constants/dataScope.js`。

@@ -29,7 +29,7 @@
               class="h-50 items-center pl-10 text-16"
               type="password"
               show-password-on="mousedown"
-              placeholder="123456"
+              placeholder="KFuser01@!"
               :maxlength="20"
               @keypress.enter="handleLogin"
           />
@@ -75,14 +75,11 @@ initLoginInfo()
 
 function initLoginInfo() {
   const localLoginInfo = lStorage.get('loginInfo')
-  if (localLoginInfo?.username && localLoginInfo?.password) {
-    loginInfo.value.username = localLoginInfo.username
-    loginInfo.value.password = localLoginInfo.password
-    return
-  }
-  if (import.meta.env.DEV) {
-    loginInfo.value.username = 'admin'
-    loginInfo.value.password = 'KFuser01@!'
+  if (!localLoginInfo?.username) return
+  loginInfo.value.username = localLoginInfo.username
+  // 历史版本曾把明文密码写入 localStorage，这里只保留账号并覆写旧记录
+  if (localLoginInfo.password) {
+    lStorage.set('loginInfo', {username: localLoginInfo.username})
   }
 }
 
@@ -99,7 +96,7 @@ async function handleLogin() {
     $message.loading(t('views.login.message_login_success'))
     const res = await api.login({username, password: password.toString()})
     $message.success(t('views.login.message_login_success'))
-    lStorage.set('loginInfo', {username, password})
+    lStorage.set('loginInfo', {username})
 
     // 登录成功后设置 token
     // debugger

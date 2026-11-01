@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings
 
 
 class GlobalConfig(BaseSettings):
-    """全局常量配置（日期格式等）；运行时路由元数据见 router_registry.py。"""
+    """全局常量配置（日期格式等）。"""
 
     DATE_FORMAT: str = "%Y-%m-%d"
     TIME_FORMAT: str = "%H:%M:%S"

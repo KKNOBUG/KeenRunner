@@ -94,7 +94,7 @@ async def delete_tag(
     :param tag_id: 标签主键ID
     :param tag_code: 标签业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的标签
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
     :return: 统一HTTP响应
     """
     try:
@@ -133,7 +133,7 @@ async def batch_delete_tags(
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的标签
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
     :return: 统一HTTP响应
     """
     try:
@@ -163,7 +163,7 @@ async def update_tag(
 
     :param tag_in: 标签入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的标签
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的标签
     :return: 统一HTTP响应
     """
     try:
@@ -214,6 +214,7 @@ async def get_tag(
             instance = await services.tag_curd.get_by_id(tag_id=tag_id, on_error=True, state__not=1)
         else:
             instance = await services.tag_curd.get_by_code(tag_code=tag_code, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 详情需收口到可见范围
             raise NoPermissionException(
                 message=f"查询标签失败, 标签[{instance.tag_code}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -294,6 +295,7 @@ async def search_tags(
                     state__not=1
                 ).values_list("id", "project_name")
             )
+        await scope.load_owners([obj.created_user for obj in instances])
         for item, obj in zip(data, instances):
             item["tag_project_name"] = project_name_map.get(item.get("tag_project"), "")
             item["can_delete"] = scope.can_delete(obj.created_user)

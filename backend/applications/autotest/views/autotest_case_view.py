@@ -107,7 +107,7 @@ async def delete_case(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除所属人为自己的用例
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的用例
     :return: 统一HTTP响应
     """
     try:
@@ -146,7 +146,7 @@ async def batch_delete_cases(
 
     :param case_in: 用例删除入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除所属人为自己的用例
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的用例
     :return: 统一HTTP响应
     """
     try:
@@ -178,7 +178,7 @@ async def update_case(
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改所属人为自己的用例
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的用例
     :return: 统一HTTP响应
     """
     try:
@@ -230,6 +230,7 @@ async def get_case(
         else:
             instance = await services.case_curd.get_by_code(case_code=case_code, on_error=True, state__not=1)
         # 公共脚本/公共接口对所有用户可见，不随数据范围收窄
+        await scope.load_owners([instance.owner_user])
         if instance.case_type not in PUBLIC_CASE_TYPES and not scope.can_read(instance.owner_user):
             error_message: str = f"查询用例信息失败, 用例[{instance.case_name}]所属人[{instance.owner_user}]不在当前用户可见范围"
             LOGGER.error(error_message)
@@ -371,6 +372,11 @@ async def search_cases(
     """
     try:
         q = Q()
+        # 复数字段优先，单数仅作兼容回退；过滤和出参共用同一类型集合
+        requested_types: Set[str] = {
+            case_type.value
+            for case_type in (case_in.case_types or ([case_in.case_type] if case_in.case_type else []))
+        }
         if case_in.case_id:
             q &= Q(id=case_in.case_id)
         if case_in.case_ids:
@@ -385,8 +391,8 @@ async def search_cases(
             for tag_id in case_in.case_tags:
                 tag_q |= Q(case_tags__contains=tag_id)
             q &= tag_q
-        if case_in.case_types:
-            q &= Q(case_type__in=case_in.case_types)
+        if requested_types:
+            q &= Q(case_type__in=requested_types)
         if case_in.case_steps:
             q &= Q(case_steps__gte=case_in.case_steps)
         if case_in.case_project:
@@ -434,7 +440,6 @@ async def search_cases(
         all_project_ids: Set[int] = set()
         all_tag_ids: Set[int] = set()
         all_case_ids: List[int] = []
-        requested_types = set(case_in.case_type or [])
         script_case_types = {AutoTestCaseType.PUBLIC_SCRIPT.value, AutoTestCaseType.PRIVATE_SCRIPT.value}
         is_script_query = requested_types == script_case_types
         is_public_api_query = AutoTestCaseType.PUBLIC_API.value in requested_types
@@ -455,6 +460,7 @@ async def search_cases(
 
         # 循环序列化每条用例
         case_serializes: List[Dict[str, Any]] = []
+        await scope.load_owners([instance.owner_user for instance in instances])
         for instance in instances:
             serialize: Dict[str, Any] = await instance.to_dict(
                 exclude_fields={

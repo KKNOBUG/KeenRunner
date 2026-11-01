@@ -121,7 +121,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         更新报告，根据report_id或report_code定位。
 
         :param report_in: 报告更新schema
-        :param scope: 数据权限上下文，仅允许修改创建人为自己的报告
+        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的报告
         :return: 更新后的报告实例
         """
         report_id: Optional[int] = report_in.report_id
@@ -133,8 +133,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
             report_id: int = instance.id
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"更新报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -160,7 +161,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         物理删除报告，并同步物理删除该报告下所有明细。
 
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的报告
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
         :param report_id: 报告主键ID，与report_code二选一
         :param report_code: 报告标识代码，与report_id二选一
         :return: 删除前的报告实例快照
@@ -170,8 +171,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         else:
             instance = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"删除报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -191,7 +193,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         批量物理删除报告及其全部明细；先全量校验归属，任一报告无权则整批拒绝。
 
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的报告
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
         :param report_in: 报告ID列表或报告标识代码列表
         :return: 实际删除的报告数量
         """
@@ -223,10 +225,11 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
                 raise NotFoundException(message=error_message)
 
         # 全有或全无：先逐条校验归属，避免部分报告已删、后续被拒
+        await scope.load_owners([instance.created_user for instance in targets])
         for instance in targets:
             if not scope.can_delete(instance.created_user):
                 error_message: str = (
-                    f"批量删除报告失败, 报告[{instance.report_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+                    f"批量删除报告失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
                 )
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)

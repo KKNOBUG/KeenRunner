@@ -7,14 +7,22 @@
 @DateTime: 2025/1/18 10:28
 """
 import traceback
+from datetime import timedelta, datetime, timezone
+from typing import List
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query, Depends, Request
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
+from backend.applications.base.models.menu_model import Menu
+from backend.applications.base.models.role_model import Role
+from backend.applications.base.models.router_model import Router
+from backend.applications.base.schemas.token_schema import CredentialsSchema, JWTOut, JWTPayload
 from backend.applications.department.dependencies import get_dept_crud
 from backend.applications.department.services.department_crud import DepartmentCrud
 from backend.applications.user.dependencies import get_user_crud
+from backend.applications.user.models.user_model import User
 from backend.applications.user.schemas.user_schema import (
     UserCreate,
     UserUpdate,
@@ -23,21 +31,36 @@ from backend.applications.user.schemas.user_schema import (
     UserBatchDelete,
 )
 from backend.applications.user.services.user_crud import UserCrud
-from backend.configure import LOGGER
+from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import (
     DataAlreadyExistsException,
+    DataBaseStorageException,
     NotFoundException,
+    NoAuthenticateException,
+    NoPermissionException,
     ParameterException
 )
 from backend.core.responses import (
+    ForbiddenResponse,
     NotFoundResponse,
     SuccessResponse,
     FailureResponse,
     ParameterResponse,
     DataAlreadyExistsResponse,
+    DataBaseStorageResponse,
+    UnauthorizedResponse,
 )
-from backend.services import CTX_USER_ID, verify_password, get_password_hash
+from backend.enums import BuiltinRoleCode
+from backend.services import CTX_USER_ID, AuthControl, create_access_token, verify_password
+from backend.services.dependency import load_request_roles
 
+# 公开端点：登录不要求令牌
+user_public = APIRouter()
+
+# 仅认证端点：当前登录用户自身操作，不做 RBAC 鉴权
+user_self = APIRouter()
+
+# 权限端点：用户管理类接口
 user_secure = APIRouter()
 
 
@@ -62,6 +85,8 @@ async def create_user(
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except IntegrityError as e:
         LOGGER.error(f"新增失败, 用户已存在: {e}\n{traceback.format_exc()}")
         return DataAlreadyExistsResponse(message="新增失败, 用户已存在")
@@ -132,9 +157,10 @@ async def update_user(
     :return: 统一HTTP响应
     """
     try:
-        instance = await user_crud.update_user(user_in=user_in)
-        if "role_ids" in user_in.model_fields_set:
-            await user_crud.update_roles(instance, user_in.role_ids)
+        async with in_transaction():
+            instance = await user_crud.update_user(user_in=user_in)
+            if "role_ids" in user_in.model_fields_set:
+                await user_crud.update_roles(instance, user_in.role_ids)
         data = await instance.to_dict(
             exclude_fields=["password"],
             replace_fields={"id": "user_id"}
@@ -142,6 +168,16 @@ async def update_user(
         return SuccessResponse(message="更新成功", data=data, total=1)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
+    except IntegrityError as e:
+        # 并发改名落到唯一索引：按已存在返回，不能落成服务异常
+        LOGGER.error(f"更新失败, 用户账号已存在: {e}\n{traceback.format_exc()}")
+        return DataAlreadyExistsResponse(message="更新失败, 用户账号已存在")
     except Exception as e:
         LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"更新失败，异常描述: {e}")
@@ -172,11 +208,12 @@ async def get_user(
             m2m_replace_fields={"roles": {"id": "role_id"}}
         )
         dept_id = data.pop("dept_id", None)
+        data["dept"] = {}
         if dept_id:
-            department_instance = await dept_crud.get_or_error(id=dept_id)
-            data["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
-        else:
-            data["dept"] = {}
+            # 脏部门引用降级为空对象，不能让单条坏数据拖垮详情查询
+            department_instance = await dept_crud.model.filter(id=dept_id).first()
+            if department_instance:
+                data["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
     except Exception as e:
         LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -206,10 +243,31 @@ async def get_user_by_username(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
+async def _attach_departments(data: List[dict], dept_crud: DepartmentCrud) -> None:
+    """
+    批量为用户列表挂载部门信息。
+
+    一次查询全部部门，避免逐条查库造成 N+1；脏 dept_id 降级为空对象，
+    保证单条坏数据不会让整张用户表返回 999999。
+
+    :param data: 用户列表字典（就地修改）
+    :param dept_crud: 部门CRUD服务
+    :return: None
+    """
+    dept_ids = {item.get("dept_id") for item in data if item.get("dept_id")}
+    dept_map: dict = {}
+    if dept_ids:
+        for department in await dept_crud.model.filter(id__in=dept_ids):
+            dept_map[department.id] = await department.to_dict(replace_fields={"id": "dept_id"})
+    for item in data:
+        item_dept_id = item.pop("dept_id", None)
+        item["dept"] = dept_map.get(item_dept_id, {})
+
+
 @user_secure.get("/list", summary="查询用户列表(Query)", description="根据条件分页查询用户列表信息(Query)")
 async def search_users(
         page: int = Query(default=1, ge=1, description="页码"),
-        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        page_size: int = Query(default=10, ge=10, le=99999, description="每页数量"),
         order: list = Query(default_factory=lambda: ["id"], description="排序字段"),
         username: str = Query(default=None, description="用户账号，用于搜索"),
         alias: str = Query(default=None, description="用户名称，用于搜索"),
@@ -279,13 +337,7 @@ async def search_users(
                 m2m_replace_fields={"roles": {"id": "role_id"}}
             ) for obj in user_objs
         ]
-        for item in data:
-            dept_id = item.pop("dept_id", None)
-            if dept_id:
-                department_instance = await dept_crud.get_or_error(id=dept_id)
-                item["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
-            else:
-                item["dept"] = {}
+        await _attach_departments(data, dept_crud)
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
@@ -351,20 +403,14 @@ async def list_users(
                 m2m_replace_fields={"roles": {"id": "role_id"}}
             ) for obj in instances
         ]
-        for item in data:
-            dept_id = item.pop("dept_id", None)
-            if dept_id:
-                department_instance = await dept_crud.get_or_error(id=dept_id)
-                item["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
-            else:
-                item["dept"] = {}
+        await _attach_departments(data, dept_crud)
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception as e:
         LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@user_secure.post("/update_password", summary="更新用户密码(个人)", description="根据当前登录用户ID修改密码")
+@user_self.post("/update_password", summary="更新用户密码(个人)", description="根据当前登录用户ID修改密码")
 async def update_user_password(
         req_in: UpdatePassword,
         user_crud: UserCrud = Depends(get_user_crud),
@@ -383,8 +429,7 @@ async def update_user_password(
         if not verified:
             return FailureResponse(message="旧密码验证错误")
 
-        instance.password = get_password_hash(req_in.new_password)
-        await instance.save()
+        instance = await user_crud.update_password(user_id=user_id, new_password=req_in.new_password)
         data = await instance.to_dict(
             exclude_fields=["password"],
             replace_fields={"id": "user_id"}
@@ -410,12 +455,14 @@ async def reset_password(
     try:
         data = await user_crud.reset_password(user_id)
         return SuccessResponse(message="重置成功", data=data, total=1)
+    except NoPermissionException:
+        raise
     except Exception as e:
         LOGGER.error(f"重置失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"重置失败，异常描述: {e}")
 
 
-@user_secure.post("/logout", summary="注销访问令牌", description="注销当前登录用户的所有会话信息")
+@user_self.post("/logout", summary="注销访问令牌", description="注销当前登录用户的所有会话信息")
 async def logout(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
@@ -436,3 +483,211 @@ async def logout(
     except Exception as e:
         LOGGER.error(f"登出失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"登出失败，异常描述: {e}")
+
+
+# ==================== 公开端点：登录 ====================
+@user_public.post("/login", summary="用户登录", description="验证用户密码和状态并签发访问令牌")
+async def login(
+        credentials: CredentialsSchema = Body(..., description="用户信息"),
+        user_crud: UserCrud = Depends(get_user_crud),
+):
+    """
+    验证用户密码和状态并生成令牌。
+
+    :param credentials: 登录凭证入参
+    :param user_crud: 用户CRUD服务
+    :return: 统一HTTP响应
+    """
+    try:
+        try:
+            user: User = await user_crud.authenticate(credentials)
+        except (NotFoundException, NoAuthenticateException):
+            # 账号不存在与密码错误统一返回401，避免账号枚举；失败响应不回显密码
+            return UnauthorizedResponse(message="用户名或密码错误")
+        except NoPermissionException as e:
+            return ForbiddenResponse(message=str(e.message))
+        try:
+            await user_crud.update_last_login(user_id=user.id)
+        except (ParameterException, NotFoundException):
+            return FailureResponse(message="登录失败，请稍后重试")
+
+        access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + access_token_expires
+        data = JWTOut(
+            access_token=create_access_token(
+                data=JWTPayload(
+                    user_id=user.id,
+                    username=user.username,
+                    state=user.state,
+                    is_superuser=user.is_superuser,
+                    token_version=user.token_version,
+                    exp=expire,
+                ),
+            ),
+            username=user.username,
+            alias=user.alias,
+            email=user.email,
+            phone=user.phone,
+            avatar=user.avatar,
+            state=user.state,
+            is_superuser=user.is_superuser,
+            last_login=user.last_login
+        )
+        return SuccessResponse(message="登录成功", data=data.model_dump())
+    except Exception as e:
+        LOGGER.error(f"登录失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message="登录失败，请稍后重试")
+
+
+@user_public.post("/transfer_login", summary="第三方迁移登录", description="账号不存在时按第三方平台校验并接纳为新用户后生成令牌")
+async def transfer_login(
+        credentials: CredentialsSchema = Body(..., description="用户信息"),
+        user_crud: UserCrud = Depends(get_user_crud),
+):
+    """
+    第三方平台用户迁移登录：本地账号不存在时按第三方平台校验并接纳为新用户后生成令牌。
+
+    与 /user/login 的差异仅在于账号不存在分支：校验第三方账号真实性并自动注册，
+    其余口令/状态校验与令牌签发逻辑与原接口一致。
+
+    :param credentials: 登录凭证入参
+    :param user_crud: 用户CRUD服务
+    :return: 统一HTTP响应
+    """
+    try:
+        try:
+            user: User = await user_crud.authenticate(credentials)
+        except NotFoundException:
+            valid, third_user = await user_crud.confirm_user_authenticate(username=credentials.username)
+            if not valid:
+                return UnauthorizedResponse(message="用户名或密码错误")
+            user = await user_crud.create_user(user_in=UserCreate(password=credentials.password, **third_user))
+            LOGGER.info(f"用户名[{credentials.username}]注册成功")
+        except NoPermissionException as e:
+            return ForbiddenResponse(message=str(e.message))
+        except NoAuthenticateException:
+            return UnauthorizedResponse(message="用户名或密码错误")
+        try:
+            await user_crud.update_last_login(user_id=user.id)
+        except (ParameterException, NotFoundException):
+            return FailureResponse(message="登录失败，请稍后重试")
+
+        access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + access_token_expires
+        data = JWTOut(
+            access_token=create_access_token(
+                data=JWTPayload(
+                    user_id=user.id,
+                    username=user.username,
+                    state=user.state,
+                    is_superuser=user.is_superuser,
+                    token_version=user.token_version,
+                    exp=expire,
+                ),
+            ),
+            username=user.username,
+            alias=user.alias,
+            email=user.email,
+            phone=user.phone,
+            avatar=user.avatar,
+            state=user.state,
+            is_superuser=user.is_superuser,
+            last_login=user.last_login
+        )
+        return SuccessResponse(message="登录成功", data=data.model_dump())
+    except Exception as e:
+        LOGGER.error(f"登录失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message="登录失败，请稍后重试")
+
+
+# ==================== 仅认证端点：当前用户自身 ====================
+@user_self.post("/get_userinfo", summary="查询当前用户信息", description="查询当前登录用户的基本信息")
+async def get_user_info(
+        request: Request,
+        current_user: User = Depends(AuthControl.is_authed),
+):
+    """
+    查看当前用户信息。
+
+    :param request: 当前请求，用于复用请求级角色缓存
+    :param current_user: 已认证用户，认证链路已查库并缓存，避免重复查询
+    :return: 统一HTTP响应
+    """
+    try:
+        data = await current_user.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
+        # 管理员角色与超管同权，前端据此放开行级删除等归属限制；超管无需再查角色
+        roles: List[Role] = [] if current_user.is_superuser else await load_request_roles(
+            request=request, user=current_user
+        )
+        data["is_admin"] = current_user.is_superuser or BuiltinRoleCode.includes_admin(
+            role.code for role in roles
+        )
+        return SuccessResponse(message="查询成功", data=data)
+    except Exception as e:
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@user_self.post("/menu/list", summary="查询当前用户菜单", description="查询当前登录用户的菜单信息")
+async def get_user_menu():
+    """
+    查看当前用户菜单。
+
+    :return: 统一HTTP响应
+    """
+    try:
+        user_id = CTX_USER_ID.get()
+        user_obj = await User.filter(id=user_id).first()
+        role_objs: List[Role] = await user_obj.roles
+        # 超管与管理员角色直接拿到全量菜单，不依赖角色菜单绑定
+        if user_obj.is_superuser or BuiltinRoleCode.includes_admin(role.code for role in role_objs):
+            menus: List[Menu] = await Menu.all().order_by("order", "id")
+        elif role_objs:
+            # 多角色菜单一次查出并去重，避免按角色逐条查询造成 N+1；下发顺序由 order 决定
+            menus = await Menu.filter(
+                role_menus__id__in=[role.id for role in role_objs]
+            ).distinct().order_by("order", "id")
+        else:
+            menus = []
+        parent_menus: List[Menu] = []
+        for menu in menus:
+            if menu.parent_id == 0:
+                parent_menus.append(menu)
+        res = []
+        for parent_menu in parent_menus:
+            parent_menu_dict = await parent_menu.to_dict(replace_fields={"id": "menu_id"})
+            parent_menu_dict["children"] = []
+            for menu in menus:
+                if menu.parent_id == parent_menu.id:
+                    parent_menu_dict["children"].append(await menu.to_dict(replace_fields={"id": "menu_id"}))
+            res.append(parent_menu_dict)
+        return SuccessResponse(message="查询成功", data=res)
+    except Exception as e:
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@user_self.post("/get_user_routers", summary="查询当前用户路由", description="查询当前登录用户的路由权限")
+async def get_user_routers():
+    """
+    查看当前用户路由权限键。
+
+    :return: 统一HTTP响应
+    """
+    try:
+        user_id = CTX_USER_ID.get()
+        user_obj = await User.filter(id=user_id).first()
+        role_objs: List[Role] = await user_obj.roles
+        # 超管与管理员角色直接拿到全量接口，不依赖角色路由绑定
+        if user_obj.is_superuser or BuiltinRoleCode.includes_admin(role.code for role in role_objs):
+            router_objs: List[Router] = await Router.all()
+        elif role_objs:
+            # 多角色接口一次查出并去重，避免按角色逐条查询造成 N+1
+            router_objs = await Router.filter(role_routers__id__in=[role.id for role in role_objs]).distinct()
+        else:
+            router_objs = []
+        routers = sorted({router.method.lower() + router.path for router in router_objs})
+        return SuccessResponse(message="查询成功", data=routers)
+    except Exception as e:
+        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")

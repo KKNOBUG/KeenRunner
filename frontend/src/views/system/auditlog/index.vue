@@ -246,7 +246,7 @@ const columns = computed(() => {
       align: 'center',
       ellipsis: { tooltip: true },
       render(row) {
-        return h(NTag, { type: 'info' }, { default: () => row.request_tags || '-' })
+        return h(NTag, { type: 'info' }, { default: () => row.request_tags_label || row.request_tags || '-' })
       },
     },
     {

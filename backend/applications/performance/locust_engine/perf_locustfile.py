@@ -159,7 +159,7 @@ def _stats_name(item: Dict[str, Any]) -> str:
     统计聚合口径: 方法 + 渲染前路径模板(参数化行与查询串不打散统计)。
 
     :param item: 单个接口项定义
-    :return: locust request name, 如 "POST /base/auth/access_token"
+    :return: locust request name, 如 "POST /user/login"
     """
     request_url = str(item.get("request_url") or "")
     parsed = urlparse(request_url)

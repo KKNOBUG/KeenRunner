@@ -12,13 +12,13 @@ from backend.applications.autotest.models.autotest_case_model import AutoTestCas
 from backend.applications.autotest.models.autotest_project_model import AutoTestProjectModel
 from backend.configure import LOGGER
 from backend.core.exceptions import NoPermissionException, NotFoundException
-from backend.enums import PUBLIC_CASE_TYPES
+from backend.enums import PUBLIC_CASE_TYPES, ResourceTag
 from backend.services.data_scope import DataScope
 
-# 父资源所属资源族标签：与路由注册标签一致，父/子资源的范围才可独立配置
-PROJECT_TAG = "应用管理:项目"
-ENV_TAG = "应用管理:环境"
-CASE_TAG = "自动化测试:用例"
+# 父资源所属资源族：与路由注册标签同源，父/子资源的范围才可独立配置
+PROJECT_TAG = ResourceTag.PROJECT.value
+ENV_TAG = ResourceTag.ENV.value
+CASE_TAG = ResourceTag.CASE.value
 
 
 async def load_readable_project(scope: Optional[DataScope], project_id: int) -> AutoTestProjectModel:
@@ -56,8 +56,36 @@ async def assert_parent_readable(scope: Optional[DataScope], tag: str, parent: A
     parent_scope = await scope.for_tag(tag)
     # 有归属人字段的父资源（用例）以归属人为准，转让后创建人不再代表数据归属
     owner = getattr(parent, "owner_user", None) or getattr(parent, "created_user", None)
+    await parent_scope.load_owners([owner])
     if not parent_scope.can_read(owner):
         error_message: str = f"数据权限校验失败, 无权使用{label}[id={getattr(parent, 'id', '')}]所属数据"
+        LOGGER.error(error_message)
+        raise NoPermissionException(message=error_message)
+
+
+async def assert_case_writable(scope: Optional[DataScope], case: AutoTestCaseModel, action: str) -> None:
+    """
+    校验用例既可读又可写。
+
+    步骤、数据源等子资源没有独立归属，读写范围必须按父用例资源族解析；
+    用子资源自身标签判定会让角色对 autotest.case 的覆盖配置对子资源失效。
+
+    :param scope: 当前请求数据权限上下文；None表示调用方为内部可信路径
+    :param case: 归属用例
+    :param action: 操作名，用于错误提示
+    :return: None
+    """
+    if scope is None:
+        return
+    case_scope = await scope.for_tag(CASE_TAG)
+    await case_scope.load_owners([case.owner_user])
+    # 公共脚本/公共接口对所有用户可见，读取不随数据范围收窄，但写入仍按归属收敛
+    if case.case_type not in PUBLIC_CASE_TYPES and not case_scope.can_read(case.owner_user):
+        error_message: str = f"数据权限校验失败, {action}失败, 用例[{case.case_name}]所属人[{case.owner_user}]不在当前用户可见范围"
+        LOGGER.error(error_message)
+        raise NoPermissionException(message=error_message)
+    if not case_scope.can_write(case.owner_user):
+        error_message: str = f"数据权限校验失败, {action}失败, 用例[{case.case_name}]所属人[{case.owner_user}]不在当前用户可写范围"
         LOGGER.error(error_message)
         raise NoPermissionException(message=error_message)
 
@@ -74,11 +102,12 @@ async def assert_cases_readable(scope: Optional[DataScope], case_ids: Iterable[O
     if scope is None or not ids:
         return
     case_scope = await scope.for_tag(CASE_TAG)
-    if case_scope.read_owners is None:
+    if case_scope.read_depts is None:
         return
     rows = await AutoTestCaseModel.filter(id__in=ids, state__not=1).values_list(
         "id", "case_name", "case_type", "owner_user"
     )
+    await case_scope.load_owners([owner_user for _, _, _, owner_user in rows])
     for case_id, case_name, case_type, owner_user in rows:
         if case_type in PUBLIC_CASE_TYPES:
             continue

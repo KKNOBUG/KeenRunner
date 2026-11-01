@@ -39,6 +39,7 @@ from backend.core.responses import (
     DataBaseStorageResponse
 )
 from backend.enums import BuiltinRoleCode
+from backend.services import DependSuperUser
 
 role = APIRouter()
 
@@ -195,7 +196,7 @@ async def get_role(
 @role.get("/list", summary="查询角色列表(Query)", description="根据角色name查询角色信息")
 async def search_roles(
         page: int = Query(default=1, ge=1, description="页码"),
-        page_size: int = Query(default=10, ge=10, description="每页数量"),
+        page_size: int = Query(default=10, ge=10, le=99999, description="每页数量"),
         order: list = Query(default_factory=lambda: ["id"], description="排序字段"),
         name: str = Query(default="", description="角色名称"),
         role_crud: RoleCrud = Depends(get_role_crud),
@@ -255,7 +256,12 @@ async def search_roles_by_body(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@role.get("/authorized", summary="查询角色权限", description="根据角色id查询角色权限")
+@role.get(
+    "/authorized",
+    summary="查询角色权限",
+    description="根据角色id查询角色权限",
+    dependencies=[DependSuperUser],
+)
 async def get_role_authorized(
         id: int = Query(..., description="角色id"),
         role_crud: RoleCrud = Depends(get_role_crud),
@@ -286,7 +292,12 @@ async def get_role_authorized(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@role.post("/authorized", summary="更新角色权限", description="根据角色id更新角色权限")
+@role.post(
+    "/authorized",
+    summary="更新角色权限",
+    description="根据角色id更新角色权限",
+    dependencies=[DependSuperUser],
+)
 async def update_role_authorized(
         role_in: RoleUpdateMenusRouters,
         role_crud: RoleCrud = Depends(get_role_crud),
@@ -303,10 +314,13 @@ async def update_role_authorized(
         # 管理员角色始终拥有全量权限，保存绑定只会造成“配了但不生效”的误解，直接拒绝
         if role_obj.code == BuiltinRoleCode.ADMIN.value:
             return ParameterResponse(message="管理员角色固定拥有全部菜单、接口与数据权限，无需配置")
-        # 标签范围先保存：非法范围在此处拒绝，避免先重置菜单/路由造成部分更新
-        if role_in.tag_scopes is not None:
-            await role_crud.save_tag_scopes(role_id=role_in.id, items=role_in.tag_scopes)
-        await role_crud.update_roles(role=role_obj, menu_ids=role_in.menu_ids, router_infos=role_in.router_infos)
+        # 菜单、接口、标签范围同属一次授权，由服务层统一校验后单事务保存
+        await role_crud.save_authorization(
+            role=role_obj,
+            menu_ids=role_in.menu_ids,
+            router_infos=role_in.router_infos,
+            tag_scopes=role_in.tag_scopes,
+        )
         return SuccessResponse(message="更新成功")
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

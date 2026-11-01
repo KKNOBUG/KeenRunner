@@ -196,7 +196,7 @@ async def update_redis_config(
 
     :param config_in: Redis环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
     :return: 统一HTTP响应
     """
     try:
@@ -229,7 +229,7 @@ async def delete_env_config(
 
     :param config_in: 环境配置删除入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的环境配置
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境配置
     :return: 统一HTTP响应
     """
     try:
@@ -260,7 +260,7 @@ async def update_app_config(
 
     :param config_in: APP环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
     :return: 统一HTTP响应
     """
     try:
@@ -293,7 +293,7 @@ async def update_file_config(
 
     :param config_in: FILE环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
     :return: 统一HTTP响应
     """
     try:
@@ -326,7 +326,7 @@ async def update_db_config(
 
     :param config_in: DB环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境配置
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
     :return: 统一HTTP响应
     """
     try:
@@ -369,6 +369,7 @@ async def get_env_config(
             instance = await services.env_config_curd.get_by_id(config_id=config_id, on_error=True, state__not=1)
         else:
             instance = await services.env_config_curd.get_by_code(config_code=config_code, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 配置含凭据信息，详情需收口到可见范围
             raise NoPermissionException(
                 message=f"查询环境配置失败, 配置[{instance.config_code}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -456,6 +457,7 @@ async def search_env_configs(
                 ).values_list("id", "project_name")
             )
         data = []
+        await scope.load_owners([obj.created_user for obj in instances])
         for obj in instances:
             item = await services.env_config_curd.serialize_config(
                 obj,
@@ -560,6 +562,7 @@ async def list_env_configs(
             scope=scope,
         )
         # 行级可删标记：配置归属 created_user，按当前资源族的删除范围判定
+        await scope.load_owners([item.get("created_user") for item in data])
         for item in data:
             item["can_delete"] = scope.can_delete(item.get("created_user"))
         return SuccessResponse(message="查询成功", data=data, total=total)

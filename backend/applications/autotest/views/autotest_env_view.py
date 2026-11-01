@@ -22,6 +22,7 @@ from backend.applications.autotest.schemas.autotest_env_schema import (
     AutoTestEnvListQuery,
     AutoTestEnvPageSelect,
 )
+from backend.applications.autotest.services.autotest_scope_guard import PROJECT_TAG
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -38,7 +39,6 @@ from backend.core.responses import (
     DataBaseStorageResponse,
     DataAlreadyExistsResponse
 )
-from backend.applications.autotest.services.autotest_scope_guard import PROJECT_TAG
 from backend.services import DataScope, DependTagScope
 
 autotest_env = APIRouter()
@@ -91,7 +91,7 @@ async def delete_environment(
     :param env_id: 环境主键ID
     :param env_code: 环境业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的环境
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境
     :return: 统一HTTP响应
     """
     try:
@@ -123,7 +123,7 @@ async def delete_environments(
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的环境
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境
     :return: 统一HTTP响应
     """
     try:
@@ -154,7 +154,7 @@ async def update_environment(
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改创建人为自己的环境
+    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境
     :return: 统一HTTP响应
     """
     try:
@@ -196,6 +196,7 @@ async def get_environment(
             instance = await services.env_curd.get_by_id(env_id=env_id, on_error=True, state__not=1)
         else:
             instance = await services.env_curd.get_by_code(env_code=env_code, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 详情读取需收口到可见范围
             raise NoPermissionException(
                 message=f"查询环境失败, 环境[{instance.env_code}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -275,6 +276,7 @@ async def search_environments(
         )
         env_serializes: List[Dict[str, Any]] = await services.env_curd.serialize_envs(instances, with_audit=True)
         # 行级可删标记：按当前资源族的删除范围判定（含部门范围），前端不复算归属
+        await scope.load_owners([obj.created_user for obj in instances])
         for item, obj in zip(env_serializes, instances):
             item["can_delete"] = scope.can_delete(obj.created_user)
         LOGGER.info(f"根据条件查询环境成功, 结果数量: {total}")
@@ -344,8 +346,8 @@ async def list_environments(
         return FailureResponse(message=f"查询失败: {e}")
 
 
-@autotest_env.post("/page", summary="查询环境分页列表", description="按应用/环境/节点类型/配置名称聚合后分页查询(Body)")
-async def page_environments(
+@autotest_env.post("/search_page", summary="查询环境分页列表", description="按应用/环境/节点类型/配置名称聚合后分页查询(Body)")
+async def search_page_environments(
         page_in: AutoTestEnvPageSelect = Body(..., description="环境分页查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
         scope: DataScope = DependTagScope,
@@ -360,6 +362,10 @@ async def page_environments(
     """
     try:
         total, data = await services.env_curd.get_env_search_list(query_in=page_in, scope=scope)
+        # 行级可删标记：按环境资源族的删除范围判定（含部门范围），前端不复算归属
+        await scope.load_owners([item.get("created_user") for item in data])
+        for item in data:
+            item["can_delete"] = scope.can_delete(item.get("created_user"))
         return SuccessResponse(data=data, total=total, message="查询成功")
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
@@ -371,7 +377,7 @@ async def page_environments(
 @autotest_env.get("/get_all_app", summary="查询全部应用", description="查询全部启用应用列表")
 async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
-        page_size: int = Query(10000, ge=1, description="每页条数"),
+        page_size: int = Query(10000, ge=1, le=99999, description="每页条数"),
         services: AutoTestServices = Depends(get_autotest_api_services),
         scope: DataScope = DependTagScope,
 ):

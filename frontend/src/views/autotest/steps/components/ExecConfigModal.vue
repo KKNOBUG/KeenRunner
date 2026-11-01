@@ -228,7 +228,7 @@ const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
   const walk = Array.isArray(sourceSteps) ? sourceSteps : []
   forEachStepWithQuote(walk, (step) => {
     if (!step) return
-    // 从步骤数据中获取环境名称（编辑模式时由 splice_tree 接口返回）
+    // 从步骤数据中获取环境名称（编辑模式时由 build_splice_tree 接口返回）
     const stepEnvName = step.env_name || step.original?.env_name || null
     if (step.type === 'http' || step.type === 'tcp') {
       const cfg = step.config || {}
@@ -1401,12 +1401,12 @@ const initEmbeddedCases = async () => {
     const bags = []
     const quoteStepsMapAll = {}
     
-    // 使用 /splice_tree 接口批量获取多用例步骤树
+    // 使用 /build_splice_tree 接口批量获取多用例步骤树
     const res = await api.spliceStepTree({ case_ids: ids })
     const { details, indexes } = res?.data || {}
     
     if (!details || !indexes) {
-      throw new Error('splice_tree 接口返回数据格式异常')
+      throw new Error('build_splice_tree 接口返回数据格式异常')
     }
     
     // 编辑模式：将保存的环境信息插入到对应步骤中

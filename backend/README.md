@@ -200,3 +200,52 @@ celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbea
 
 ```
 
+# 接口路径与行为规范
+
+接口的「行为」由**路径末段动词**决定，不再看 summary。新增/改名接口必须遵守，否则启动日志会输出 ERROR（不阻断启动，但必须纠正）。
+
+## 1. 判定规则（`common/permission_action.py` 的 `derive_action`）
+
+1. `DELETE` 方法一律判为「删除」；
+2. 路径末段按 `_` 分词，取**位置最后的已知动词**决定行为（`query_export` → 导出，`export_query` → 查询）；
+3. `GET` 方法无动词时回落为「查询」；
+4. 其余方法（POST/PUT/PATCH）无动词则为 `unknown`：不进审计、不参与资源域判定，并在启动时输出 ERROR。
+
+## 2. 动词表（一个动词只归属一种行为）
+
+| 行为 | 动词 |
+|------|------|
+| 新增 | `create`、`add`、`copy`、`duplicate`、`generate`、`register` |
+| 更新 | `update`、`save`、`move`、`pin`、`bind`、`unbind`、`transfer`、`authorized`、`reset`、`assign`、`enable`、`disable` |
+| 删除 | `delete`、`deletes`（批量）、`remove`、`clear`、`logout`、`revoke` |
+| 上传 | `upload`、`import`、`parse` |
+| 下载 | `download`、`export` |
+| 执行 | `run`、`start`、`stop`、`debug`、`debugging`、`execute`、`compare`、`precheck`、`test`、`connection`、`login` |
+| 查询 | `search`、`list`、`get`、`query`、`validate`、`build`、`read`、`fetch` |
+| 运维 | `refresh` |
+
+新增动词需同时改 `VERB_ACTIONS` 与本文表格。
+
+## 3. 资源族（`enums/resource_enum.py` 的 `ResourceTag`）
+
+路由 `tags` 的 label 必须能在 `ResourceTag` 注册表中精确命中（如 `自动化测试:用例` → `autotest.case`），否则视为未登记：不参与内置角色自动绑定，且启动时输出 ERROR。新增业务模块时先登记资源族，再挂路由。
+
+## 4. 认证模式（`core/initializations/permission_contract.py`）
+
+| 模式 | 路由依赖 | 是否写 `krun_router` | 说明 |
+|------|----------|----------------------|------|
+| 公开 | 无 | 否 | 登录等无需令牌接口 |
+| 仅认证 | `DependAuth` | 否 | 当前用户自身操作（改密、登出、菜单、权限键） |
+| 权限 | `DependPermission` | 是 | 参与角色绑定与审计 |
+
+管理员专属接口在权限模式上再叠加 `DependSuperUser`，契约标记 `available_only_admin`：不自动绑定给非管理员角色，角色保存时忽略该分配，刷新时回收残留。
+
+认证执行链路：`auth_middleware` 先认证（非白名单），RBAC 在路由依赖 `DependPermission` 中完成；认证结果缓存在 `request.state.current_user`，同一请求的中间件/依赖/审计只查一次用户表。
+
+开发用临时令牌 `AUTH_TEMPORARY_TOKEN` 必须填预签发的长效 JWT（同密钥/算法，含 `exp`、`token_version`），空值即禁用；启用时启动打印安全 WARNING，仍走完整 RBAC。
+
+## 5. 自检
+
+- 启动日志出现 `[权限契约]` / `[权限规则]` ERROR：按本规范修正路径或登记资源族；
+- 新增/改名接口后执行 `POST /base/router/refresh`，并确认日志无契约告警、角色补绑符合预期。
+

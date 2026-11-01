@@ -9,7 +9,6 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.routing import APIRoute
 from tortoise import Tortoise
 from tortoise.exceptions import DBConnectionError
 
@@ -20,10 +19,11 @@ from backend.core.initializations import (
     register_routers,
     init_database_table,
 )
+from backend.core.initializations.permission_contract import bind_route_contracts, validate_route_contracts
 from backend.core.responses import SuccessResponse
 
 try:
-    from backend.configure import PROJECT_CONFIG, ROUTER_SUMMARY, ROUTER_TAGS
+    from backend.configure import LOGGER, PROJECT_CONFIG
 except ImportError as e:
     from backend.core.exceptions import NotImplementedException
 
@@ -32,16 +32,16 @@ except ImportError as e:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN:
+        LOGGER.warning("[安全] 已启用开发联通阶段临时令牌(AUTH_TEMPORARY_TOKEN), 生产环境请置空禁用;")
+    # 路由已全部注册，启动时统一绑定契约并自检；问题只告警不阻断启动
+    bind_route_contracts(app)
+    validate_route_contracts(app)
     try:
         await register_database(app)
     except DBConnectionError as e:
         raise RuntimeError(f"数据库连接失败, 请检查主机地址是否可达: {e}") from e
     await init_database_table(app)
-
-    for route in app.routes:
-        if isinstance(route, APIRoute):
-            ROUTER_SUMMARY[route.path] = route.summary
-            ROUTER_TAGS[route.path] = route.tags
 
     yield
 

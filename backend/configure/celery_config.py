@@ -17,6 +17,11 @@ from typing_extensions import Self
 from backend.common import FileUtils
 from backend.configure.project_config import PROJECT_CONFIG
 
+# 自动化批量任务时限（秒）：整批多脚本串行数小时属正常场景，任务级覆盖全局 1h 硬时限；
+# 运行态僵尸判定同口径使用该硬时限，避免长任务被误判失效而重复执行
+AUTOTEST_TASK_SOFT_TIME_LIMIT: int = 25200
+AUTOTEST_TASK_TIME_LIMIT: int = 28800
+
 
 class CeleryConfig(BaseSettings):
     CELERY_BEAT_SCHEDULER: str = "redbeat.schedulers:RedBeatScheduler"

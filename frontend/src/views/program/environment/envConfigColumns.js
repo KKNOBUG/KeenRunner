@@ -21,7 +21,7 @@ export function buildConfigDisplayColumns(type) {
   cols.push({ title: '主机地址', key: 'config_host', align: 'center', ellipsis: { tooltip: true }, minWidth: 120 })
   cols.push({ title: '端口', key: 'config_port', align: 'center', width: 80 })
   cols.push({ title: '备注', key: 'config_desc', align: 'center', ellipsis: { tooltip: true }, minWidth: 120 })
-  cols.push({ title: '维护人员', key: 'updated_user', align: 'center', width: 100, ellipsis: { tooltip: true } })
-  cols.push({ title: '维护时间', key: 'updated_time', align: 'center', width: 170, ellipsis: { tooltip: true } })
+  cols.push({ title: '更新人员', key: 'updated_user', align: 'center', width: 100, ellipsis: { tooltip: true } })
+  cols.push({ title: '更新时间', key: 'updated_time', align: 'center', width: 170, ellipsis: { tooltip: true } })
   return cols
 }

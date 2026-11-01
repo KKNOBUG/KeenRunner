@@ -92,7 +92,7 @@ async def delete_report(
     :param report_id: 报告主键ID
     :param report_code: 报告业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的报告
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
     :return: 统一HTTP响应
     """
     try:
@@ -129,7 +129,7 @@ async def delete_reports(
 
     :param report_in: 报告ID列表或报告代码列表(二选一)
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除创建人为自己的报告
+    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
     :return: 统一HTTP响应，data为实际删除的报告数量
     """
     try:
@@ -207,6 +207,7 @@ async def get_report(
             instance = await services.report_curd.get_by_id(report_id=report_id, on_error=True, state__not=1)
         else:
             instance = await services.report_curd.get_by_code(report_code=report_code, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_read(instance.created_user):  # 报告含执行明细，详情需收口到可见范围
             raise NoPermissionException(
                 message=f"查询报告失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可见范围"
@@ -295,6 +296,7 @@ async def search_reports(
             q &= owner_q
         total, data = await services.report_curd.search_reports(search=q, report_in=report_in)
         # 行级可删标记：报告归属 created_user，按当前资源族的删除范围判定
+        await scope.load_owners([item.get("created_user") for item in data])
         for item in data:
             item["can_delete"] = scope.can_delete(item.get("created_user"))
         return SuccessResponse(message="报告列表查询成功", data=data, total=total)
@@ -333,6 +335,7 @@ async def search_batch_reports(
             scope=scope,
         )
         # 行级可删标记：批次报告同样按当前资源族的删除范围判定
+        await scope.load_owners([item.get("created_user") for item in data])
         for item in data:
             item["can_delete"] = scope.can_delete(item.get("created_user"))
         return SuccessResponse(message="批次报告列表查询成功", data=data, total=total)

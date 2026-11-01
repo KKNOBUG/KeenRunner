@@ -8,12 +8,13 @@
 """
 import re
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Set, Tuple
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q, RawSQL
+from tortoise.timezone import now as tz_now
 
 from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
 from backend.applications.autotest.schemas.autotest_task_schema import AutoTestTaskCreate, AutoTestTaskUpdate
@@ -23,7 +24,7 @@ from backend.applications.autotest.services.autotest_scope_guard import (
 )
 from backend.applications.autotest.services.autotest_task_schedule import normalize_schedule
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER
+from backend.configure import AUTOTEST_TASK_TIME_LIMIT, LOGGER
 from backend.core.exceptions import (
     NotFoundException,
     DataBaseStorageException,
@@ -31,7 +32,7 @@ from backend.core.exceptions import (
     ParameterException,
     NoPermissionException,
 )
-from backend.enums import AutoTestTaskPeriodicMode
+from backend.enums import AutoTestTaskPeriodicMode, AutoTestTaskStatus
 from backend.services import DataScope
 
 
@@ -148,6 +149,58 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             task_dict["task_involve_envs"] = extract_task_involve_envs(cases_cfg)
         return task_dict
 
+    # 运行态失效缓冲：Celery 硬时限 SIGKILL 后状态可能残留 RUNNING，超过「任务硬时限+缓冲」视为僵尸状态
+    RUN_STATE_STALE_GRACE_SECONDS: int = 60
+
+    @classmethod
+    def stale_run_before(cls) -> datetime:
+        """返回运行态失效时间点：早于该时刻的 RUNNING 不再阻塞下一次触发。"""
+        # 库内 DatetimeField 读出为带时区值，基准时刻必须同口径，避免 naive/aware 比较报错；
+        # 以批量任务自身硬时限为基准：全局 1h 硬时限短于长任务正常耗时，会误判为僵尸而重复执行
+        return tz_now() - timedelta(seconds=AUTOTEST_TASK_TIME_LIMIT + cls.RUN_STATE_STALE_GRACE_SECONDS)
+
+    async def is_execution_running(self, task_id: int) -> bool:
+        """
+        判断任务是否处于有效运行态。
+
+        :param task_id: 任务主键ID
+        :return: RUNNING 且未失效返回 True
+        """
+        task: Optional[AutoTestTaskModel] = await self.model.filter(id=task_id).first()
+        if not task or task.last_execute_state != AutoTestTaskStatus.RUNNING:
+            return False
+        return bool(task.last_execute_time and task.last_execute_time >= self.stale_run_before())
+
+    async def claim_execution(
+            self,
+            task_id: int,
+            execute_user: Optional[str],
+            started_at: Optional[datetime] = None
+    ) -> bool:
+        """
+        原子抢占任务执行权：仅当任务不在有效运行态时才能置为 RUNNING。
+
+        多端点击/Beat 重投会在同一条 UPDATE 上互斥，未抢到的消息不再执行，
+        避免同一任务并发生成多份报告。
+
+        :param task_id: 任务主键ID
+        :param execute_user: 本次执行人
+        :param started_at: 本次执行开始时间，缺省取当前时刻
+        :return: 抢占成功返回 True
+        """
+        started_at = started_at or tz_now()
+        claimed: int = await self.model.filter(id=task_id).filter(
+            Q(last_execute_state__isnull=True)
+            | ~Q(last_execute_state=AutoTestTaskStatus.RUNNING)
+            | Q(last_execute_time__isnull=True)
+            | Q(last_execute_time__lt=self.stale_run_before())
+        ).update(
+            last_execute_state=AutoTestTaskStatus.RUNNING,
+            last_execute_time=started_at,
+            last_execute_user=execute_user,
+        )
+        return claimed > 0
+
     async def get_by_id(self, task_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestTaskModel]:
         """
         根据主键ID查询任务。
@@ -188,7 +241,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             raise NotFoundException(message=error_message)
         return instance
 
-    async def create_task(self, task_in: AutoTestTaskCreate, scope: Optional[DataScope] = None) -> AutoTestTaskModel:
+    async def create_task(self, task_in: AutoTestTaskCreate, scope: DataScope) -> AutoTestTaskModel:
         """
         创建任务；同名软删记录在写权限内恢复并更新，活跃同名报错。
 
@@ -224,8 +277,9 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             task_dict = self._apply_task_fields(task_dict)
             if existing_task and existing_task.state == 1:
                 # 软删恢复不得跨写范围接管他人任务，且不覆盖原创建人
-                if scope is not None and not scope.can_write(existing_task.created_user):
-                    error_message: str = f"新增任务信息失败, 任务[{task_name}]创建人[{existing_task.created_user}]非当前用户, 无权操作"
+                await scope.load_owners([existing_task.created_user])
+                if not scope.can_write(existing_task.created_user):
+                    error_message: str = f"新增任务信息失败, 任务[{task_name}]创建人[{existing_task.created_user}]不在当前用户可操作范围内, 无权操作"
                     LOGGER.error(error_message)
                     raise NoPermissionException(message=error_message)
                 task_dict.pop("created_user", None)
@@ -251,8 +305,8 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
     async def copy_task(
             self,
             task_id: int,
+            scope: DataScope,
             operate_user: Optional[str] = None,
-            scope: Optional[DataScope] = None,
     ) -> AutoTestTaskModel:
         """
         完全复刻任务记录生成新任务：业务配置原样复制，task_code重新生成、
@@ -264,7 +318,8 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         :return: 复制生成的新任务实例
         """
         source = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
-        if scope is not None and not scope.can_read(source.created_user):
+        await scope.load_owners([source.created_user])
+        if not scope.can_read(source.created_user):
             error_message: str = f"复制任务信息失败, 任务[{source.task_name}]创建人[{source.created_user}]不在当前用户可见范围"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
@@ -295,7 +350,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         更新任务，根据task_id或task_code定位并校验(task_name, task_project)唯一。
 
         :param task_in: 任务更新schema
-        :param scope: 数据权限上下文，仅允许修改创建人为自己的任务
+        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的任务
         :return: 更新后的任务实例
         """
         task_id: Optional[int] = task_in.task_id
@@ -306,8 +361,9 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             instance = await self.get_by_code(task_code=task_code, on_error=True, state__not=1)
             task_id = instance.id
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"更新任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -380,7 +436,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         """
         软删除任务并关闭调度。
 
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的任务
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的任务
         :param task_id: 任务主键ID，与task_code二选一
         :param task_code: 任务标识代码，与task_id二选一
         :return: 软删除后的任务实例
@@ -390,8 +446,9 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         else:
             instance = await self.get_by_code(task_code=task_code, on_error=True, state__not=1)
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"删除任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -411,16 +468,17 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         设置任务是否启用调度(仅切换task_enabled，触发依赖task_schedule_expr)。
 
         :param task_id: 任务主键ID
-        :param scope: 数据权限上下文，仅允许启停创建人为自己的任务
+        :param scope: 数据权限上下文，仅允许启停归属人在当前用户可操作范围内的任务
         :param enabled: 是否启用
         :param updated_user: 操作人员账号(启停调度视为任务修改，刷新维护人；调度触发执行的执行人归因到该人)
         :return: 更新后的任务实例
-        :raises NoPermissionException: 任务创建人非当前用户
+        :raises NoPermissionException: 任务创建人不在当前用户可操作范围内
         :raises ParameterException: 启用调度时任务尚无定时表达式
         """
         instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
+        await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"启停任务调度失败, 任务[{instance.task_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"启停任务调度失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         # 无定时表达式的任务启用后永不触发，误导为“已启动”；启动前强制校验

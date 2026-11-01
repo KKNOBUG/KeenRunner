@@ -50,12 +50,6 @@ export const useUserStore = defineStore('user', {
     deptId() {
       return this.userInfo?.dept_id
     },
-    selectScope() {
-      return this.userInfo?.select_scope
-    },
-    updateScope() {
-      return this.userInfo?.update_scope
-    },
     /**
      * 行级删除权限：列表接口已在每行注入 can_delete（后端按当前资源族的删除范围判定，
      * 含本部门/下级部门，前端无法复算部门归属），有该结论时直接采用；
@@ -78,8 +72,8 @@ export const useUserStore = defineStore('user', {
           return
         }
         // 接口主键已改为user_id返回，内部仍映射为id，保证getter(userId)与下游消费不变
-        const { user_id: id, username, alias, email, phone, avatar, state, is_superuser, is_admin, is_active, last_login, dept_id, select_scope, update_scope } = res.data
-        this.userInfo = { id, username, alias, email, phone, avatar, state, is_superuser, is_admin, is_active, last_login, dept_id, select_scope, update_scope }
+        const { user_id: id, username, alias, email, phone, avatar, state, is_superuser, is_admin, is_active, last_login, dept_id } = res.data
+        this.userInfo = { id, username, alias, email, phone, avatar, state, is_superuser, is_admin, is_active, last_login, dept_id }
         return res.data
       } catch (error) {
         return error

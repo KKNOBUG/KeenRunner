@@ -17,7 +17,7 @@ from typing import Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, S
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import core_schema
 from tortoise import fields, models
-from tortoise.exceptions import DoesNotExist, FieldError
+from tortoise.exceptions import DoesNotExist, FieldError, IntegrityError, OperationalError
 from tortoise.expressions import Q
 from tortoise.fields import JSONField
 from tortoise.models import Model
@@ -25,7 +25,7 @@ from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
 from backend.configure import GLOBAL_CONFIG, LOGGER
-from backend.core.exceptions import ParameterException, NotFoundException
+from backend.core.exceptions import ParameterException, NotFoundException, DataBaseStorageException
 
 
 def unique_identify() -> str:
@@ -445,14 +445,14 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return
 
         # 惰性导入，避免 scaffold ↔ services.dependency 循环依赖
-        from backend.services.ctx import get_current_username
+        from backend.services.ctx import get_current_username, normalize_username
         username = get_current_username()
         if username:
             obj_dict["created_user"] = username
         else:
             existing = obj_dict.get("created_user")
             if isinstance(existing, str) and existing.strip():
-                obj_dict["created_user"] = existing.strip().upper()[:16]
+                obj_dict["created_user"] = normalize_username(existing)
 
         if hasattr(target, "updated_user") and not obj_dict.get("updated_user"):
             created = obj_dict.get("created_user")
@@ -470,7 +470,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if not hasattr(target, "updated_user"):
             return
 
-        from backend.services.ctx import get_current_username
+        from backend.services.ctx import get_current_username, normalize_username
         username = get_current_username()
         if username:
             obj_dict["updated_user"] = username
@@ -478,7 +478,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         existing = obj_dict.get("updated_user")
         if isinstance(existing, str) and existing.strip():
-            obj_dict["updated_user"] = existing.strip().upper()[:16]
+            obj_dict["updated_user"] = normalize_username(existing)
 
     @staticmethod
     def explicit_restored_null_fields(payload: Any, update_dict: Dict[str, Any], field_names: Tuple[str, ...]) -> None:
@@ -651,7 +651,18 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             obj_dict = obj_in.model_dump(exclude_unset=True, exclude={"id"})
         self.fill_updated_user(obj_dict)
         obj = obj.update_from_dict(obj_dict)
-        await obj.save()
+        try:
+            await obj.save()
+        except IntegrityError:
+            raise
+        except OperationalError as e:
+            # 并发改唯一值时 InnoDB 可能抛死锁(1213)/锁等待超时(1205)，转为可重试的存储异常
+            raw = e.args[0] if e.args else None
+            errno = raw.args[0] if isinstance(raw, BaseException) and getattr(raw, "args", None) else None
+            if errno in (1213, 1205):
+                LOGGER.error(f"更新并发冲突: {self.model.__name__}(id={id}), 错误: {e}")
+                raise DataBaseStorageException(message="并发冲突, 请稍后重试") from e
+            raise
         LOGGER.info(f"更新成功: {self.model.__name__}(id={id}), 字段: {list(obj_dict.keys())}")
         return obj
 

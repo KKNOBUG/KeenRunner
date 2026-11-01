@@ -162,7 +162,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         更新明细，需提供detail_id或(report_code, step_code)定位。
 
         :param detail_in: 明细更新schema
-        :param scope: 数据权限上下文，仅允许修改创建人为自己的明细
+        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的明细
         :return: 更新后的明细实例
         """
         case_id: Optional[int] = detail_in.case_id
@@ -203,8 +203,9 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
                 state__not=1,
             )
             detail_id = instance.id
+        await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"更新明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         try:
@@ -230,7 +231,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         """
         物理删除明细，需提供detail_id或(report_code, step_code)。
 
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的明细
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
         :param detail_id: 明细主键ID，与(report_code, step_code)二选一
         :param step_code: 步骤标识代码
         :param report_code: 报告标识代码
@@ -251,8 +252,9 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
                 step_code=step_code,
                 state__not=1,
             )
+        await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"删除明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         await instance.delete()
@@ -262,7 +264,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         """
         批量物理删除明细；先全量校验归属，任一明细无权则整批拒绝。
 
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的明细
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
         :param detail_in: 明细ID列表入参
         :return: 实际删除的明细数量
         """
@@ -276,10 +278,11 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             raise NotFoundException(message=error_message)
 
         # 全有或全无：先逐条校验归属，避免部分明细已删、后续被拒
+        await scope.load_owners([instance.created_user for instance in targets])
         for instance in targets:
             if not scope.can_delete(instance.created_user):
                 error_message: str = (
-                    f"批量删除明细失败, 明细[{instance.step_name}]创建人[{instance.created_user}]非当前用户, 无权操作"
+                    f"批量删除明细失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
                 )
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)

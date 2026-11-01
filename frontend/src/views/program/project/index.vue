@@ -249,15 +249,20 @@ async function refreshMetaOptions() {
 }
 
 async function loadEnvOptions() {
+  // 下拉只做候选项；无环境名称读取权限时保留手工输入能力，不触发必然 403 的请求
+  if (!hasApiPermission('get', '/autotest/env/get_names')) {
+    envOptions.value = []
+    return
+  }
   try {
-    const res = await api.getEnvList()
-    const list = res?.data ?? []
-    envOptions.value = list
-        .map((row) => {
-          const name = row.env_name != null ? String(row.env_name) : ''
-          return name ? { label: name, value: name } : null
-        })
+    // 环境名称去重由后端按可见范围返回，无需拉取全量环境绑定行
+    const res = await api.getApiEnvNames()
+    const names = (res?.data ?? [])
+        .map((name) => String(name ?? '').trim())
         .filter(Boolean)
+    envOptions.value = [...new Set(names)]
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+        .map((name) => ({ label: name, value: name }))
   } catch (_) {
     envOptions.value = []
   }
@@ -288,6 +293,35 @@ const columns = computed(() => {
       minWidth: 150,
       align: 'center',
       ellipsis: { tooltip: true },
+      render(row) {
+        const name = row.project_name || ''
+        // 名称链接是编辑入口，无编辑接口权限时降级为纯文本
+        if (!hasApiPermission('post', '/autotest/project/update')) {
+          return name
+        }
+        return h(
+            'a',
+            {
+              href: 'javascript:void(0)',
+              title: name,
+              style: {
+                display: 'inline-block',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                color: '#2080f0',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+              },
+              onClick: (e) => {
+                e.preventDefault()
+                customHandleEdit(row)
+              },
+            },
+            name
+        )
+      },
     },
     {
       title: '应用状态',

@@ -59,7 +59,8 @@ from backend.core.responses import (
     NotFoundResponse,
     DataBaseStorageResponse,
     DataAlreadyExistsResponse,
-    BadReqResponse
+    BadReqResponse,
+    ForbiddenResponse,
 )
 from backend.enums import AutoTestReportType, AutoTestStepType, PUBLIC_CASE_TYPES
 from backend.services import DataScope, DependTagScope
@@ -372,7 +373,7 @@ async def copy_step_tree(
         return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
 
 
-@autotest_step.post("/splice_tree", summary="查询拼接步骤树结构", description="根据用例id或code列表批量查询并拼接步骤树结构")
+@autotest_step.post("/build_splice_tree", summary="查询拼接步骤树结构", description="根据用例id或code列表批量查询并拼接步骤树结构")
 async def splice_step_tree(
         splice_in: AutoTestStepTreeSplice = Body(..., description="拼接查询条件"),
         services: AutoTestServices = Depends(get_autotest_api_services),
@@ -420,7 +421,7 @@ async def batch_update_steps_tree(
 
     :param tree_in: 步骤树入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许保存所属人为自己的用例
+    :param scope: 数据权限上下文，仅允许保存归属人在当前用户可操作范围内的用例
     :return: 统一HTTP响应
     """
     try:
@@ -692,21 +693,25 @@ async def validate_step_tree(
 async def debug_http_request(
         debug_in: AutoTestHttpDebugRequest = Body(..., description="HTTP请求步骤数据"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     HTTP请求调试。
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，解析环境配置前校验应用与配置可见性
     :return: 统一HTTP响应
     """
     try:
-        data = await StepDebugService.debug_http(debug_in, services)
+        data = await StepDebugService.debug_http(debug_in, services, scope)
         return SuccessResponse(message="HTTP请求调试完成", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except NoPermissionException as e:
+        return ForbiddenResponse(message=str(e.message))
     except StepDebugException as e:
         return FailureResponse(message=e.message, data=e.data)
     except Exception as e:
@@ -718,21 +723,25 @@ async def debug_http_request(
 async def debug_tcp_request(
         debug_in: AutoTestTcpDebugRequest = Body(..., description="TCP请求步骤数据"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     TCP请求调试。
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，解析环境配置前校验应用与配置可见性
     :return: 统一HTTP响应
     """
     try:
-        data = await StepDebugService.debug_tcp(debug_in, services)
+        data = await StepDebugService.debug_tcp(debug_in, services, scope)
         return SuccessResponse(message="TCP请求调试完成", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except NoPermissionException as e:
+        return ForbiddenResponse(message=str(e.message))
     except StepDebugException as e:
         return FailureResponse(message=e.message, data=e.data)
     except Exception as e:
@@ -746,6 +755,9 @@ async def debug_python_code(
 ):
     """
     Python代码调试。
+
+    该端点只执行沙箱代码，不读取应用/环境/配置，不存在可按 project_id+env_name+config_name
+    访问他人凭据的数据范围入口；沙箱隔离由 UserCodeSandbox 承担。
 
     :param debug_in: 步骤调试入参
     :return: 统一HTTP响应
@@ -770,21 +782,25 @@ async def debug_python_code(
 async def debug_redis_request(
         debug_in: AutoTestRedisDebugRequest = Body(..., description="Redis请求步骤数据"),
         services: AutoTestServices = Depends(get_autotest_api_services),
+        scope: DataScope = DependTagScope,
 ):
     """
     Redis请求调试。
 
     :param debug_in: 步骤调试入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文，解析每条操作的环境配置前校验应用与配置可见性
     :return: 统一HTTP响应
     """
     try:
-        data = await StepDebugService.debug_redis(debug_in, services)
+        data = await StepDebugService.debug_redis(debug_in, services, scope)
         return SuccessResponse(message="Redis请求调试完成", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
+    except NoPermissionException as e:
+        return ForbiddenResponse(message=str(e.message))
     except StepDebugException as e:
         return FailureResponse(message=e.message, data=e.data)
     except Exception as e:
@@ -1064,6 +1080,7 @@ async def batch_execute_cases(
         # 一次性载入全部用例校验归属，避免循环内查库；用例归属按用例资源族收敛
         case_instances = await AutoTestCaseModel.filter(id__in=case_ids, state__not=1)
         case_scope: DataScope = await scope.for_tag(CASE_TAG)
+        await case_scope.load_owners([case.owner_user for case in case_instances])
         for case_instance in case_instances:
             if case_instance.case_type in PUBLIC_CASE_TYPES or case_scope.can_read(case_instance.owner_user):
                 continue

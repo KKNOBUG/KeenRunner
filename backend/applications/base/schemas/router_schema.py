@@ -62,7 +62,7 @@ class RouterSelect(RouterBase):
     """分页查询路由入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
     created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")

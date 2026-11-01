@@ -3,7 +3,7 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : KeenRunner
-@Module  : celery_worker
+@Module  : celery_worker.py
 @DateTime: 2026/1/25 12:15
 """
 import asyncio
@@ -121,20 +121,13 @@ async def _create_task_record(
         to_jsonable,
     )
     from backend.enums import AutoTestTaskStatus
+    from backend.services.ctx import normalize_username
 
     # 与终态写库一致：同一协程内先确保ORM可用，避免长任务后连接失效
     await init_tortoise_orm()
 
-    def _normalize_username(raw: Any) -> Optional[str]:
-        if raw is None:
-            return None
-        name = str(raw).strip()
-        if not name:
-            return None
-        return name.upper()[:16]
-
     report_val = getattr(report_type, "value", report_type)
-    username = _normalize_username(created_user)
+    username: Optional[str] = normalize_username(created_user) or None
     task_meta = resolve_task_meta(celery_task_name)
     req_kwargs = request_kwargs if isinstance(request_kwargs, dict) else {}
     data: Dict[str, Any] = {
@@ -172,7 +165,7 @@ async def _create_task_record(
             periodic = getattr(task_instance, "task_periodic_expr", None)
             # Worker 无登录上下文：优先用触发方传入的用户；否则回退任务创建人
             if not username:
-                username = _normalize_username(
+                username = normalize_username(
                     getattr(task_instance, "created_user", None)
                     or getattr(task_instance, "updated_user", None)
                 )

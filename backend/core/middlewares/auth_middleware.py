@@ -11,10 +11,22 @@ from __future__ import annotations
 from typing import Iterable
 
 from fastapi import Request
+from starlette.exceptions import HTTPException
 
-from backend.configure import PROJECT_CONFIG
-from backend.core.responses import UnauthorizedResponse
+from backend.configure import LOGGER, PROJECT_CONFIG
+from backend.core.responses import InternalErrorResponse, UnauthorizedResponse
 from backend.services import AuthControl
+
+# 公开入口白名单：登录、根路径、文档与静态资源；与路由契约 public 模式保持同源语义
+PUBLIC_WHITELIST: tuple[str, ...] = (
+    "POST /user/login",
+    "POST /user/transfer_login",
+    "GET /",
+    f"GET {PROJECT_CONFIG.APP_DOCS_URL}",
+    f"GET {PROJECT_CONFIG.APP_REDOC_URL}",
+    f"GET {PROJECT_CONFIG.APP_OPENAPI_URL}",
+    "* /static/*",
+)
 
 
 def _normalize_path(path: str) -> str:
@@ -67,40 +79,29 @@ def _is_whitelisted(whitelist: Iterable[str], request_method: str, request_path:
 async def auth_middleware(request: Request, call_next):
     request_method: str = request.method.upper()
     request_path: str = _normalize_path(request.url.path)
-    # 临时放行策略
-    is_enabled: bool = request.headers.get("token") == PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN
     # 允许CORS前置请求
     if request_method == "OPTIONS":
         return await call_next(request)
 
-    whitelist = [
-        # login
-        "POST /base/auth/access_token",
-        "POST /base/auth/access_token_transfer",
-
-        # root
-        "GET /",
-
-        # openapi/docs
-        f"GET {PROJECT_CONFIG.APP_DOCS_URL}",
-        f"GET {PROJECT_CONFIG.APP_REDOC_URL}",
-        f"GET {PROJECT_CONFIG.APP_OPENAPI_URL}",
-
-        # static assets
-        "* /static/*",
-    ]
-
-    if _is_whitelisted(whitelist=whitelist, request_method=request_method, request_path=request_path) or is_enabled:
+    if _is_whitelisted(whitelist=PUBLIC_WHITELIST, request_method=request_method, request_path=request_path):
         return await call_next(request)
 
     token = request.headers.get("token")
     if not token:
         return UnauthorizedResponse(message="请求服务鉴权失败, 请携带有效 Token 进行访问")
 
-    # 对( RBAC发生在依赖权限中)进行认证
+    # 此处只做认证；接口授权(RBAC)由路由依赖完成；开发用临时令牌同样经此路径校验 exp 与 token_version
     try:
-        await AuthControl.is_authed(token)
+        await AuthControl.is_authed(request=request, token=token)
+    except HTTPException as e:
+        # 401明细均为面向调用方的规范文案，需透传以便定位临时令牌等问题
+        if e.status_code == 401:
+            return UnauthorizedResponse(message=str(e.detail))
+        # 鉴权内部异常不能用401：前端会因此误登出，且语义上应归为服务端故障
+        LOGGER.error(f"请求认证异常: {e.detail}")
+        return InternalErrorResponse(message="请求服务鉴权异常, 请稍后重试")
     except Exception as e:
-        # 统一以未认证返回，避免调试模式下泄露异常细节
-        return UnauthorizedResponse(message="请求服务鉴权已过期, 请重新登录获取有效 Token 后进行访问")
+        # 非预期异常记录后统一返回服务异常，避免调试模式下泄露内部细节
+        LOGGER.error(f"请求认证异常: {e!r}")
+        return InternalErrorResponse(message="请求服务鉴权异常, 请稍后重试")
     return await call_next(request)

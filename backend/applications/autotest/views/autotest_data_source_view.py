@@ -40,6 +40,7 @@ from backend.applications.autotest.services.autotest_data_source_parser import D
 from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.autotest.services.autotest_scope_guard import (
     CASE_TAG,
+    assert_case_writable,
     assert_parent_readable,
 )
 from backend.configure import LOGGER, PROJECT_CONFIG
@@ -206,11 +207,7 @@ async def create_data_source(
         )
         DataSourceService.ensure_request_step(step, case=case)
         DataSourceService.ensure_case_allows_data_source(case)
-        await assert_parent_readable(scope, CASE_TAG, case, "用例")
-        if not scope.can_write(case.owner_user):
-            raise NoPermissionException(
-                message=f"新增数据源失败, 用例[{case.case_name}]所属人[{case.owner_user}]非当前用户, 无权操作"
-            )
+        await assert_case_writable(scope, case, "新增数据源")
         parsed = await DataSourceService.apply_dataframe_payload(data_source_in.dataframe, data_source_in.axis)
         effective = data_source_in
         if parsed:
@@ -321,11 +318,7 @@ async def unbind_case_data_source(
             case_code=data_in.case_code,
             state__not=1
         )
-        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
-        if not scope.can_write(case_instance.owner_user):
-            raise NoPermissionException(
-                message=f"解绑用例数据源失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
-            )
+        await assert_case_writable(scope, case_instance, "解绑用例数据源")
         async with in_transaction():
             source_ids = await services.data_source_curd.model.filter(
                 case_id=case_instance.id,
@@ -469,11 +462,7 @@ async def save_or_update_data_source(
                 )
                 DataSourceService.ensure_request_step(step, case=case)
                 DataSourceService.ensure_case_allows_data_source(case)
-                await assert_parent_readable(scope, CASE_TAG, case, "用例")
-                if not scope.can_write(case.owner_user):
-                    raise NoPermissionException(
-                        message=f"保存数据源失败, 用例[{case.case_name}]所属人[{case.owner_user}]非当前用户, 无权操作"
-                    )
+                await assert_case_writable(scope, case, "保存数据源")
                 existing = await services.data_source_curd.get_by_case_step(
                     case_id=case.id,
                     step_code=step.step_code,
@@ -1142,11 +1131,7 @@ async def single_step_dataset_upload(
         return FailureResponse(message=f"查询用例失败，异常描述: {e}")
     if case_instance.case_type in PUBLIC_CASE_TYPES:
         return BadReqResponse(message="公共脚本/公共接口不允许使用数据源")
-    await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
-    if not scope.can_write(case_instance.owner_user):
-        error_message: str = f"数据源文件上传失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
-        LOGGER.error(error_message)
-        raise NoPermissionException(message=error_message)
+    await assert_case_writable(scope, case_instance, "数据源文件上传")
 
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(
@@ -1404,11 +1389,7 @@ async def batch_step_dataset_upload(
         return FailureResponse(message=f"查询用例失败，异常描述: {e}")
     if case_instance.case_type in PUBLIC_CASE_TYPES:
         return BadReqResponse(message="公共脚本/公共接口不允许使用数据源，无法批量上传数据源")
-    await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
-    if not scope.can_write(case_instance.owner_user):
-        error_message: str = f"批量上传数据源失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
-        LOGGER.error(error_message)
-        raise NoPermissionException(message=error_message)
+    await assert_case_writable(scope, case_instance, "批量上传数据源")
 
     destination: str = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id))
     ok, path_or_error = await FileTransfer.save_upload_file_chunks(

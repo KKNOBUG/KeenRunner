@@ -24,7 +24,7 @@ from backend.core.exceptions import (
     DataBaseStorageException,
     DataAlreadyExistsException,
 )
-from backend.services import get_current_username
+from backend.services import get_current_username, normalize_username
 
 
 class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestCaseTransferCreate, AutoTestCaseTransferCreate]):
@@ -66,7 +66,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
         :return: 新增的转让记录
         """
         case_id: int = transfer_in.case_id
-        next_owner_user = str(transfer_in.next_owner_user or "").strip().upper()
+        next_owner_user = normalize_username(transfer_in.next_owner_user)
         if not next_owner_user:
             error_message: str = "转让用例失败, 参数[next_owner_user]不允许为空"
             LOGGER.error(error_message)
@@ -80,7 +80,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
 
         case_crud = AutoTestCaseCrud()
         case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
-        prev_owner_user = (case_instance.owner_user or "").strip().upper()
+        prev_owner_user = normalize_username(case_instance.owner_user)
         if not prev_owner_user:
             error_message: str = "转让用例失败, 所属人员不允许为空"
             LOGGER.error(error_message)

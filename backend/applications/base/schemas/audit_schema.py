@@ -59,7 +59,7 @@ class AuditSelect(AuditBase):
     """分页查询审计日志入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-created_time"], description="排序字段")
     start_time: Optional[str] = Field(default=None, description="开始时间；与end_time都未传时默认最近7天")
     end_time: Optional[str] = Field(default=None, description="结束时间；与start_time都未传时默认最近7天")

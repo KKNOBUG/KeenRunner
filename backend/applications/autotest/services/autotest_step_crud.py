@@ -36,6 +36,7 @@ from backend.applications.autotest.services.autotest_detail_crud import AutoTest
 from backend.applications.autotest.services.autotest_report_crud import AutoTestReportCrud
 from backend.applications.autotest.services.autotest_scope_guard import (
     CASE_TAG,
+    assert_case_writable,
     assert_parent_readable,
 )
 from backend.applications.autotest.services.autotest_step_engine import AutoTestStepExecutionEngine
@@ -484,9 +485,21 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :param case_code: 用例标识代码，与case_id二选一
         :param scope: 数据权限上下文，传入时校验用例所属人的读范围
         :return: 去重后的project_id列表(升序)
+        :raises ParameterException: 步骤中的应用ID不是有效整数
         """
         load = await self.get_case_tree(case_id=case_id, case_code=case_code, scope=scope)
         project_ids: Set[int] = set()
+
+        def _collect_project_id(raw_project_id: Any) -> None:
+            """收集合法应用ID；非法数据显式失败，避免跳过后削弱父应用可读校验。"""
+            if not raw_project_id:
+                return
+            try:
+                project_ids.add(int(raw_project_id))
+            except (TypeError, ValueError) as exc:
+                error_message: str = f"提取步骤所属应用失败, 应用ID[{raw_project_id}]不是有效整数"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message) from exc
 
         def _norm_step_type(st: Any) -> Optional[AutoTestStepType]:
             """将原始step_type规范为枚举；非法则返回None。"""
@@ -505,28 +518,13 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             """
             st_e = _norm_step_type(step.step_type)
             if st_e in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
-                request_project_id = step.request_project_id
-                if request_project_id:
-                    try:
-                        project_ids.add(int(request_project_id))
-                    except Exception:
-                        pass
+                _collect_project_id(step.request_project_id)
             elif st_e == AutoTestStepType.DATABASE:
                 for db_operate in step.database_operates or []:
-                    project_id = db_operate.project_id
-                    if project_id:
-                        try:
-                            project_ids.add(int(project_id))
-                        except Exception:
-                            pass
+                    _collect_project_id(db_operate.project_id)
             elif st_e == AutoTestStepType.REDIS:
                 for redis_operate in step.redis_operates or []:
-                    project_id = redis_operate.project_id
-                    if project_id:
-                        try:
-                            project_ids.add(int(project_id))
-                        except Exception:
-                            pass
+                    _collect_project_id(redis_operate.project_id)
             for child in step.children or []:
                 recursive_require_project_ids(child)
             for quote_step in step.quote_steps or []:
@@ -549,12 +547,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         step_no: int = step_in.step_no
         case_crud = AutoTestCaseCrud()
         case_instance = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
-        # 父用例可见是子资源准入前提，写范围仍按步骤当前标签收敛
-        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
-        if not scope.can_write(case_instance.owner_user):
-            error_message: str = f"新增步骤信息失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
-            LOGGER.error(error_message)
-            raise NoPermissionException(message=error_message)
+        # 步骤无独立归属，读写范围一律按父用例资源族收敛
+        await assert_case_writable(scope, case_instance, "新增步骤")
 
         if step_in.parent_step_id:
             parent_step_id: int = step_in.parent_step_id
@@ -634,12 +628,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         target_case = await AutoTestCaseCrud().get_by_id(
             case_id=step_in.case_id or instance.case_id, on_error=True, state__not=1
         )
-        # 迁移目标用例同样需可见，写范围仍按步骤当前标签收敛
-        await assert_parent_readable(scope, CASE_TAG, target_case, "用例")
-        if not scope.can_write(target_case.owner_user):
-            error_message: str = f"更新步骤信息失败, 用例[{target_case.case_name}]所属人[{target_case.owner_user}]非当前用户, 无权操作"
-            LOGGER.error(error_message)
-            raise NoPermissionException(message=error_message)
+        # 迁移目标用例同样按用例资源族校验读写范围
+        await assert_case_writable(scope, target_case, "更新步骤")
 
         if "step_no" in update_dict:
             case_id = update_dict.get("case_id", instance.case_id)
@@ -745,11 +735,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             step_id: int = instance.id
 
         case_instance = await AutoTestCaseCrud().get_by_id(case_id=instance.case_id, on_error=True, state__not=1)
-        await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
-        if not scope.can_write(case_instance.owner_user):
-            error_message: str = f"删除步骤信息失败, 用例[{case_instance.case_name}]所属人[{case_instance.owner_user}]非当前用户, 无权操作"
-            LOGGER.error(error_message)
-            raise NoPermissionException(message=error_message)
+        await assert_case_writable(scope, case_instance, "删除步骤")
 
         children_count = await self.model.filter(parent_step_id=step_id, state__not=1).count()
         if children_count > 0:

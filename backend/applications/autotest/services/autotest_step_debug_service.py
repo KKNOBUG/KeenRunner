@@ -47,13 +47,15 @@ from backend.applications.autotest.services.autotest_runtime.protocol_tcp import
     select_tcp_payload,
     TCP_MAX_RESPONSE_BYTES,
 )
+from backend.applications.autotest.services.autotest_scope_guard import load_readable_project
 from backend.applications.autotest.services.autotest_tool_service import AutoTestToolService
 from backend.common import AioTcpClient
 from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.common.url_utils import build_absolute_http_url, is_absolute_http_url
 from backend.configure import LOGGER
-from backend.core.exceptions import NotFoundException, ParameterException, ReqInvalidException
-from backend.enums import AutoTestConfigNodeType, AutoTestReqArgsType, AutoTestStepType
+from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException, ReqInvalidException
+from backend.enums import AutoTestConfigNodeType, AutoTestReqArgsType, AutoTestStepType, ResourceTag
+from backend.services.data_scope import DataScope
 
 
 class StepDebugException(Exception):
@@ -201,6 +203,7 @@ class StepDebugService:
             env_not_found_template: Optional[str] = None,
             config_not_found_template: Optional[str] = None,
             empty_env_message: Optional[str] = None,
+            scope: Optional[DataScope] = None,
     ) -> EnvEndpoint:
         """
         按应用+环境名+配置名+节点类型解析环境配置（绑定与配置的 env_type 对齐）。
@@ -214,6 +217,7 @@ class StepDebugService:
         :param env_not_found_template: 环境不存在文案模板，可用{label}/{project_id}/{env_name}
         :param config_not_found_template: 配置不存在文案模板，可用{label}/{config_name}
         :param empty_env_message: env_name为空时的完整错误文案
+        :param scope: 数据权限上下文；外部调试传入时要求应用与配置创建人均在可见范围
         :return: EnvEndpoint
         """
         env_name = (env_name or "").strip()
@@ -243,6 +247,19 @@ class StepDebugService:
             raise NotFoundException(
                 message=tmpl.format(label=label, config_name=config_name)
             )
+
+        # 解析结果暴露 host/port，外部调试必须与列表口径一致：应用可读且配置创建人可读
+        if scope is not None:
+            await load_readable_project(scope, project_id)
+            config_scope = await scope.for_tag(ResourceTag.ENV_CONFIG.value)
+            await config_scope.load_owners([env_config_instance.created_user])
+            if not config_scope.can_read(env_config_instance.created_user):
+                error_message = (
+                    f"{label}, 环境配置[{config_name}]创建人[{env_config_instance.created_user}]"
+                    f"不在当前用户可见范围"
+                )
+                LOGGER.error(error_message)
+                raise NoPermissionException(message=error_message)
 
         return EnvEndpoint(
             env_id=env_row.id,
@@ -388,12 +405,18 @@ class StepDebugService:
         }
 
     @classmethod
-    async def debug_http(cls, debug_in: AutoTestHttpDebugRequest, services: AutoTestServices) -> Dict[str, Any]:
+    async def debug_http(
+            cls,
+            debug_in: AutoTestHttpDebugRequest,
+            services: AutoTestServices,
+            scope: Optional[DataScope] = None,
+    ) -> Dict[str, Any]:
         """
         调试HTTP请求步骤。
 
         :param debug_in: HTTP调试入参
         :param services: CRUD依赖聚合
+        :param scope: 数据权限上下文，相对地址解析环境配置时校验应用与配置可见性
         :return: 调试结果字典
         """
         env_name = (debug_in.env_name or "").strip()
@@ -436,6 +459,7 @@ class StepDebugService:
                 config_name=request_config_name,
                 config_type=AutoTestConfigNodeType.APP,
                 label="HTTP请求调试失败",
+                scope=scope,
             )
             host = (endpoint.config_host or "").strip()
             if not host:
@@ -626,12 +650,18 @@ class StepDebugService:
         return result
 
     @classmethod
-    async def debug_tcp(cls, debug_in: AutoTestTcpDebugRequest, services: AutoTestServices) -> Dict[str, Any]:
+    async def debug_tcp(
+            cls,
+            debug_in: AutoTestTcpDebugRequest,
+            services: AutoTestServices,
+            scope: Optional[DataScope] = None,
+    ) -> Dict[str, Any]:
         """
         调试TCP请求步骤。
 
         :param debug_in: TCP调试入参
         :param services: CRUD依赖聚合
+        :param scope: 数据权限上下文，解析环境配置时校验应用与配置可见性
         :return: 调试结果字典
         """
         from backend.common import AsyncTcpUtils
@@ -671,8 +701,9 @@ class StepDebugService:
                 config_type=AutoTestConfigNodeType.APP,
                 label="TCP请求调试失败",
                 config_not_found_template="{label}, 环境配置[{config_name}]不存在",
+                scope=scope,
             )
-        except (ParameterException, NotFoundException) as e:
+        except (ParameterException, NotFoundException, NoPermissionException) as e:
             log(str(e.message))
             raise
         except Exception as e:
@@ -916,12 +947,18 @@ class StepDebugService:
                 raise StepDebugException(message="Python代码调试失败", data=debugging_return) from e
 
     @classmethod
-    async def debug_redis(cls, debug_in: AutoTestRedisDebugRequest, services: AutoTestServices) -> Dict[str, Any]:
+    async def debug_redis(
+            cls,
+            debug_in: AutoTestRedisDebugRequest,
+            services: AutoTestServices,
+            scope: Optional[DataScope] = None,
+    ) -> Dict[str, Any]:
         """
         调试Redis请求步骤；查到即止语义与RedisStepExecutor对齐。
 
         :param debug_in: Redis调试入参
         :param services: CRUD依赖聚合
+        :param scope: 数据权限上下文，解析每条操作的环境配置时校验应用与配置可见性
         :return: 调试结果字典
         """
         from backend.applications.autotest.services.autotest_step_engine import RedisStepExecutor
@@ -1018,6 +1055,7 @@ class StepDebugService:
                     label=operate_no,
                     env_not_found_template="{label}：应用[{project_id}]下环境[{env_name}]不存在",
                     config_not_found_template="{label}：环境配置[{config_name}]不存在",
+                    scope=scope,
                 )
                 config_host = endpoint.config_host
                 config_port = endpoint.config_port
@@ -1099,7 +1137,7 @@ class StepDebugService:
                 if redis_searched and RedisStepExecutor.has_effective_redis_result(redis_data):
                     log(f"【Redis请求】查到即止：{operate_no}已返回有效结果，已终止后续命令")
                     break
-            except (ParameterException, NotFoundException) as e:
+            except (ParameterException, NotFoundException, NoPermissionException) as e:
                 log(str(e.message))
                 raise
             except StepDebugException:

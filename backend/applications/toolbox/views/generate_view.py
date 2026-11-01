@@ -18,7 +18,7 @@ from backend.core.responses import SuccessResponse
 generate = APIRouter()
 
 
-@generate.post("/info", summary="新增虚拟信息", description="随机生成虚拟信息")
+@generate.post("/create_info", summary="新增虚拟信息", description="随机生成虚拟信息")
 async def generate_info(
         generate_in: GenerateVirtualInfo = Body(..., description="虚拟信息生成条件"),
 ):

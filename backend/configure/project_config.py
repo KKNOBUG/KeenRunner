@@ -102,7 +102,8 @@ class ProjectConfig(BaseSettings):
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 day
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥")
-    AUTH_TEMPORARY_TOKEN: str = Field(..., min_length=128, description="临时令牌")
+    # 开发用临时令牌：预签发的长效 JWT，为空表示禁用；启用后仍受 exp / token_version 约束
+    AUTH_TEMPORARY_TOKEN: str = Field(default="", description="开发用临时令牌(为空表示禁用)")
 
     # 日志相关参数配置
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"

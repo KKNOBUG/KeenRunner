@@ -57,7 +57,7 @@ class DepartmentSelect(BaseModel):
     """分页查询部门入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="数据数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="数据数量")
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
     code: Optional[str] = Field(default=None, description="部门代码")
     name: Optional[str] = Field(default=None, description="部门名称")

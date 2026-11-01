@@ -22,6 +22,7 @@ from backend.applications.department.services.department_crud import DepartmentC
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     DataAlreadyExistsException,
+    DataBaseStorageException,
     NotFoundException,
     ParameterException,
 )
@@ -29,6 +30,7 @@ from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,
+    DataBaseStorageResponse,
     NotFoundResponse,
     ParameterResponse,
 )
@@ -127,6 +129,10 @@ async def update_department(
         instance = await dept_crud.update_department(department_in=department_in)
         data = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="更新成功", data=data, total=1)
+    except DataAlreadyExistsException as e:
+        return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:

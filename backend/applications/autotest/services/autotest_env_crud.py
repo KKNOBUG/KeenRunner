@@ -258,8 +258,8 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
     async def create_env(
             self,
             env_in: AutoTestEnvCreate,
+            scope: DataScope,
             strict_duplicate: bool = False,
-            scope: Optional[DataScope] = None,
     ) -> AutoTestEnvBindModel:
         """
         创建环境绑定；同应用+环境+类型已存在则恢复启用（软删恢复需写权限）。
@@ -271,7 +271,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         await load_readable_project(scope, env_in.project_id)
         # 环境字典为全局共享数据，归属人取登录态，忽略请求体回传，防止伪造创建人
-        actor: Optional[str] = (scope.username if scope and scope.username else get_current_username()) or env_in.created_user
+        actor: Optional[str] = scope.username or get_current_username() or env_in.created_user
         dict_row = await self._get_or_create_env_dict(
             env_name=env_in.env_name,
             user=actor,
@@ -302,8 +302,10 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                 raise DataAlreadyExistsException(message="新增失败, 已存在相同应用、环境及节点记录")
             return existing_bind
         # 软删恢复不得跨写范围接管他人环境绑定
+        if scope is not None:
+            await scope.load_owners([existing_bind.created_user])
         if scope is not None and not scope.can_write(existing_bind.created_user):
-            error_message: str = f"新增环境绑定信息失败, 环境绑定[code={existing_bind.env_code}]创建人[{existing_bind.created_user}]非当前用户, 无权操作"
+            error_message: str = f"新增环境绑定信息失败, 环境绑定[code={existing_bind.env_code}]创建人[{existing_bind.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         try:
@@ -323,7 +325,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         按env_id/env_code精准更新单条环境绑定；描述写在绑定表，不影响同名其他节点类型。
 
         :param env_in: 环境绑定更新schema
-        :param scope: 数据权限上下文，仅允许修改创建人为自己的环境绑定
+        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境绑定
         :return: 更新后的环境绑定实例
         """
         env_id: Optional[int] = env_in.env_id
@@ -340,8 +342,9 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             instance = await self.get_by_code(env_code=env_code, on_error=True, state__not=1)
             env_id = instance.id
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"更新环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -426,7 +429,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         物理删除环境绑定；绑定下仍存在未删除的环境配置时禁止删除。
 
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的环境绑定
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境绑定
         :param env_id: 环境绑定主键，与env_code二选一
         :param env_code: 绑定标识代码，与env_id二选一
         :return: 删除后的环境绑定实例快照
@@ -441,8 +444,9 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         else:
             instance = await self.get_by_code(env_code=env_code, on_error=True, state__not=1)
 
+        await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]非当前用户, 无权操作"
+            error_message: str = f"删除环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -460,7 +464,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         根据ID或code列表批量软删除环境绑定；软删与物理删同样拒绝存在引用关系的环境绑定。
 
         :param env_in: 环境绑定删除schema
-        :param scope: 数据权限上下文，仅允许删除创建人为自己的环境绑定
+        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境绑定
         :return: 更新条数
         """
         env_ids: Optional[List[int]] = env_in.env_ids
@@ -503,8 +507,9 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                     raise NotFoundException(message=error_message)
                 targets.append(instance)
 
+        await scope.load_owners([instance.created_user for instance in targets])
         if not all(scope.can_delete(instance.created_user) for instance in targets):
-            error_message: str = "删除环境绑定信息失败, 存在非当前用户创建的环境绑定, 无权操作"
+            error_message: str = "删除环境绑定信息失败, 存在不在当前用户可删除范围内的环境绑定, 无权操作"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         # 软删同样受引用关系约束：先全量校验再落库，保证批量操作全有或全无
@@ -668,7 +673,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         :param query_in: 环境分页查询入参(过滤条件与分页)
         :param scope: 数据权限上下文，按创建人过滤可见范围
-        :return: (总条数, 当前页记录)；记录含env_id(绑定主键)/project_id/env_name/env_type/project_name/is_delete/时间字段
+        :return: (总条数, 当前页记录)；记录含env_id(绑定主键)/project_id/env_name/env_type/project_name/created_user/is_delete/时间字段
         """
         try:
             base_qs = self.model.filter(state=0)
@@ -714,7 +719,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             total = await base_qs.count()
             offset = (query_in.page - 1) * query_in.page_size
             page_rows = await base_qs.offset(offset).limit(query_in.page_size).values(
-                "id", "project_id", "env_enum_id",
+                "id", "project_id", "env_enum_id", "created_user",
                 "env_type", "created_time", "updated_time"
             )
             dict_name_map = await self._get_dict_name_map({item["env_enum_id"] for item in page_rows})
@@ -746,6 +751,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                         if isinstance(updated_time, datetime) else updated_time
                     ),
                     "project_name": active_project_map.get(int(item["project_id"]), ""),
+                    "created_user": item["created_user"],
                     "is_delete": env_bind_id not in sub_exists,
                 })
             return total, result

@@ -64,7 +64,7 @@ class RoleSelect(RoleBase):
     """分页查询角色入参。"""
 
     page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=10, ge=10, description="每页数量")
+    page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["id"], description="排序字段")
     created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(default=None, max_length=16, description="更新人员")
@@ -73,18 +73,25 @@ class RoleSelect(RoleBase):
 class RoleTagScopeItem(BaseModel):
     """角色标签范围覆盖项；范围为空表示按角色默认范围生效。"""
 
-    tag: str = Field(..., max_length=64, description="资源族标签(一级目录:二级模块)")
+    tag: str = Field(..., max_length=64, description="资源族编码")
     select_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可见范围")
     update_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可写范围")
     delete_scope: Optional[DataScopeEnum] = Field(default=None, description="数据可删范围")
 
 
+class RoleRouterItem(BaseModel):
+    """角色接口绑定项：以接口路径与方法唯一定位。"""
+
+    path: str = Field(..., max_length=255, description="接口路径")
+    method: str = Field(..., max_length=16, description="请求方法")
+
+
 class RoleUpdateMenusRouters(BaseModel):
-    """更新角色菜单与路由绑定入参。"""
+    """更新角色菜单、接口与标签范围绑定入参。"""
 
     id: int = Field(..., description="角色ID")
     menu_ids: List[int] = Field(default_factory=list, description="菜单ID列表")
-    router_infos: List[dict] = Field(default_factory=list, description="路由信息列表")
+    router_infos: List[RoleRouterItem] = Field(default_factory=list, description="接口绑定项列表")
     tag_scopes: Optional[List[RoleTagScopeItem]] = Field(default=None, description="标签范围覆盖列表")
 
 

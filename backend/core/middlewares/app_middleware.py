@@ -17,9 +17,11 @@ from starlette.datastructures import FormData
 
 from backend.applications.base.models.audit_model import Audit
 from backend.applications.user.models.user_model import User
-from backend.common.permission_action import AUDITED_ACTIONS, classify_summary_action
-from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER, ROUTER_SUMMARY, ROUTER_TAGS
+from backend.common.permission_action import ACTION_UNKNOWN, AUDITED_ACTIONS, derive_action
+from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
+from backend.enums import ResourceTag
 from backend.services import AuthControl
+from backend.services.resource_policy import LEGACY_TAG
 
 # 审计脱敏：凭证类字段在入库前遮蔽，避免拥有审计读权限的角色（Users 系统域只读）取到他人登录态与密码
 MASKED_HEADER_KEYS: frozenset = frozenset({
@@ -51,12 +53,13 @@ MASKED_FIELD_KEYWORDS: frozenset = frozenset({
     "refresh_token",
 })
 MASKED_VALUE: str = "******"
+NON_JSON_CONTENT: str = "<NON-JSON CONTENT>"
 
 
 def _mask_sensitive(payload: Any) -> Any:
     """递归遮蔽字典/列表中的凭证字段，保留原始结构以保留审计可读性。
 
-    :param payload: 已解析的请求体或表单数据
+    :param payload: 已解析的请求体、响应体或表单数据
     :returns: 脱敏后的同结构数据
     """
     if isinstance(payload, dict):
@@ -118,7 +121,7 @@ def is_longtext_response(response: Response) -> bool:
     """判断响应体是否超过 102400 字节（用于决定是否截断审计日志中的响应体）。
 
     :param response: 响应对象。
-    :returns: Content-Length 大于 5000 时返回 True。
+    :returns: Content-Length 大于 102400 时返回 True。
     """
     content_length: int = response.headers.get("content-length", 0)
     return int(content_length) > 102400
@@ -170,30 +173,28 @@ async def logging_middleware(request: Request, call_next):
         key: (MASKED_VALUE if key.lower() in MASKED_HEADER_KEYS else value)
         for key, value in request.headers.items()
     }
-    if "referer" in request_header and request_header["referer"]:
-        try:
-            request_header["referer"] = unquote(request_header["referer"])
-        except:
-            pass
+    if request_header.get("referer"):
+        # referer 可能带百分号编码的中文路径，记录前还原便于检索；unquote 对非法编码不抛异常
+        request_header["referer"] = unquote(request_header["referer"])
     request_client: str = request.client.host if request.client else "127.0.0.1"
-    request_tags: str = ROUTER_TAGS.get(request_router or "未定义", "未定义")
-    request_summary: str = ROUTER_SUMMARY.get(request_router or "未定义", "未定义")
     request_body: bytes = request_body if is_upload else original_request_body.decode("utf-8", errors="ignore")
     request_params: str = unquote(request.query_params.__str__())
 
     # 请求流传递并获取响应
     response = await call_next(request)
 
-    # 按路由声明的标签与摘要归类行为：审计记录写/删/执行/上传/下载类请求，刷新与查询直接透传，避免日志膨胀；下载响应仅记占位符，不复制大响应体
+    # 按启动绑定的契约归类行为：审计记录写/删/执行/上传/下载类请求，查询直接透传；
+    # 无法判定行为的路由默认审计（fail-closed），避免漏审
     route = request.scope.get("route")
-    route_tags = [str(tag).strip() for tag in (getattr(route, "tags", None) or []) if str(tag or "").strip()]
-    if route_tags:
-        request_tags = ",".join(route_tags)
-    action: str = classify_summary_action(
-        getattr(route, "summary", None) or request_summary,
-        request_method,
-    )
-    if action not in AUDITED_ACTIONS:
+    resource = getattr(route, "resource", None)
+    request_tags = resource.value if resource is not None else LEGACY_TAG
+    # 路由对象在 call_next 后才挂到 scope，摘要直接从路由读取，避免单独维护路径字典
+    request_summary: str = getattr(route, "summary", None) or "未定义"
+    action: str = getattr(route, "action", None) or derive_action(request_method, request_router)
+    # 403 拒绝事件即使落在查询接口也必须留痕：拒绝信号由异常处理器写入共享 request.state，
+    # 正常查询不消费响应体，只有拒绝请求进入下方审计管线（与写操作同口径记录业务参数）
+    denied: bool = bool(getattr(request.state, "audit_denied", False))
+    if action not in AUDITED_ACTIONS and action != ACTION_UNKNOWN and not denied:
         return response
 
     # 判断是否管控响应
@@ -204,14 +205,16 @@ async def logging_middleware(request: Request, call_next):
 
     response_header: dict = dict(response.headers)
 
-    # 路由排除（静态文件&OpenApi文档）
-    if not request_router.startswith("/static/") and request_router not in (
+    # 路由排除（静态文件&OpenApi文档&审计自身查询）；拒绝事件响应体很小，
+    # 即使是排除路由也要落审计，避免越权探测无痕
+    excluded_route: bool = request_router.startswith("/static/") or request_router in (
             '/',
             '/base/audit/list',
             PROJECT_CONFIG.APP_DOCS_URL,
             PROJECT_CONFIG.APP_REDOC_URL,
             PROJECT_CONFIG.APP_OPENAPI_URL,
-    ):
+    )
+    if not excluded_route or denied:
         # 消费响应体
         if is_download:
             response_body: bytes = b"<FILE DOWNLOAD>"
@@ -241,13 +244,12 @@ async def logging_middleware(request: Request, call_next):
         response_time: str = time.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2, time.localtime(end_time))
         response_elapsed = f"{end_time - start_time:.2f}s"
 
-        # 仅审计写请求额外承担一次JSON解析：凭证字段（密码/令牌等）入库前脱敏，
-        # 非JSON请求体（如XML原文）无法结构化处理则原样记录
+        # JSON请求保留结构并递归脱敏；无法可靠解析的非JSON原文不落审计，避免口令/XML秘密绕过字段级脱敏
         body_text: str = request_body.decode("utf-8", errors="ignore") if isinstance(request_body, bytes) else (request_body or "")
         try:
             masked_body: str = orjson.dumps(_mask_sensitive(orjson.loads(body_text))).decode()
         except orjson.JSONDecodeError:
-            masked_body = body_text
+            masked_body = NON_JSON_CONTENT if body_text else ""
 
         # 记录日志
         audit_log: Dict[str, Any] = {
@@ -267,17 +269,21 @@ async def logging_middleware(request: Request, call_next):
             try:
                 _response = orjson.loads(response_body)
             except orjson.JSONDecodeError:
-                # 非JSON响应(如纯文本)不阻断审计，仅跳过响应体解析
+                # 非JSON响应无法保证字段级脱敏，仅保留类型占位符，避免纯文本秘密进入审计与日志
                 _response = {}
-            audit_log["response_code"] = _response.get("code", "")
-            audit_log["response_message"] = _response.get("message", "")[:512]
-            audit_log["response_params"] = response_body
+                masked_response_body = NON_JSON_CONTENT
+            else:
+                masked_response_body = orjson.dumps(_mask_sensitive(_response)).decode()
+            audit_log["response_code"] = _response.get("code", "") if isinstance(_response, dict) else ""
+            response_message = _response.get("message", "") if isinstance(_response, dict) else ""
+            audit_log["response_message"] = str(response_message)[:512]
+            audit_log["response_params"] = masked_response_body
             del _response
 
         request_message: str = (
             f"\n> > > > > > > > > > > > > > > > > > > >\n"
             f"请求时间：{audit_log.get('request_time')}\n"
-            f"请求模块：{audit_log.get('request_tags')}\n"
+            f"请求模块：{ResourceTag.label_of(request_tags)}\n"
             f"请求接口：{audit_log.get('request_summary')}\n"
             f"请求方式：{audit_log.get('request_method')}\n"
             f"请求路由：{audit_log.get('request_router')}\n"
@@ -299,7 +305,7 @@ async def logging_middleware(request: Request, call_next):
             user_obj: Optional[User] = None
             token = request.headers.get("token")
             if token:
-                user_obj: User = await AuthControl.is_authed(token)
+                user_obj: User = await AuthControl.is_authed(request=request, token=token)
             audit_log["user_id"] = user_obj.id if user_obj else 0
             audit_log["username"] = user_obj.username if user_obj else ""
         except Exception as e:

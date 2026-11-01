@@ -6,11 +6,14 @@
 @Module  : user_crud.py
 @DateTime: 2025/1/18 11:36
 """
+import traceback
 from datetime import datetime
 from typing import Any, Dict, Tuple, Optional, Union, List
 
-from tortoise.exceptions import DoesNotExist
+from tortoise.exceptions import DoesNotExist, IntegrityError
+from tortoise.transactions import in_transaction
 
+from backend.applications.base.models.role_model import Role
 from backend.applications.base.schemas.token_schema import CredentialsSchema
 from backend.applications.base.services.role_crud import RoleCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -28,7 +31,6 @@ from backend.core.exceptions import (
     ParameterException,
     ResInvalidException,
 )
-from backend.core.responses import ForbiddenResponse
 from backend.enums import BuiltinRoleCode
 from backend.services import verify_password, get_password_hash
 
@@ -134,7 +136,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
     async def create_user(self, user_in: UserCreate) -> User:
         """
-        创建用户：校验唯一性、哈希密码、落库并绑定角色。
+        创建用户：校验唯一性、哈希密码、单事务落库并绑定角色。
 
         :param user_in: 新增用户入参
         :return: 新建的用户实例
@@ -151,10 +153,20 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
+        # 先校验角色再落库：角色非法时不能留下无角色用户，也避免并发下只写一半
+        roles: List[Role] = await self._load_bind_roles(user_in.role_ids)
         user_data = user_in.create_dict()
         user_data["password"] = get_password_hash(password=user_in.password)
-        instance = await self.create(user_data)
-        await self.update_roles(instance, user_in.role_ids or [])
+        try:
+            async with in_transaction():
+                instance = await self.create(user_data)
+                if roles:
+                    await instance.roles.add(*roles)
+        except IntegrityError as e:
+            # 并发同名/同邮箱：预校验会同时通过，靠唯一索引收敛为业务已存在并回滚角色绑定
+            error_message: str = f"新增用户信息失败, 记录[username={username}, email={email}]信息已存在"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataAlreadyExistsException(message=error_message) from e
         return instance
 
     async def delete_user(self, user_id: int, **kwargs) -> User:
@@ -207,33 +219,62 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             error_message: str = f"更新用户信息失败, 记录[id={user_id}]不存在"
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
+        except IntegrityError as e:
+            # 并发改名/改邮箱撞唯一索引与创建同口径，返回已存在而非服务异常
+            error_message: str = f"更新用户信息失败, 记录[id={user_id}]的账号/姓名+邮箱与已有记录冲突"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataAlreadyExistsException(message=error_message) from e
 
         return instance
 
     @classmethod
+    async def _load_bind_roles(cls, role_ids: Optional[List[int]]) -> List[Role]:
+        """
+        批量校验待绑定角色：一次查库，非法ID统一报400400，避免逐条查询与半途清空。
+
+        :param role_ids: 待绑定角色ID列表
+        :return: 有效角色实例列表
+        """
+        unique_ids: List[int] = list(dict.fromkeys(role_ids or []))
+        if not unique_ids:
+            return []
+        # Role 采用硬删除，无 state 字段；按主键一次取全，缺失即视为非法引用
+        roles: List[Role] = await Role.filter(id__in=unique_ids)
+        found_ids = {role.id for role in roles}
+        missing_ids = [role_id for role_id in unique_ids if role_id not in found_ids]
+        if missing_ids:
+            error_message: str = f"角色信息不存在, 非法角色ID: {missing_ids}"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        return roles
+
+    @classmethod
     async def update_roles(cls, user: User, role_ids: List[int]) -> None:
         """
-        重置用户角色关联：先清空再根据role_ids重新绑定。
+        重置用户角色关联：先校验再清空后重建，非法角色不会破坏已有绑定。
 
         :param user: 用户实例
         :param role_ids: 角色ID列表；空列表表示清空
         :return: None
         """
+        roles: List[Role] = await cls._load_bind_roles(role_ids)
         await user.roles.clear()
-        for role_id in role_ids or []:
-            role_obj = await RoleCrud().get_or_error(id=role_id)
-            await user.roles.add(role_obj)
+        if roles:
+            await user.roles.add(*roles)
 
-    async def reset_password(self, user_id: int):
+    async def reset_password(self, user_id: int) -> Dict[str, Any]:
         """
         管理员重置用户密码为默认值并吊销Token；超级用户不可重置。
 
         :param user_id: 用户ID
-        :return: 不含密码的用户字典，或ForbiddenResponse
+        :return: 不含密码的用户字典
+        :raises NoPermissionException: 目标用户为超级用户
         """
         instance = await self.get_or_error(id=user_id)
         if instance.is_superuser:
-            return ForbiddenResponse(message="不允许重置超级用户密码")
+            error_message: str = "不允许重置超级用户密码"
+            LOGGER.error(error_message)
+            raise NoPermissionException(message=error_message)
 
         instance.password = get_password_hash(password="KFuser01@!")
         instance.token_version += 1  # 吊销用户所有Token

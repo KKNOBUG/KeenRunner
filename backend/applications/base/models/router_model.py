@@ -19,6 +19,7 @@ class Router(ScaffoldModel, MaintainMixin, TimestampMixin):
     method = fields.CharEnumField(HTTPMethod, description="路由请求方式")
     summary = fields.CharField(max_length=255, index=True, description='路由作用简介')
     tags = fields.CharField(max_length=255, index=True, description='路由所属标签')
+    available_only_admin = fields.BooleanField(default=False, description='仅管理员可用')
     description = fields.TextField(null=True, description="路由功能描述")
 
     class Meta:

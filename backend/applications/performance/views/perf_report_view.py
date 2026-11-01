@@ -121,7 +121,7 @@ async def search_perf_reports(
         return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
 
 
-@perf_report.post("/metrics", summary="查询压测指标曲线", description="代理VictoriaMetrics查询压测指标时序曲线")
+@perf_report.post("/get_metrics", summary="查询压测指标曲线", description="代理VictoriaMetrics查询压测指标时序曲线")
 async def get_perf_report_metrics(
         metrics_in: PerfReportMetrics = Body(..., description="指标曲线查询条件"),
         services: PerfServices = Depends(get_perf_api_services),

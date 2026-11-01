@@ -29,3 +29,6 @@ class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):
 
     class Meta:
         table = "krun_menu"
+        # (name, path) 联合唯一：并发创建同名校验会同时通过，靠唯一索引兜底幂等
+        # (parent_id, path) 联合唯一：前端路由全路径=父path+子path，同级重复path会导致后注册路由不可达
+        unique_together = (("name", "path"), ("parent_id", "path"))

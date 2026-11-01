@@ -83,6 +83,7 @@ async def get_case_transfer(
     """
     try:
         instance = await services.case_transfer_curd.get_by_id(transfer_id=transfer_id, on_error=True)
+        await scope.load_owners([instance.prev_owner_user, instance.next_owner_user, instance.created_user])
         visible: bool = any(
             scope.can_read(owner)
             for owner in (instance.prev_owner_user, instance.next_owner_user, instance.created_user)
@@ -118,7 +119,7 @@ async def search_case_transfers(
     """
     try:
         q = Q()
-        if scope.read_owners is not None:
+        if scope.read_depts is not None:
             q &= (
                     scope.read_q("prev_owner_user")
                     | scope.read_q("next_owner_user")

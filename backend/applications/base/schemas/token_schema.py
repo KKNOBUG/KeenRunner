@@ -9,7 +9,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TokenBase(BaseModel):
@@ -32,8 +32,18 @@ class TokenBase(BaseModel):
 class CredentialsSchema(TokenBase):
     """登录凭证入参。"""
 
-    username: str = Field(..., max_length=32, description="用户账号[电子邮箱或手机号码]")
-    password: str = Field(..., max_length=255, description="用户密码[a-zZ-Z0-9_-.*@!]")
+    username: str = Field(..., min_length=1, max_length=32, description="用户账号[电子邮箱或手机号码]")
+    password: str = Field(..., min_length=1, max_length=255, description="用户密码[a-zZ-Z0-9_-.*@!]")
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def _validate_username(cls, value):
+        """登录账号去空白；空白账号按参数错误拒绝，避免落入用户不存在分支。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[username]不允许为空")
+        return value
 
 
 class JWTOut(TokenBase):

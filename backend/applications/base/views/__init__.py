@@ -9,25 +9,18 @@
 from fastapi import APIRouter
 
 from .audit_view import audit
-from .auth_view import auth_public, auth_secure
 from .file_transfer_view import file_transfer
 from .menu_view import menu
 from .role_view import role
 from .router_view import router
 
-base_public = APIRouter()
-base_secure = APIRouter()
 router_secure = APIRouter()
 menu_secure = APIRouter()
 role_secure = APIRouter()
 audit_secure = APIRouter()
 file_secure = APIRouter()
 
-# 公共端点(无全局认证/ RBAC依赖)
-base_public.include_router(auth_public, prefix="/auth")
-
 # 安全端点(要求认证+ RBAC依赖)
-base_secure.include_router(auth_secure, prefix="/auth")
 router_secure.include_router(router, prefix="/router")
 menu_secure.include_router(menu, prefix="/menu")
 role_secure.include_router(role, prefix="/role")

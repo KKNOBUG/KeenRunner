@@ -9,10 +9,10 @@ import { getToken } from '@/utils'
  */
 export default {
   // 登录相关
-  login: (data) => request.post('/base/auth/access_token', data, { noNeedToken: true }),
-  getUserInfo: () => request.post('/base/auth/userinfo'),
-  getUserMenu: () => request.post('/base/auth/usermenu'),
-  getUserRouters: () => request.post('/base/auth/get_user_routers'),
+  login: (data) => request.post('/user/login', data, { noNeedToken: true }),
+  getUserInfo: () => request.post('/user/get_userinfo'),
+  getUserMenu: () => request.post('/user/menu/list'),
+  getUserRouters: () => request.post('/user/get_user_routers'),
   // 用户相关
   getUserList: (params = {}) => request.get('/user/list', { params }),
   getUserById: (params = {}) => request.get('/user/get', { params }),
@@ -86,12 +86,10 @@ export default {
   /** 批量删除：Body { env_ids?: number[] } 或 { env_codes?: string[] } */
   deleteEnvBatch: (data = {}) => request.post('/autotest/env/deletes', data),
   updateEnv: (data = {}) => request.post('/autotest/env/update', data),
-  /** 环境分页搜索（默认大页全量；传入 data 可覆盖 page/page_size/state） */
-  getEnvList: (data = {}) => request.post('/autotest/env/search', { page: 1, page_size: 9999, state: 0, ...data }),
   /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } */
   listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
   /** 环境分页列表（聚合应用名/是否可删）。Body: project_id/env_name/env_type/ip/config_name + 分页 */
-  getEnvPage: (data = {}) => request.post('/autotest/env/page', data),
+  getEnvPage: (data = {}) => request.post('/autotest/env/search_page', data),
   /** Body: { project_ids: number[] } -> project_id -> env_name -> api|file|database|redis -> config_name -> {config_host,...} */
   queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/env/query', data),
   /** 全部启用应用（环境侧）。Query: page/page_size */
@@ -138,7 +136,7 @@ export default {
   getTagList: (data = {}) => request.post('/autotest/tag/search', { page: 1, page_size: 9999, state: 0, ...data }),
 
   // 工具箱相关
-  generateInfo: (data = {}) => request.post('/toolbox/generate/info', data),
+  generateInfo: (data = {}) => request.post('/toolbox/generate/create_info', data),
 
   // ---------- autotest：用例 / 步骤 / 报告 / 任务 ----------
   getApiTestcaseList: (data = {}) => request.post('/autotest/case/search', data),
@@ -176,7 +174,7 @@ export default {
     return request.get(`/autotest/step/tree${params.length ? '?' + params.join('&') : ''}`)
   },
   /** Body: { case_ids?: number[], case_codes?: string[] } —— 批量查询多用例步骤树并拼接为一个列表 */
-  spliceStepTree: (data = {}) => request.post('/autotest/step/splice_tree', data),
+  spliceStepTree: (data = {}) => request.post('/autotest/step/build_splice_tree', data),
   /**
    * 复制用例步骤树（返回未保存的副本，不含 step_id/step_code 等更新必填项）
    * 后端接口：GET /autotest/step/copy_tree?case_id=X 或 ?case_code=X
@@ -227,7 +225,7 @@ export default {
   deleteApiReportBatch: (data = {}) => request.post('/autotest/report/deletes', data),
   // 明细相关
   getApiDetailList: (data = {}) => request.post('/autotest/detail/search', data),
-  getApiDetailTree: (data = {}) => request.post('/autotest/detail/tree', data),
+  getApiDetailTree: (data = {}) => request.post('/autotest/detail/search_tree', data),
   getApiDetail: (params = {}) => {
     const queryParams = []
     if (params.detail_id) queryParams.push(`detail_id=${params.detail_id}`)
@@ -255,7 +253,7 @@ export default {
   /** Body：{ task_id } —— 复制任务(完全复刻配置, 重置执行痕迹并停用调度) */
   copyApiTask: (data = {}) => request.post('/autotest/task/copy', data),
   // 定时执行预览（近10次触发时间）
-  previewTaskSchedule: (data = {}) => request.post('/autotest/task/schedule_preview', data),
+  previewTaskSchedule: (data = {}) => request.post('/autotest/task/get_schedule_preview', data),
   // 任务执行记录
   getApiTaskRecordList: (data = {}) => request.post('/autotest/task/record/search', data),
   /** params：record_id —— 删除终态执行记录并物理清理产物文件 */
@@ -448,7 +446,7 @@ export default {
   /** Query：report_id 或 report_code —— 报告详情（含 locust_stats 快照） */
   getPerfReport: (params = {}) => request.get('/perf/report/get', { params }),
   /** Body：PerfReportMetrics —— 指标曲线（代理 VictoriaMetrics query_range） */
-  getPerfReportMetrics: (data = {}) => request.post('/perf/report/metrics', data),
+  getPerfReportMetrics: (data = {}) => request.post('/perf/report/get_metrics', data),
   /** Query：report_code + baseline_code —— 对比两份报告（双侧指标对照 + 配置差异明细） */
   getPerfReportSnapshotDiff: (params = {}) => request.get('/perf/report/snapshot_diff', { params }),
   /** Query：report_code —— 报告产物清单（场景快照/引擎日志/结果分片；裸 axios 直连，404=无产物由调用方静默处理） */

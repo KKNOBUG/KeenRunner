@@ -207,7 +207,7 @@ _SAMPLE_REQUEST_XML = """<?xml version="1.0" encoding="UTF-8"?>
 </Request>"""
 
 
-@autotest_http_xml_test.post(path="/xml", summary="执行HTTP/XML测试", description="保险理赔申请")
+@autotest_http_xml_test.post(path="/execute", summary="执行HTTP/XML测试", description="保险理赔申请")
 async def http_xml_test(
         request: Request,
 ):

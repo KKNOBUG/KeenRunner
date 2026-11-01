@@ -7,8 +7,10 @@
 @DateTime: 2025/2/3 16:31
 """
 import datetime
+import traceback
 from typing import Any, Dict, Optional, List
 
+from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
@@ -107,8 +109,16 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        instance = await self.create(department_in)
-        await self.update_dept_closure(instance)
+        try:
+            # 部门主记录与闭包关系必须同时提交，任一步失败均回滚，避免残留半完成部门
+            async with in_transaction():
+                instance = await self.create(department_in)
+                await self.update_dept_closure(instance)
+        except IntegrityError as e:
+            # 并发创建同 code/name：预校验会同时通过，靠唯一索引收敛为业务已存在
+            error_message: str = f"创建部门信息失败, 记录[code={code},name={name}]信息已存在"
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataAlreadyExistsException(message=error_message) from e
         return instance
 
     async def _assert_department_not_referenced(self, instance: Department) -> None:
@@ -173,13 +183,23 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
                 error_message: str = "更新部门信息失败, 含有子部门的顶级部门不能设置为子部门"
                 LOGGER.error(error_message)
                 raise ParameterException(message=error_message)
-            # 先清旧闭包，字段更新后再按新parent_id重建
-            await DeptStruct.filter(ancestor=instance.id).delete()
-            await DeptStruct.filter(descendant=instance.id).delete()
 
-        instance = await self.update(id=department_id, obj_in=department_in)
-        if parent_changed:
-            await self.update_dept_closure(instance)
+        try:
+            # 闭包重建与字段更新同事务：唯一冲突回滚时不能丢失旧闭包
+            async with in_transaction():
+                if parent_changed:
+                    # 先清旧闭包，字段更新后再按新parent_id重建
+                    await DeptStruct.filter(ancestor=instance.id).delete()
+                    await DeptStruct.filter(descendant=instance.id).delete()
+                instance = await self.update(id=department_id, obj_in=department_in)
+                if parent_changed:
+                    await self.update_dept_closure(instance)
+        except IntegrityError as e:
+            error_message: str = (
+                f"更新部门信息失败, 记录[code={department_in.code}, name={department_in.name}]信息已存在"
+            )
+            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            raise DataAlreadyExistsException(message=error_message) from e
         return instance
 
     async def get_dept_tree(self, name: Optional[str] = None) -> List[dict]:

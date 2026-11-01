@@ -142,12 +142,14 @@ const tagScopeColumns = [
     key: 'tag',
     ellipsis: {tooltip: true},
     render: (row) => {
+      // 展示资源族中文名，tag 为后端持久化编码（与路由契约同源）
+      const label = row.tag_label || row.tag
       // 只标注显式覆盖过的行；未覆盖即按角色默认范围生效，不再重复标注避免干扰阅读
       const overridden = row.select_scope || row.update_scope || row.delete_scope
-      if (!overridden) return row.tag
+      if (!overridden) return label
       return h(NSpace, {size: 6, align: 'center', wrap: false}, {
         default: () => [
-          h('span', row.tag),
+          h('span', label),
           h(NTag, {size: 'tiny', bordered: false, type: 'warning'}, {default: () => '已覆盖'}),
         ],
       })
@@ -170,16 +172,19 @@ const tagScopeColumns = [
   },
 ]
 
-/** 标签范围列表跟随抽屉顶部的筛选关键字 */
+/** 标签范围列表跟随抽屉顶部的筛选关键字：编码与中文名都可命中 */
 const filteredTagScopeRows = computed(() => {
-  const keyword = pattern.value.trim()
+  const keyword = pattern.value.trim().toLowerCase()
   if (!keyword) return tagScopeRows.value
-  return tagScopeRows.value.filter((row) => row.tag.includes(keyword))
+  return tagScopeRows.value.filter((row) =>
+    `${row.tag_label || ''} ${row.tag}`.toLowerCase().includes(keyword)
+  )
 })
 
 function normalizeTagScopes(payload) {
   return (payload || []).map((row) => ({
     tag: row.tag,
+    tag_label: row.tag_label || row.tag,
     select_scope: row.select_scope || '',
     update_scope: row.update_scope || '',
     delete_scope: row.delete_scope || '',
@@ -769,15 +774,15 @@ async function updateRoleAuthorized() {
               </div>
             </NTabPane>
             <NTabPane name="tagScope" tab="标签范围" display-directive="show">
-              <NDataTable
-                  class="role-auth-scope-table"
-                  size="small"
-                  flex-height
-                  :columns="tagScopeColumns"
-                  :data="filteredTagScopeRows"
-                  :row-key="(row) => row.tag"
-                  :virtual-scroll="false"
-              />
+              <div class="role-auth-scroll">
+                <NDataTable
+                    class="role-auth-scope-table"
+                    size="small"
+                    :columns="tagScopeColumns"
+                    :data="filteredTagScopeRows"
+                    :row-key="(row) => row.tag"
+                />
+              </div>
             </NTabPane>
           </NTabs>
         </template>
@@ -845,8 +850,9 @@ async function updateRoleAuthorized() {
   user-select: text;
 }
 
+/* 表格按内容自适应高度，溢出交给外层滚动区域，避免固定高度裁掉末行 */
 .role-auth-scope-table {
-  height: 100%;
+  width: 100%;
 }
 
 /* 接口权限行：方法标签 + 摘要 + 灰色路径，路径过长省略；节点由 render 函数生成，需 :deep 命中 */
