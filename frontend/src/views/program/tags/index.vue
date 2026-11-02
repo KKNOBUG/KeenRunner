@@ -244,7 +244,7 @@ onMounted(async () => {
   } finally {
     projectLoading.value = false
   }
-  // 进入页面不自动请求表格数据，由用户点击「搜索」按钮时再请求
+  // 标签列表由 CrudTable 首次挂载自动查询
 })
 
 const columns = computed(() => {

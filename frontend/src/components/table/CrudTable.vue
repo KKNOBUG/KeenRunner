@@ -102,6 +102,11 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  /** 是否首次挂载自动查询；抽屉、折叠面板等按需加载场景可关闭 */
+  autoLoad: {
+    type: Boolean,
+    default: true,
+  },
   /** 透传给 QueryBar 的 props（如 addReset、addSearch、actionMode=split 等） */
   queryBarProps: {
     type: Object,
@@ -154,6 +159,8 @@ const pagination = reactive({
   page: 1,
   /** 与 Naive Pagination 字段一致；请求接口时映射为 page_size */
   pageSize: 10,
+  /** 必须提供真实初始总数，避免组件按页数乘每页条数推导出虚假的10条 */
+  itemCount: 0,
   pageSizes: [10, 20, 50, 100],
   showSizePicker: true,
   prefix({ itemCount }) {
@@ -201,6 +208,14 @@ async function handleQuery() {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  // 首次挂载加载；KeepAlive 再激活复用现有数据，避免切换页签重复请求
+  if (props.autoLoad) {
+    handleQuery()
+  }
+})
+
 function handleSearch() {
   pagination.page = 1
   handleQuery()

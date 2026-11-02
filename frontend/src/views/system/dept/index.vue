@@ -107,7 +107,6 @@ const parentDeptOptions = computed(() => {
 
 onMounted(() => {
   getTreeSelect()
-  $table.value?.handleSearch()
 })
 
 const deptRules = {

@@ -199,7 +199,8 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             if record_in.task_type_in:
                 type_vals = [getattr(t, "value", t) for t in record_in.task_type_in]
                 q &= Q(task_type__in=type_vals)
-            else:
+            elif record_in.task_type is None:
+                # 默认排除仅用于异步中心缺省查询，显式单值类型不得再叠加相反条件
                 q &= Q(task_type__not_in=[
                     AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
                     AutoTestTaskType.SINGLE_CASE_EXECUTE,

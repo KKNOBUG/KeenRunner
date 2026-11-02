@@ -1,5 +1,5 @@
 <script setup>
-import { computed, h, onMounted, ref, resolveDirective, withDirectives } from 'vue'
+import { computed, h, ref, resolveDirective, withDirectives } from 'vue'
 import {NButton, NForm, NFormItem, NInput, NPopconfirm, NSelect, NTag} from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -84,10 +84,6 @@ const {
   doDelete: api.deleteRouter,
   refresh: () => $table.value?.handleSearch(),
 
-})
-
-onMounted(() => {
-  $table.value?.handleSearch()
 })
 
 async function handleRefreshRouter() {

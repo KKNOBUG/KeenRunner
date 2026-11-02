@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { h, onMounted, onUnmounted, ref } from 'vue'
+import { h, onUnmounted, ref } from 'vue'
 import { NButton, NInput, NPopconfirm, NSelect, NSpace, NTag, NTooltip } from 'naive-ui'
 
 import CommonPage from '@/components/page/CommonPage.vue'
@@ -267,10 +267,6 @@ async function handleDelete(row) {
     /* 拦截器已提示 */
   }
 }
-
-onMounted(() => {
-  /* 首次列表由 CrudTable 自行加载 */
-})
 
 onUnmounted(() => {
   stopPolling()

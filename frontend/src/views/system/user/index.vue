@@ -99,11 +99,6 @@ const {
   refresh: () => $table.value?.handleSearch(),
 })
 
-onMounted(() => {
-  $table.value?.handleSearch()
-})
-
-
 const roleOption = ref([])
 const deptOption = ref([])
 

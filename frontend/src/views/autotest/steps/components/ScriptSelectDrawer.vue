@@ -22,6 +22,7 @@
           :is-pagination="true"
           :columns="columns"
           :get-data="getData"
+          :auto-load="false"
           :row-key="'case_id'"
       >
         <template #queryBar>

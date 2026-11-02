@@ -41,6 +41,7 @@ def _route_method(route: APIRoute) -> str:
 
 def _route_dependency_funcs(route: APIRoute) -> Set[object]:
     """递归收集路由全部依赖（含 include_router、装饰器与视图参数三处声明）。"""
+
     def walk(dependant: Dependant) -> Iterator[object]:
         for sub in dependant.dependencies:
             if sub.call is not None:
@@ -103,13 +104,10 @@ def validate_route_contracts(app: FastAPI) -> List[str]:
         if resource is None:
             issues.append(f"资源族未登记 tags={route.tags} {method} {route.path}")
         if action == ACTION_UNKNOWN:
-            issues.append(f"路径末段缺少已知动词 {method} {route.path}")
+            issues.append(f"路径末段不符 缺少预定义词根 {method} {route.path}")
 
     for issue in issues:
         LOGGER.error(f"[权限契约] {issue}")
     if issues:
-        LOGGER.error(
-            f"[权限契约] 共 {len(issues)} 项待修正，启动继续；"
-            f"请按 backend/README.md「接口路径与行为规范」修正"
-        )
+        LOGGER.error(f"[权限契约] 共 {len(issues)} 项待修正，启动继续；")
     return issues

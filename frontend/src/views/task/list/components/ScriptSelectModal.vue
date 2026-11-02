@@ -390,6 +390,7 @@ defineExpose({ collapse })
         :is-pagination="true"
         :columns="columns"
         :get-data="getData"
+        :auto-load="false"
         :row-key="'case_id'"
         :scroll-x="1200"
         :single-line="true"

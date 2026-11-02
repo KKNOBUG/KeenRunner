@@ -109,7 +109,7 @@ const pagination = reactive({
   pageSizes: [10, 20, 50, 100],
   itemCount: 0,
   prefix({ itemCount }) {
-    return `共 ${itemCount} 条记录`
+    return `共 ${itemCount} 条`
   },
 })
 
@@ -123,7 +123,7 @@ const batchPagination = reactive({
   pageSizes: [10, 20, 50, 100],
   itemCount: 0,
   prefix({ itemCount }) {
-    return `共 ${itemCount} 条记录`
+    return `共 ${itemCount} 条`
   },
 })
 const detailDrawerVisible = ref(false)

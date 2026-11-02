@@ -369,6 +369,7 @@ const columns = computed(() => {
         :is-pagination="true"
         :columns="columns"
         :get-data="getData"
+        :auto-load="false"
         :query-bar-props="queryBarProps"
         :row-key="'case_id'"
         :scroll-x="1320"

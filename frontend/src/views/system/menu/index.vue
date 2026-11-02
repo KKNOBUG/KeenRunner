@@ -82,7 +82,6 @@ const {
 
 onMounted(() => {
   getTreeSelect()
-  $table.value?.handleSearch()
 })
 
 // 是否展示 "菜单类型"

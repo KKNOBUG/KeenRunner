@@ -1,5 +1,5 @@
 <script setup>
-import {computed, h, onMounted, ref, resolveDirective, withDirectives} from 'vue'
+import {computed, h, ref, resolveDirective, withDirectives} from 'vue'
 import {
   NAlert,
   NButton,
@@ -92,11 +92,6 @@ const {
   doUpdate: api.updateRole,
   refresh: () => $table.value?.handleSearch(),
 })
-
-onMounted(() => {
-  $table.value?.handleSearch()
-})
-
 
 const pattern = ref('')
 const menuOption = ref([]) // 菜单选项
