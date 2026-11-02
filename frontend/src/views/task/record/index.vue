@@ -9,6 +9,7 @@
         :remote="true"
         :columns="columns"
         :get-data="getTaskRecordList"
+        :extra-params="extraParams"
         :scroll-x="3050"
         :single-line="true"
         row-key="record_id"
@@ -117,6 +118,8 @@ import TextPreviewModal from '@/components/common/TextPreviewModal.vue'
 import api from '@/api'
 import { useApiPermission, useBatchDeleteGuard } from '@/composables'
 import { formatDateTime, formatJsonBrief, resultPayloadOf, toPrettyJson } from '@/utils'
+import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { TASK_RECORD_TASK_TYPE_VALUES } from '@/constants/autotestTaskType'
 
 defineOptions({ name: '执行记录' })
 
@@ -128,6 +131,8 @@ function hasDownloadPermission() {
 
 const $table = ref(null)
 const queryItems = ref({})
+/** 执行记录页只展示任务执行类型；缺省时后端会按异步中心口径排除这些记录 */
+const extraParams = { task_type_in: TASK_RECORD_TASK_TYPE_VALUES }
 const checkedRowKeys = ref([])
 const { pickDeletableIds } = useBatchDeleteGuard()
 
@@ -242,17 +247,7 @@ const downloadAttachment = async (row, att) => {
   }
   try {
     const res = await api.downloadApiTaskRecordAttachment(recordId, att?.key || 'main')
-    const blob = new Blob([res.data], { type: att?.content_type || 'application/octet-stream' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
-    const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd) || /filename="?([^";]+)"?/i.exec(cd)
-    link.download = matched?.[1] ? decodeURIComponent(matched[1]) : (att?.name || 'download.bin')
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    await downloadBlobResponse(res, att?.name || 'download.bin')
   } catch (e) {
     window.$message?.error?.(e?.message || '下载失败')
   }

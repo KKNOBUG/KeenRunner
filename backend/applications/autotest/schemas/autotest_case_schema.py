@@ -68,12 +68,32 @@ class AutoTestCaseCreate(AutoTestCaseBase):
     session_transfer: AutoTestSessionTransfer = Field(default=AutoTestSessionTransfer.DISABLE, description="变量池传递开关")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
+    @field_validator("case_name", mode="before")
+    @classmethod
+    def _validate_case_name(cls, value: Any) -> Any:
+        """用例名称去空白；纯空白名称直接拒绝，避免绕过同名唯一约束。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[case_name]不允许为空")
+        return value
+
 
 class AutoTestCaseUpdate(AutoTestCaseMeta, AutoTestCaseBase):
     """更新用例入参。"""
 
     case_desc: Optional[str] = Field(None, max_length=2048, description="用例描述")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+
+    @field_validator("case_name", mode="before")
+    @classmethod
+    def _validate_case_name(cls, value: Any) -> Any:
+        """更新时同样禁止把用例名称改成空白。"""
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("参数[case_name]不允许为空")
+        return value
 
 
 class AutoTestCaseScriptGenerate(BaseModel):

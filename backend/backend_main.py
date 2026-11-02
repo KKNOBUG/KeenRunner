@@ -33,7 +33,7 @@ except ImportError as e:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN:
-        LOGGER.warning("[安全] 已启用开发联通阶段临时令牌(AUTH_TEMPORARY_TOKEN), 生产环境请置空禁用;")
+        LOGGER.warning("[安全] 已启用开发联调阶段临时令牌(AUTH_TEMPORARY_TOKEN), 生产环境请置空禁用;")
     # 路由已全部注册，启动时统一绑定契约并自检；问题只告警不阻断启动
     bind_route_contracts(app)
     validate_route_contracts(app)

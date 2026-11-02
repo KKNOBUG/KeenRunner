@@ -469,7 +469,7 @@ async def init_database_menu():
         Menu(
             menu_type=MenuType.MENU,
             name="App 测试",
-            path="ui",
+            path="app",
             order=2,
             parent_id=autotest_parent_menu.id,
             icon="gravity-ui:smartphone",

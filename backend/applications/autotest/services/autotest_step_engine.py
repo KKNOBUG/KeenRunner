@@ -3989,6 +3989,8 @@ class AutoTestStepExecutionEngine:
             当_save_report为True时，最后两项为待落库的报告创建体与明细列表（report_code 已统一），
             调用方在单事务内依次create_report、create_detail、update_case
         """
+        # 运行、调试及Worker共用此入口；缺省和空配置统一为空字典，后续可安全遍历
+        steps_execute_config = steps_execute_config or {}
         report_code: Optional[str] = None
         case_id: int = case.get("case_id")
         case_code: str = case.get("case_code")

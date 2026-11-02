@@ -392,6 +392,14 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 case_block = {**case_block, "case_id": None, "case_code": None}
             children = [strip_step_for_copy_model(c) for c in (step.children or [])]
             quotes = [strip_step_for_copy_model(q) for q in (step.quote_steps or [])]
+            branches = [
+                branch.model_copy(update={
+                    "branch_children": [
+                        strip_step_for_copy_model(child) for child in (branch.branch_children or [])
+                    ] or None,
+                })
+                for branch in (step.branch_items or [])
+            ]
             return step.model_copy(
                 update={
                     "step_id": None,
@@ -404,6 +412,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     "case": case_block,
                     "children": children or None,
                     "quote_steps": quotes or [],
+                    "branch_items": branches or None,
                 }
             )
 
@@ -1683,7 +1692,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             case_cfg = (cases_cfg_map.get(str(case_id)) or cases_cfg_map.get(case_id) or {})
             if not isinstance(case_cfg, dict):
                 case_cfg = {}
-            per_steps_cfg = case_cfg.get("steps_execute_config") or steps_execute_config
+            per_steps_cfg = case_cfg.get("steps_execute_config")
+            if per_steps_cfg is None:
+                per_steps_cfg = steps_execute_config
+            # 显式空字典与缺省配置都表示无覆盖，不能继续向下游传递None
+            per_steps_cfg = per_steps_cfg or {}
             # dataset_enabled为任务级全局开关(独立字段)：启用时各用例自动纳入其全部数据场景(去重，保持出现顺序)
             dataset_names = await _load_case_dataset_names(case_id) if dataset_enabled else []
             if not isinstance(dataset_names, list):

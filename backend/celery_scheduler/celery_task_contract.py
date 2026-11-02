@@ -178,12 +178,15 @@ def _attachments_from_raw(raw: Any) -> List[Dict[str, Any]]:
             return out
     file_path = raw.get("file_path")
     file_name = raw.get("file_name")
-    if not file_path and not file_name:
+    # 导入任务的file_name只是源文件元信息；只有真实落盘产物才能登记为可下载附件
+    if not file_path:
         return []
-    path = str(file_path or "")
-    name = str(file_name or (os.path.basename(path) if path else "download.bin"))
-    storage_key = path_to_storage_key(path) if path else f"autotest_export/{name}"
-    return [_build_attachment(name=name, storage_key=storage_key, file_path=path or None)]
+    path = str(file_path)
+    if not os.path.isfile(path):
+        return []
+    name = str(file_name or os.path.basename(path))
+    storage_key = path_to_storage_key(path)
+    return [_build_attachment(name=name, storage_key=storage_key, file_path=path)]
 
 
 def normalize_task_summary(retval: Any, *, pipeline_ok: bool = True) -> Dict[str, Any]:

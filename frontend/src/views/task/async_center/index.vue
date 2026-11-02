@@ -60,6 +60,7 @@ import api from '@/api'
 import { useApiPermission, useBatchDeleteGuard } from '@/composables'
 import { useUserStore } from '@/store'
 import { formatDateTime, renderIcon } from '@/utils'
+import { downloadBlobResponse } from '@/utils/common/downloadFile'
 import {
   ASYNC_CENTER_TASK_TYPE_OPTIONS,
   ASYNC_CENTER_TASK_TYPE_VALUES,
@@ -144,17 +145,7 @@ const downloadAttachment = async (row, att) => {
   }
   try {
     const res = await api.downloadApiTaskRecordAttachment(recordId, att?.key || 'main')
-    const blob = new Blob([res.data], { type: att?.content_type || 'application/octet-stream' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    const cd = res?.headers?.['content-disposition'] || res?.headers?.['Content-Disposition'] || ''
-    const matched = /filename\*=UTF-8''([^;]+)/i.exec(cd) || /filename="?([^";]+)"?/i.exec(cd)
-    link.download = matched?.[1] ? decodeURIComponent(matched[1]) : (att?.name || 'download.bin')
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    await downloadBlobResponse(res, att?.name || 'download.bin')
   } catch (e) {
     window.$message?.error?.(e?.message || '下载失败')
   }
