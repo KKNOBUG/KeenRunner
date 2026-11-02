@@ -209,7 +209,7 @@ views (/http_debugging, /tcp_debugging)
 
 ### 3.4 user / department / toolbox
 
-- `user/`：用户模型 + CRUD + 视图；单删与批量删除均为**软删除**（`state=1` 并递增 `token_version` 吊销 Token）；`/user/update` 仅在显式传 `role_ids` 时重建角色绑定，局部更新（如调岗）不清空既有授权。登录与当前用户自身接口收在 `user_view.py`：公开 `POST /user/login`、`POST /user/transfer_login`；仅认证 `POST /user/get_userinfo`、`POST /user/menu/list`、`POST /user/get_user_routers`、`POST /user/update_password`、`POST /user/logout`（不做 RBAC 鉴权，也不能被角色绑定）。
+- `user/`：用户模型 + CRUD + 视图；单删与批量删除均为**软删除**（`state=1` 并递增 `token_version` 吊销 Token）；`/user/update` 仅在显式传 `role_ids` 时重建角色绑定，局部更新（如调岗）不清空既有授权。登录与当前用户自身接口收在 `user_view.py`：公开 `POST /user/login`、`POST /user/transfer_login`；仅认证 `POST /user/get_userinfo`、`POST /user/menu/list`、`POST /user/get_user_routers`、`POST /user/update_password`（不做 RBAC 鉴权，也不能被角色绑定）；`POST /user/logout` 为公开幂等登出，由中间件可选认证，有效 Token 吊销全部会话，失效或无 Token 不修改用户数据并返回成功。
 - `department/`：部门模型 + CRUD + 视图；单删为**物理删除**，批量删除为**软删除**（`state=1`）；两条路径都拒绝存在启用子部门或在用用户的部门，删除时在事务内清理闭包表 `krun_dept_nest`
 - `toolbox/`：代码生成等辅助工具（`views/generate_view.py`）
 
@@ -241,7 +241,7 @@ views (/http_debugging, /tcp_debugging)
 ### 4.3 中间件（core/middlewares/）
 
 - `app_middleware.py`：应用级日志与审计；仅 `AUDITED_ACTIONS`/`unknown` 落库，查询透传；取用户复用认证缓存，不再重复查库。
-- `auth_middleware.py`：非白名单请求统一先认证，**不做 RBAC**（RBAC 在路由依赖 `DependPermission`）；401 明细透传（含临时令牌过期提示），其余异常记录 `LOGGER.error` 后返回 500（不能用 401，否则前端会误登出）；白名单仅登录、根路径、docs 与 static。
+- `auth_middleware.py`：非白名单请求统一先认证，**不做 RBAC**（RBAC 在路由依赖 `DependPermission`）；Token 认证失败返回真实 HTTP 401，响应体仍保留统一业务码与明细（含临时令牌过期提示），其余异常记录 `LOGGER.error` 后返回 500（不能用 401，否则前端会误登出）；白名单仅登录、根路径、docs 与 static，`POST /user/logout` 单独使用可选认证白名单，失效凭证仅幂等放行登出，不能访问其他业务接口。
 - `request_context_middleware.py`：请求上下文（用户/租户注入）
 - 认证结果请求级缓存：`AuthControl.is_authed` 命中 `request.state.current_user` 时只重建 `CTX_USER_ID`/`CTX_USERNAME` 不查库；Starlette `BaseHTTPMiddleware` 与端点共享同一 `scope["state"]`，中间件 → 路由依赖 → 审计三处调用只查一次用户表。
 - 开发用临时令牌 `AUTH_TEMPORARY_TOKEN`：必须是**预签发的长效 JWT**（与登录令牌同密钥/算法，必含 `exp`/`user_id`/`token_version` 三个声明，`jwt.decode` 以 `options={"require": ...}` 强制校验），不是任意字符串；空值表示禁用；比对用 `hmac.compare_digest` 常量时间；启用时启动打印安全 WARNING，生产必须置空。

@@ -8,7 +8,7 @@
 """
 import traceback
 from datetime import timedelta, datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Body, Query, Depends, Request
 from tortoise.exceptions import IntegrityError
@@ -462,19 +462,24 @@ async def reset_password(
         return FailureResponse(message=f"重置失败，异常描述: {e}")
 
 
-@user_self.post("/logout", summary="注销访问令牌", description="注销当前登录用户的所有会话信息")
+# ==================== 公开端点：幂等登出（由中间件执行可选认证） ====================
+@user_public.post("/logout", summary="注销访问令牌", description="注销当前登录用户的所有会话信息")
 async def logout(
+        request: Request,
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    用户登出。
+    用户登出；有效Token吊销全部会话，失效或无Token仅返回幂等成功，不修改用户数据。
 
+    :param request: 当前请求，可选认证成功后由中间件写入current_user
     :param user_crud: 用户CRUD服务
     :return: 统一HTTP响应
     """
-    user_id = CTX_USER_ID.get()
+    current_user: Optional[User] = getattr(request.state, "current_user", None)
+    if current_user is None:
+        return SuccessResponse(message="登录状态已失效，已退出登录", data={}, total=0)
     try:
-        instance = await user_crud.logout(user_id=user_id)
+        instance = await user_crud.logout(user_id=int(current_user.id))
         data = await instance.to_dict(
             exclude_fields=["password"],
             replace_fields={"id": "user_id"}

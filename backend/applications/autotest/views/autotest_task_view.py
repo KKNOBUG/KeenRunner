@@ -304,7 +304,6 @@ async def search_tasks(
         for task_dict, obj in zip(data, instances):
             task_dict["steps_execute_env"] = extract_steps_execute_envs(task_dict.get("cases_execute_config"))
             task_dict["can_delete"] = scope.can_delete(obj.created_user)
-        LOGGER.info(f"根据条件分页查询任务列表信息成功, 结果数量: {total}")
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))

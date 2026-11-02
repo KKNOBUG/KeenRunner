@@ -51,7 +51,7 @@ export async function addDynamicRoutes() {
     } catch (error) {
         console.error('error', error)
         const userStore = useUserStore()
-        await userStore.logout()
+        userStore.clearSession()
     }
 }
 

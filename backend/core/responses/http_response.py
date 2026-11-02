@@ -120,8 +120,19 @@ class UnauthorizedResponse(BaseResponse):
     data = {}
     total = None
 
-    def __init__(self, message: Optional[str] = None, data: DataType = None, total: Optional[int] = None):
-        super(UnauthorizedResponse, self).__init__(message=message, data=data, total=total)
+    def __init__(
+            self,
+            message: Optional[str] = None,
+            data: DataType = None,
+            total: Optional[int] = None,
+            http_status_code: Optional[int] = None,
+    ):
+        super(UnauthorizedResponse, self).__init__(
+            http_status_code=http_status_code,
+            message=message,
+            data=data,
+            total=total,
+        )
 
 
 class ForbiddenResponse(BaseResponse):

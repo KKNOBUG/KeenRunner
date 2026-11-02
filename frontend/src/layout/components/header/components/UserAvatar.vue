@@ -40,9 +40,13 @@ function handleSelect(key) {
       title: t('header.label_logout_dialog_title'),
       type: 'warning',
       content: t('header.text_logout_confirm'),
-      confirm() {
-        userStore.logout()
-        $message.success(t('header.text_logout_success'))
+      async confirm() {
+        try {
+          const res = await userStore.logout()
+          $message.success(res?.message || t('header.text_logout_success'))
+        } catch {
+          // 请求拦截器已展示失败原因，store已清理本地会话，不再提示虚假的登出成功
+        }
       },
     })
   }

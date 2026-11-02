@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from fastapi import Request
+from fastapi import Request, status
 from starlette.exceptions import HTTPException
 
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.responses import InternalErrorResponse, UnauthorizedResponse
 from backend.services import AuthControl
 
-# 公开入口白名单：登录、根路径、文档与静态资源；与路由契约 public 模式保持同源语义
+# 公开入口白名单：登录、根路径、文档与静态资源；
 PUBLIC_WHITELIST: tuple[str, ...] = (
     "POST /user/login",
     "POST /user/transfer_login",
@@ -26,6 +26,11 @@ PUBLIC_WHITELIST: tuple[str, ...] = (
     f"GET {PROJECT_CONFIG.APP_REDOC_URL}",
     f"GET {PROJECT_CONFIG.APP_OPENAPI_URL}",
     "* /static/*",
+)
+
+# 幂等登出允许失效凭证完成本地退出；
+OPTIONAL_AUTH_WHITELIST: tuple[str, ...] = (
+    "POST /user/logout",
 )
 
 
@@ -86,9 +91,19 @@ async def auth_middleware(request: Request, call_next):
     if _is_whitelisted(whitelist=PUBLIC_WHITELIST, request_method=request_method, request_path=request_path):
         return await call_next(request)
 
+    is_optional_auth = _is_whitelisted(
+        whitelist=OPTIONAL_AUTH_WHITELIST,
+        request_method=request_method,
+        request_path=request_path,
+    )
     token = request.headers.get("token")
     if not token:
-        return UnauthorizedResponse(message="请求服务鉴权失败, 请携带有效 Token 进行访问")
+        if is_optional_auth:
+            return await call_next(request)
+        return UnauthorizedResponse(
+            http_status_code=status.HTTP_401_UNAUTHORIZED,
+            message="请求服务鉴权失败, 请携带有效 Token 进行访问",
+        )
 
     # 此处只做认证；接口授权(RBAC)由路由依赖完成；开发用临时令牌同样经此路径校验 exp 与 token_version
     try:
@@ -96,7 +111,12 @@ async def auth_middleware(request: Request, call_next):
     except HTTPException as e:
         # 401明细均为面向调用方的规范文案，需透传以便定位临时令牌等问题
         if e.status_code == 401:
-            return UnauthorizedResponse(message=str(e.detail))
+            if is_optional_auth:
+                return await call_next(request)
+            return UnauthorizedResponse(
+                http_status_code=status.HTTP_401_UNAUTHORIZED,
+                message=str(e.detail),
+            )
         # 鉴权内部异常不能用401：前端会因此误登出，且语义上应归为服务端故障
         LOGGER.error(f"请求认证异常: {e.detail}")
         return InternalErrorResponse(message="请求服务鉴权异常, 请稍后重试")

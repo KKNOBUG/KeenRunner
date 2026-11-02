@@ -94,19 +94,15 @@ export async function resReject(error) {
   // 从错误对象的响应中解构出数据和状态码
   const { data, status } = error.response
 
-  // 检查响应数据的 code 是否为 401，表示未授权（支持字符串和数字类型）
+  // Token认证失败统一清理本地会话；仅做本地退出，避免再次调用logout形成循环请求
   const responseCode = data?.code
-  if (responseCode === 401 || responseCode === '400401' || String(responseCode) === '401') {
-    try {
-      // 获取用户状态管理 store
-      const userStore = useUserStore()
-      // 调用 store 中的登出方法
-      await userStore.logout()
-    } catch (error) {
-      // 捕获登出过程中可能出现的错误并打印日志
-      console.log('resReject error', error)
-      return
-    }
+  const isUnauthorized = status === 401 || responseCode === 401 || responseCode === '400401' || String(responseCode) === '401'
+  if (isUnauthorized) {
+    const code = data?.code ?? status
+    const message = '登录已过期，请重新登录'
+    useUserStore().clearSession()
+    window.$message?.error(message, { keepAliveOnHover: true })
+    return Promise.reject({ code, message, error: data || error.response })
   }
 
   // 后端返回的response数据，获取错误码，优先使用响应数据中的 code，若不存在则使用状态码

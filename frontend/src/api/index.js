@@ -13,6 +13,7 @@ export default {
   getUserInfo: () => request.post('/user/get_userinfo'),
   getUserMenu: () => request.post('/user/menu/list'),
   getUserRouters: () => request.post('/user/get_user_routers'),
+  logout: () => request.post('/user/logout'),
   // 用户相关
   getUserList: (params = {}) => request.get('/user/list', { params }),
   getUserById: (params = {}) => request.get('/user/get', { params }),

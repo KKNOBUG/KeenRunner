@@ -68,7 +68,7 @@ export const useUserStore = defineStore('user', {
       try {
         const res = await api.getUserInfo()
         if (res.code === 401) {
-          this.logout()
+          this.clearSession()
           return
         }
         // 接口主键已改为user_id返回，内部仍映射为id，保证getter(userId)与下游消费不变
@@ -79,7 +79,7 @@ export const useUserStore = defineStore('user', {
         return error
       }
     },
-    async logout() {
+    clearSession() {
       const { resetTags } = useTagsStore()
       const { resetPermission } = usePermissionStore()
       removeToken()
@@ -88,6 +88,14 @@ export const useUserStore = defineStore('user', {
       resetRouter()
       this.$reset()
       toLogin()
+    },
+    async logout() {
+      try {
+        // 无论服务端是否仍能认证，都必须完成本地退出；失效Token由后端幂等放行
+        return await api.logout()
+      } finally {
+        this.clearSession()
+      }
     },
     setUserInfo(userInfo = {}) {
       this.userInfo = { ...this.userInfo, ...userInfo }
