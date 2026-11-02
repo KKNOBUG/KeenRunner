@@ -71,7 +71,7 @@ class AutoTestCaseCreate(AutoTestCaseBase):
     @field_validator("case_name", mode="before")
     @classmethod
     def _validate_case_name(cls, value: Any) -> Any:
-        """用例名称去空白；纯空白名称直接拒绝，避免绕过同名唯一约束。"""
+        """用例名称去空白。"""
         if isinstance(value, str):
             value = value.strip()
             if not value:
@@ -88,7 +88,7 @@ class AutoTestCaseUpdate(AutoTestCaseMeta, AutoTestCaseBase):
     @field_validator("case_name", mode="before")
     @classmethod
     def _validate_case_name(cls, value: Any) -> Any:
-        """更新时同样禁止把用例名称改成空白。"""
+        """用例名称去空白。"""
         if isinstance(value, str):
             value = value.strip()
             if not value:
@@ -144,7 +144,7 @@ class AutoTestCaseScriptGenerate(BaseModel):
 
 
 class AutoTestCaseDelete(BaseModel):
-    """批量删除用例入参：批量删除保持软删除，case_ids与case_codes二选一。"""
+    """批量删除用例入参。"""
 
     case_ids: Optional[List[int]] = Field(None, description="用例ID列表")
     case_codes: Optional[List[str]] = Field(None, description="用例标识代码列表")

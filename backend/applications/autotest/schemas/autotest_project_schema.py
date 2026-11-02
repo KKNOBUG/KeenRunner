@@ -30,7 +30,7 @@ class AutoTestProjectBase(BaseModel):
     @field_validator("project_mark", mode="before")
     @classmethod
     def _normalize_project_mark(cls, value):
-        """应用标识去空白：缺省落空串，保证(名称,标识)联合唯一键参与判重。"""
+        """应用标识去空白。"""
         return value.strip() if isinstance(value, str) else value
 
 
@@ -43,7 +43,7 @@ class AutoTestProjectCreate(AutoTestProjectBase):
     @field_validator("project_name", mode="before")
     @classmethod
     def _validate_project_name(cls, value):
-        """应用名称去空白；空白名称直接拒绝，避免绕过同名唯一约束。"""
+        """应用名称去空白。"""
         if isinstance(value, str):
             value = value.strip()
             if not value:
@@ -78,7 +78,7 @@ class AutoTestProjectUpdate(AutoTestProjectBase):
     @field_validator("project_name", mode="before")
     @classmethod
     def _validate_project_name(cls, value):
-        """更新时同样禁止把应用名称改成空白。"""
+        """应用名称去空白。"""
         if isinstance(value, str):
             value = value.strip()
             if not value:

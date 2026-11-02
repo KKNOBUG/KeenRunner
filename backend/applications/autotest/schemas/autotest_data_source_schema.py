@@ -37,7 +37,7 @@ class AutoTestDataSourceBase(BaseModel):
 
 
 class AutoTestDataSourceCreate(AutoTestDataSourceBase):
-    """创建数据驱动文件入参。定位：(case_id或case_code)且(step_id或step_code)。"""
+    """创建数据驱动文件入参。"""
 
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
 
@@ -52,7 +52,7 @@ class AutoTestDataSourceCreate(AutoTestDataSourceBase):
 
 
 class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
-    """更新数据驱动文件入参。定位：data_source_id/code，或(case_id或case_code)且(step_id或step_code)。"""
+    """更新数据驱动文件入参。"""
 
     data_source_id: Optional[int] = Field(None, ge=1, description="主键ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动文件标识代码")
@@ -71,7 +71,7 @@ class AutoTestDataSourceUpdate(AutoTestDataSourceBase):
 
 
 class AutoTestDataSourceSaveOrUpdate(AutoTestDataSourceBase):
-    """保存或更新数据源入参。有data_source_id/code则更新；否则按用例+步骤有则更新无则新增。"""
+    """保存或更新数据源入参。"""
 
     data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据源标识代码")
@@ -105,7 +105,7 @@ class AutoTestDataSourceUnbindCase(BaseModel):
 
 
 class AutoTestDataSourceUpdateFields(BaseModel):
-    """按步骤报文同步数据源字段入参。定位：data_source_id/code，或(case_id或case_code)且(step_id或step_code)。"""
+    """按步骤报文同步数据源字段入参。"""
 
     data_source_id: Optional[int] = Field(None, ge=1, description="数据源ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据源标识代码")
