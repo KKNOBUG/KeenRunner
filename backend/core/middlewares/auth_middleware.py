@@ -19,12 +19,19 @@ from backend.services import AuthControl
 
 # 公开入口白名单：登录、根路径、文档与静态资源；
 PUBLIC_WHITELIST: tuple[str, ...] = (
+    # login
     "POST /user/login",
     "POST /user/transfer_login",
+
+    # root
     "GET /",
+
+    # openapi/docs
     f"GET {PROJECT_CONFIG.APP_DOCS_URL}",
     f"GET {PROJECT_CONFIG.APP_REDOC_URL}",
     f"GET {PROJECT_CONFIG.APP_OPENAPI_URL}",
+
+    # static assets
     "* /static/*",
 )
 
