@@ -37,6 +37,7 @@ PUBLIC_WHITELIST: tuple[str, ...] = (
 
 # 幂等登出允许失效凭证完成本地退出；
 OPTIONAL_AUTH_WHITELIST: tuple[str, ...] = (
+    # logout
     "POST /user/logout",
 )
 
