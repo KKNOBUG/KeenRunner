@@ -477,7 +477,7 @@ async def logout(
     """
     current_user: Optional[User] = getattr(request.state, "current_user", None)
     if current_user is None:
-        return SuccessResponse(message="登录状态已失效，已退出登录", data={}, total=0)
+        return SuccessResponse(message="登录已过期，请重新登录", data={}, total=0)
     try:
         instance = await user_crud.logout(user_id=int(current_user.id))
         data = await instance.to_dict(
