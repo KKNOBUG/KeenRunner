@@ -8,7 +8,11 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin
+from backend.applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    TimestampMixin,
+)
 from backend.enums import MenuType
 
 
@@ -32,3 +36,6 @@ class Menu(ScaffoldModel, MaintainMixin, TimestampMixin):
         # (name, path) 联合唯一：并发创建同名校验会同时通过，靠唯一索引兜底幂等
         # (parent_id, path) 联合唯一：前端路由全路径=父path+子path，同级重复path会导致后注册路由不可达
         unique_together = (("name", "path"), ("parent_id", "path"))
+
+    def __str__(self):
+        return f"Menu(name={self.name}, menu_type={self.menu_type}, path={self.path})"

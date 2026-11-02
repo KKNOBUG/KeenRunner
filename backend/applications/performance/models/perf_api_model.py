@@ -9,12 +9,12 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from backend.enums import (
@@ -86,5 +86,4 @@ class PerfApiModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, Res
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回接口名称。"""
-        return self.api_name
+        return f"PerfApiModel(step_type={self.step_type}, api_name={self.api_name}, api_code={self.api_code})"

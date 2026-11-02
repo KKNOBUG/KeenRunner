@@ -8,7 +8,12 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
+from backend.applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
+)
 
 
 class Department(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
@@ -23,6 +28,9 @@ class Department(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
     class Meta:
         table = "krun_dept"
 
+    def __str__(self):
+        return f"Department(code={self.code}, name={self.name})"
+
 
 class DeptStruct(ScaffoldModel, TimestampMixin):
     """部门闭包表模型，ancestor/descendant关系。"""
@@ -33,3 +41,6 @@ class DeptStruct(ScaffoldModel, TimestampMixin):
 
     class Meta:
         table = "krun_dept_nest"
+
+    def __str__(self):
+        return f"DeptStruct(ancestor={self.ancestor}, descendant={self.descendant})"

@@ -8,7 +8,12 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
+from backend.applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
+)
 
 
 class User(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
@@ -41,3 +46,6 @@ class User(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
         unique_together = (
             ("alias", "email"),
         )
+
+    def __str__(self):
+        return f"User(username={self.username}, alias={self.alias})"

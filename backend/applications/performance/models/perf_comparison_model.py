@@ -9,12 +9,12 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from backend.enums import PerfComparisonMode
@@ -53,5 +53,4 @@ class PerfComparisonModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回对比记录名称。"""
-        return self.comparison_name
+        return f"PerfComparisonModel(comparison_name={self.comparison_name}, comparison_code={self.comparison_code}, comparison_mode={self.comparison_mode})"

@@ -9,13 +9,13 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
-    UpperCharField,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
+    UpperCharField,
 )
 from backend.enums import (
     PerfLoadMode,
@@ -83,5 +83,4 @@ class PerfLoadPresetModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
         ordering = ["-last_execute_time", "-updated_time"]
 
     def __str__(self):
-        """返回负载预设名称。"""
-        return self.preset_name
+        return f"PerfLoadPresetModel(preset_name={self.preset_name}, preset_code={self.preset_code})"

@@ -9,12 +9,12 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from backend.enums import PerfJobStatus, PerfJobType
@@ -74,5 +74,4 @@ class PerfJobModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, Res
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回作业名称。"""
-        return self.job_name
+        return f"PerfJobModel(job_name={self.job_name}, job_code={self.job_code}, job_type={self.job_type})"

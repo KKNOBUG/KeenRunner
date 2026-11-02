@@ -9,12 +9,12 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from backend.enums import PerfAssertMode, PerfRunMode
@@ -70,5 +70,4 @@ class PerfSceneModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, R
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回场景名称。"""
-        return self.scene_name
+        return f"PerfSceneModel(scene_name={self.scene_name}, scene_project={self.scene_project}, run_mode={self.run_mode})"

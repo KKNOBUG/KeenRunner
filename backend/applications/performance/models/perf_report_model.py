@@ -9,12 +9,12 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from backend.enums import PerfReportStatus, PerfRunMode, PerfStoppedReason
@@ -129,5 +129,4 @@ class PerfReportModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, 
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回报告标识代码。"""
-        return self.report_code
+        return f"PerfReportModel(preset_id={self.preset_id}, report_code={self.report_code}, batch_code={self.batch_code}, celery_id={self.celery_id})"

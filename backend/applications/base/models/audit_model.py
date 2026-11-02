@@ -8,7 +8,10 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, TimestampMixin
+from backend.applications.base.services.scaffold import (
+    ScaffoldModel,
+    TimestampMixin,
+)
 from backend.enums import HTTPMethod
 
 
@@ -41,3 +44,6 @@ class Audit(ScaffoldModel, TimestampMixin):
             ("response_code", "created_time"),
             ("request_router", "created_time"),
         )
+
+    def __str__(self):
+        return f"Audit(user_id={self.user_id}, username={self.username})"

@@ -10,12 +10,12 @@ from tortoise import fields
 from tortoise.validators import MaxValueValidator, MinValueValidator
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from backend.enums import PerfDatasetSource
@@ -76,5 +76,4 @@ class PerfDatasetModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel,
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回数据集名称。"""
-        return self.ds_name
+        return f"PerfDatasetModel(ds_name={self.ds_name}, ds_code={self.ds_code}, ds_project={self.ds_project})"
