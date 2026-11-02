@@ -9,11 +9,11 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 
@@ -44,5 +44,4 @@ class AutoTestProjectModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMo
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回项目名称。"""
-        return self.project_name
+        return f"AutoTestProjectModel(project_name={self.project_name}, project_mark={self.project_mark})"

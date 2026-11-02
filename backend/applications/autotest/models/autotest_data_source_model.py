@@ -10,11 +10,11 @@ from tortoise import fields
 from tortoise.validators import MinValueValidator, MaxValueValidator
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 
@@ -57,4 +57,4 @@ class AutoTestDataSourceModel(ScaffoldModel, MaintainMixin, TimestampMixin, Stat
         ordering = ["case_id", "step_code"]
 
     def __str__(self):
-        return f"{self.data_source_code or ''}(case_id={self.case_id},step_code={self.step_code})"
+        return f"AutoTestDataSourceModel(case_id={self.case_id}, step_id={self.step_id}, data_source_code={self.data_source_code})"

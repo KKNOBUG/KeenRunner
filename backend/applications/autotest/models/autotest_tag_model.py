@@ -9,11 +9,11 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 
@@ -38,5 +38,4 @@ class AutoTestTagModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel,
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回标签名称。"""
-        return self.tag_name
+        return f"AutoTestTagModel(tag_code={self.tag_code}, tag_project={self.tag_project}, tag_mode={self.tag_mode}, tag_name={self.tag_name})"

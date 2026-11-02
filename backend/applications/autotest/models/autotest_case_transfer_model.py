@@ -8,7 +8,12 @@
 """
 from tortoise import fields
 
-from backend.applications.base.services.scaffold import ScaffoldModel, MaintainMixin, TimestampMixin, UpperCharField
+from backend.applications.base.services.scaffold import (
+    MaintainMixin,
+    ScaffoldModel,
+    TimestampMixin,
+    UpperCharField,
+)
 
 
 class AutoTestCaseTransferModel(ScaffoldModel, MaintainMixin, TimestampMixin):
@@ -27,4 +32,4 @@ class AutoTestCaseTransferModel(ScaffoldModel, MaintainMixin, TimestampMixin):
         ordering = ["-created_time"]
 
     def __str__(self):
-        return f"{self.case_id}:{self.prev_owner_user}->{self.next_owner_user}"
+        return f"AutoTestCaseTransferModel(case_id={self.case_id}, prev_owner_user={self.prev_owner_user}, next_owner_user={self.next_owner_user})"

@@ -9,11 +9,11 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 from backend.enums import AutoTestConfigNodeType, AutoTestDataBaseType
@@ -48,8 +48,7 @@ class AutoTestEnvBindModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMo
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回绑定标识代码。"""
-        return self.env_code
+        return f"AutoTestEnvBindModel(env_enum={self.env_enum}, env_type={self.env_type}, env_code={self.env_code}, project_id={self.project_id})"
 
 
 class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, ReserveFields):
@@ -90,4 +89,4 @@ class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, State
         ordering = ["-updated_time"]
 
     def __str__(self):
-        return self.config_name
+        return f"AutoTestEnvConfigModel(env_bind={self.env_bind}, config_name={self.config_name}, config_code={self.config_code})"

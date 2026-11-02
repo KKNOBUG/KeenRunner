@@ -9,13 +9,13 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
-    MaintainMixin,
-    TimestampMixin,
-    StateModel,
-    ReserveFields,
-    unique_identify,
     JSONTextField,
+    MaintainMixin,
+    ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
+    unique_identify,
 )
 from backend.enums import (
     AutoTestStepType,
@@ -139,5 +139,4 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         ordering = ["case_id", "step_no"]
 
     def __str__(self):
-        """返回步骤名称。"""
-        return self.step_name
+        return f"AutoTestStepModel(case_id={self.case_id}, step_no={self.step_no}, step_code={self.step_code}, step_name={self.step_name}, step_type={self.step_type})"

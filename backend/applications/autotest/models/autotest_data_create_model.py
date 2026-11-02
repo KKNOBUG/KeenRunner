@@ -9,11 +9,11 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 
@@ -44,4 +44,4 @@ class AutoTestDataCreateModel(ScaffoldModel, MaintainMixin, TimestampMixin, Stat
         ordering = ["case_id", "step_code"]
 
     def __str__(self):
-        return self.create_code
+        return f"AutoTestDataCreateModel(case_id={self.case_id}, create_code={self.create_code})"

@@ -9,11 +9,11 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     unique_identify,
 )
 
@@ -28,5 +28,4 @@ class AutoTestEnvModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel,
         ordering = ["-updated_time"]
 
     def __str__(self):
-        """返回环境名称。"""
-        return self.env_name
+        return f"AutoTestEnvModel(env_name={self.env_name}, env_code={self.env_code})"

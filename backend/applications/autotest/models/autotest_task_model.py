@@ -9,11 +9,11 @@
 from tortoise import fields
 
 from backend.applications.base.services.scaffold import (
-    ScaffoldModel,
     MaintainMixin,
-    TimestampMixin,
-    StateModel,
     ReserveFields,
+    ScaffoldModel,
+    StateModel,
+    TimestampMixin,
     UpperCharField,
     unique_identify,
 )
@@ -91,5 +91,4 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         ordering = ["-last_execute_time", "-updated_time"]
 
     def __str__(self):
-        """返回任务名称。"""
-        return self.task_name
+        return f"AutoTestTaskModel(task_name={self.task_name}, task_project={self.task_project}, task_case_ids={self.task_case_ids}, task_code={self.task_code})"
