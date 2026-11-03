@@ -366,6 +366,7 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             "is_superuser": False,
             "dept_id": dept.id,
             "role_ids": [role.id],
+            "created_user": "ADMIN",
         }
         LOGGER.info(f"用户名[{username}]真实性校验成功: {build_user}")
         return True, build_user
