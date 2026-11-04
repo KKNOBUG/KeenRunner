@@ -7,7 +7,9 @@
 @DateTime: 2025/2/19 13:03
 """
 import hmac
-from typing import List, Optional
+import re
+from functools import lru_cache
+from typing import List, Optional, Tuple, Dict
 
 import jwt
 from fastapi import Depends, Header, HTTPException, Request
@@ -40,10 +42,9 @@ class AuthControl:
             return user
 
         configured = PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN
-        # 常量时间比对，避免通过响应耗时逐字符探测；空值表示开发用临时令牌未启用
         is_temporary = bool(configured) and hmac.compare_digest(str(token), str(configured))
         try:
-            # 临时令牌本质是预签发的长效 JWT，必须与其他令牌一样受 exp / token_version 约束
+            # 临时令牌必须与其他令牌一样受exp/token_version约束
             decode_data = jwt.decode(
                 jwt=configured if is_temporary else token,
                 key=PROJECT_CONFIG.AUTH_SECRET_KEY,
@@ -53,10 +54,8 @@ class AuthControl:
             user = await User.filter(id=int(decode_data["user_id"]), state__not=1).first()
             if not user:
                 raise HTTPException(status_code=401, detail="请求服务鉴权失败, 用户状态异常, 请联系管理员后重试")
-
             if int(decode_data["token_version"]) != user.token_version:
-                raise HTTPException(status_code=401, detail="请求服务鉴权已过期, 请重新登录获取有效 Token 后进行访问")
-
+                raise HTTPException(status_code=401, detail="请求服务鉴权过期, 请重新登录获取有效 Token 后进行访问")
             request.state.current_user = user
             CTX_USER_ID.set(int(user.id))
             CTX_USERNAME.set((user.username or "").strip())
@@ -65,11 +64,11 @@ class AuthControl:
             raise
         except jwt.ExpiredSignatureError:
             if is_temporary:
-                raise HTTPException(status_code=401, detail="开发用临时令牌已过期, 请重新签发后再使用")
-            raise HTTPException(status_code=401, detail="请求服务鉴权已过期, 请重新登录获取有效 Token 后进行访问")
+                raise HTTPException(status_code=401, detail="开发临时令牌过期, 请重新签发后再使用")
+            raise HTTPException(status_code=401, detail="请求服务鉴权过期, 请重新登录获取有效 Token 后进行访问")
         except jwt.InvalidTokenError:
             if is_temporary:
-                LOGGER.error("开发用临时令牌配置非法, 无法按JWT解析, 请重新签发后再使用")
+                LOGGER.error("开发临时令牌配置非法, 无法按JWT解析, 请重新签发后再使用")
             raise HTTPException(status_code=401, detail="请求服务鉴权失败, 请携带有效 Token 进行访问")
         except Exception as e:
             # 内部异常不向调用方暴露细节，日志留痕后统一返回服务异常
@@ -78,31 +77,60 @@ class AuthControl:
 
 
 class PermissionControl:
-    @staticmethod
-    def _path_matches(template: str, path: str) -> bool:
-        """
-        路由模板与请求路径匹配：`{param}` 视为单段通配。
 
-        :param template: krun_router 中登记的路由路径，可含 `{param}` 占位
-        :param path: 实际请求路径
-        :return: 匹配返回True
+    @classmethod
+    @lru_cache(maxsize=1024)
+    def _compile_router_path(cls, router_path: str) -> Tuple[re.Pattern, List[str]]:
         """
-        if template == path:
+        编译路由模板为正则表达式，提取参数名称列表，结果缓存；支持段内拼接占位符 {param}。
+
+        :param router_path: 路由模板路径
+        :return: (正则对象, 参数名列表)
+        """
+        parts = router_path.split("/")
+        re_parts = []
+        all_params = []
+        for part in parts:
+            params = re.findall(r"\{([^{}]+?)\}", part)
+            all_params.extend(params)
+            escaped = re.escape(part)
+            pat_segment = re.sub(r"\\\{([^{}]+?)\\\}", r"([^/]+)", escaped)
+            re_parts.append(pat_segment)
+        full_pat_str = "^" + "/".join(re_parts) + "$"
+        return re.compile(full_pat_str), all_params
+
+    @classmethod
+    def _matches_router_path(cls, router_path: str, actual_path: str) -> bool:
+        """
+        判断实际请求路径是否匹配路由模板。
+
+        :param router_path: 路由模板路径
+        :param actual_path: 真实请求路径
+        :return: 匹配返回True，否则False
+        """
+        if router_path == actual_path:
             return True
-        if "{" not in template:
+        if "{" not in router_path:
             return False
-        template_parts = template.strip("/").split("/")
-        path_parts = path.strip("/").split("/")
-        if len(template_parts) != len(path_parts):
-            return False
-        for template_part, path_part in zip(template_parts, path_parts):
-            if template_part.startswith("{") and template_part.endswith("}"):
-                if not path_part:
-                    return False
-                continue
-            if template_part != path_part:
-                return False
-        return True
+        pat, _ = cls._compile_router_path(router_path=router_path)
+        return bool(pat.fullmatch(actual_path))
+
+    @classmethod
+    def _extract_router_path_params(cls, router_path: str, actual_path: str) -> Dict[str, str]:
+        """
+        路径匹配成功后提取路由参数，匹配失败返回空字典。
+
+        :param router_path: 路由模板路径
+        :param actual_path: 真实请求路径
+        :return: 参数字典
+        """
+        if not cls._matches_router_path(router_path, actual_path):
+            return {}
+        pat, param_names = cls._compile_router_path(router_path)
+        m = pat.fullmatch(actual_path)
+        if not m:
+            return {}
+        return dict(zip(param_names, m.groups()))
 
     @classmethod
     async def has_permission(cls, request: Request, current_user: User = Depends(AuthControl.is_authed)) -> None:
@@ -125,21 +153,19 @@ class PermissionControl:
         # 管理员角色与超管同权：全量接口放行，不依赖菜单/路由绑定记录
         if BuiltinRoleCode.includes_admin(role.code for role in roles):
             return
-        # 统一大写：库内 method 为 HTTPMethod 值，直接比较字符串可避免非标准方法构造枚举报错
+
         method = request.method.upper()
-        # 对结尾‘/’符号进行统一化，使白名单/路径匹配稳定。
         path = request.url.path
         if path != "/" and path.endswith("/"):
             path = path.rstrip("/")
+
         # 多角色接口一次查出并集，避免按角色逐条查询造成 N+1；
-        # 只取本次方法且路径为「精确匹配或含占位模板」的记录，避免每次拉全量路由再逐个比对
         permission_paths = await Router.filter(
             role_routers__id__in=[role.id for role in roles]
         ).filter(
             Q(method=method) & (Q(path=path) | Q(path__contains="{"))
         ).values_list("path", flat=True)
-        # 路由模板可含 {param} 占位，需按段匹配；否则含路径参数的接口对非超管永久 403
-        if not any(cls._path_matches(router_path, path) for router_path in permission_paths):
+        if not any(cls._matches_router_path(router_path=router_path, actual_path=path) for router_path in permission_paths):
             raise HTTPException(status_code=403, detail=f"请求服务不被接受, Method:{method} Path:{path}")
 
 
