@@ -241,10 +241,10 @@ views (/http_debugging, /tcp_debugging)
 ### 4.3 中间件（core/middlewares/）
 
 - `app_middleware.py`：应用级日志与审计；仅 `AUDITED_ACTIONS`/`unknown` 落库，查询透传；取用户复用认证缓存，不再重复查库。
-- `auth_middleware.py`：非白名单请求统一先认证，**不做 RBAC**（RBAC 在路由依赖 `DependPermission`）；Token 认证失败返回真实 HTTP 401，响应体仍保留统一业务码与明细（含临时令牌过期提示），其余异常记录 `LOGGER.error` 后返回 500（不能用 401，否则前端会误登出）；白名单仅登录、根路径、docs 与 static，`POST /user/logout` 单独使用可选认证白名单，失效凭证仅幂等放行登出，不能访问其他业务接口。
+- `auth_middleware.py`：非白名单请求统一先认证，**不做 RBAC**（RBAC 在路由依赖 `DependPermission`）；Token 认证失败返回真实 HTTP 401，响应体仍保留统一业务码与明细，其余异常记录 `LOGGER.error` 后返回 500（不能用 401，否则前端会误登出）；白名单仅登录、根路径、docs 与 static，`POST /user/logout` 单独使用可选认证白名单，失效凭证仅幂等放行登出，不能访问其他业务接口。
 - `request_context_middleware.py`：请求上下文（用户/租户注入）
 - 认证结果请求级缓存：`AuthControl.is_authed` 命中 `request.state.current_user` 时只重建 `CTX_USER_ID`/`CTX_USERNAME` 不查库；Starlette `BaseHTTPMiddleware` 与端点共享同一 `scope["state"]`，中间件 → 路由依赖 → 审计三处调用只查一次用户表。
-- 开发用临时令牌 `AUTH_TEMPORARY_TOKEN`：必须是**预签发的长效 JWT**（与登录令牌同密钥/算法，必含 `exp`/`user_id`/`token_version` 三个声明，`jwt.decode` 以 `options={"require": ...}` 强制校验），不是任意字符串；空值表示禁用；比对用 `hmac.compare_digest` 常量时间；启用时启动打印安全 WARNING，生产必须置空。
+- 令牌校验：`is_authed` 只接受登录签发的 JWT，`jwt.decode` 以 `options={"require": ["exp","user_id","token_version"]}` 强制校验，缺任一声明或签名/过期/版本不符一律 401；不再存在任何开发阶段临时令牌旁路。
 
 ### 4.4 初始化（core/initializations/）
 

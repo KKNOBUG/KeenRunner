@@ -113,11 +113,10 @@ async def auth_middleware(request: Request, call_next):
             message="请求服务鉴权失败, 请携带有效 Token 进行访问",
         )
 
-    # 此处只做认证；接口授权(RBAC)由路由依赖完成；开发用临时令牌同样经此路径校验 exp 与 token_version
     try:
+        # 此处只做认证；接口授权(RBAC)由路由依赖完成；
         await AuthControl.is_authed(request=request, token=token)
     except HTTPException as e:
-        # 401明细均为面向调用方的规范文案，需透传以便定位临时令牌等问题
         if e.status_code == 401:
             if is_optional_auth:
                 return await call_next(request)
@@ -125,11 +124,9 @@ async def auth_middleware(request: Request, call_next):
                 http_status_code=status.HTTP_401_UNAUTHORIZED,
                 message=str(e.detail),
             )
-        # 鉴权内部异常不能用401：前端会因此误登出，且语义上应归为服务端故障
-        LOGGER.error(f"请求认证异常: {e.detail}")
+        LOGGER.error(f"请求服务鉴权异常, 请稍后重试: {e.detail}")
         return InternalErrorResponse(message="请求服务鉴权异常, 请稍后重试")
     except Exception as e:
-        # 非预期异常记录后统一返回服务异常，避免调试模式下泄露内部细节
-        LOGGER.error(f"请求认证异常: {e!r}")
+        LOGGER.error(f"请求服务鉴权异常, 请稍后重试: {e!r}")
         return InternalErrorResponse(message="请求服务鉴权异常, 请稍后重试")
     return await call_next(request)

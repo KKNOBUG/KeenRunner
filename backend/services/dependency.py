@@ -6,7 +6,6 @@
 @Module  : dependency.py
 @DateTime: 2025/2/19 13:03
 """
-import hmac
 import re
 from functools import lru_cache
 from typing import List, Optional, Tuple, Dict
@@ -22,7 +21,7 @@ from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.enums import BuiltinRoleCode
 from backend.services import CTX_USER_ID, CTX_USERNAME
 
-# 认证必需声明：缺任一关键声明即视为非法令牌，避免无过期时间的长效凭证绕过
+# 认证必需声明：缺任一关键即视为非法令牌，避免无过期时间的长效凭证绕过
 REQUIRED_CLAIMS: tuple = ("exp", "user_id", "token_version")
 
 
@@ -32,8 +31,8 @@ class AuthControl:
         """
         认证当前请求并写入用户上下文。
 
-        同一请求内中间件、路由依赖、审计会重复调用，命中 request.state 缓存时不再查库；
-        缓存命中仍需重建上下文变量（中间件与端点可能运行在不同任务）。
+        同一请求内中间件、路由依赖、审计会重复调用，命中request.state缓存时不再查库；
+        缓存命中仍需重建上下文变量，中间件与端点可能运行在不同任务。
         """
         user = getattr(request.state, "current_user", None)
         if user is not None:
@@ -41,12 +40,9 @@ class AuthControl:
             CTX_USERNAME.set((user.username or "").strip())
             return user
 
-        configured = PROJECT_CONFIG.AUTH_TEMPORARY_TOKEN
-        is_temporary = bool(configured) and hmac.compare_digest(str(token), str(configured))
         try:
-            # 临时令牌必须与其他令牌一样受exp/token_version约束
             decode_data = jwt.decode(
-                jwt=configured if is_temporary else token,
+                jwt=token,
                 key=PROJECT_CONFIG.AUTH_SECRET_KEY,
                 algorithms=PROJECT_CONFIG.AUTH_JWT_ALGORITHM,
                 options={"require": list(REQUIRED_CLAIMS)},
@@ -63,26 +59,21 @@ class AuthControl:
         except HTTPException:
             raise
         except jwt.ExpiredSignatureError:
-            if is_temporary:
-                raise HTTPException(status_code=401, detail="开发临时令牌过期, 请重新签发后再使用")
             raise HTTPException(status_code=401, detail="请求服务鉴权过期, 请重新登录获取有效 Token 后进行访问")
         except jwt.InvalidTokenError:
-            if is_temporary:
-                LOGGER.error("开发临时令牌配置非法, 无法按JWT解析, 请重新签发后再使用")
             raise HTTPException(status_code=401, detail="请求服务鉴权失败, 请携带有效 Token 进行访问")
         except Exception as e:
-            # 内部异常不向调用方暴露细节，日志留痕后统一返回服务异常
-            LOGGER.error(f"请求认证异常: {e!r}")
+            LOGGER.error(f"请求服务鉴权异常, 请稍后重试: {e!r}")
             raise HTTPException(status_code=500, detail="请求服务鉴权异常, 请稍后重试")
 
 
 class PermissionControl:
 
-    @classmethod
+    @staticmethod
     @lru_cache(maxsize=1024)
-    def _compile_router_path(cls, router_path: str) -> Tuple[re.Pattern, List[str]]:
+    def _compile_router_path(router_path: str) -> Tuple[re.Pattern, List[str]]:
         """
-        编译路由模板为正则表达式，提取参数名称列表，结果缓存；支持段内拼接占位符 {param}。
+        编译路由模板为正则表达式，提取参数名称列表，结果缓存；支持段内拼接占位符。
 
         :param router_path: 路由模板路径
         :return: (正则对象, 参数名列表)
@@ -137,8 +128,7 @@ class PermissionControl:
         """
         校验当前用户角色是否绑定当前「方法+路径」接口权限。
 
-        超管与管理员角色直接放行；其余用户一次查询角色接口并集，
-        含占位符的路由模板按段匹配，避免带路径参数的接口对非超管永久 403。
+        超管与管理员角色直接放行；其余用户一次查询角色接口并集，含占位符的路由模板按段匹配，避免带路径参数的接口对非超管永久 403。
 
         :param request: 当前请求
         :param current_user: 已认证用户
@@ -150,6 +140,7 @@ class PermissionControl:
         roles: List[Role] = await load_request_roles(request=request, user=current_user)
         if not roles:
             raise HTTPException(status_code=403, detail="请求服务不被接受, 暂无任何角色策略")
+
         # 管理员角色与超管同权：全量接口放行，不依赖菜单/路由绑定记录
         if BuiltinRoleCode.includes_admin(role.code for role in roles):
             return
@@ -170,12 +161,7 @@ class PermissionControl:
 
 
 async def load_request_roles(request: Request, user: User) -> List[Role]:
-    """
-    取当前请求用户的角色列表，并缓存在 request.state 上。
-
-    available_only_admin 接口同时挂鉴权与超管守卫，Tortoise 的关系查询不走实例缓存，
-    不共享结果会重复查同一张关联表。
-    """
+    """取当前请求用户的角色列表，并缓存在request.state上。"""
     roles: Optional[List[Role]] = getattr(request.state, "current_roles", None)
     if roles is None:
         roles = await user.roles

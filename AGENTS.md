@@ -77,7 +77,7 @@ frontend/
 - 接口路径即行为契约：末段按 `_` 分词的最后一个已知动词决定动作（`新增/更新/删除/上传/下载/执行/查询/运维` 八组，见 `common/permission_action.py`），DELETE 一律删除、GET 无动词回落查询、其余无动词为 unknown；启动时 `validate_route_contracts` 只打 ERROR 不阻断，`POST /base/router/refresh` 会按同一规则告警，必须修正后再上线。
 - 认证模式三分：公开（无路由依赖，不写 `krun_router`）、仅认证（`DependAuth`，不下发到角色）、权限（`DependPermission`，写库并参与角色绑定）。管理员专属接口在 `DependPermission` 之外叠加 `DependSuperUser`（如 `/base/role/authorized`、`/base/router/refresh`、`/autotest/report/create|update`、`/autotest/detail/create|update`），契约标记 `available_only_admin`，非管理员角色即使被勾选也会拒绝保存并在刷新时回收绑定。
 - 审计中间件记录新增/更新/删除/执行/上传/下载类动作（`common/permission_action.py` 的 `AUDITED_ACTIONS`），刷新与查询直接透传；下载只记占位符，避免日志膨胀。
-- 认证先于鉴权：`auth_middleware` 对非白名单请求统一认证，Token 失效返回真实 HTTP 401（统一响应体中的业务码与明细保留），RBAC 由路由依赖 `DependPermission` 完成；认证结果缓存在 `request.state.current_user`，同一请求的中间件/依赖/审计只查一次用户表。`POST /user/logout` 是唯一可选认证例外：有效 Token 仍吊销全部会话，失效或无 Token 仅幂等返回退出成功且不修改用户数据，其他业务接口不得套用。开发用临时令牌 `AUTH_TEMPORARY_TOKEN` 必须是预签发的长效 JWT（含 `exp`/`token_version`，仍走完整 RBAC），空值即禁用，启用时启动打印安全 WARNING。
+- 认证先于鉴权：`auth_middleware` 对非白名单请求统一认证，Token 失效返回真实 HTTP 401（统一响应体中的业务码与明细保留），RBAC 由路由依赖 `DependPermission` 完成；认证结果缓存在 `request.state.current_user`，同一请求的中间件/依赖/审计只查一次用户表。`POST /user/logout` 是唯一可选认证例外：有效 Token 仍吊销全部会话，失效或无 Token 仅幂等返回退出成功且不修改用户数据，其他业务接口不得套用。所有业务接口必须携带登录签发的有效 JWT（`is_authed` 以 `options={"require": ["exp","user_id","token_version"]}` 强制校验），不再存在任何开发阶段临时令牌旁路。
 
 ## 4. 编码规范（评审基准）
 

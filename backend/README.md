@@ -240,9 +240,7 @@ celery -A celery_scheduler.celery_worker beat --loglevel=info --scheduler=redbea
 
 管理员专属接口在权限模式上再叠加 `DependSuperUser`，契约标记 `available_only_admin`：不自动绑定给非管理员角色，角色保存时忽略该分配，刷新时回收残留。
 
-认证执行链路：`auth_middleware` 先认证（非白名单），RBAC 在路由依赖 `DependPermission` 中完成；认证结果缓存在 `request.state.current_user`，同一请求的中间件/依赖/审计只查一次用户表。
-
-开发用临时令牌 `AUTH_TEMPORARY_TOKEN` 必须填预签发的长效 JWT（同密钥/算法，含 `exp`、`token_version`），空值即禁用；启用时启动打印安全 WARNING，仍走完整 RBAC。
+认证执行链路：`auth_middleware` 先认证（非白名单），RBAC 在路由依赖 `DependPermission` 中完成；认证结果缓存在 `request.state.current_user`，同一请求的中间件/依赖/审计只查一次用户表。所有业务接口必须携带有效登录令牌，不再接受任何开发阶段临时令牌。
 
 ## 5. 自检
 
