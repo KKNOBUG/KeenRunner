@@ -44,10 +44,10 @@ def _remove_artifact_files(record: AutoTestRecordModel) -> None:
             file_path = resolve_storage_path(storage_key)
             if os.path.isfile(file_path):
                 os.remove(file_path)
-        except ValueError as e:
-            LOGGER.warning(f"清理产物文件失败, 非法storage_key[{storage_key}], 异常描述: {e}")
-        except OSError as e:
-            LOGGER.warning(f"清理产物文件失败, 文件[{storage_key}], 异常描述: {e}")
+        except ValueError:
+            LOGGER.warning(f"清理产物文件失败, 非法storage_key[{storage_key}]\n{traceback.format_exc()}")
+        except OSError:
+            LOGGER.warning(f"清理产物文件失败, 文件[{storage_key}]\n{traceback.format_exc()}")
 
 
 class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate, AutoTestRecordUpdate]):
@@ -249,7 +249,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             )
             return total, list(instances)
         except FieldError as e:
-            error_message: str = f"查询任务执行记录异常, 错误描述: {e}"
+            error_message: str = "查询任务执行记录失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 

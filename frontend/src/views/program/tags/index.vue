@@ -5,7 +5,10 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NList,
+  NListItem,
   NPopconfirm,
+  NPopover,
   NSelect,
   NText,
 } from 'naive-ui'
@@ -41,16 +44,16 @@ function onListPaginationMeta(meta) {
 const checkedRowKeys = ref([])
 const queryItems = ref({
   tag_project: null,
-  tag_mode: null,
-  tag_name: '',
+  tag_ids: [],
 })
 const projectOptions = ref([])
 const projectLoading = ref(false)
-/** 查询区「大类」下拉（随应用变化） */
-const queryModeOptions = ref([])
+/** 查询区标签二级选择 */
+const tagQueryPopoverShow = ref(false)
+const projectTags = ref([])
+const selectedTagModeForQuery = ref(null)
 /** 表单「大类」下拉（可新建，随应用变化） */
 const formModeOptions = ref([])
-const modeOptionsLoading = ref(false)
 const vPermission = resolveDirective('permission')
 
 const {
@@ -107,15 +110,13 @@ function projectLabel(projectId) {
 }
 
 /**
- * 拉取某应用下已有大类，供查询/表单复用，减少「冒烟 / 冒烟测试」分裂。
+ * 拉取某应用下已有大类，供表单复用，减少「冒烟 / 冒烟测试」分裂。
  */
-async function loadModeOptions({ projectId, target }) {
+async function loadModeOptions({ projectId }) {
   if (!projectId) {
-    if (target === 'query' || target === 'both') queryModeOptions.value = []
-    if (target === 'form' || target === 'both') formModeOptions.value = []
+    formModeOptions.value = []
     return
   }
-  modeOptionsLoading.value = true
   try {
     const res = await api.getTagList({
       page: 1,
@@ -130,15 +131,49 @@ async function loadModeOptions({ projectId, target }) {
               .filter(Boolean)
       ),
     ].sort((a, b) => a.localeCompare(b, 'zh-CN'))
-    const opts = modes.map((m) => ({ label: m, value: m }))
-    if (target === 'query' || target === 'both') queryModeOptions.value = opts
-    if (target === 'form' || target === 'both') formModeOptions.value = opts
+    formModeOptions.value = modes.map((m) => ({ label: m, value: m }))
   } catch (_) {
-    if (target === 'query' || target === 'both') queryModeOptions.value = []
-    if (target === 'form' || target === 'both') formModeOptions.value = []
-  } finally {
-    modeOptionsLoading.value = false
+    formModeOptions.value = []
   }
+}
+
+/** 查询区：按 tag_mode 分组当前应用的标签 */
+const tagModeGroups = computed(() => {
+  const groups = {}
+  for (const t of projectTags.value) {
+    const mode = String(t.tag_mode ?? '').trim() || '未分类'
+    ;(groups[mode] ||= []).push(t)
+  }
+  return groups
+})
+
+/** 查询区：当前选中大类下的标签列表 */
+const currentQueryTagNames = computed(() => {
+  if (!selectedTagModeForQuery.value) return []
+  return tagModeGroups.value[selectedTagModeForQuery.value] || []
+})
+
+/** 查询区：已选标签名称拼接展示 */
+function getQuerySelectedTagNames() {
+  const ids = queryItems.value.tag_ids || []
+  if (!ids.length) return ''
+  const names = ids
+      .map((id) => projectTags.value.find((t) => t.tag_id === id)?.tag_name)
+      .filter(Boolean)
+  return names.length <= 2 ? names.join('、') : `${names[0]}、${names[1]} 等${names.length}个`
+}
+
+/** 查询区：切换标签选中状态 */
+function handleQueryTagSelect(tagId) {
+  const ids = queryItems.value.tag_ids || []
+  const idx = ids.indexOf(tagId)
+  if (idx === -1) ids.push(tagId)
+  else ids.splice(idx, 1)
+  queryItems.value.tag_ids = [...ids]
+}
+
+function isQueryTagSelected(tagId) {
+  return (queryItems.value.tag_ids || []).includes(tagId)
 }
 
 async function handleBatchDelete() {
@@ -167,12 +202,9 @@ async function handleBatchDelete() {
       window.$message?.success?.('删除成功')
       checkedRowKeys.value = []
       $table.value?.handleSearch?.()
-      // 大类选项可能变化
+      // 标签选项可能变化
       if (queryItems.value.tag_project) {
-        loadModeOptions({
-          projectId: queryItems.value.tag_project,
-          target: 'query',
-        })
+        loadProjectTags(queryItems.value.tag_project)
       }
     },
   })
@@ -182,18 +214,42 @@ function buildSearchBody(overrides = {}) {
   return {
     state: 0,
     tag_project: queryItems.value.tag_project || undefined,
-    tag_mode: queryItems.value.tag_mode || undefined,
-    tag_name: queryItems.value.tag_name || undefined,
+    tag_ids: queryItems.value.tag_ids?.length ? queryItems.value.tag_ids : undefined,
     ...overrides,
   }
 }
 
+/**
+ * 加载某应用下的标签列表，供查询区二级选择使用。
+ */
+async function loadProjectTags(projectId) {
+  if (!projectId) {
+    projectTags.value = []
+    return
+  }
+  try {
+    const res = await api.getTagList({
+      page: 1,
+      page_size: 9999,
+      state: 0,
+      tag_project: projectId,
+    })
+    projectTags.value = res?.data || []
+    // 自动选中第一个大类
+    const modes = [...new Set(projectTags.value.map((t) => String(t.tag_mode ?? '').trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'zh-CN'))
+    selectedTagModeForQuery.value = modes[0] || null
+  } catch (_) {
+    projectTags.value = []
+    selectedTagModeForQuery.value = null
+  }
+}
+
 function onQueryProjectChange(projectId) {
-  queryItems.value.tag_mode = null
-  loadModeOptions({
-    projectId,
-    target: 'query',
-  })
+  queryItems.value.tag_ids = []
+  selectedTagModeForQuery.value = null
+  projectTags.value = []
+  loadProjectTags(projectId)
 }
 
 function customHandleAdd() {
@@ -201,9 +257,6 @@ function customHandleAdd() {
   // 若查询区已选应用，新增时默认带上，减少重复选择
   if (queryItems.value.tag_project) {
     modalForm.value.tag_project = queryItems.value.tag_project
-  }
-  if (queryItems.value.tag_mode) {
-    modalForm.value.tag_mode = queryItems.value.tag_mode
   }
 }
 
@@ -215,7 +268,7 @@ watch(
     () => [modalVisible.value, modalForm.value.tag_project],
     ([visible, projectId]) => {
       if (!visible) return
-      loadModeOptions({ projectId, target: 'form' })
+      loadModeOptions({ projectId })
     }
 )
 
@@ -223,10 +276,7 @@ const originalHandleSave = handleSave
 function customHandleSave(...args) {
   originalHandleSave(...args, () => {
     if (queryItems.value.tag_project) {
-      loadModeOptions({
-        projectId: queryItems.value.tag_project,
-        target: 'query',
-      })
+      loadProjectTags(queryItems.value.tag_project)
     }
   })
 }
@@ -434,26 +484,61 @@ const columns = computed(() => {
               @update:value="onQueryProjectChange"
           />
         </QueryBarItem>
-        <QueryBarItem label="标签大类：">
-          <NSelect
-              v-model:value="queryItems.tag_mode"
-              :options="queryModeOptions"
-              :loading="modeOptionsLoading"
-              :disabled="!queryItems.tag_project"
-              clearable
-              filterable
-              placeholder="先选应用后可选"
-              style="width: 140px"
-          />
-        </QueryBarItem>
         <QueryBarItem label="标签名称：">
-          <NInput
-              v-model:value="queryItems.tag_name"
-              clearable
-              placeholder="支持模糊搜索"
-              style="width: 160px"
-              @keypress.enter="$table?.handleSearch()"
-          />
+          <n-popover
+              v-model:show="tagQueryPopoverShow"
+              trigger="click"
+              placement="bottom-start"
+              :style="{ width: '400px' }"
+              :disabled="!queryItems.tag_project"
+          >
+            <template #trigger>
+              <n-input
+                  :value="getQuerySelectedTagNames()"
+                  readonly
+                  :clearable="queryItems.tag_ids?.length > 0"
+                  :disabled="!queryItems.tag_project"
+                  placeholder="先选应用后可选"
+                  style="width: 240px"
+                  @click="queryItems.tag_project && (tagQueryPopoverShow = !tagQueryPopoverShow)"
+                  @clear="queryItems.tag_ids = []"
+              />
+            </template>
+            <template #default>
+              <div class="tag-picker-panel">
+                <div class="tag-picker-col overlay-scroll">
+                  <n-list v-if="Object.keys(tagModeGroups).length > 0">
+                    <n-list-item
+                        v-for="(tags, mode) in tagModeGroups"
+                        :key="mode"
+                        :class="{ 'tag-mode-selected': selectedTagModeForQuery === mode, 'tag-mode-item': true }"
+                        @click="selectedTagModeForQuery = mode"
+                    >
+                      <span class="tag-mode-text" :title="mode">{{ mode }}</span>
+                    </n-list-item>
+                  </n-list>
+                  <div v-else class="autotest-empty-hint">暂无标签数据</div>
+                </div>
+                <div class="tag-picker-col tag-picker-col--names overlay-scroll">
+                  <n-list v-if="selectedTagModeForQuery && currentQueryTagNames.length > 0">
+                    <n-list-item
+                        v-for="tag in currentQueryTagNames"
+                        :key="tag.tag_id"
+                        :class="{ 'tag-name-selected': isQueryTagSelected(tag.tag_id) }"
+                        class="tag-list-item"
+                        @click="handleQueryTagSelect(tag.tag_id)"
+                    >
+                      <span class="tag-checkbox">{{ isQueryTagSelected(tag.tag_id) ? '✓ ' : '' }}</span>
+                      <span class="tag-name-text" :title="tag.tag_name">{{ tag.tag_name }}</span>
+                    </n-list-item>
+                  </n-list>
+                  <div v-else class="autotest-empty-hint">
+                    {{ selectedTagModeForQuery ? '该分类下暂无标签' : '请先选择左侧分类' }}
+                  </div>
+                </div>
+              </div>
+            </template>
+          </n-popover>
         </QueryBarItem>
       </template>
     </CrudTable>
@@ -497,7 +582,6 @@ const columns = computed(() => {
           <NSelect
               v-model:value="modalForm.tag_mode"
               :options="formModeOptions"
-              :loading="modeOptionsLoading"
               :disabled="!modalForm.tag_project"
               filterable
               tag
@@ -532,3 +616,79 @@ const columns = computed(() => {
     </CrudModal>
   </CommonPage>
 </template>
+
+<style scoped>
+.tag-mode-selected {
+  background-color: rgba(244, 81, 30, 0.1);
+  font-weight: 500;
+}
+
+/* 标签二级选择面板（左分类 / 右标签名） */
+.tag-picker-panel {
+  display: flex;
+  height: 300px;
+  width: 400px;
+}
+
+/* 左侧分类列 */
+.tag-picker-col {
+  width: 45%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* 右侧标签名列 */
+.tag-picker-col--names {
+  width: 50%;
+}
+
+.tag-name-selected {
+  background-color: rgba(244, 81, 30, 0.1);
+  font-weight: 500;
+}
+
+.tag-mode-item {
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+.tag-mode-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.tag-list-item {
+  cursor: pointer;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  color: #F4511E;
+  font-weight: bold;
+}
+
+.tag-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.n-list.item) {
+  transition: background-color 0.2s;
+}
+
+:deep(.n-list.item:hover) {
+  background-color: rgba(244, 81, 30, 0.1);
+}
+</style>

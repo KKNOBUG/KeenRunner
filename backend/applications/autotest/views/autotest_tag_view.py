@@ -255,8 +255,8 @@ async def search_tags(
     """
     try:
         q = Q()
-        if tag_in.tag_id:
-            q &= Q(id=tag_in.tag_id)
+        if tag_in.tag_ids:
+            q &= Q(id__in=tag_in.tag_ids)
         if tag_in.tag_code:
             q &= Q(tag_code=tag_in.tag_code)
         if tag_in.tag_mode:

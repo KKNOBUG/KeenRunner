@@ -120,12 +120,20 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增明细信息失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增明细信息失败，明细记录可能重复或关联数据无效，请检查报告、用例和步骤信息"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [report_code={detail_in.report_code}, "
+                f"case_id={case_id}, case_code={case_code}, step_code={detail_in.step_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
-            error_message: str = f"新增明细信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增明细信息失败，暂时无法保存执行明细，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [report_code={detail_in.report_code}, "
+                f"case_id={case_id}, case_code={case_code}, step_code={detail_in.step_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def create_details(self, details_in: List[AutoTestDetailCreate]) -> List[AutoTestDetailModel]:
@@ -149,12 +157,18 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             await self.model.bulk_create(instances)
             return instances
         except IntegrityError as e:
-            error_message: str = f"批量新增明细信息失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "批量新增明细信息失败，明细记录可能重复或关联数据无效，请检查报告、用例和步骤信息"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [detail_count={len(details_in)}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
-            error_message: str = f"批量新增明细信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "批量新增明细信息失败，暂时无法保存执行明细，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [detail_count={len(details_in)}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_detail(self, detail_in: AutoTestDetailUpdate, scope: DataScope) -> AutoTestDetailModel:
@@ -217,8 +231,12 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             instance = await self.update(id=detail_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"更新明细信息失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新明细信息失败，明细记录可能重复或关联数据无效，请检查报告、用例和步骤信息"
+            LOGGER.error(
+                f"{error_message}, 关键字段: [detail_id={detail_id}, "
+                f"report_code={report_code}, step_code={step_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_detail(
@@ -308,7 +326,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             dataset = await query.offset(page_offset).limit(page_size).order_by(*order_fields).values(*self.DETAIL_LIGHT_COLUMNS)
             return total, dataset
         except FieldError as e:
-            error_message: str = f"查询明细信息失败, 错误描述: {e}"
+            error_message: str = "查询明细信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -326,7 +344,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             rows = await query.order_by(*order_fields).values(*self.DETAIL_LIGHT_COLUMNS)
             return len(rows), rows
         except FieldError as e:
-            error_message: str = f"树模式全量查询明细失败, 错误描述: {e}"
+            error_message: str = "查询明细树失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 

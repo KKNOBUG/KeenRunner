@@ -50,6 +50,7 @@ class AutoTestTagSelect(AutoTestTagUpdate):
     page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
 
+    tag_ids: Optional[List[int]] = Field(None, description="标签ID列表")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态(0:启用, 1:禁用)")

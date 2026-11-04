@@ -192,7 +192,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             try:
                 return await self.create(obj_in=data_dict)
             except IntegrityError as e:
-                error_message: str = f"新增数据源异常, 违反约束规则: {e}"
+                error_message: str = "新增数据源失败，该步骤可能已绑定数据源，或关联的用例、步骤无效，请检查后重试"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
@@ -204,19 +204,19 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             try:
                 return await self.update(id=existing.id, obj_in=update_dict)
             except DoesNotExist as e:
-                error_message: str = f"恢复数据源失败, 记录[id={existing.id}]不存在, 错误描述: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                error_message: str = "恢复数据源失败，目标数据源不存在或已被删除，请刷新后重试"
+                LOGGER.error(
+                    f"{error_message}, 关键字段: [data_source_id={existing.id}]\n"
+                    f"{traceback.format_exc()}"
+                )
                 raise NotFoundException(message=error_message) from e
             except IntegrityError as e:
-                error_message: str = f"恢复数据源异常, 违反约束规则: {e}"
+                error_message: str = "恢复数据源失败，可能与其他数据源冲突，或关联的用例、步骤无效，请刷新后重试"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
-        error_message: str = (
-            f"新增数据源失败, 该步骤已绑定启用中的数据源, "
-            f"查询条件: [case_id={case_id}, step_code={step_code}]"
-        )
-        LOGGER.error(error_message)
+        error_message: str = "新增数据源失败，该步骤已绑定启用中的数据源，请更新现有数据源或先解绑"
+        LOGGER.error(f"{error_message}, 查询条件: [case_id={case_id}, step_code={step_code}]")
         raise DataAlreadyExistsException(message=error_message)
 
     async def update_data_source(
@@ -280,7 +280,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         try:
             await updated_instance.save()
         except IntegrityError as e:
-            error_message: str = f"更新数据源异常, 违反约束规则: {e}"
+            error_message: str = "更新数据源失败，数据源存在重复或无效内容，请检查后重试"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
         LOGGER.info(f"更新成功: {self.model.__name__}(id={instance.id}), 字段: {list(update_dict.keys())}")
@@ -299,7 +299,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询数据源异常, 错误描述: {e}"
+            error_message: str = "查询数据源失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 

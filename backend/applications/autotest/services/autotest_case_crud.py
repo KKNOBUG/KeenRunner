@@ -258,7 +258,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             instance = await self.create(case_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增用例信息失败, 违反约束规则: {e}"
+            error_message: str = "新增用例信息失败，用例名称重复或关联数据无效，请检查用例名称、所属应用和标签"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -374,11 +374,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 await self._cascade_public_api_step_project(instance)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新用例信息失败, 记录[id={case_id}]或[code={case_code}]不存在, 错误描述: {e}"
+            error_message: str = "更新用例信息失败，目标用例不存在或已被删除，请刷新后重试"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新用例信息异常, 违反约束规则: {e}"
+            error_message: str = "更新用例信息失败，用例名称重复或关联数据无效，请检查用例名称、所属应用和标签"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -536,7 +536,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询用例信息异常, 错误描述: {e}"
+            error_message: str = "查询用例信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -648,9 +648,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 )
                 create_case_dict["case_tags"] = case_tags
                 if existing_case_instance and existing_case_instance.state != 1:
-                    message_error: str = "相同应用下, 用例名称不允许重复"
+                    message_error: str = f"第{cid}条用例新增失败，相同应用下用例名称不允许重复"
                     LOGGER.error(
-                        f"第{cid}条用例新增失败, {message_error}, "
+                        f"{message_error}, "
                         f"查询条件: [case_project={case_project}, case_name={case_name}, "
                         f"case_type={case_type}, owner_user={owner_user}]"
                     )
@@ -665,7 +665,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         create_case_dict["owner_user"] = owner_user
                         new_case_instance: AutoTestCaseModel = await self.create(obj_in=create_case_dict)
                 except Exception as e:
-                    error_message: str = f"第{cid}条用例新增失败, 错误描述: {e}"
+                    error_message: str = f"第{cid}条用例新增失败，暂时无法保存用例，请稍后重试"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
 
@@ -744,9 +744,9 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         exclude_id=case_id,
                     )
                     if existing_case_instance:
-                        message_error: str = "相同应用下, 用例名称不允许重复"
+                        message_error: str = f"第{cid}条用例更新失败，相同应用下用例名称不允许重复"
                         LOGGER.error(
-                            f"第{cid}条用例新增失败, {message_error}, "
+                            f"{message_error}, "
                             f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, "
                             f"case_type={unique_case_type}, owner_user={case_instance.owner_user}]"
                         )
@@ -756,7 +756,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                     update_case_dict["case_version"] = case_instance.case_version + 1
                     updated_instance: AutoTestCaseModel = await self.update(id=case_id, obj_in=update_case_dict)
                 except Exception as e:
-                    error_message: str = f"第{cid}条用例更新失败, 错误描述: {e}"
+                    error_message: str = f"第{cid}条用例更新失败，暂时无法保存用例，请稍后重试"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
 

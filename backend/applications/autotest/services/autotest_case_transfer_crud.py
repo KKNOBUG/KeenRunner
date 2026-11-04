@@ -101,7 +101,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
             owner_user=next_owner_user,
         )
         if existing_case:
-            message_error: str = "转让用例失败"
+            message_error: str = "转让用例失败，转入人名下已存在同应用、同类型、同名称的用例，请更换转入人或先调整同名用例"
             LOGGER.error(
                 f"{message_error}, "
                 f"查询条件: ["
@@ -134,7 +134,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
                 )
                 return instance
         except IntegrityError as e:
-            error_message: str = f"转让用例失败, 违反约束规则: {e}"
+            error_message: str = "转让用例失败，转入人名下可能已存在同名用例，或用例状态已发生变化，请刷新后重试"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -157,6 +157,6 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询用例转让记录失败, 错误描述: {e}"
+            error_message: str = "查询用例转让记录失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
