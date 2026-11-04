@@ -12,24 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 
 
-class TokenBase(BaseModel):
-    """认证与令牌相关公共字段。"""
-
-    user_id: Optional[int] = Field(default=None, description="用户ID")
-    username: Optional[str] = Field(default=None, max_length=32, description="用户账号")
-    password: Optional[str] = Field(default=None, max_length=255, description="用户密码")
-    alias: Optional[str] = Field(default=None, max_length=64, description="用户姓名")
-    email: Optional[str] = Field(default=None, max_length=64, description="用户邮箱")
-    phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
-    avatar: Optional[str] = Field(default=None, max_length=255, description="用户头像")
-    state: Optional[int] = Field(default=None, description="状态(0:启用, 1:禁用)")
-    is_superuser: Optional[bool] = Field(default=None, description="是否为超级管理员")
-    last_login: Optional[datetime] = Field(default=None, description="最后一次登录时间")
-    access_token: Optional[str] = Field(default=None, description="访问令牌")
-    exp: Optional[datetime] = Field(default=None, description="令牌过期时间")
-
-
-class CredentialsSchema(TokenBase):
+class CredentialsSchema(BaseModel):
     """登录凭证入参。"""
 
     username: str = Field(..., min_length=1, max_length=32, description="用户账号[电子邮箱或手机号码]")
@@ -38,7 +21,7 @@ class CredentialsSchema(TokenBase):
     @field_validator("username", mode="before")
     @classmethod
     def _validate_username(cls, value):
-        """登录账号去空白；空白账号按参数错误拒绝，避免落入用户不存在分支。"""
+        """登录账号去空白。"""
         if isinstance(value, str):
             value = value.strip()
             if not value:
@@ -46,21 +29,24 @@ class CredentialsSchema(TokenBase):
         return value
 
 
-class JWTOut(TokenBase):
+class JWTOut(BaseModel):
     """登录成功返回的令牌与用户信息。"""
 
     access_token: str = Field(..., description="访问令牌")
+    user_id: int = Field(..., description="用户ID")
     username: str = Field(..., max_length=32, description="用户账号")
     alias: str = Field(..., max_length=64, description="用户姓名")
     email: str = Field(..., max_length=64, description="用户邮箱")
     phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
+    motto: Optional[str] = Field(default=None, max_length=255, description="用户签名")
     avatar: Optional[str] = Field(default=None, max_length=255, description="用户头像")
     state: int = Field(..., description="状态(0:启用, 1:禁用)")
     is_superuser: bool = Field(..., description="是否为超级管理员")
-    last_login: Optional[datetime] = Field(default=None, description="最后一次登录时间")
+    last_login: Optional[str] = Field(default=None, description="最后一次登录时间")
+    exp: Optional[str] = Field(..., description="令牌过期时间")
 
 
-class JWTPayload(TokenBase):
+class JWTPayload(BaseModel):
     """JWT 载荷字段。"""
 
     user_id: int = Field(..., description="用户ID")

@@ -31,7 +31,7 @@ from backend.applications.user.schemas.user_schema import (
     UserBatchDelete,
 )
 from backend.applications.user.services.user_crud import UserCrud
-from backend.configure import LOGGER, PROJECT_CONFIG
+from backend.configure import LOGGER, PROJECT_CONFIG, GLOBAL_CONFIG
 from backend.core.exceptions import (
     DataAlreadyExistsException,
     DataBaseStorageException,
@@ -517,7 +517,8 @@ async def login(
             return FailureResponse(message="登录失败，请稍后重试")
 
         access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        expire = datetime.now(timezone.utc) + access_token_expires
+        expire_time = datetime.now(timezone.utc) + access_token_expires
+        last_login_time = user.last_login.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2) if user.last_login else None
         data = JWTOut(
             access_token=create_access_token(
                 data=JWTPayload(
@@ -526,21 +527,24 @@ async def login(
                     state=user.state,
                     is_superuser=user.is_superuser,
                     token_version=user.token_version,
-                    exp=expire,
+                    exp=expire_time,
                 ),
             ),
+            user_id=user.id,
             username=user.username,
             alias=user.alias,
             email=user.email,
             phone=user.phone,
+            motto=user.motto,
             avatar=user.avatar,
             state=user.state,
             is_superuser=user.is_superuser,
-            last_login=user.last_login
+            last_login=last_login_time,
+            exp=expire_time.astimezone().strftime(GLOBAL_CONFIG.DATETIME_FORMAT2),
         )
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception as e:
-        LOGGER.error(f"登录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"登录失败，请稍后重试: {e}\n{traceback.format_exc()}")
         return FailureResponse(message="登录失败，请稍后重试")
 
 
@@ -578,7 +582,8 @@ async def transfer_login(
             return FailureResponse(message="登录失败，请稍后重试")
 
         access_token_expires = timedelta(minutes=PROJECT_CONFIG.AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        expire = datetime.now(timezone.utc) + access_token_expires
+        expire_time = datetime.now(timezone.utc) + access_token_expires
+        last_login_time = user.last_login.strftime(GLOBAL_CONFIG.DATETIME_FORMAT2) if user.last_login else None
         data = JWTOut(
             access_token=create_access_token(
                 data=JWTPayload(
@@ -587,21 +592,24 @@ async def transfer_login(
                     state=user.state,
                     is_superuser=user.is_superuser,
                     token_version=user.token_version,
-                    exp=expire,
+                    exp=expire_time,
                 ),
             ),
+            user_id=user.id,
             username=user.username,
             alias=user.alias,
             email=user.email,
             phone=user.phone,
+            motto=user.motto,
             avatar=user.avatar,
             state=user.state,
             is_superuser=user.is_superuser,
-            last_login=user.last_login
+            last_login=last_login_time,
+            exp=expire_time.astimezone().strftime(GLOBAL_CONFIG.DATETIME_FORMAT2),
         )
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception as e:
-        LOGGER.error(f"登录失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"登录失败，请稍后重试: {e}\n{traceback.format_exc()}")
         return FailureResponse(message="登录失败，请稍后重试")
 
 
