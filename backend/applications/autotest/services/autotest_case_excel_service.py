@@ -534,7 +534,7 @@ class CaseExcelService:
         }
         return marker_rows, marker_cols
 
-    # ==================== 通道 B：导出接口明细（HTTP 14列 / TCP 16列双布局模板） ====================
+    # ==================== 通道 B：导出接口用例（HTTP 14列 / TCP 16列双布局模板） ====================
 
     @classmethod
     def build_script_file_name(cls, username: Optional[str]) -> str:
@@ -675,7 +675,7 @@ class CaseExcelService:
         cls._set_sheet_cells_style(sheet, start_row=cls.SCRIPT_DATA_START_ROW, row_height=cls.SHEET_STYLE_ROW_HEIGHT)
         cls._auto_size_sheet_columns(sheet)
 
-    # ==================== 通道 C：导入接口明细（解析/校验/落库） ====================
+    # ==================== 通道 C：导入接口用例（解析/校验/落库） ====================
 
     @staticmethod
     def _cell_text(value: Any) -> str:

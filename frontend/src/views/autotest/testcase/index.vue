@@ -84,8 +84,8 @@ const canCreateCase = computed(() => hasCaseApiPermission('post', '/autotest/cas
 /** 额外动作与后端接口权限一一对应，无权限不下发，避免出现点了 403 的按钮 */
 const CASE_EXTRA_ACTIONS = [
   {label: '导出报文数据', key: 'exportData', perm: '/autotest/case/export_case_datagram_async'},
-  {label: '导出接口明细', key: 'exportScript', perm: '/autotest/case/export_case_scripts_async'},
-  {label: '导入接口明细', key: 'importScript', perm: '/autotest/case/import_case_scripts_async'},
+  {label: '导出接口用例', key: 'exportScript', perm: '/autotest/case/export_case_scripts_async'},
+  {label: '导入接口用例', key: 'importScript', perm: '/autotest/case/import_case_scripts_async'},
   {label: '接口模板下载', key: 'downloadTemplate', perm: '/autotest/case/import_template_download'},
   {label: '接口生成脚本', key: 'generateScript', perm: '/autotest/case/generate_case_scripts_async'},
 ]

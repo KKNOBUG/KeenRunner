@@ -101,12 +101,6 @@ class AutoTestAssertionOperation(StringEnum):
 class AutoTestTaskType(StringEnum):
     """
     任务业务类型：Task定义分类、Beat扫描过滤、执行记录分类均根据此区分。
-
-    - MULTIPLE_CASE_EXECUTE 为 krun_autotest_task.task_type 唯一实际取值（模型默认值，Beat 扫描按此过滤）；
-    - 其余成员仅作为 krun_autotest_record.task_type 执行记录分类；
-    - 历史存储值(autotest_api/用例执行/调度扫描/导出用例数据/导出公共接口)由
-      backend/scripts/task_type_rename_migrate.sql 一次性迁移至当前存储值；
-      部署含本次改动的代码前必须先执行该脚本，否则存量行反序列化失败、Beat 扫描失效。
     """
     MULTIPLE_CASE_EXECUTE = "多个用例执行"  # 用例编排：任务列表定时/手动，多用例整树执行
     SINGLE_CASE_EXECUTE = "单个用例执行"  # 单用例步骤树异步执行
