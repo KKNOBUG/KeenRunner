@@ -81,18 +81,22 @@ class CaseExcelService:
     DATAGRAM_SECTION_MARKS = frozenset({"HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"})
 
     # ==================== 常量：脚本模板布局 ====================
+    # 公共接口导出开关：为True时输出"变量/提取/断言"三列，为False时不输出；
+    EXPORT_VAR_EXT_ASS: bool = True
+    OPTIONAL_SHEET_COLUMNS: Tuple[str, ...] = ("变量", "提取", "断言")
     TCP_SHEET_NAME = "TCP模板"
-    TCP_SHEET_COLUMNS: Tuple[str, ...] = (
+    TCP_BASE_COLUMNS: Tuple[str, ...] = (
         "接口名称", "所属应用", "协议类型", "接口描述",
         "配置名称", "报文进制", "长度位", "报文总长度", "请求结束符", "响应结束符",
-        "请求体类型", "请求体", "变量", "提取", "断言", "所属人员",
+        "请求体类型", "请求体",
     )
+    TCP_SHEET_COLUMNS: Tuple[str, ...] = TCP_BASE_COLUMNS + OPTIONAL_SHEET_COLUMNS
     HTTP_SHEET_NAME = "HTTP模板"
-    HTTP_SHEET_COLUMNS: Tuple[str, ...] = (
+    HTTP_BASE_COLUMNS: Tuple[str, ...] = (
         "接口名称", "所属应用", "协议类型", "接口描述",
         "请求方式", "配置名称", "请求路径", "请求体类型", "请求体", "请求头",
-        "变量", "提取", "断言", "所属人员",
     )
+    HTTP_SHEET_COLUMNS: Tuple[str, ...] = HTTP_BASE_COLUMNS + OPTIONAL_SHEET_COLUMNS
     SCRIPT_SHEET_LAYOUTS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
         TCP_PROTOCOL: (TCP_SHEET_NAME, TCP_SHEET_COLUMNS),
         HTTP_PROTOCOL: (HTTP_SHEET_NAME, HTTP_SHEET_COLUMNS),
@@ -130,6 +134,16 @@ class CaseExcelService:
     HTTP_METHODS = frozenset(e.value for e in HTTPMethod)
     REQ_ARGS_TYPE = frozenset(e.value for e in AutoTestReqArgsType)
     TCP_ARGS_TYPE = frozenset({AutoTestReqArgsType.XML.value, AutoTestReqArgsType.JSON.value, AutoTestReqArgsType.RAW.value})
+
+    # ==================== 常量：步骤查询收窄 ====================
+    STEP_EXPORT_ONLY_FIELDS: Tuple[str, ...] = (
+        "id", "case_id", "parent_step_id", "step_no", "step_type", "data_source_id",
+        "request_args_type", "request_method", "request_url", "request_config_name",
+        "request_header", "request_params", "request_form_data", "request_form_urlencoded", "request_body", "request_text",
+        "tcp_radix", "tcp_radix_length", "tcp_datagram_length", "tcp_request_end_symbol", "tcp_response_end_symbol",
+    )
+    # 仅当EXPORT_VAR_EXT_ASS开关开启时追加查询"变量/提取/断言"三列，关闭时不查询。
+    STEP_EXPORT_OPTIONAL_FIELDS: Tuple[str, ...] = ("defined_variables", "extract_variables", "assert_validators")
 
     # ==================== 通用样式与文件工具 ====================
 
@@ -186,6 +200,11 @@ class CaseExcelService:
         if raw is None:
             return ""
         return getattr(raw, "value", raw) or ""
+
+    @classmethod
+    def _required_columns(cls, columns: Tuple[str, ...]) -> Tuple[str, ...]:
+        """完整列去掉可选尾列，得到必需列，可选列恒位于布局末尾。"""
+        return columns[: len(columns) - len(cls.OPTIONAL_SHEET_COLUMNS)]
 
     # ==================== 公共接口装载（双通道共用） ====================
 
@@ -244,12 +263,15 @@ class CaseExcelService:
             })
         return valid, invalid
 
-    @staticmethod
-    async def _load_case_steps(case_ids: List[int], services: Any) -> Dict[int, List[AutoTestStepModel]]:
-        """查询全部启用步骤并按用例分组。"""
+    @classmethod
+    async def _load_case_steps(cls, case_ids: List[int], services: Any) -> Dict[int, List[AutoTestStepModel]]:
+        """查询全部启用步骤并按用例分组；按导出所需字段收窄查询，可选三列随导出开关追加。"""
+        fields = cls.STEP_EXPORT_ONLY_FIELDS
+        if cls.EXPORT_VAR_EXT_ASS:
+            fields = fields + cls.STEP_EXPORT_OPTIONAL_FIELDS
         steps: List[AutoTestStepModel] = await services.step_curd.model.filter(
             case_id__in=case_ids, state__not=1
-        ).all()
+        ).only(*fields).all()
         grouped: Dict[int, List[AutoTestStepModel]] = defaultdict(list)
         for step in steps:
             grouped[step.case_id].append(step)
@@ -269,6 +291,7 @@ class CaseExcelService:
             parent_id = getattr(step, "parent_step_id", None)
             if parent_id is not None:
                 children[parent_id].append(step)
+
         collected: List[AutoTestStepModel] = []
         pending = sorted(roots, key=lambda step: getattr(step, "step_no", 0))
         while pending:
@@ -284,10 +307,12 @@ class CaseExcelService:
         ids = sorted({project_id for project_id in project_ids if project_id})
         if not ids:
             return names
+
         projects: List[AutoTestProjectModel] = await services.project_curd.model.filter(id__in=ids).all()
         names.update({project.id: project.project_name or "" for project in projects})
         for project_id in ids:
             names.setdefault(project_id, "")
+
         return names
 
     # ==================== 通道 A：导出报文数据（HEAD/BODY JSONPath 矩阵） ====================
@@ -534,7 +559,7 @@ class CaseExcelService:
         }
         return marker_rows, marker_cols
 
-    # ==================== 通道 B：导出接口用例（HTTP 14列 / TCP 16列双布局模板） ====================
+    # ==================== 通道 B：导出接口用例（HTTP 13列 / TCP 15列双布局模板） ====================
 
     @classmethod
     def build_script_file_name(cls, username: Optional[str]) -> str:
@@ -556,17 +581,21 @@ class CaseExcelService:
                 CaseScriptCodec.encode_kv_lines(getattr(step, "request_header", None), column="请求头", problems=problems)
                 if is_http else ""
             )
-            variables_text = CaseScriptCodec.encode_kv_lines(
-                getattr(step, "defined_variables", None), column="变量", problems=problems
-            )
             if form_attr:
                 body_text = CaseScriptCodec.encode_kv_lines(
                     getattr(step, form_attr, None), column="请求体", problems=problems
                 )
             else:
                 body_text = CaseScriptCodec.encode_step_body(step)
-            problems.extend(CaseScriptCodec.check_extract_roundtrip(getattr(step, "extract_variables", None)))
-            problems.extend(CaseScriptCodec.check_assert_roundtrip(getattr(step, "assert_validators", None)))
+
+            # 可选三列仅在导出开关开启时编码与校验：关闭时不落盘，其往返安全校验一并跳过（不参与导出即无错位风险）
+            optional_texts: Dict[str, str] = {}
+            if cls.EXPORT_VAR_EXT_ASS:
+                optional_texts["变量"] = CaseScriptCodec.encode_kv_lines(getattr(step, "defined_variables", None), column="变量", problems=problems)
+                problems.extend(CaseScriptCodec.check_extract_roundtrip(getattr(step, "extract_variables", None)))
+                problems.extend(CaseScriptCodec.check_assert_roundtrip(getattr(step, "assert_validators", None)))
+                optional_texts["提取"] = CaseScriptCodec.encode_extract_lines(getattr(step, "extract_variables", None))
+                optional_texts["断言"] = CaseScriptCodec.encode_assert_lines(getattr(step, "assert_validators", None))
 
             # 往返不安全项直接拦截该用例，避免导出成功但导入错位
             if problems:
@@ -584,10 +613,7 @@ class CaseExcelService:
                 "请求体类型": args,
                 "请求体": body_text,
                 "请求头": header_text,
-                "变量": variables_text,
-                "提取": CaseScriptCodec.encode_extract_lines(getattr(step, "extract_variables", None)),
-                "断言": CaseScriptCodec.encode_assert_lines(getattr(step, "assert_validators", None)),
-                "所属人员": getattr(case, "owner_user", None) or getattr(case, "created_user", None) or "",
+                **optional_texts,
             }
             if not is_http:
                 row.update(cls._tcp_frame_export_values(step))
@@ -617,10 +643,12 @@ class CaseExcelService:
         按导出用例的协议组合选择模板：全HTTP用HTTP模板、全TCP用TCP模板、混合用HTTP&TCP模板；
         模板内HTTP行写入[HTTP模板]sheet、TCP行写入[TCP模板]sheet；填充完成后将用户可见页签
         重命名为[HTTP数据]/[TCP数据]，[填写说明]sheet不做任何修改。
+        产物列以物理模板实际表头为准：EXPORT_VAR_EXT_ASS=False 仅保留必需列（模板含三列则删尾，
+        已删三列的模板原样输出）；=True 需模板完整含三列，缺列即报错，避免数据无处落盘。
 
         :param rows: 行字典列表（键为列名，TCP行额外携带帧配置列）
         :return: 填充完成的工作簿
-        :raises RuntimeError: 模板缺失或模板表头/页签与预定义布局不一致时
+        :raises RuntimeError: 模板缺失、页签缺失、表头不合法或开关开启但模板缺可选列时
         """
         has_http = any(row.get("协议类型") == cls.HTTP_PROTOCOL for row in rows)
         has_tcp = any(row.get("协议类型") == cls.TCP_PROTOCOL for row in rows)
@@ -639,25 +667,58 @@ class CaseExcelService:
             protocol_rows = [row for row in rows if row.get("协议类型") == protocol]
             if not protocol_rows:
                 continue
-            sheet = cls._resolve_script_sheet(workbook, template_name, sheet_name, columns)
-            cls._fill_script_sheet(sheet, columns, protocol_rows)
+            sheet, physical_header = cls._resolve_script_sheet(workbook, template_name, sheet_name, columns)
+            required = cls._required_columns(columns)
+            if cls.EXPORT_VAR_EXT_ASS:
+                # 开关开启需导出三列：物理模板必须完整含可选列，否则数据无处落盘（缺列即明确报错，不静默丢数据）
+                missing = [name for name in cls.OPTIONAL_SHEET_COLUMNS if name not in physical_header]
+                if missing:
+                    LOGGER.error(f"脚本模板[{sheet_name}]缺少可选列{missing}, 导出开关开启时无法写入")
+                    raise RuntimeError(f"脚本模板[{sheet_name}]缺少列{'/'.join(missing)}, 请联系管理员")
+                export_columns = tuple(physical_header)
+            else:
+                # 开关关闭仅导出必需列：物理表头长于必需列则删尾(完整模板)，等长则无需删(第三方已删三列的模板)
+                export_columns = required
+                if len(physical_header) > len(required):
+                    sheet.delete_cols(len(required) + 1, len(physical_header) - len(required))
+            cls._fill_script_sheet(sheet, export_columns, protocol_rows)
             sheet.title = cls.SCRIPT_EXPORT_SHEET_NAMES[protocol]
         return workbook
 
-    @staticmethod
+    @classmethod
     def _resolve_script_sheet(
-            workbook: Workbook, template_name: str, sheet_name: str, columns: Tuple[str, ...]
-    ) -> Worksheet:
-        """校验模板页签存在且表头与布局注册表一致，返回该sheet。"""
+            cls, workbook: Workbook, template_name: str, sheet_name: str, columns: Tuple[str, ...]
+    ) -> Tuple[Worksheet, List[str]]:
+        """
+        校验模板页签存在且表头合法，返回该sheet与物理表头（去尾随空列）。
+
+        合法口径与导入侧一致：必需列须按预定义顺序完整在前，"变量/提取/断言"为可选尾列，
+        允许任意子集乃至全部缺省，以兼容第三方已手动删除三列的模板。
+
+        :param workbook: 模板工作簿
+        :param template_name: 模板文件名，仅用于错误定位
+        :param sheet_name: 目标页签名
+        :param columns: 该协议的完整预定义列（必需列 + 可选尾列）
+        :return: (目标sheet, 物理表头列名列表)
+        :raises RuntimeError: 页签缺失或表头不合法时
+        """
         if sheet_name not in workbook.sheetnames:
             LOGGER.error(f"脚本模板缺少页签[{sheet_name}]: 模板={template_name}, 页签={workbook.sheetnames}")
             raise RuntimeError(f"脚本模板缺少页签[{sheet_name}], 请联系管理员")
+
         sheet = workbook[sheet_name]
-        header = [cell.value for cell in sheet[1][: len(columns)]]
-        if header != list(columns):
+        header = [cls._cell_text(cell.value) for cell in sheet[1][: len(columns)]]
+        while header and not header[-1]:
+            header.pop()
+
+        required = cls._required_columns(columns)
+        optional = set(cls.OPTIONAL_SHEET_COLUMNS)
+        tail = header[len(required):]
+        if header[: len(required)] != list(required) or len(set(tail)) != len(tail) or not set(tail) <= optional:
             LOGGER.error(f"脚本模板[{sheet_name}]表头与预定义表头不一致: 模板={header}, 预定义={list(columns)}")
             raise RuntimeError(f"脚本模板[{sheet_name}]表头与预定义表头不一致, 请联系管理员")
-        return sheet
+
+        return sheet, header
 
     @classmethod
     def _fill_script_sheet(cls, sheet: Worksheet, columns: Tuple[str, ...], rows: List[Dict[str, str]]) -> None:
@@ -687,20 +748,28 @@ class CaseExcelService:
         return str(value).strip()
 
     @classmethod
-    def _detect_script_sheet_layout(cls, sheet: Worksheet) -> Optional[Tuple[str, Tuple[str, ...]]]:
+    def _detect_script_sheet_layout(cls, sheet: Worksheet) -> Optional[Tuple[str, Dict[str, int]]]:
         """
         按首个sheet表头识别模板协议布局，兼容尾随空列；识别失败返回None。
 
+        必需列须按预定义顺序完整存在；"变量/提取/断言"为可选列，允许任意子集、任意顺序出现（缺省即视为未提供）。
+        识别成功返回列名→0基列索引映射，供逐行按名取值，避免可选列缺省导致的位置错位。
+
         :param sheet: 工作簿第一个sheet
-        :return: (协议, 列定义) 或 None
+        :return: (协议, 列名→列索引映射) 或 None
         """
         max_known = max(len(columns) for _, columns in cls.SCRIPT_SHEET_LAYOUTS.values())
         header = [cls._cell_text(cell.value) for cell in sheet[1][:max_known]]
         while header and not header[-1]:
             header.pop()
+        optional = set(cls.OPTIONAL_SHEET_COLUMNS)
         for protocol, (_, columns) in cls.SCRIPT_SHEET_LAYOUTS.items():
-            if header == list(columns):
-                return protocol, columns
+            required = cls._required_columns(columns)
+            if header[: len(required)] != list(required):
+                continue
+            tail = header[len(required):]
+            if len(set(tail)) == len(tail) and set(tail) <= optional:
+                return protocol, {name: index for index, name in enumerate(header)}
         return None
 
     @classmethod
@@ -764,9 +833,7 @@ class CaseExcelService:
         }, errors
 
     @classmethod
-    def _validate_row_identity(
-            cls, cells: Dict[str, str], sheet_protocol: str
-    ) -> Tuple[str, str, Optional[str], List[str]]:
+    def _validate_row_identity(cls, cells: Dict[str, str], sheet_protocol: str) -> Tuple[str, str, Optional[str], List[str]]:
         """校验接口名称/所属应用必填与协议类型合法性，返回(名称, 应用, 协议或None, 错误)。"""
         errors: List[str] = []
         case_name, project_name = cells["接口名称"], cells["所属应用"]
@@ -851,11 +918,11 @@ class CaseExcelService:
             request_header, header_errors = CaseScriptCodec.decode_kv_lines(header_text, "请求头")
             errors.extend(header_errors)
             request_header = request_header or None
-        defined_variables, kv_errors = CaseScriptCodec.decode_kv_lines(cells["变量"], "变量")
+        defined_variables, kv_errors = CaseScriptCodec.decode_kv_lines(cells.get("变量", ""), "变量")
         errors.extend(kv_errors)
-        extract_variables, extract_errors = CaseScriptCodec.decode_extract_lines(cells["提取"])
+        extract_variables, extract_errors = CaseScriptCodec.decode_extract_lines(cells.get("提取", ""))
         errors.extend(extract_errors)
-        assert_validators, assert_errors = CaseScriptCodec.decode_assert_lines(cells["断言"])
+        assert_validators, assert_errors = CaseScriptCodec.decode_assert_lines(cells.get("断言", ""))
         errors.extend(assert_errors)
         if errors:
             return None, errors
@@ -900,15 +967,15 @@ class CaseExcelService:
         layout = cls._detect_script_sheet_layout(sheet)
         if layout is None:
             return [], [{"row": 1, "reason": "脚本模板表头与预定义表头不一致"}]
-        sheet_protocol, columns = layout
+        sheet_protocol, column_index = layout
 
         rows: List[Dict[str, Any]] = []
         invalid: List[Dict[str, Any]] = []
         for row_no, excel_row in enumerate(
-                sheet.iter_rows(min_row=cls.SCRIPT_DATA_START_ROW, max_col=len(columns), values_only=True),
+                sheet.iter_rows(min_row=cls.SCRIPT_DATA_START_ROW, max_col=len(column_index), values_only=True),
                 start=cls.SCRIPT_DATA_START_ROW,
         ):
-            cells = {column: cls._cell_text(value) for column, value in zip(columns, excel_row)}
+            cells = {name: cls._cell_text(excel_row[index]) for name, index in column_index.items()}
             if not any(cells.values()):
                 continue
             row, errors = cls._parse_script_row(cells, row_no, sheet_protocol)
@@ -990,9 +1057,7 @@ class CaseExcelService:
         return duplicate_row_nos, invalid
 
     @staticmethod
-    async def _load_import_project_ids(
-            rows: List[Dict[str, Any]], services: Any
-    ) -> Dict[str, int]:
+    async def _load_import_project_ids(rows: List[Dict[str, Any]], services: Any) -> Dict[str, int]:
         """按模板出现的应用名批量定位启用应用，返回 应用名→主键（缺失即未命中）。"""
         project_names = list(dict.fromkeys(row["project_name"] for row in rows))
         if not project_names:
@@ -1034,9 +1099,7 @@ class CaseExcelService:
         return grouped
 
     @staticmethod
-    async def _load_import_root_steps(
-            grouped_cases: Dict[Tuple[int, str], List[AutoTestCaseModel]],
-    ) -> Dict[int, List[AutoTestStepModel]]:
+    async def _load_import_root_steps(grouped_cases: Dict[Tuple[int, str], List[AutoTestCaseModel]]) -> Dict[int, List[AutoTestStepModel]]:
         """
         批量装载命中接口的根步骤（含软删，供软删接口恢复覆盖时计数）。
 
@@ -1112,12 +1175,7 @@ class CaseExcelService:
         return prepared, invalid
 
     @classmethod
-    async def _persist_import_rows(
-            cls,
-            prepared: List[Dict[str, Any]],
-            services: Any,
-            owner_user: Optional[str],
-    ) -> Tuple[int, int]:
+    async def _persist_import_rows(cls, prepared: List[Dict[str, Any]], services: Any, owner_user: Optional[str]) -> Tuple[int, int]:
         """
         单事务落库：不存在则新增用例+步骤，存在则更新或恢复覆盖（版本号自增）。
 
