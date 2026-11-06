@@ -92,7 +92,7 @@ backend/
 - `krun_autotest_data_source`（参数化文件，dataset/dataset_names/cache_key）
 - 环境链：`env` 1—N `env_bind` 1—N `env_config`（唯一真实外键链）
 - 执行链：`task` → `record`（Celery 观测）→ `report`（每用例）→ `details`（每步骤×每圈快照）
-- 辅助：`tag`、`case_transfer`、`data_create`
+- 辅助：`tag`、`case_transfer`
 
 **核心执行链路**：
 ```

@@ -438,15 +438,15 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        # 硬删用例时步骤不再保留任何痕迹：先清理步骤关联的数据源/生成记录/上传文件，再删步骤与用例
-        from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
+        # 硬删用例时步骤不再保留任何痕迹：先清理步骤关联的数据源/上传文件，再删步骤与用例
+        from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
         from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 
         step_crud = AutoTestStepCrud()
         step_codes: List[str] = await step_crud.model.filter(case_id=case_id).values_list("step_code", flat=True)
         await step_crud.model.filter(case_id=case_id).delete()
         if step_codes:
-            await delete_step_create(case_id=case_id, step_code_list=list(step_codes))
+            await AutoTestDataSourceCrud().delete_step_data_sources(case_id=case_id, step_code_list=list(step_codes))
         await instance.delete()
         return instance
 

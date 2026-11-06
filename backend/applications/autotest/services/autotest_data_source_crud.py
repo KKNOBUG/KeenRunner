@@ -6,7 +6,6 @@
 @Module  : autotest_data_source_crud.py
 @DateTime: 2026/3/6
 """
-import os
 import traceback
 from typing import List, Optional, Dict, Any, Tuple
 from typing import Union
@@ -16,11 +15,10 @@ from tortoise.exceptions import FieldError
 from tortoise.exceptions import IntegrityError, DoesNotExist
 from tortoise.expressions import Q
 
-from backend.applications.autotest.models.autotest_data_create_model import AutoTestDataCreateModel
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate, AutoTestDataSourceUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
-from backend.configure import LOGGER, PROJECT_CONFIG
+from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
 from backend.core.exceptions import DataBaseStorageException
 
@@ -446,27 +444,17 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         )
         return new_record.id
 
+    async def delete_step_data_sources(self, case_id: int, step_code_list: List[str]) -> None:
+        """
+        硬删除指定步骤关联的数据源记录，并清理其本地上传文件。
 
-async def delete_step_create(case_id: int, step_code_list: List[str]) -> None:
-    """
-    硬删除指定步骤的数据源与生成记录，并清理关联本地文件。
-
-    :param case_id: 用例主键(用于定位上传目录)
-    :param step_code_list: 待清理的步骤标识列表
-    :return: None
-    """
-    instance_list = await AutoTestDataSourceModel.filter(step_code__in=step_code_list).all()
-    steps_info = await AutoTestDataCreateModel.filter(step_code__in=step_code_list).all()
-    await AutoTestDataSourceModel.filter(step_code__in=step_code_list).delete()
-    await AutoTestDataCreateModel.filter(step_code__in=step_code_list).delete()
-    for instance in instance_list:
-        if instance.file_path and await aos.path.exists(instance.file_path):
-            await aos.remove(instance.file_path)
-    LOGGER.warning(f"删除更新后多余步骤: [case_id={case_id}, step_code__in={list(step_code_list)}]关联数据已被清理")
-    for step_info in steps_info:
-        if step_info and step_info.file_name:
-            file_path = os.path.join(PROJECT_CONFIG.OUTPUT_UPLOAD_DIR, "autotest", str(case_id), step_info.file_name)
-            if await aos.path.exists(file_path):
-                await aos.remove(file_path)
-        if step_info and step_info.file_path and await aos.path.exists(step_info.file_path):
-            await aos.remove(step_info.file_path)
+        :param case_id: 用例主键(仅用于日志定位)
+        :param step_code_list: 待清理的步骤标识列表
+        :return: None
+        """
+        instance_list = await self.model.filter(step_code__in=step_code_list).all()
+        await self.model.filter(step_code__in=step_code_list).delete()
+        for instance in instance_list:
+            if instance.file_path and await aos.path.exists(instance.file_path):
+                await aos.remove(instance.file_path)
+        LOGGER.warning(f"删除步骤关联数据源: [case_id={case_id}, step_code__in={list(step_code_list)}]关联数据已被清理")

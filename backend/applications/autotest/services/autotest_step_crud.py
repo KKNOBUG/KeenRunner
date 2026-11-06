@@ -757,9 +757,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         # 单删步骤与单删用例一致为物理删除，软删语义仅保留在批量与淘汰链路
         await instance.delete()
-        # 同步硬删除该步骤关联的数据源与数据生成记录（延迟导入避免循环依赖）
-        from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
-        await delete_step_create(case_id=instance.case_id, step_code_list=[instance.step_code])
+        # 同步硬删除该步骤关联的数据源（延迟导入避免循环依赖）
+        from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+        await AutoTestDataSourceCrud().delete_step_data_sources(case_id=instance.case_id, step_code_list=[instance.step_code])
         return instance
 
     async def delete_steps_recursive(
@@ -848,11 +848,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                         f"step_no={step_instance.step_no}, step_code={step_instance.step_code})成功"
                     )
 
-        # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源与数据生成记录
+        # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源
         if deleted_by_case:
-            from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
+            from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+            data_source_curd = AutoTestDataSourceCrud()
             for ds_case_id, step_codes in deleted_by_case.items():
-                await delete_step_create(case_id=ds_case_id, step_code_list=step_codes)
+                await data_source_curd.delete_step_data_sources(case_id=ds_case_id, step_code_list=step_codes)
 
         return deleted_count
 
@@ -1359,9 +1360,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     )
                     if stale_rows:
                         await self.model.filter(id__in=[row["id"] for row in stale_rows]).delete()
-                        # 分支子步骤同属淘汰步骤：同步硬删其数据源与生成记录，避免残留孤儿数据源
-                        from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
-                        await delete_step_create(
+                        # 分支子步骤同属淘汰步骤：同步硬删其数据源，避免残留孤儿数据源
+                        from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+                        await AutoTestDataSourceCrud().delete_step_data_sources(
                             case_id=int(stale_rows[0]["case_id"] or 0),
                             step_code_list=[row["step_code"] for row in stale_rows if row["step_code"]],
                         )

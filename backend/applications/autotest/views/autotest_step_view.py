@@ -33,8 +33,8 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeSplice,
     StepVariablesBase,
     StepsExecuteConfigBase,
+    step_variables_list_from_storage,
 )
-from backend.applications.autotest.services.autotest_data_source_crud import delete_step_create
 from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.autotest.services.autotest_scope_guard import (
     CASE_TAG,
@@ -549,47 +549,57 @@ async def batch_update_steps_tree(
                                                 recursive_update_case_id(branch.branch_children, relevant_case_id)
 
                             recursive_update_case_id(steps_data, successful_case_id)
-                # 2.2 批量更新/新增步骤信息（递归处理）
-                step_result: Dict[str, Any] = await services.step_curd.batch_update_or_create_steps(steps_data)
+                # 2.2 先删除本次提交已淘汰的步骤，再新增/更新：
+                #     淘汰步骤若留到新增之后再删，其旧 step_no 会与"删一个+加一个"后前序重排到同号的新步骤
+                #     在新增守卫处瞬时冲突（误判"同一用例下步骤序号重复"）。保留集按 step_code/step_id 从整树
+                #     递归收集，口径与 IF 分支子步骤"先删后建"一致；全程同一事务，任一步失败整体回滚。
                 deleted_step_count: int = 0
+                target_case_id: Optional[int] = (
+                    success_case_detail[0].get("case_id") if success_case_detail else None
+                ) or getattr(case_data, "case_id", None)
+                if target_case_id:
+                    retained_codes: Set[str] = set()
+                    retained_ids: Set[int] = set()
+
+                    def collect_retained_identities(steps: List[AutoTestStepTreeUpdateItem]) -> None:
+                        """递归收集整树中仍保留步骤的 step_code/step_id（含 children 与条件分支子步骤）。"""
+                        for s in steps or []:
+                            if s.step_code:
+                                retained_codes.add(s.step_code)
+                            if s.step_id:
+                                retained_ids.add(s.step_id)
+                            if s.children:
+                                collect_retained_identities(s.children)
+                            for branch in s.branch_items or []:
+                                if branch.branch_children:
+                                    collect_retained_identities(branch.branch_children)
+
+                    collect_retained_identities(steps_data)
+                    stale_query = services.step_curd.model.filter(case_id=target_case_id)
+                    if retained_codes:
+                        stale_query = stale_query.exclude(step_code__in=retained_codes)
+                    if retained_ids:
+                        stale_query = stale_query.exclude(id__in=retained_ids)
+                    stale_step_codes: List[str] = [
+                        code for code in await stale_query.values_list("step_code", flat=True) if code
+                    ]
+                    if stale_step_codes:
+                        deleted_step_count = len(stale_step_codes)
+                        LOGGER.warning(
+                            f"删除淘汰步骤(先删后建): 用例(case_id={target_case_id})下 "
+                            f"step_code__in={stale_step_codes} 已被硬删除"
+                        )
+                        await services.step_curd.model.filter(
+                            case_id=target_case_id, step_code__in=stale_step_codes
+                        ).delete()
+                        # 同步硬删除被淘汰步骤关联的数据源
+                        await services.data_source_curd.delete_step_data_sources(case_id=int(target_case_id), step_code_list=stale_step_codes)
+
+                # 2.3 批量更新/新增步骤信息（递归处理）
+                step_result: Dict[str, Any] = await services.step_curd.batch_update_or_create_steps(steps_data)
                 created_step_count: int = step_result['created_count']
                 updated_step_count: int = step_result['updated_count']
-                process_step_count: Dict[str, Set[str]] = step_result['process_detail']
                 success_step_detail: List[Dict[str, Any]] = step_result['success_detail']
-                # 2.3 删除多余步骤（硬删除步骤表记录，并清理关联数据源/生成记录）
-                if process_step_count:
-                    for case_id, step_codes in process_step_count.items():
-                        actual_step_codes = await services.step_curd.model.filter(
-                            case_id=case_id
-                        ).values_list("step_code", flat=True)
-                        missing_step_codes: Set[str] = set(actual_step_codes) - step_codes
-                        if missing_step_codes:
-                            deleted_step_count += len(missing_step_codes)
-                            LOGGER.warning(
-                                f"删除更新后多余步骤: "
-                                f"步骤(case_id={case_id}, step_code__in={list(missing_step_codes)})已被硬删除"
-                            )
-                            await services.step_curd.model.filter(step_code__in=missing_step_codes).delete()
-                            # 同步硬删除被删步骤关联的数据源与数据生成记录
-                            await delete_step_create(case_id=int(case_id), step_code_list=list(missing_step_codes))
-                # 2.4 步骤全部删除：当 steps 为空且用例已存在时，硬删除该用例下所有步骤
-                elif success_case_detail and len(success_case_detail) > 0:
-                    successful_case_id: Optional[int] = success_case_detail[0].get("case_id")
-                    if successful_case_id:
-                        step_codes = await services.step_curd.model.filter(
-                            case_id=successful_case_id
-                        ).values_list("step_code", flat=True)
-                        deleted_step_count = len(step_codes)
-                        if deleted_step_count > 0:
-                            await services.step_curd.model.filter(case_id=successful_case_id).delete()
-                            await delete_step_create(
-                                case_id=successful_case_id,
-                                step_code_list=list(step_codes),
-                            )
-                            LOGGER.warning(
-                                f"步骤已全部删除: 用例(case_id={successful_case_id})下 "
-                                f"{deleted_step_count} 个步骤已被硬删除"
-                            )
                 LOGGER.info(
                     f"步骤处理完成："
                     f"新增步骤: {created_step_count}个, "
@@ -975,6 +985,11 @@ async def execute_step_tree(
 
         collected_session_variables: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(steps)
         merged_map: Dict[str, StepVariablesBase] = {}
+        # 用例级初始变量池为基底，与运行模式 execute_single_case 口径一致(后写覆盖先写)；
+        # 缺这段则调试模式下 case.session_variables 不并入，步骤占位符引用不到而无法替换
+        for var in step_variables_list_from_storage(case_instance.session_variables):
+            if var.key:
+                merged_map[var.key] = var
         for var in collected_session_variables:
             if var.key:
                 merged_map[var.key] = var
