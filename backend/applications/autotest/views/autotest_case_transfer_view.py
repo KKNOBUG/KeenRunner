@@ -9,10 +9,10 @@
 import traceback
 from typing import Optional
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.schemas.autotest_case_transfer_schema import (
     AutoTestCaseTransferCreate,
     AutoTestCaseTransferSelect,
@@ -41,7 +41,7 @@ autotest_case_transfer = APIRouter()
 @autotest_case_transfer.post("/create", summary="更新用例所属人", description="将用例所属人转让给指定人员并写入转让记录")
 async def transfer_case(
         transfer_in: AutoTestCaseTransferCreate = Body(..., description="转让信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
 ):
     """
     转让用例所属人。
@@ -70,7 +70,7 @@ async def transfer_case(
 @autotest_case_transfer.get("/get", summary="查询转让记录", description="根据转让记录ID查询单条转让记录")
 async def get_case_transfer(
         transfer_id: Optional[int] = Query(None, description="转让记录ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -106,7 +106,7 @@ async def get_case_transfer(
 @autotest_case_transfer.post("/search", summary="查询转让记录列表", description="根据条件分页查询转让记录(Body)")
 async def search_case_transfers(
         transfer_in: AutoTestCaseTransferSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

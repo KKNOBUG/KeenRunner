@@ -14,7 +14,7 @@ from fastapi import APIRouter, Body, Query, Depends, Path
 from starlette.responses import FileResponse
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel
 from backend.applications.autotest.models.autotest_env_model import AutoTestEnvModel
 from backend.applications.autotest.schemas.autotest_record_schema import AutoTestRecordSelect, AutoTestRecordBatchDelete
@@ -59,7 +59,7 @@ autotest_task = APIRouter()
 @autotest_task.post("/create", summary="新增任务", description="新增任务信息")
 async def create_task(
         task_in: AutoTestTaskCreate = Body(..., description="任务信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -102,7 +102,7 @@ async def create_task(
 async def delete_task(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -141,7 +141,7 @@ async def delete_task(
 @autotest_task.post("/update", summary="更新任务", description="根据id或code更新任务信息")
 async def update_task(
         task_in: AutoTestTaskUpdate = Body(..., description="任务信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -184,7 +184,7 @@ async def update_task(
 async def get_task(
         task_id: Optional[int] = Query(None, description="任务ID"),
         task_code: Optional[str] = Query(None, description="任务标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -231,7 +231,7 @@ async def get_task(
 @autotest_task.post("/search", summary="查询任务列表", description="根据条件分页查询任务列表信息(Body)")
 async def search_tasks(
         task_in: AutoTestTaskSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -315,7 +315,7 @@ async def search_tasks(
 @autotest_task.post("/run", summary="执行任务", description="立即执行任务")
 async def run_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -368,7 +368,7 @@ async def run_task(
 @autotest_task.post("/start", summary="启动任务", description="启用任务定时调度")
 async def start_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -410,7 +410,7 @@ async def start_task(
 @autotest_task.post("/stop", summary="停止任务", description="停用任务定时调度")
 async def stop_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -452,7 +452,7 @@ async def stop_task(
 @autotest_task.post("/copy", summary="新增任务副本", description="根据任务id复刻生成新任务")
 async def copy_task(
         task_in: AutoTestTaskId = Body(..., description="任务ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -529,7 +529,7 @@ async def preview_task_schedule(
 @autotest_task.post("/record/search", summary="查询执行记录", description="根据条件分页查询任务执行记录(Body)")
 async def search_task_records(
         record_in: AutoTestRecordSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -566,7 +566,7 @@ async def search_task_records(
 async def download_task_record_attachment(
         record_id: int = Path(..., description="执行记录主键"),
         key: str = Path(..., description="附件key，默认main"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -616,7 +616,7 @@ async def download_task_record_attachment(
 @autotest_task.delete("/record/delete", summary="删除执行记录", description="删除终态执行记录并物理清理产物文件")
 async def delete_task_record(
         record_id: int = Query(..., description="执行记录主键"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -647,7 +647,7 @@ async def delete_task_record(
 @autotest_task.post("/record/deletes", summary="批量删除执行记录", description="批量删除终态执行记录并物理清理产物文件")
 async def delete_task_records(
         record_in: AutoTestRecordBatchDelete = Body(..., description="批量删除执行记录入参"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

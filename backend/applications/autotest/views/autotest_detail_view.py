@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.schemas.autotest_detail_schema import (
     AutoTestDetailCreate,
     AutoTestDetailUpdate,
@@ -43,7 +43,7 @@ autotest_detail = APIRouter()
 @autotest_detail.post("/create", summary="新增明细", description="新增明细信息")
 async def create_step_detail(
         detail_in: AutoTestDetailCreate = Body(..., description="明细信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         _current_user: User = DependSuperUser,
 ):
     """
@@ -81,7 +81,7 @@ async def delete_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -125,7 +125,7 @@ async def delete_step_detail(
 @autotest_detail.post("/deletes", summary="批量删除执行明细", description="根据明细ID列表批量删除执行明细")
 async def delete_step_details(
         detail_in: AutoTestDetailBatchDelete = Body(..., description="批量删除明细入参"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -153,7 +153,7 @@ async def delete_step_details(
 @autotest_detail.post("/update", summary="更新明细", description="根据id或code更新明细信息")
 async def update_step_detail(
         detail_in: AutoTestDetailUpdate = Body(..., description="明细信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
         _current_user: User = DependSuperUser,
 ):
@@ -195,7 +195,7 @@ async def get_step_detail(
         detail_id: Optional[int] = Query(None, description="明细ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -246,7 +246,7 @@ async def get_step_detail(
 @autotest_detail.post("/search", summary="查询明细列表", description="根据条件分页查询明细列表信息(Body)")
 async def search_step_details(
         detail_in: AutoTestDetailSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -307,7 +307,7 @@ async def search_step_details(
 @autotest_detail.post("/search_tree", summary="查询明细树", description="根据报告标识查询完整明细树(后端组装, 不分页)")
 async def search_step_detail_tree(
         detail_in: AutoTestDetailTreeSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

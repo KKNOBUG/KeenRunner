@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.schemas.autotest_env_config_schema import AutoTestEnvConfigQueryByProjectsIn
 from backend.applications.autotest.schemas.autotest_env_schema import (
     AutoTestEnvCreate,
@@ -47,7 +47,7 @@ autotest_env = APIRouter()
 @autotest_env.post("/create", summary="新增环境", description="新增环境")
 async def create_environment(
         env_in: AutoTestEnvCreate = Body(..., description="环境信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -82,7 +82,7 @@ async def create_environment(
 async def delete_environment(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -115,7 +115,7 @@ async def delete_environment(
 @autotest_env.post("/deletes", summary="批量删除环境", description="根据id或code列表删除环境信息")
 async def delete_environments(
         env_in: AutoTestEnvDelete = Body(..., description="环境信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -146,7 +146,7 @@ async def delete_environments(
 @autotest_env.post("/update", summary="更新环境", description="根据id或code更新环境信息")
 async def update_environment(
         env_in: AutoTestEnvUpdate = Body(..., description="环境信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -179,7 +179,7 @@ async def update_environment(
 async def get_environment(
         env_id: Optional[int] = Query(None, description="环境ID"),
         env_code: Optional[str] = Query(None, description="环境标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -217,7 +217,7 @@ async def get_environment(
 
 @autotest_env.get("/get_names", summary="查询环境名称", description="查询去重后的环境名称列表")
 async def get_environment_names(
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -239,7 +239,7 @@ async def get_environment_names(
 @autotest_env.post("/search", summary="查询环境列表", description="根据条件分页查询环境列表信息(Body)")
 async def search_environments(
         env_in: AutoTestEnvSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -291,7 +291,7 @@ async def search_environments(
 @autotest_env.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
 async def classify_environment_configs(
         env_config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -325,7 +325,7 @@ async def classify_environment_configs(
 @autotest_env.post("/list", summary="查询环境聚合列表", description="按节点类型/应用聚合环境名称")
 async def list_environments(
         env_in: AutoTestEnvListQuery = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -349,7 +349,7 @@ async def list_environments(
 @autotest_env.post("/search_page", summary="查询环境分页列表", description="按应用/环境/节点类型/配置名称聚合后分页查询(Body)")
 async def search_page_environments(
         page_in: AutoTestEnvPageSelect = Body(..., description="环境分页查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -378,7 +378,7 @@ async def search_page_environments(
 async def get_all_apps(
         page: int = Query(1, ge=1, description="页码"),
         page_size: int = Query(10000, ge=1, le=99999, description="每页条数"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

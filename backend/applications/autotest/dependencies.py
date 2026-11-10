@@ -8,6 +8,8 @@
 """
 from dataclasses import dataclass
 
+from fastapi import Depends
+
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 from backend.applications.autotest.services.autotest_case_transfer_crud import AutoTestCaseTransferCrud
 from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
@@ -59,3 +61,6 @@ async def get_autotest_api_services() -> AutoTestServices:
         tag_curd=AutoTestTagCrud(),
         task_curd=AutoTestTaskCrud(),
     )
+
+
+DependAutoTestServices = Depends(get_autotest_api_services)

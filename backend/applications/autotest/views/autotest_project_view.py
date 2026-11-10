@@ -13,7 +13,7 @@ from fastapi import APIRouter, Body, Query, Depends
 from tortoise import connections
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.schemas.autotest_project_schema import (
     AutoTestProjectCreate,
     AutoTestProjectUpdate,
@@ -71,7 +71,7 @@ async def _fuzzy_json_list_ids(
 @autotest_project.post("/create", summary="新增应用", description="新增应用信息")
 async def create_project(
         project_in: AutoTestProjectCreate = Body(..., description="应用信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -109,7 +109,7 @@ async def create_project(
 async def delete_project(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -149,7 +149,7 @@ async def delete_project(
 @autotest_project.post("/delete", summary="批量删除应用", description="根据id或code列表删除应用信息")
 async def batch_delete_projects(
         project_in: AutoTestProjectDelete = Body(..., description="项目信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -179,7 +179,7 @@ async def batch_delete_projects(
 @autotest_project.post("/update", summary="更新应用", description="根据id或code更新应用信息")
 async def update_project(
         project_in: AutoTestProjectUpdate = Body(..., description="应用信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -221,7 +221,7 @@ async def update_project(
 async def get_project(
         project_id: Optional[int] = Query(None, description="应用ID"),
         project_code: Optional[str] = Query(None, description="应用标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -266,7 +266,7 @@ async def get_project(
 
 @autotest_project.get("/get_names", summary="查询应用名称", description="查询去重后的应用名称列表")
 async def get_project_names(
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -291,7 +291,7 @@ async def get_project_names(
 @autotest_project.post("/search", summary="查询应用列表", description="根据条件分页查询应用列表信息(Body)")
 async def search_projects(
         project_in: AutoTestProjectSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

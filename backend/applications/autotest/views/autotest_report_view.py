@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.schemas.autotest_report_schema import (
     AutoTestReportCreate,
     AutoTestReportSelect,
@@ -46,7 +46,7 @@ autotest_report = APIRouter()
 @autotest_report.post("/create", summary="新增报告", description="新增报告信息")
 async def create_report(
         report_in: AutoTestReportCreate = Body(..., description="报告信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         _current_user: User = DependSuperUser,
 ):
     """
@@ -83,7 +83,7 @@ async def create_report(
 async def delete_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -121,7 +121,7 @@ async def delete_report(
 @autotest_report.post("/deletes", summary="批量删除报告", description="根据报告ID或报告代码列表批量删除报告及其明细")
 async def delete_reports(
         report_in: AutoTestReportBatchDelete = Body(..., description="批量删除报告入参"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -149,7 +149,7 @@ async def delete_reports(
 @autotest_report.post("/update", summary="更新报告", description="根据id或code更新报告信息")
 async def update_report(
         report_in: AutoTestReportUpdate = Body(..., description="报告信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
         _current_user: User = DependSuperUser,
 ):
@@ -190,7 +190,7 @@ async def update_report(
 async def get_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -236,7 +236,7 @@ async def get_report(
 @autotest_report.post("/search", summary="查询报告列表", description="分页查询手工执行报告列表(Body)")
 async def search_reports(
         report_in: AutoTestReportSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -312,7 +312,7 @@ async def search_reports(
 @autotest_report.post("/search_batch_reports", summary="查询同批次报告列表", description="根据batch_code精确分页查询同批次报告")
 async def search_batch_reports(
         batch_detail_in: AutoTestReportBatchDetailSelect = Body(..., description="批次报告查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -351,7 +351,7 @@ async def search_batch_reports(
 @autotest_report.post("/search_task_batches", summary="查询任务执行历史", description="按任务聚合批次执行历史并计算结果")
 async def search_task_batches(
         batch_in: AutoTestReportBatchSelect = Body(..., description="批次查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -378,7 +378,7 @@ async def search_task_batches(
 @autotest_report.post("/search_batch_scripts", summary="查询批次脚本执行信息", description="按批次分页查询脚本执行信息")
 async def search_report_batch_scripts(
         script_in: AutoTestReportBatchScriptSelect = Body(..., description="批次脚本查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -408,7 +408,7 @@ async def search_report_batch_scripts(
                       description="按批次与用例分页查询执行报告；round_no可选：传入时按轮次过滤，缺省时返回全部轮次明细")
 async def search_script_round_reports(
         report_in: AutoTestReportScriptReportSelect = Body(..., description="轮次明细查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

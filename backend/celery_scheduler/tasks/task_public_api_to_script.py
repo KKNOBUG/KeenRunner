@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from tortoise.transactions import in_transaction
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from backend.applications.autotest.schemas.autotest_step_schema import (
     AutoTestStepTreeUpdateItem,

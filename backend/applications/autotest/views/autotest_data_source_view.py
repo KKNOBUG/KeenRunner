@@ -23,7 +23,7 @@ from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.autotest.schemas.autotest_data_source_schema import (
@@ -183,7 +183,7 @@ def _stream_xlsx_response(output: io.BytesIO, file_name: str) -> StreamingRespon
 @autotest_data_source.post("/create", summary="新增数据源", description="为指定用例步骤绑定一条数据源")
 async def create_data_source(
         data_source_in: AutoTestDataSourceCreate = Body(..., description="数据源信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -252,7 +252,7 @@ async def delete_data_source(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -301,7 +301,7 @@ async def delete_data_source(
 @autotest_data_source.post("/unbind_case", summary="更新数据源(解绑)", description="解绑用例下全部HTTP/TCP请求步骤及引用公共接口步骤的数据源")
 async def unbind_case_data_source(
         data_in: AutoTestDataSourceUnbindCase = Body(..., description="用例定位"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -341,7 +341,7 @@ async def unbind_case_data_source(
 @autotest_data_source.post("/update", summary="更新数据源", description="更新数据源信息")
 async def update_data_source(
         data_source_in: AutoTestDataSourceUpdate = Body(..., description="数据源信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -404,7 +404,7 @@ async def update_data_source(
 @autotest_data_source.post("/save_or_update", summary="更新数据源(保存)", description="保存或更新数据源信息")
 async def save_or_update_data_source(
         data_source_in: AutoTestDataSourceSaveOrUpdate = Body(..., description="数据源信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -562,7 +562,7 @@ async def _unbind_empty_data_source(
 @autotest_data_source.post("/update_fields", summary="更新数据源字段", description="按步骤当前报文同步数据源矩阵字段")
 async def update_data_source_fields(
         data_in: AutoTestDataSourceUpdateFields = Body(..., description="数据源定位"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -625,7 +625,7 @@ async def update_data_source_fields(
 @autotest_data_source.post("/build", summary="查询或构建数据源矩阵", description="查询或构建数据源矩阵并附带报文原始值映射(Body)")
 async def build_data_source(
         build_in: AutoTestDataSourceBuild = Body(..., description="数据源矩阵构建定位条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -714,7 +714,7 @@ async def get_data_source(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -771,7 +771,7 @@ async def get_data_source(
 @autotest_data_source.post(path="/query_dataset_names", summary="查询数据场景", description="查询用例数据场景名称")
 async def get_dataset_names(
         case_id: int = Form(..., description="用例ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -808,7 +808,7 @@ async def get_dataset_names(
 @autotest_data_source.post("/search", summary="查询数据源列表", description="根据条件分页查询数据源列表信息(Body)")
 async def search_data_sources(
         data_source_in: AutoTestDataSourceSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -866,7 +866,7 @@ async def get_data_source_by_case_step(
         case_code: Optional[str] = Query(None, description="用例标识代码"),
         step_id: Optional[int] = Query(None, description="步骤ID"),
         step_code: Optional[str] = Query(None, description="步骤标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 
 ):
@@ -913,7 +913,7 @@ async def get_data_source_by_case_step(
 async def get_scene_names_by_case(
         case_id: Optional[int] = Query(None, description="用例ID"),
         case_code: Optional[str] = Query(None, description="用例标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1018,7 +1018,7 @@ async def get_dataset_scenario(
         case_id: int = Query(..., description="用例ID"),
         step_code: str = Query(..., description="步骤标识代码"),
         dataset_name: str = Query(..., description="数据集/场景名称"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1081,7 +1081,7 @@ async def single_step_dataset_upload(
         step_code: str = Form(..., description="步骤标识代码"),
         file_desc: Optional[str] = Form(None, description="数据源文件描述"),
         file: UploadFile = File(..., description="数据源文件(仅支持.xlsx后缀, 单步骤模式仅读取第1个Sheet页)"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1223,7 +1223,7 @@ async def single_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
         step_code: str = Query(..., description="步骤标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1276,7 +1276,7 @@ async def single_step_template_download(
         case_id: int = Query(..., description="用例ID"),
         step_id: int = Query(..., description="步骤ID"),
         step_code: str = Query(..., description="步骤标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1328,7 +1328,7 @@ async def batch_step_dataset_upload(
         case_id: int = Form(..., description="用例ID"),
         file_desc: Optional[str] = Form(None, description="数据驱动文件场景描述"),
         file: UploadFile = File(..., description="xlsx 文件(每个 sheet 名须对应步骤树中一个可挂载数据源步骤(HTTP/TCP/引用公共接口)的步骤名)"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1506,7 +1506,7 @@ async def batch_step_dataset_upload(
 @autotest_data_source.get("/batch_step_dataset_download", summary="导出多步骤数据源汇总", description="根据用例汇总导出所有步骤数据源xlsx")
 async def batch_step_dataset_download(
         case_id: int = Query(..., description="用例ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -1568,7 +1568,7 @@ async def batch_step_dataset_download(
                           description="根据用例汇总导出所有可挂载数据源步骤(HTTP/TCP/引用公共接口)报文构建模板xlsx")
 async def batch_step_template_download(
         case_id: int = Query(..., description="用例ID"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """

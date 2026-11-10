@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
 
-from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
+from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
 from backend.applications.autotest.schemas.autotest_tag_schema import (
     AutoTestTagCreate,
     AutoTestTagSelect,
@@ -43,7 +43,7 @@ autotest_tag = APIRouter()
 @autotest_tag.post("/create", summary="新增标签", description="新增标签信息")
 async def create_tag(
         tag_in: AutoTestTagCreate = Body(..., description="标签信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -85,7 +85,7 @@ async def create_tag(
 async def delete_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -125,7 +125,7 @@ async def delete_tag(
 @autotest_tag.post("/delete", summary="批量删除标签", description="根据id或code列表删除标签信息")
 async def batch_delete_tags(
         tag_in: AutoTestTagDelete = Body(..., description="标签信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -155,7 +155,7 @@ async def batch_delete_tags(
 @autotest_tag.post("/update", summary="更新标签", description="根据id或code更新标签信息")
 async def update_tag(
         tag_in: AutoTestTagUpdate = Body(..., description="标签信息"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -197,7 +197,7 @@ async def update_tag(
 async def get_tag(
         tag_id: Optional[int] = Query(None, description="标签ID"),
         tag_code: Optional[str] = Query(None, description="标签标识代码"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
@@ -243,7 +243,7 @@ async def get_tag(
 @autotest_tag.post("/search", summary="查询标签列表", description="根据条件分页查询标签列表信息(Body)")
 async def search_tags(
         tag_in: AutoTestTagSelect = Body(..., description="查询条件"),
-        services: AutoTestServices = Depends(get_autotest_api_services),
+        services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
