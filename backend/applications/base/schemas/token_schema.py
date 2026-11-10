@@ -36,7 +36,7 @@ class JWTOut(BaseModel):
     user_id: int = Field(..., description="用户ID")
     username: str = Field(..., max_length=32, description="用户账号")
     alias: str = Field(..., max_length=64, description="用户姓名")
-    email: str = Field(..., max_length=64, description="用户邮箱")
+    email: Optional[str] = Field(default=None, max_length=64, description="用户邮箱(非必填)")
     phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
     motto: Optional[str] = Field(default=None, max_length=255, description="用户签名")
     avatar: Optional[str] = Field(default=None, max_length=255, description="用户头像")

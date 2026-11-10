@@ -10,6 +10,7 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Tuple, Optional, Union, List
 
+from email_validator import EmailNotValidError, validate_email
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.transactions import in_transaction
 
@@ -141,15 +142,9 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :param user_in: 新增用户入参
         :return: 新建的用户实例
         """
-        email = user_in.email
         username = user_in.username
         if await self.model.filter(username=username).exists():
             error_message: str = f"新增用户信息失败, 记录[username={username}]已存在"
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
-
-        if await self.model.filter(email=email).exists():
-            error_message: str = f"新增用户信息失败, 记录[email={email}]已存在"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
@@ -163,8 +158,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
                 if roles:
                     await instance.roles.add(*roles)
         except IntegrityError as e:
-            # 并发同名/同邮箱：预校验会同时通过，靠唯一索引收敛为业务已存在并回滚角色绑定
-            error_message: str = f"新增用户信息失败, 记录[username={username}, email={email}]信息已存在"
+            # 并发同名：预校验会同时通过，靠username唯一索引收敛为业务已存在并回滚角色绑定
+            error_message: str = f"新增用户信息失败, 记录[username={username}]信息已存在"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataAlreadyExistsException(message=error_message) from e
         return instance
@@ -213,6 +208,9 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         user_id: int = user_in.user_id
         user_if: dict = user_in.model_dump(exclude_none=True)
+        # 邮箱非必填：显式传空表示清空，exclude_none 会把它当成未修改，需要单独回填
+        if "email" in user_in.model_fields_set:
+            user_if["email"] = user_in.email
         try:
             instance = await self.update(id=user_id, obj_in=user_if)
         except DoesNotExist:
@@ -220,8 +218,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         except IntegrityError as e:
-            # 并发改名/改邮箱撞唯一索引与创建同口径，返回已存在而非服务异常
-            error_message: str = f"更新用户信息失败, 记录[id={user_id}]的账号/姓名+邮箱与已有记录冲突"
+            # 并发改名撞username唯一索引与创建同口径，返回已存在而非服务异常
+            error_message: str = f"更新用户信息失败, 记录[id={user_id}]的账号与已有记录冲突"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataAlreadyExistsException(message=error_message) from e
 
@@ -308,6 +306,55 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         await instance.save()
         return instance
 
+    @staticmethod
+    def _normalize_text(value: Any) -> Optional[str]:
+        """
+        第三方字段归一：去首尾空白，空值统一为None。
+
+        :param value: 第三方返回的原始字段值
+        :return: 归一后的字符串或None
+        """
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    @classmethod
+    def _normalize_int(cls, value: Any, default: int = 0, minimum: int = 0, maximum: Optional[int] = None) -> int:
+        """
+        第三方字段转整数：非数字或越界值一律回落默认值，避免脏数据打断自动注册。
+
+        :param value: 第三方返回的原始字段值
+        :param default: 无法转换或越界时的默认值
+        :param minimum: 允许的下界
+        :param maximum: 允许的上界，None表示不限制
+        :return: 合法的整数或默认值
+        """
+        try:
+            number = int(str(value).strip())
+        except (TypeError, ValueError):
+            return default
+        if number < minimum or (maximum is not None and number > maximum):
+            return default
+        return number
+
+    @classmethod
+    def _normalize_email(cls, value: Any) -> Optional[str]:
+        """
+        第三方邮箱归一：缺失或格式非法一律降级为None；邮箱已非必填，不能因脏数据阻断自动注册。
+
+        :param value: 第三方返回的邮箱
+        :return: 合法邮箱或None
+        """
+        email = cls._normalize_text(value)
+        if not email:
+            return None
+        try:
+            return validate_email(email, check_deliverability=False).normalized
+        except EmailNotValidError:
+            LOGGER.warning(f"第三方邮箱[{email}]格式非法, 自动注册时按未填写处理")
+            return None
+
     @classmethod
     async def confirm_user_authenticate(cls, username: str) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
@@ -315,11 +362,11 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         字段映射：
             - loginName -> username
-            - username -> alias
-            - telPhone -> phone
-            - gender -> gender
-            - email -> email
-            - userType -> user_type
+            - username -> alias（缺失时回落username）
+            - telPhone -> phone（缺失为None）
+            - gender -> gender（非数字或越界值回落0）
+            - email -> email（缺失或非法为None，邮箱非必填）
+            - userType -> user_type（非数字或越界值回落0）
 
         :param username: 用户账号
         :return: (是否真实有效, 本平台用户信息字段字典)；无效时返回(False, None)
@@ -358,11 +405,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         dept = await DepartmentCrud().get_by_code(code="AUTOTEST_DEPT", name="技术测试团队", on_error=True)
         build_user: Dict[str, Any] = {
             "username": username,
-            "alias": data.get("username"),
-            "phone": data.get("telPhone"),
-            "gender": int(data.get("gender") or 0),
-            "email": data.get("email"),
-            "user_type": int(data.get("userType") or 0),
+            # 第三方可能不返回姓名/邮箱/电话等字段，缺失值必须归一，避免触发必填校验或落库失败
+            "alias": cls._normalize_text(data.get("username")) or username,
+            "phone": cls._normalize_text(data.get("telPhone")),
+            "gender": cls._normalize_int(data.get("gender"), maximum=2),
+            "email": cls._normalize_email(data.get("email")),
+            "user_type": cls._normalize_int(data.get("userType"), maximum=9),
             "is_superuser": False,
             "dept_id": dept.id,
             "role_ids": [role.id],

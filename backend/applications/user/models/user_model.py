@@ -22,7 +22,7 @@ class User(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
     username = fields.CharField(max_length=16, unique=True, description="用户账号")
     password = fields.CharField(max_length=255, description="用户密码")
     alias = fields.CharField(max_length=64, description="用户姓名")
-    email = fields.CharField(max_length=64, description="用户邮箱")
+    email = fields.CharField(max_length=64, null=True, description="用户邮箱")
     phone = fields.CharField(max_length=20, null=True, description="用户电话")
     motto = fields.CharField(max_length=255, null=True, description="用户签名")
     avatar = fields.CharField(max_length=255, null=True, description="用户头像")
@@ -43,9 +43,6 @@ class User(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel):
 
     class Meta:
         table = "krun_user"
-        unique_together = (
-            ("alias", "email"),
-        )
 
     def __str__(self):
         return f"User(username={self.username}, alias={self.alias})"

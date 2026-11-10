@@ -19,7 +19,7 @@ class UserBase(BaseModel):
     username: Optional[str] = Field(default=None, max_length=16, description="用户账号")
     alias: Optional[str] = Field(default=None, max_length=32, description="用户姓名")
     phone: Optional[str] = Field(default=None, max_length=20, description="用户电话")
-    email: Optional[EmailStr] = Field(default=None, max_length=64, description="用户邮箱")
+    email: Optional[EmailStr] = Field(default=None, max_length=64, description="用户邮箱(非必填)")
     motto: Optional[str] = Field(default=None, max_length=255, description="用户签名")
     avatar: Optional[str] = Field(default=None, max_length=255, description="用户头像")
     address: Optional[str] = Field(default=None, max_length=255, description="用户住址")
@@ -31,6 +31,15 @@ class UserBase(BaseModel):
     dept_id: Optional[int] = Field(default=None, description="所属部门ID")
     role_ids: Optional[List[int]] = Field(default=None, description="角色ID列表")
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, value):
+        """邮箱非必填：空白输入统一按未填写处理，避免空串触发邮箱格式校验。"""
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
 
 class UserCreate(UserBase):
     """新增用户入参。"""
@@ -38,7 +47,7 @@ class UserCreate(UserBase):
     username: str = Field(..., min_length=1, max_length=16, description="用户账号")
     password: str = Field(..., min_length=1, max_length=255, description="用户密码")
     alias: str = Field(..., max_length=32, description="用户姓名")
-    email: EmailStr = Field(..., max_length=64, description="用户邮箱")
+    email: Optional[EmailStr] = Field(default=None, max_length=64, description="用户邮箱(非必填)")
     gender: int = Field(default=0, ge=0, le=2, description="用户性别: 0未知 1男 2女")
     avatar: str = Field(default="/static/avatar/default/20250101010101.png", max_length=255, description="用户头像")
     user_type: int = Field(default=0, ge=0, le=9, description="用户类型：0xx 1xx 2xx")

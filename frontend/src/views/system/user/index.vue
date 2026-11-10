@@ -349,15 +349,16 @@ const validateAddUser = {
   ],
   email: [
     {
-      required: true,
-      message: '请输入邮箱地址',
-      trigger: ['input', 'change'],
-    },
-    {
       trigger: ['blur'],
+      // 邮箱非必填：留空放行，填写时才校验格式
       validator: (rule, value, callback) => {
+        const email = (value || '').trim()
+        if (!email) {
+          callback()
+          return
+        }
         const re = /^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/
-        if (!re.test(modalForm.value.email)) {
+        if (!re.test(email)) {
           callback('邮箱格式错误')
           return
         }
@@ -526,7 +527,7 @@ const validateAddUser = {
               <NInput v-model:value="modalForm.alias" clearable placeholder="请输入用户名称"/>
             </NFormItem>
             <NFormItem label="电子邮箱" path="email">
-              <NInput v-model:value="modalForm.email" clearable placeholder="请输入电子邮箱"/>
+              <NInput v-model:value="modalForm.email" clearable placeholder="请输入电子邮箱（选填）"/>
             </NFormItem>
             <NFormItem label="手机号码" path="phone">
               <NInput v-model:value="modalForm.phone" clearable placeholder="请输入手机号码"/>
