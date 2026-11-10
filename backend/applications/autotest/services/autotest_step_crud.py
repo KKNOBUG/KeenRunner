@@ -48,7 +48,6 @@ from backend.core.exceptions import (
     ParameterException,
     DataBaseStorageException,
     DataAlreadyExistsException,
-    NoPermissionException,
 )
 from backend.enums import (
     AutoTestCaseType,
@@ -394,9 +393,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             quotes = [strip_step_for_copy_model(q) for q in (step.quote_steps or [])]
             branches = [
                 branch.model_copy(update={
-                    "branch_children": [
-                        strip_step_for_copy_model(child) for child in (branch.branch_children or [])
-                    ] or None,
+                    "branch_children": [strip_step_for_copy_model(child) for child in (branch.branch_children or [])] or None,
                 })
                 for branch in (step.branch_items or [])
             ]
@@ -589,8 +586,13 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 instance: AutoTestStepModel = await self.create(step_dict)
                 return instance
             except IntegrityError as e:
-                error_message: str = f"新增步骤信息失败, 违反约束规则: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                error_message: str = "新增步骤信息失败，步骤序号可能重复或关联用例、父步骤、引用用例无效，请检查步骤配置后重试"
+                LOGGER.error(
+                    f"{error_message}, "
+                    f"关键字段: [case_id={case_id}, step_no={step_no}, "
+                    f"parent_step_id={step_in.parent_step_id}, quote_case_id={step_in.quote_case_id}]\n"
+                    f"{traceback.format_exc()}"
+                )
                 raise DataBaseStorageException(message=error_message) from e
 
         try:
@@ -600,8 +602,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             instance: AutoTestStepModel = await self.update(id=existing_step.id, obj_in=step_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)步骤信息异常, 违反约束规则或空指针异常: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增步骤信息失败，目标步骤可能已被删除或步骤数据与现有记录冲突，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [case_id={case_id}, step_no={step_no}, step_id={existing_step.id}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_step(self, step_in: AutoTestStepUpdate, scope: DataScope) -> AutoTestStepModel:
@@ -649,9 +655,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 state__not=1
             ).exclude(id=step_id).first()
             if existing_step:
-                error_message: str = (
-                    f"根据(case_id={case_id}, step_no={step_no})条件检查步骤信息失败, 同一用例下步骤序号不允许重复"
-                )
+                error_message: str = f"根据(case_id={case_id}, step_no={step_no})条件检查步骤信息失败, 同一用例下步骤序号不允许重复"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
@@ -715,12 +719,20 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             instance = await self.update(id=step_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新步骤信息失败, 记录[id={step_id}]或[code={step_code}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新步骤信息失败，目标步骤不存在或已被删除，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [step_id={step_id}, step_code={step_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新步骤信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新步骤信息失败，步骤序号可能重复或关联用例、父步骤、引用用例无效，请检查步骤配置后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [step_id={step_id}, step_code={step_code}, case_id={instance.case_id}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_step(
@@ -870,7 +882,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询步骤信息异常, 错误描述: {e}"
+            error_message: str = "查询步骤信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -1036,25 +1048,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     on_error=True,
                 )
 
-                # 同一用例内 step_no 必须全局唯一（前端树序列化按全树前序统一编号）：
-                # 新增步骤尚未生成 step_code，若把 step_code=None 拼进查询条件会退化为 step_code IS NULL，
-                # 查不到库中已有记录，重复序号会被静默放行并落库成两条
-                existing_step_instance: Optional[AutoTestStepModel] = await self.model.filter(
-                    case_id=case_id,
-                    step_no=step_no,
-                    state__not=1,
-                ).first()
-                if existing_step_instance:
-                    error_message: str = (
-                        f"第{sid}步骤新增失败, "
-                        f"根据(case_id={case_id}, step_no={step_no})条件查询步骤信息失败, "
-                        f"同一用例下步骤序号不允许重复(已存在step_code={existing_step_instance.step_code})"
-                    )
-                    LOGGER.error(error_message)
-                    raise DataAlreadyExistsException(message=error_message)
-
-                final_parent_step_id = parent_step_id if parent_step_id is not None else step_data.parent_step_id
                 parent_step: Optional[AutoTestStepModel] = None
+                final_parent_step_id = parent_step_id if parent_step_id is not None else step_data.parent_step_id
                 if final_parent_step_id:
                     # 递归调用时父实例已由上层传入，命中即复用，避免每个子节点重复查询同一父步骤
                     if parent_step_instance is not None and final_parent_step_id == parent_step_instance.id:
@@ -1111,8 +1106,13 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 try:
                     new_step_instance: AutoTestStepModel = await self.create(create_step_dict)
                 except Exception as e:
-                    error_message: str = f"第{sid}条步骤新增失败, 错误描述: {e}"
-                    LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                    error_message: str = f"第{sid}条步骤新增失败，步骤数据无效或暂时无法保存，请检查步骤配置后重试"
+                    LOGGER.error(
+                        f"{error_message}, "
+                        f"关键字段: [case_id={case_id}, step_no={step_no}, "
+                        f"parent_step_id={final_parent_step_id}, step_type={step_data.step_type}]\n"
+                        f"{traceback.format_exc()}"
+                    )
                     raise DataBaseStorageException(message=error_message) from e
 
                 # 复制来的步骤携带数据源时，同步复制为新步骤的独立数据源（仅复制解析数据，文件字段置空）
@@ -1216,24 +1216,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     ]
                     update_dict.pop("loop_conditions", None)
 
-                if "step_no" in update_dict:
-                    case_id = update_dict.get("case_id", step_instance.case_id)
-                    step_no = update_dict.get("step_no", step_instance.step_no)
-                    existing_step_instance = await self.model.filter(
-                        case_id=case_id,
-                        step_no=step_no,
-                        step_code=step_code,
-                        state__not=1
-                    ).exclude(step_code=step_code).first()
-                    if existing_step_instance:
-                        error_message: str = (
-                            f"第{sid}步骤更新失败, "
-                            f"根据(case_id={case_id}, step_no={step_no}, step_code={step_code})条件查询步骤信息失败, "
-                            f"同一用例下步骤序号不允许重复"
-                        )
-                        LOGGER.error(error_message)
-                        raise DataBaseStorageException(message=error_message)
-
+                # step_no 唯一性改由整树写完后的终态校验保证，不在更新途中逐步拦截（理由同新增分支）
                 if "case_id" in update_dict:
                     case_id: int = update_dict.get("case_id", step_instance.case_id)
                     case: Optional[AutoTestCaseModel] = await _get_case_cached(
@@ -1331,8 +1314,13 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     updated_instance = step_instance.update_from_dict(update_dict)
                     await updated_instance.save()
                 except Exception as e:
-                    error_message: str = f"第{sid}步骤更新失败, 错误描述: {e}"
-                    LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                    error_message: str = f"第{sid}步骤更新失败，步骤数据无效或暂时无法保存，请检查步骤配置后重试"
+                    LOGGER.error(
+                        f"{error_message}, "
+                        f"关键字段: [step_id={step_id}, step_code={step_code}, "
+                        f"case_id={step_instance.case_id}, step_no={step_data.step_no}]\n"
+                        f"{traceback.format_exc()}"
+                    )
                     raise DataBaseStorageException(message=error_message) from e
 
                 processed_step_codes.setdefault(updated_instance.case_id, set()).add(updated_instance.step_code)
@@ -1399,6 +1387,28 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             "process_detail": processed_step_codes,
             "success_detail": success_detail
         }
+
+    async def assert_step_no_unique(self, case_id: int) -> None:
+        """
+        同一用例下step_no全局唯一，在整个步骤树结构写入完成后，断言是否存在重复，如有重复即抛异常触发事务回滚。
+
+        :param case_id: 用例主键ID
+        :return: None
+        :raises DataAlreadyExistsException: 同一用例下存在重复 step_no
+        """
+        step_nos: List[int] = await self.model.filter(
+            case_id=case_id, state__not=1
+        ).values_list("step_no", flat=True)
+        seen: Set[int] = set()
+        duplicates: Set[int] = set()
+        for step_no in step_nos:
+            if step_no in seen:
+                duplicates.add(step_no)
+            seen.add(step_no)
+        if duplicates:
+            error_message: str = f"用例(case_id={case_id})步骤序号重复, 重复的step_no={sorted(duplicates)}, 同一用例下步骤序号必须唯一"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
 
     async def execute_single_case(
             self,
@@ -1790,10 +1800,13 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 case_id, case_results, case_ok=case_ok, empty_error=empty_error,
             )
         except Exception as e:
-            error_message: str = f"执行用例[id={case_id}]异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "执行用例失败，暂时无法完成用例执行，请稍后重试"
+            LOGGER.error(f"{error_message}, 关键字段: [case_id={case_id}]\n{traceback.format_exc()}")
             result = self._aggregate_case_runs(
-                case_id, [], case_ok=False, empty_error=error_message,
+                case_id=case_id,
+                case_results=[],
+                case_ok=False,
+                empty_error=error_message,
             )
         LOGGER.info(f"==> 执行用例[id={case_id}]结束")
         return result

@@ -298,8 +298,12 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
                 instance = await self.create(task_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增任务信息失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增任务信息失败，相同应用下任务名称可能重复，或关联应用、用例无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [task_name={task_name}, task_project={task_project}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def copy_task(
@@ -419,12 +423,20 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             instance = await self.update(id=task_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新任务信息失败, 记录[id={task_id}]或[code={task_code}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新任务信息失败，目标任务不存在或已被删除，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [task_id={task_id}, task_code={task_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新任务信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新任务信息失败，相同应用下任务名称可能重复，或关联应用、用例无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [task_id={task_id}, task_code={task_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_task(
@@ -524,6 +536,6 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
                 return total, list(instances)
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询任务信息失败, 错误描述: {e}"
+            error_message: str = "查询任务信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e

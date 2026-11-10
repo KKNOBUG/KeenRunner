@@ -112,8 +112,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"新增报告信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增报告信息失败，报告标识可能重复或关联用例无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [case_id={case_id}, case_code={case_code}, report_code={report_in.report_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_report(self, report_in: AutoTestReportUpdate, scope: DataScope) -> AutoTestReportModel:
@@ -148,8 +152,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             instance = await self.update(id=report_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = f"更新报告信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新报告信息失败，报告标识可能重复或关联用例无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [report_id={report_id}, report_code={report_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_report(
@@ -182,9 +190,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
             detail_crud = AutoTestDetailCrud()
             # 明细与报告均物理删除，同事务避免明细已删而报告未删的中间态
-            count = await detail_crud.model.filter(
-                report_code=report_code
-            ).delete()
+            count = await detail_crud.model.filter(report_code=report_code).delete()
             LOGGER.warning(f"成功删除报告[report_code={report_code}]关联的{count}条明细信息")
             await instance.delete()
             return instance
@@ -257,7 +263,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询报告信息异常, 错误描述: {e}"
+            error_message: str = "查询报告信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 

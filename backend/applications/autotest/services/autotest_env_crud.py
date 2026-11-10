@@ -251,8 +251,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             dict_row = await AutoTestEnvModel.filter(env_name=name).first()
             if dict_row:
                 return dict_row
-            error_message: str = f"新增环境枚举信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增环境枚举信息失败，环境名称与现有记录冲突，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [env_name={name}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def create_env(
@@ -292,8 +296,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             try:
                 return await self.create(obj_in=payload)
             except IntegrityError as e:
-                error_message: str = f"新增环境绑定信息异常, 违反约束规则: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                error_message: str = "新增环境绑定信息失败，相同应用、环境及节点类型可能已存在，或关联应用、环境无效，请检查后重试"
+                LOGGER.error(
+                    f"{error_message}, "
+                    f"关键字段: [project_id={env_in.project_id}, env_enum_id={dict_row.id}, env_type={env_in.env_type}]\n"
+                    f"{traceback.format_exc()}"
+                )
                 raise DataBaseStorageException(message=error_message) from e
 
         # 已启用则直接复用；仅软删记录需要恢复
@@ -316,8 +324,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                 restore_dict["updated_user"] = actor
             return await self.update(id=existing_bind.id, obj_in=restore_dict)
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"更新环境绑定信息异常, 违反约束规则或空指针异常: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增环境绑定信息失败，目标环境绑定可能已被删除或与现有记录冲突，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [env_bind_id={existing_bind.id}, project_id={env_in.project_id}, env_enum_id={dict_row.id}, env_type={env_in.env_type}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_env(self, env_in: AutoTestEnvUpdate, scope: DataScope) -> AutoTestEnvBindModel:
@@ -375,12 +387,20 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             instance = await self.update(id=env_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新环境绑定信息失败, 记录[id={env_id}]或[code={env_code}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新环境绑定信息失败，目标环境绑定不存在或已被删除，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [env_id={env_id}, env_code={env_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新环境绑定信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新环境绑定信息失败，相同应用、环境及节点类型可能已存在，或关联环境无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [env_id={env_id}, env_code={env_code}, project_id={instance.project_id}, env_type={instance.env_type}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def _assert_env_not_referenced(self, instance: AutoTestEnvBindModel) -> None:
@@ -531,7 +551,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询环境绑定信息异常, 错误描述: {e}"
+            error_message: str = "查询环境绑定信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -656,8 +676,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                 result[pid] = {et: sorted(names) for et, names in grouped.get(pid, {}).items()}
             return result
         except Exception as e:
-            error_message = f"查询环境信息异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "查询环境信息失败，暂时无法获取环境信息，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [project_id={project_id}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise ParameterException(message=error_message) from e
 
     @staticmethod
@@ -758,6 +782,11 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         except ParameterException:
             raise
         except Exception as e:
-            error_message = f"查询环境搜索列表异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "查询环境搜索列表失败，暂时无法获取环境列表，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [project_id={query_in.project_id}, env_name={query_in.env_name}, "
+                f"env_type={query_in.env_type}, page={query_in.page}, page_size={query_in.page_size}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise ParameterException(message=error_message) from e

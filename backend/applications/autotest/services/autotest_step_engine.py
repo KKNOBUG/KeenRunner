@@ -131,6 +131,7 @@ class StepExecutionResult:
     assert_validators: List[Dict[str, Any]] = field(default_factory=list)
     children: List["StepExecutionResult"] = field(default_factory=list)
 
+
 class HttpClientProtocol(Protocol):
     """
     HTTP客户端协议，便于依赖注入和单元测试。
@@ -174,7 +175,7 @@ class StepExecutionContext:
         :param report_code: 报告编码，用于保存步骤明细
         :param dataset_name: 参数化时传入的数据集名称，HTTP/TCP执行器据此 + case_id/step_code查表取数
         :param http_client: 可选HTTP客户端，不传则在__aenter__中创建
-        :param initial_variables: 初始会话变量列表List[StepVariablesBase]；会经占位符解析后赋给session_variables
+        :param initial_variables: 初始会话变量列表List[StepVariablesBase]；先置入session_variables再整体解析占位符，池内变量互引可求值
         :param pending_details: save_report 时收集待落库明细的列表；非None时_save_step_detail仅追加不写库
         """
         self.case_id = case_id
@@ -197,7 +198,7 @@ class StepExecutionContext:
         self._exit_stack = AsyncExitStack()
         self.defined_variables: List[StepVariablesBase] = []
         self.session_variables: List[StepVariablesBase] = []
-        self.session_variables = self.resolve_placeholders(initial_variables) or []
+        self.initialize_session_variables(initial_variables)
         self.timeout: float = 30.0
         self.connect: float = 10.0
 
@@ -257,6 +258,22 @@ class StepExecutionContext:
             is_core_engine=True,
             finished_variables=self
         )
+
+    def initialize_session_variables(self, initial_variables: Optional[List[StepVariablesBase]]) -> List[StepVariablesBase]:
+        """
+        重置会话变量池并求值，口径对齐用例初始化(__init__)：先置入原始池再整体解析函数占位符。
+
+        执行中途进入被引用用例时复用此入口，使被引用用例与宿主用例做相同的变量池初始化，
+        避免中途替换/并入的池绕过__init__那次解析而残留${generate_xxx()}字面量。
+        先置入再解析使变量互引在本池内求值(不回看宿主池)，维持引用域半隔离语义。
+
+        :param initial_variables: 原始初始变量池(未解析)，None按空池处理
+        :return: 解析后的会话变量池，与self.session_variables指向同一列表(执行期就地追加对调用方可见)
+        """
+        self.session_variables = list(initial_variables or [])
+        resolved: List[StepVariablesBase] = self.resolve_placeholders(self.session_variables) or []
+        self.session_variables = resolved
+        return resolved
 
     def resolve_xml_placeholders(self, xml_text: str, step_code: Optional[str] = None) -> str:
         """
@@ -2406,7 +2423,8 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
         将引用步骤自身追加的defined_variables/extract_variables/assert_validators合并进内层HTTP/TCP请求步骤。
 
         仅merge_and_override_fields开启且步骤类型具有响应上下文（HTTP/TCP）时合并；
-        合并顺序为原数据在前、追加在后；同名变量由追加项覆盖（剔除同名原变量，避免占位符解析按列表顺序取首个命中时读到原值）；同名提取按执行先后自然覆盖。
+        合并顺序为原数据在前、追加在后；变量查找按key取最后一个同名项，追加项天然覆盖原值，
+        剔除同名原变量只为避免重复key进入变量池与结果快照；同名提取按执行先后自然覆盖。
 
         :param quote_step: 被引用用例的待执行根步骤模型
         :return: 合并追加字段后的步骤模型；开关关闭/类型不匹配/无可合并字段时原样返回
@@ -2431,11 +2449,12 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
 
     def _build_quote_session_pool(self, quote_case_instance: Any, quote_roots: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
-        初始化引用域独立变量池，聚合顺序与宿主用例保持一致（用例级session_variables在前、树内用户变量在后，同名后者覆盖）。
+        构建被引用用例的原始初始变量池(未解析)，聚合口径与宿主用例execute_single_case一致：
+        用例级session_variables在前为基底、树内用户变量在后，同名后者覆盖。解析求值由调用方统一执行。
 
         :param quote_case_instance: 被引用用例模型实例（取其case级session_variables存储数据）
         :param quote_roots: 被引用用例根步骤列表（收集其中用户变量步骤的产出）
-        :return: 按key去重后的引用域初始变量池
+        :return: 按key去重后的被引用用例原始初始变量池
         """
         stored: List[StepVariablesBase] = step_variables_list_from_storage(getattr(quote_case_instance, "session_variables", None))
         collected: List[StepVariablesBase] = AutoTestToolService.collect_session_variables(quote_roots)
@@ -2519,13 +2538,29 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
                     f"【{self.quote_step_label}】获取用例(id={quote_case_id})步骤树数据异常, 错误描述: {e}"
                 ) from e
 
+            # 进入被引用用例：先按宿主用例同款口径构建其初始变量池(用例级session_variables为基底、树内用户变量覆盖)。
+            # 这是BaseQuoteCaseStepExecutor的默认初始化动作，只取决于被引用用例自身；与宿主的关系仅体现在下方池作用域策略。
+            quote_initial_pool: List[StepVariablesBase] = self._build_quote_session_pool(quote_case_instance, quote_roots)
             if self.use_isolated_session_pool:
-                # 半隔离：整段替换变量池引用（禁止就地update_variables，否则会污染宿主池）；宿主池仅存引用，不被引用域读写
+                # 半隔离(公共脚本)：宿主池暂存引用，被引用用例在自身解析后的独立池上执行，结束后整体回灌宿主。
+                # initialize_session_variables返回的列表与context.session_variables同一对象，执行期就地追加对finally回灌可见。
                 host_pool = self.context.session_variables
-                quote_pool = self._build_quote_session_pool(quote_case_instance, quote_roots)
-                self.context.session_variables = quote_pool
+                quote_pool = self.context.initialize_session_variables(quote_initial_pool)
                 self.context.log(
                     f"【{self.quote_step_label}】初始化引用域独立变量池({len(quote_pool)}项), 宿主变量池已隔离",
+                    step_code=self.step_code
+                )
+            else:
+                # 共享(公共接口)：被引用用例初始池解析后按"输出主导"并入宿主池，同名覆盖宿主，
+                # 与半隔离收口(A池覆盖宿主)方向统一；被引用用例步骤直接在宿主池上执行，产出即时回灌宿主。
+                # 必须就地update_variables而非整段替换：嵌套引用时外层半隔离池局部变量与context.session_variables
+                # 须保持同一列表对象，替换会使外层finally回灌读到执行前的旧池而丢失内层产出。
+                resolved_initial: List[StepVariablesBase] = self.context.resolve_placeholders(quote_initial_pool) or []
+                if resolved_initial:
+                    self.context.update_variables(resolved_initial, scope="session_variables")
+                self.context.log(
+                    f"【{self.quote_step_label}】输出主导并入被引用用例(id={quote_case_id})初始变量池"
+                    f"({len(resolved_initial)}项, 同名覆盖宿主)",
                     step_code=self.step_code
                 )
 

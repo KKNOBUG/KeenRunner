@@ -127,8 +127,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             try:
                 return await self.update(id=existing.id, obj_in=payload)
             except (DoesNotExist, IntegrityError) as e:
-                error_message = f"更新环境配置异常, 违反约束规则或记录不存在: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                error_message: str = "新增环境配置失败，目标配置可能已被删除或与现有记录冲突，请刷新后重试"
+                LOGGER.error(
+                    f"{error_message}, "
+                    f"关键字段: [config_id={existing.id}, env_bind_id={env_bind.id}, config_name={config_name}]\n"
+                    f"{traceback.format_exc()}"
+                )
                 raise DataBaseStorageException(message=error_message) from e
 
         await self._assert_host_unique(
@@ -139,8 +143,13 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         try:
             return await self.create(obj_in=payload)
         except IntegrityError as e:
-            error_message = f"新增环境配置异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增环境配置失败，配置名称、IP、端口或数据库名称可能与现有记录重复，或关联环境无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [env_bind_id={env_bind.id}, config_name={config_name}, config_host={payload.get('config_host')}, "
+                f"config_port={payload.get('config_port')}, database_name={payload.get('database_name')}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_config(self, config_in: AutoTestEnvConfigUpdate, scope: DataScope) -> AutoTestEnvConfigModel:
@@ -213,12 +222,20 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         try:
             return await self.update(id=config_id, obj_in=update_dict)
         except DoesNotExist as e:
-            error_message = f"更新环境配置失败, 记录[id={config_id}]或[code={config_code}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新环境配置失败，目标配置不存在或已被删除，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [config_id={config_id}, config_code={config_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message = f"更新环境配置异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新环境配置失败，配置名称、IP、端口或数据库名称可能与现有记录重复，或关联环境无效，请检查后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [config_id={config_id}, config_code={config_code}, env_bind_id={env_bind.id}, config_name={config_name}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def _assert_configs_not_referenced(self, targets: List[AutoTestEnvConfigModel]) -> None:
@@ -366,7 +383,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询配置信息失败, 错误描述: {e}"
+            error_message: str = "查询配置信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -672,8 +689,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         except ParameterException:
             raise
         except Exception as e:
-            error_message = f"子表环境配置查询异常, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "查询环境配置失败，暂时无法获取配置列表，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [project_id={project_id}, env_name={env_name}, env_type={env_type}, page={page}, page_size={page_size}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise ParameterException(message=error_message) from e
 
     async def test_db_connection(
@@ -730,8 +751,13 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                 database_name=database_name,
             )
         except Exception as e:
-            error_message = f"创建连接池失败：{e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "数据库连接测试失败，暂时无法建立连接池，请检查配置后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [config_id={config_id}, project_id={project_id}, env_name={env_name}, "
+                f"config_name={config_name}, database_name={database_name}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
         return {

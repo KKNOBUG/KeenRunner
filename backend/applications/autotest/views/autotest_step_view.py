@@ -600,6 +600,10 @@ async def batch_update_steps_tree(
                 created_step_count: int = step_result['created_count']
                 updated_step_count: int = step_result['updated_count']
                 success_step_detail: List[Dict[str, Any]] = step_result['success_detail']
+                # 终态校验：整树写完后确认 step_no 全局唯一。重排/中间插入时的瞬时同号已在写入期放行，
+                # 此处对最终落库状态一次性拦截真实重复，重复即抛 DataAlreadyExistsException 触发事务回滚。
+                if target_case_id:
+                    await services.step_curd.assert_step_no_unique(case_id=int(target_case_id))
                 LOGGER.info(
                     f"步骤处理完成："
                     f"新增步骤: {created_step_count}个, "

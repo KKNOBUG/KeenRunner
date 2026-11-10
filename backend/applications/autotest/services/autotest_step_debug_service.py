@@ -117,17 +117,17 @@ class StepDebugService:
             session_variables: Optional[List[StepVariablesBase]],
     ) -> Tuple[Dict[str, Any], List[StepVariablesBase]]:
         """
-        合并defined与session变量；同名时session覆盖defined。
+        合并session与defined变量；同名时defined覆盖session，与执行引擎get_variable优先级一致。
 
         :param defined_variables: 步骤定义变量
-        :param session_variables: 会话变量
+        :param session_variables: 会话变量(含前端透传的用例级初始变量池)
         :return: (查找字典, 占位符解析用StepVariablesBase列表)
         """
         merged: Dict[str, Any] = {}
-        for item in defined_variables or []:
+        for item in session_variables or []:
             if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged[item.key] = item.value
-        for item in session_variables or []:
+        for item in defined_variables or []:
             if isinstance(item, StepVariablesBase) and item.key and item.key.strip():
                 merged[item.key] = item.value
         initial_models = [StepVariablesBase(key=k, value=v, desc="") for k, v in merged.items()]
