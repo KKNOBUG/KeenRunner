@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : task_public_api_to_script.py
 @DateTime: 2026/9/16
+
+公共接口转脚本异步任务：逐接口复制整树步骤，生成为独立的用户脚本/公共脚本用例（不修改源接口）。
 """
 from __future__ import annotations
 
@@ -104,6 +106,7 @@ async def _resolve_script_name(services: AutoTestServices, case_project: int, ca
     if not exists:
         return case_name
     # 截断基础名称为时间戳后缀预留长度，防止拼接后超长触发数据库截断异常
+    # 255 为 case_name 列长度上限
     base_name = case_name[: 255 - NAME_TIMESTAMP_SUFFIX_LENGTH]
     candidate = base_name
     for _ in range(NAME_TIMESTAMP_RETRY_TIMES):
@@ -139,7 +142,7 @@ async def _generate_single_script(
     :param case_type: 脚本类型(用户脚本/公共脚本)
     :param case_attr: 用例属性(正案例/反案例)
     :param case_tags: 脚本所属标签
-    :return: {"case_id", "case_name", "source_case_id", "source_case_name"}生成结果
+    :return: {"case_id", "case_name", "new_case_id", "new_case_name"}生成结果
     :raises NotFoundException: 源接口或步骤树查询失败
     :raises ValueError: 步骤树为空/结构校验失败/新用例ID未返回
     :raises Exception: 落库校验或存储失败(事务回滚)
@@ -171,6 +174,7 @@ async def _generate_single_script(
         raise ValueError(f"步骤树结构校验失败: {error_msg}")
     _assign_step_nos(tree_in.steps, 1)
     async with in_transaction():
+        # Worker 内部可信执行路径：来源用例已由视图层校验过权限，这里走 system 作用域（不做数据权限归属过滤）
         case_result = await services.case_curd.batch_update_or_create_cases(
             cases_data=[tree_in.case],
             scope=DataScope.system()
@@ -219,6 +223,7 @@ async def _generate_case_scripts_impl(
 
     created_cases: List[Dict[str, Any]] = []
     failed_details: List[Dict[str, Any]] = []
+    # 去重保序：前端重复勾选同一接口时只生成一份脚本
     unique_ids = list(dict.fromkeys(case_ids or []))
     for case_id in unique_ids:
         case_name = str(case_id)

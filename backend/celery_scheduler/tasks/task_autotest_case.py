@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : task_autotest_case
 @DateTime: 2026/2/1 16:10
+
+自动化定时任务的执行与扫描入口：单任务执行（含执行权仲裁/终态回写）与 Beat 到期扫描派发。
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ from backend.enums import (
 )
 from backend.services.ctx import CTX_USERNAME
 
+# 与 celery_worker 保持一致的前缀，便于按前缀检索同一 worker 进程内的日志
 _LOG_PREFIX = "【Celery-Worker】"
 
 
@@ -67,6 +70,9 @@ async def _run_autotest_task_impl(
 ) -> Dict[str, Any]:
     """
     执行单个自动化任务的核心逻辑，区分手动与扫描触发并写回执行状态。
+
+    失败不抛异常而是返回 success=False 的字典；仅执行过程中抛异常才向上重抛，
+    交由 Celery on_failure 把执行记录从「正在执行」更新为「失败」。
 
     :param task_id: 自动化任务主键ID
     :param report_type: 报告类型；为ASYNC_EXEC或异步执行时根据手动执行处理
@@ -118,6 +124,7 @@ async def _run_autotest_task_impl(
         return {"success": False, "error": "关联用例列表为空", "task_id": task_id}
 
     exec_report_type = AutoTestReportType.SCHEDULE_EXEC
+    # 兼容旧消息直接以中文 value 传参（StringEnum 的 ASYNC_EXEC.value 即“异步执行”），统一归一为枚举
     if report_type == AutoTestReportType.ASYNC_EXEC or (
             isinstance(report_type, str) and report_type.strip() == "异步执行"
     ):
@@ -132,7 +139,7 @@ async def _run_autotest_task_impl(
 
     try:
         cases_execute_config = getattr(task, "cases_execute_config", None) or {}
-        # 获取initial_variables
+        # 初始变量来自任务配置；格式异常时按空列表执行，不阻断任务
         task_kwargs = getattr(task, "task_kwargs", None) or {}
         initial_variables = (task_kwargs.get("initial_variables") or []) if isinstance(task_kwargs, dict) else []
         started = datetime.now()
@@ -149,6 +156,7 @@ async def _run_autotest_task_impl(
         elapsed = (datetime.now() - started).total_seconds()
         total_cases = int(result.get("total_cases") or 0)
         success_cases = int(result.get("success_cases") or 0)
+        # 全成功→SUCCESS；有成功用例→部分成功；全失败→FAILURE
         if 0 < total_cases == success_cases:
             task.last_execute_state = AutoTestTaskStatus.SUCCESS
         elif success_cases >= 1:
@@ -196,6 +204,8 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     """
     扫描到期的定时自动化任务，并下发run_autotest_task。
 
+    单任务异常只记日志，不中断后续任务扫描；扫描本身不写执行记录。
+
     :return: {"scanned": int, "dispatched": int}扫描与下发统计
     """
     span_id = get_span_id_for_log()
@@ -207,6 +217,7 @@ async def _scan_and_dispatch_impl() -> Dict[str, Any]:
     dispatched = 0
     for task in tasks:
         try:
+            # 到期判定基于任务表达式与 last_execute_time；未到期只记 debug，避免刷屏
             if is_task_due(task):
                 run_autotest_task.apply_async(args=[task.id], __task_id=task.id)
                 dispatched += 1
@@ -243,6 +254,8 @@ def scan_and_dispatch_autotest_tasks():
     """
     Beat入口，扫描启用中的定时任务，到期则下发run_autotest_task。
 
+    Beat 每 60 秒触发一次；本任务只扫描派发，不写执行记录也不走终态更新。
+
     :return: 扫描与下发统计字典
     """
     return AsyncEventLoopContextIOPool.run_in_pool(_scan_and_dispatch_impl())
@@ -269,7 +282,7 @@ def run_autotest_task(
     :param task_id: 自动化任务主键ID
     :param report_type: 报告类型(手动异步/调度)
     :param created_user: 触发用户账号(可选)
-    :return: 任务执行结果字典
+    :return: 任务执行结果字典（success/task_id/批次汇总）；业务失败不抛异常
     """
     # created_user 随kwargs传到Worker：task_prerun写入执行记录，并回填任务表last_execute_user(定时触发为空时由impl回退维护人)
     return AsyncEventLoopContextIOPool.run_in_pool(

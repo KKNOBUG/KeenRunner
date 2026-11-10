@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : task_import_case_script.py
 @DateTime: 2026/9/16
+
+公共接口脚本导入异步任务：视图层解析校验后的行数据在后台单事务落库（存在更新/恢复、不存在新增）。
 """
 from __future__ import annotations
 
@@ -37,6 +39,7 @@ async def _import_case_scripts_impl(rows: List[Dict[str, Any]], file_name: Optio
 
     result, invalid = await CaseExcelService.import_script_rows(rows=rows, services=services)
     if invalid:
+        # 任意行级匹配不合规即整批取消，失败数按总行数计（全有或全无语义）
         return {
             "total_cases": len(rows),
             "success_cases": 0,

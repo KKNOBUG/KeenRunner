@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : task_perf_data_job.py
 @DateTime: 2026/9/17 17:55
+
+性能数据作业执行任务：把单个作业代码交给 PerfJobService 编排执行，并做外层异常兜底。
 """
 from __future__ import annotations
 
@@ -17,6 +19,7 @@ from backend.celery_scheduler.celery_worker import celery
 from backend.common import AsyncEventLoopContextIOPool
 from backend.configure import LOGGER
 
+# 与 celery_worker 一致的前缀，便于按前缀检索同一 worker 进程内的日志
 _LOG_PREFIX = "【Celery-Worker】"
 
 
@@ -72,6 +75,8 @@ async def _run_perf_data_job_impl(job_code: str, celery_id: Optional[str],
 def run_perf_data_job(job_code: str, created_user: Optional[str] = None):
     """
     执行单个数据作业，由 /perf/job/run 接口下发。
+
+    任务ID取当前 Celery request.id，供作业表回填执行观测（不在入参中传递）。
 
     :param job_code: 数据作业标识代码
     :param created_user: 触发用户账号(执行归因)

@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : task_performance.py
 @DateTime: 2026/9/14 15:30
+
+性能压测执行任务：把单个负载预设交给 PerfExecuteService 编排管线，并做外层异常兜底与状态回填。
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ from backend.common import AsyncEventLoopContextIOPool
 from backend.configure import LOGGER
 from backend.enums import PerfPresetStatus
 
+# 与 celery_worker 一致的前缀，便于按前缀检索同一 worker 进程内的日志
 _LOG_PREFIX = "【Celery-Worker】"
 
 
@@ -57,6 +60,7 @@ async def _run_perf_preset_impl(preset_code: str, celery_id: Optional[str], exec
         try:
             from backend.applications.performance.models.perf_load_preset_model import PerfLoadPresetModel
 
+            # 只覆盖仍处于非终态的预设：已落到完成/失败/停止的记录不再改写，避免迟到的异常覆盖真实终态
             await PerfLoadPresetModel.filter(preset_code=preset_code).exclude(
                 last_execute_state__in=[PerfPresetStatus.COMPLETED, PerfPresetStatus.FAILED, PerfPresetStatus.STOPPED],
             ).update(
@@ -87,6 +91,8 @@ async def _run_perf_preset_impl(preset_code: str, celery_id: Optional[str], exec
 def run_perf_preset(preset_code: str, created_user: Optional[str] = None):
     """
     执行单个负载预设，由 /perf/load_preset/run 接口下发。
+
+    任务ID取当前 Celery request.id，透传到报告与负载预设表回填执行观测（不在入参中传递）。
 
     :param preset_code: 负载预设标识代码
     :param created_user: 触发用户账号(报告执行人归因)

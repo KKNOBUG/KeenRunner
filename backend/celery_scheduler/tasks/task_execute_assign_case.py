@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : task_execute_assign_case.py
 @DateTime: 2026/3/20
+
+单用例步骤树的后台执行入口：支持多数据源参数化逐轮执行，并按用例做串行变量串联。
 """
 from __future__ import annotations
 
@@ -25,8 +27,11 @@ def _normalize_initial_variables(raw: Optional[List[Dict[str, Any]]]) -> List[St
     """
     将初始变量规范为StepVariablesBase列表。
 
+    已是 schema 实例直接保留；dict 走 model_validate；其余类型静默跳过，不报错。
+
     :param raw: 原始变量列表(dict或已是schema)
     :return: StepVariablesBase列表；空入参返回[]
+    :raises ValidationError: 单个 dict 不符合变量结构时向上抛出，任务整体置为失败
     """
     if not raw:
         return []
@@ -42,6 +47,8 @@ def _normalize_initial_variables(raw: Optional[List[Dict[str, Any]]]) -> List[St
 def _new_batch_code() -> str:
     """
     生成一次执行的批次号(时间戳-UUID)。
+
+    格式为「秒级时间戳-32位大写HEX」，不需查库即可保证跨进程唯一。
 
     :return: 批次号字符串
     """
@@ -59,6 +66,9 @@ async def _execute_step_tree_impl(
 ) -> Dict[str, Any]:
     """
     后台执行单用例步骤树，支持多数据源参数化。
+
+    total_cases/success_cases 按「用例」计数（单用例恒为1），多数据源轮次见 execute_runs：
+    只有全部轮次成功才算用例成功，部分轮次失败即计为失败。
 
     :param case_id: 用例主键ID
     :param initial_variables: 初始会话变量列表
@@ -106,6 +116,7 @@ async def _execute_step_tree_impl(
         }
 
     details: List[Dict[str, Any]] = []
+    # 上一轮会话变量：仅当上一条执行开了 session_transfer 才向下传递，否则每轮都用初始变量
     inherited_variables: List[StepVariablesBase] = []
     for dataset_name in selected_dataset_names:
         single_data = await step_crud.execute_single_case(
@@ -167,6 +178,7 @@ def execute_step_tree_task(
     """
     try:
         rt = AutoTestReportType.SCHEDULE_EXEC
+        # 入参可能是枚举或字符串：字符串仅在命中枚举 value 时转换，其余（含非法值）一律回退定时执行
         if report_type and isinstance(report_type, str):
             if report_type in [e.value for e in AutoTestReportType]:
                 rt = AutoTestReportType(report_type)

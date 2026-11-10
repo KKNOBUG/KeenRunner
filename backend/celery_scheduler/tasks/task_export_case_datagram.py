@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : task_export_case_datagram.py
 @DateTime: 2026/7/27
+
+公共接口报文导出异步任务：加载合规用例后生成报文矩阵 xlsx 并落盘到下载目录。
 """
 from __future__ import annotations
 
@@ -21,6 +23,9 @@ from backend.configure import LOGGER, PROJECT_CONFIG
 async def _export_testcases_impl(case_ids: List[int], created_user: Optional[str]) -> Dict[str, Any]:
     """
     异步导出实现，加载合规用例后构建工作簿并落盘到下载目录。
+
+    返回的 file_path 指向真实落盘文件，Worker 终态会把其登记为可下载附件；
+    不合规用例仅跳过并计数，全部不合规才报错。
 
     :param case_ids: 用例主键列表
     :param created_user: 提交用户账号(仅作元信息随结果落入执行记录)

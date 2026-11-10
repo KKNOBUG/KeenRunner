@@ -3,8 +3,10 @@
 @Author  : yangkai
 @Email   : 807440781@qq.com
 @Project : KeenRunner
-@Module  : celery_base
+@Module  : celery_task_contract
 @DateTime: 2026/1/27 17:35
+
+Celery 任务统一契约：注册名元数据、异步中心任务命名、产物附件信封与任务摘要终态对齐。
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from backend.configure import PROJECT_CONFIG
 from backend.enums import AutoTestTaskStatus, AutoTestTaskType
 
 # Celery 注册名 → 任务类型 / 默认展示名
+# 新增任务必须在此登记，否则 worker 建执行记录时拿不到 task_type，执行记录不会被异步中心展示
 CELERY_TASK_META: Dict[str, Dict[str, Any]] = {
     "backend.celery_scheduler.tasks.task_autotest_case.run_autotest_task": {
         "task_type": AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
@@ -58,6 +61,7 @@ ASYNC_CENTER_TASK_TYPES: Tuple[AutoTestTaskType, ...] = (
     AutoTestTaskType.GENERATE_TEST_CASE,
 )
 
+# 异步中心任务类型集合的字符串值：供 build_async_center_task_name 与枚举/存量字符串双形态比对
 _ASYNC_CENTER_TASK_TYPE_VALUES = frozenset(t.value for t in ASYNC_CENTER_TASK_TYPES)
 
 # 错误摘要只提取有限条业务明细；完整明细仍保留在raw，避免大结果集导致摘要无限膨胀
@@ -81,6 +85,9 @@ def build_async_center_task_name(task_type: Any) -> Optional[str]:
 def resolve_task_meta(celery_task_name: Optional[str]) -> Dict[str, Any]:
     """
     根据Celery任务名解析task_type与默认task_name。
+
+    :param celery_task_name: Celery 注册名（如 backend.celery_scheduler.tasks.xxx.task）
+    :return: {"task_type": 枚举, "task_name": 默认展示名}；未登记或入参为空时返回空字典（副本，调用方可安全修改）
     """
     if not celery_task_name:
         return {}
@@ -90,6 +97,12 @@ def resolve_task_meta(celery_task_name: Optional[str]) -> Dict[str, Any]:
 def path_to_storage_key(file_path: str) -> str:
     """
     将绝对路径转为相对OUTPUT_DOWNLOAD_DIR的storage_key。
+
+    位于下载根目录内的文件按相对路径归一（分隔符统一为/）；根目录外的文件不报错，
+    而是回落到 autotest_export/<文件名> 前缀，供历史产物兼容。
+
+    :param file_path: 产物文件的绝对路径或相对路径
+    :return: storage_key；入参为空时返回空串
     """
     if not file_path:
         return ""
@@ -103,6 +116,13 @@ def path_to_storage_key(file_path: str) -> str:
 def resolve_storage_path(storage_key: str) -> str:
     """
     将storage_key解析为下载根目录内的绝对路径。
+
+    先剔除前导斜杠并统一分隔符，再阻断空串、包含 ".." 段与拼接后越出根目录的键，
+    防止通过路径穿越读取或删除根目录以外的文件。
+
+    :param storage_key: 由 path_to_storage_key 生成的相对键
+    :return: 下载根目录内的绝对路径
+    :raises ValueError: storage_key 为空、含 ".." 段或解析后越出下载根目录
     """
     key = (storage_key or "").strip().lstrip("/").replace("\\", "/")
     if not key or ".." in key.split("/"):
@@ -115,7 +135,12 @@ def resolve_storage_path(storage_key: str) -> str:
 
 
 def to_jsonable(value: Any) -> Any:
-    """将任意对象经JSON往返转为可落库结构，无法序列化时兜底包装。"""
+    """
+    将任意对象经JSON往返转为可落库结构，无法序列化时兜底包装。
+
+    :param value: 任意任务返回值
+    :return: 基础类型原样可序列化副本；无法序列化的对象包装为 {"value": str(value)}
+    """
     if value is None:
         return None
     if isinstance(value, (dict, list, str, int, float, bool)):
@@ -136,6 +161,21 @@ def _build_attachment(
         expires_at: Optional[str] = None,
         file_path: Optional[str] = None,
 ) -> Dict[str, Any]:
+    """
+    构造单条附件信封。
+
+    size 缺省时从已落盘文件取，content_type 缺省时按扩展名猜测，
+    name/key 缺省时分别回落文件名与 "main"，保证下载端字段恒完整。
+
+    :param name: 展示文件名
+    :param storage_key: 相对下载根目录的键
+    :param key: 附件标识（同一摘要下需唯一，默认main）
+    :param content_type: MIME类型；为空时按文件名推测
+    :param size: 字节数；为空时尝试从 file_path 读取
+    :param expires_at: 过期时间（可选，仅作展示/清理提示）
+    :param file_path: 磁盘路径，仅用于推断 size，不写入信封
+    :return: 附件字典（key/name/storage_key/content_type/size/expires_at）
+    """
     if size is None and file_path and os.path.isfile(file_path):
         size = os.path.getsize(file_path)
     if not content_type:
@@ -152,6 +192,15 @@ def _build_attachment(
 
 
 def _attachments_from_raw(raw: Any) -> List[Dict[str, Any]]:
+    """
+    从任务原始返回中提取附件信封。
+
+    优先读 attachments 列表（兼容只给 file_path 的旧结构）；无 attachments 时仅当 file_path
+    指向真实存在的落盘文件才登记为附件——导入任务的 file_name 只是源文件元信息，不能下载。
+
+    :param raw: 任务原始返回快照
+    :return: 附件列表；无法识别或文件不存在时返回空列表
+    """
     if not isinstance(raw, dict):
         return []
     existing = raw.get("attachments")
@@ -194,6 +243,11 @@ def normalize_task_summary(retval: Any, *, pipeline_ok: bool = True) -> Dict[str
     将任务返回值规范为信封结构，原文进入raw。
 
     此处success只按管道结果初始归一；最终业务终态由finalize_task_summary统一覆盖。
+    已含 attachments/raw/success 三键的返回值视为已规范化，沿用其值与附件，仅补齐缺省字段。
+
+    :param retval: 任务原始返回值（任意可序列化对象）
+    :param pipeline_ok: 任务是否执行完主要流程（用于无显式success时初始化成败）
+    :return: 信封字典（success/error/message/batch_code/attachments/raw）
     """
     data = to_jsonable(retval)
     # 信封三键齐备时视为已规范化结构，直接沿用并补齐缺省字段
@@ -286,8 +340,9 @@ def finalize_task_summary(
     将任务信封与最终执行状态对齐，并生成统一错误摘要。
 
     success仅表示全部成功；失败/部分成功均为False且携带错误摘要。raw、attachments与batch_code保持原样。
+    错误摘要优先级：信封显式error → Celery异常堆栈 → 业务失败明细摘要 → 状态兜底文案。
 
-    :param summary: normalize_task_summary生成的任务信封
+    :param summary: normalize_task_summary生成的任务信封（原地修改）
     :param terminal_status: 执行记录最终状态
     :param traceback_str: Celery异常堆栈（可选）
     :return: (终态信封, 错误摘要)；成功示例 ({"success": True, "error": None}, None)
@@ -321,6 +376,11 @@ def finalize_task_summary(
 def list_attachments_from_summary(task_summary: Any) -> List[Dict[str, Any]]:
     """
     从已落库task_summary提取attachments。
+
+    优先读信封的 attachments；旧记录没有信封时回落到 raw/摘要本身再解析。
+
+    :param task_summary: 已落库的任务摘要（可能是旧结构或None）
+    :return: 附件列表；非字典或不含有效附件时返回空列表
     """
     if not isinstance(task_summary, dict):
         return []

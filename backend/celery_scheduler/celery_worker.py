@@ -5,6 +5,8 @@
 @Project : KeenRunner
 @Module  : celery_worker.py
 @DateTime: 2026/1/25 12:15
+
+Celery 应用装配：信号钩子（prefork 子进程重置、任务记录）、日志接管、追踪上下文注入与 async 任务体调度。
 """
 import asyncio
 import logging
@@ -39,9 +41,11 @@ from .celery_base import (
 
 # 扫描任务不写执行记录、不走终态更新
 _SCAN_TASK_NAME = "backend.celery_scheduler.tasks.task_autotest_case.scan_and_dispatch_autotest_tasks"
-# setup_logging 写入 celery 专用日志文件时登记的 Loguru sink id，避免重复添加
+# setup_logging 写入 celery 专用日志文件/终端时登记的 Loguru sink id，
+# 记录后在重新注册前先移除，避免 prefork 子进程反复 setup 时日志重复输出
 _celery_logfile_sink_id = None
 _celery_console_sink_id = None
+# 统一日志前缀，便于从混合输出中检索 Celery worker 日志
 _LOG_PREFIX = "【Celery-Worker】"
 
 
@@ -49,6 +53,9 @@ _LOG_PREFIX = "【Celery-Worker】"
 def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     """
     prefork子进程初始化，清空事件循环池与Tortoise状态。
+
+    fork 不会复制父进程的池线程与数据库连接，子进程沿用父进程单例会把协程投递到无人驱动的 loop，
+    因此每个子进程启动时必须重置，由首次使用重新创建。
 
     :param kwargs: Celery signal透传参数
     :return: None
@@ -67,8 +74,11 @@ def _resolve_trigger_and_report(task: Task):
     """
     从Celery request解析触发来源与报告类型。
 
+    优先取 kwargs.report_type，缺失时回退 args[1]（任务按 (task_id, report_type, ...) 传参）。
+    仅 ASYNC_EXEC 视为手动触发，其余（含未传）一律按定时触发落库。
+
     :param task: 当前Celery Task实例
-    :return: (trigger_type, report_type)元组
+    :return: (trigger_type, report_type)二元组
     """
     from backend.enums import AutoTestReportType, AutoTestTaskTriggerType
 
@@ -101,6 +111,9 @@ async def _create_task_record(
 ):
     """
     创建任务执行观测记录(RUNNING)，并写入完整执行入参快照。
+
+    一条 Celery 消息对应一条记录，不做幂等去重；task_type 未在契约表登记时仅保留节点名，
+    不会生成异步中心可识别的任务类型。
 
     :param celery_id: Celery任务UUID
     :param celery_node: Celery任务名(节点标识)
@@ -157,6 +170,7 @@ async def _create_task_record(
         data["case_ids"] = [req_kwargs.get("case_id")]
 
     if task_id is not None and celery_task_name and "run_autotest_task" in celery_task_name:
+        # 仅多用例任务（run_autotest_task）需要回读业务任务：补齐 task_code/项目/数据源开关与可复现的执行快照
         task_instance = await AutoTestTaskModel.filter(id=task_id).first()
         if task_instance:
             case_ids = getattr(task_instance, "task_case_ids", None) or []
@@ -193,6 +207,7 @@ async def _create_task_record(
                 }),
             })
     elif req_kwargs:
+        # 其余任务只快照白名单入参，避免大对象或无关字段全量落库
         data["exec_snapshot"] = to_jsonable({
             "report_type": report_val,
             "kwargs": {
@@ -222,6 +237,9 @@ async def _update_task_record_on_end(
 ):
     """
     将执行记录更新为终态，并对齐task_summary.success/error与task_error（raw保留原文）。
+
+    找不到记录（如创建失败或已被清理）时只记 ERROR 日志并返回，不向上抛异常：
+    终态更新失败不能反过来影响任务本身的执行结果。
 
     :param celery_id: Celery任务UUID
     :param success: Celery管道是否成功；存在批次计数时仍会按业务结果重算终态
@@ -277,6 +295,7 @@ async def _update_task_record_on_end(
         )
         return
     if record.celery_start_time:
+        # 起始时间可能带tzinfo，统一转naive再相减，避免aware/naive混算报错
         start = record.celery_start_time
         if getattr(start, "tzinfo", None) is not None:
             start = start.replace(tzinfo=None)
@@ -294,6 +313,9 @@ async def _update_task_record_on_end(
 def receiver_task_pre_run(task: Task, *args, **kwargs):
     """
     任务执行前根据任务类型初始化Tortoise，并写入RUNNING执行记录。
+
+    两层 try 均为保护性捕获：观测记录失败（含信号本身异常）只记日志，绝不阻断任务执行。
+    扫描任务只初始化 ORM，不建执行记录。
 
     :param task: 即将执行的Celery Task
     :param args: signal位置参数
@@ -357,6 +379,9 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     """
     接管Celery日志，将stdlib经InterceptHandler接入Loguru。
 
+    日志文件优先级：--logfile 参数 > CELERY_LOGFILE 环境变量 > 按 argv 区分的默认 worker/beat 日志；
+    重复调用时先移除旧 sink 再重建；前台（非 --detach 且 stderr 为终端）额外追加终端 sink。
+
     :param loglevel: 日志级别(int或Celery传入值)
     :param logfile: Celery --logfile路径
     :param kwargs: signal其余参数
@@ -376,6 +401,7 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
         root.setLevel(level)
 
     # 依argv区分worker/beat默认日志文件；显式--logfile或CELERY_LOGFILE环境变量优先
+    # beat 作为独立 argv token 出现即判为 beat（含 `celery beat` 子命令）；否则仅当整条命令含 beat 且不含 worker 时按 beat 处理
     argv_tokens = [t.lower() for t in sys.argv]
     is_beat = "beat" in argv_tokens or ("beat" in " ".join(argv_tokens) and "worker" not in argv_tokens)
     default_logfile = os.path.join(
@@ -396,6 +422,7 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
             level="INFO",
             format=LOG_FORMAT,
             encoding="utf-8",
+            # enqueue=True 让多进程/多线程经队列串行写入；diagnose=False 避免异常时打印局部变量泄露敏感数据
             enqueue=True,
             backtrace=True,
             diagnose=False,
@@ -427,6 +454,9 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
 class TaskRequest(Request):
     """
     自定义Request，从消息头恢复Trace/Span供task_prerun与日志使用。
+
+    Celery 在调用任务体前构造 Request，此时绑定可保证 task_prerun 信号与任务内日志使用同一个 span；
+    消息头没有 span_id 时为本次任务新建（见 enter_celery_span）。
     """
 
     def __init__(self, *args, **kwargs):
@@ -454,13 +484,22 @@ def create_celery():
     """
     创建支持async任务体的Celery应用。
 
+    在函数内定义 NewCelery/ContextTask：任务基类统一替换为 ContextTask 后，
+    所有 @celery.task 任务自动获得追踪头注入、RUNNING/终态执行记录与 async 调度能力。
+
     :return: 配置完成的Celery应用实例
     """
 
     class NewCelery(Celery):
+        """
+        自定义Celery应用：在 send_task 统一下发路径注入链路追踪头，覆盖未经 Task.apply_async 的直发场景。
+        """
+
         def send_task(self, *args, **kwargs):
             """
             发送任务时注入trace_id/span_id/parent_span_id到headers。
+
+            直接覆盖而不是与调用方 headers 合并：追踪字段只信任当前上下文生成的值。
 
             :param args: send_task位置参数
             :param kwargs: send_task关键字参数
@@ -480,6 +519,9 @@ def create_celery():
                         link=None, link_error=None, shadow=None, **options):
             """
             下发任务时注入追踪头与__task_id(业务任务主键)。
+
+            __task_id 以消息属性随消息进入 Worker 的 request.properties，供执行记录回填业务主键；
+            未传时显式写 None，保证 worker 侧读取路径恒定。
 
             :param args: 任务位置参数
             :param kwargs: 任务关键字参数
@@ -508,6 +550,8 @@ def create_celery():
         ):
             """
             更新观测记录终态，扫描任务跳过。
+
+            内部异常只记日志，不影响 Celery 回调和任务结果。
 
             :param success: Celery管道是否成功；批次计数存在时终态按业务结果重算
             :param task_summary: 完整响应对象
@@ -613,6 +657,7 @@ def create_celery():
                     trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
                 enter_celery_span(trace_id, parent_span_id, span_id)
             except Exception:
+                # 追踪上下文绑定失败不能阻断任务，退化为仅用本地 trace_id 继续执行
                 trace_id = getattr(LOCAL_CONTEXT_VAR, "trace_id", None) or ""
                 enter_celery_span(trace_id, "", "")
 
@@ -625,12 +670,13 @@ def create_celery():
             # 同步函数直接执行
             return self.run(*args, **kwargs)
 
-    # 创建 Celery 实例
+    # 创建 Celery 实例；task_cls 指定后，业务模块的 @celery.task 均以 ContextTask 为基类
     _celery_: Celery = NewCelery("Celery-Worker", task_cls=ContextTask)
     _celery_.config_from_object(CELERY_CONFIG.CELERY_CONFIG)
     return _celery_
 
 
+# 模块级单例：`celery -A backend.celery_scheduler.celery_worker` 与各 task 模块共享同一应用与配置
 celery = create_celery()
 
 # ========== 启动命令（在仓库根目录执行）==========
