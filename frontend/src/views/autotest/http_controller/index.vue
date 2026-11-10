@@ -605,6 +605,8 @@ const props = defineProps({
   caseName: {type: String, default: null},
   /** 外部布局变化触发器，透传给数据源面板 */
   layoutVersion: { type: Number, default: 0 },
+  /** 用例级初始变量池（页面从树节点用例信息取出），调试时随 session_variables 透传 */
+  caseSessionVariables: { type: Array, default: null },
 })
 
 const emit = defineEmits(['update:config', 'update:quote-overlay'])
@@ -1466,7 +1468,7 @@ const doDebugRequest = async (env_name) => {
       request_text: cfg.request_text ?? null,
       request_header: Array.isArray(cfg.headers) && cfg.headers.length > 0 ? cfg.headers : null,
       defined_variables: Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null,
-      session_variables: Array.isArray(cfg.session_variables) && cfg.session_variables.length > 0 ? cfg.session_variables : null,
+      session_variables: Array.isArray(props.caseSessionVariables) && props.caseSessionVariables.length > 0 ? props.caseSessionVariables : null,
       extract_variables: buildExtractForBackend(),
       assert_validators: buildValidatorsForBackend(),
       created_user: currentUser,

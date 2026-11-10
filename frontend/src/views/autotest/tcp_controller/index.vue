@@ -503,6 +503,8 @@ const props = defineProps({
   availableVariableList: { type: Array, default: () => [] },
   builtinVariableList: { type: Array, default: () => [] },
   assistFunctions: { type: Array, default: () => [] },
+  /** 用例级初始变量池（页面从树节点用例信息取出），调试时随 session_variables 透传 */
+  caseSessionVariables: { type: Array, default: null },
 })
 const emit = defineEmits(['update:config', 'update:quote-overlay'])
 
@@ -1593,6 +1595,10 @@ const doDebugRequest = async (env_name) => {
     const dv = Array.isArray(cfg.defined_variables) && cfg.defined_variables.length > 0 ? cfg.defined_variables : null
     if (dv) {
       debugPayload.defined_variables = dv
+    }
+    const sv = Array.isArray(props.caseSessionVariables) && props.caseSessionVariables.length > 0 ? props.caseSessionVariables : null
+    if (sv) {
+      debugPayload.session_variables = sv
     }
     const ev = buildExtractForBackend()
     if (ev.length > 0) {

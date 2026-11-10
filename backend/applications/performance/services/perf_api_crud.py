@@ -178,16 +178,26 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
             try:
                 return await self.create(obj_in=api_dict)
             except IntegrityError as e:
-                error_message: str = f"新增压测接口信息失败, 违反约束规则: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                # 接口名称与标识代码均为全局唯一列, 冲突只可能是重名或并发新建
+                error_message: str = "新增压测接口信息失败，接口名称可能与现有接口重复，请修改接口名称后重试"
+                LOGGER.error(
+                    f"{error_message}, "
+                    f"关键字段: [api_name={api_in.api_name}, request_project_id={api_in.request_project_id}, "
+                    f"request_config_name={api_in.request_config_name}]\n"
+                    f"{traceback.format_exc()}"
+                )
                 raise DataBaseStorageException(message=error_message) from e
 
         try:
             api_dict["state"] = 0
             return await self.update(id=existing.id, obj_in=api_dict)
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)压测接口信息异常, 违反约束规则或空指针异常: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增压测接口信息失败，同名接口记录可能已被删除或与现有记录冲突，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [api_id={existing.id}, api_name={api_in.api_name}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_perf_api(self, api_in: PerfApiUpdate) -> PerfApiModel:
@@ -245,16 +255,30 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         try:
             return await self.update(id=api_id, obj_in=update_dict)
         except DoesNotExist as e:
-            error_message: str = f"更新压测接口信息失败, 记录[id={api_id}]或[code={api_code}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新压测接口信息失败，目标接口不存在或已被删除，请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [api_id={api_id}, api_code={api_code}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新压测接口信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新压测接口信息失败，接口名称可能与现有接口重复，请修改接口名称后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [api_id={api_id}, api_code={api_code}, "
+                f"api_name={update_dict.get('api_name')}, request_project_id={api_in.request_project_id}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
-    async def copy_perf_api(self, *, api_id: Optional[int] = None, api_code: Optional[str] = None,
-                            created_user: Optional[str] = None) -> PerfApiModel:
+    async def copy_perf_api(
+            self,
+            *,
+            api_id: Optional[int] = None,
+            api_code: Optional[str] = None,
+            created_user: Optional[str] = None
+    ) -> PerfApiModel:
         """
         复制压测接口为新资产(名称追加副本后缀, 调试结论与溯源不继承)。
 
@@ -280,8 +304,12 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         try:
             return await self.create(obj_in=copy_dict)
         except IntegrityError as e:
-            error_message: str = f"复制压测接口信息失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "复制压测接口信息失败，副本名称可能与现有接口重复，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [source_api_id={source.id}, source_api_code={source.api_code}, api_name={copy_dict.get('api_name')}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def mark_debug_result(self, *, api_id: int, success: bool) -> PerfApiModel:
@@ -319,8 +347,7 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         await self.ensure_apis_deletable(api_codes=[instance.api_code], action="删除")
         return await self.soft_delete(id=instance.id)
 
-    async def select_perf_apis(self, search: Q, page: int, page_size: int,
-                               order: List[str]) -> Tuple[int, List[PerfApiModel]]:
+    async def select_perf_apis(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[PerfApiModel]]:
         """
         根据条件分页查询压测接口列表。
 
@@ -333,12 +360,20 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询压测接口信息失败, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message)
+            error_message: str = "查询压测接口信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [page={page}, page_size={page_size}, order={order}]\n"
+                f"{traceback.format_exc()}"
+            )
+            raise ParameterException(message=error_message) from e
 
-    async def list_for_scene(self, *, api_name: Optional[str] = None,
-                             step_type: Optional[str] = None) -> List[PerfApiModel]:
+    async def list_for_scene(
+            self,
+            *,
+            api_name: Optional[str] = None,
+            step_type: Optional[str] = None
+    ) -> List[PerfApiModel]:
         """
         场景选择器查询(不分页, 仅启用态; 无 api_project 过滤, 接口名称全局唯一)。
 
@@ -364,4 +399,3 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         from backend.applications.autotest.services.autotest_project_crud import AutoTestProjectCrud
 
         await AutoTestProjectCrud().get_by_id(project_id=project_id, on_error=True, state__not=1)
-

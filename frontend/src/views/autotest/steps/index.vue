@@ -319,7 +319,7 @@ import ApiAssertEditor from "@/views/autotest/assert_controller/index.vue";
 import ApiExtractEditor from "@/views/autotest/extract_controller/index.vue";
 import api from "@/api";
 import { awaitPendingDataSourceSaves } from '@/composables/step-editor/pendingDataSourceSaves'
-import { mapBackendStep } from './utils/stepTreeMap'
+import { mapBackendStep, forEachStep } from './utils/stepTreeMap'
 import { resolveCaseIdFromSteps, toPositiveCaseId } from './utils/prepareCaseExecute'
 import {
   stringifyStepTreePayload,
@@ -422,6 +422,8 @@ function markCaseNeedsFreshLoad(cid, ccode) {
 const appliedCaseMeta = ref({ case_id: null, case_code: null })
 /** 已加载内容对应的路由 case_info 快照：与 appliedCaseMeta 共同判断 keep-alive 重新激活时路由是否变化 */
 const loadedCaseInfo = ref(undefined)
+/** 加载时的用例级初始变量池快照：零步骤用例/新插入步骤无树节点用例信息时兜底 */
+const loadedCaseSessionVariables = ref(null)
 
 /** 用例信息子组件 ref：表单、校验、项目列表 */
 const caseInfoPanelRef = ref(null)
@@ -1531,6 +1533,16 @@ const handleDebug = async () => {
   })
 }
 
+/** 从步骤树原始数据提取用例级初始变量池（每个步骤节点均附带 case；零步骤时为仅含 case 的单节点） */
+const pickCaseSessionVariables = (rawData) => {
+  if (!Array.isArray(rawData)) return null
+  for (const node of rawData) {
+    const sv = node?.case?.session_variables
+    if (Array.isArray(sv) && sv.length > 0) return sv
+  }
+  return null
+}
+
 /**
  * 【用例管理「复制」】从路由 case_info 加载步骤树（不请求 DB）
  * @param {object} caseInfo - 含 is_copy、steps，及用例表单字段
@@ -1560,6 +1572,11 @@ const loadStepsFromCopy = (caseInfo) => {
     return next
   }
   const cleanedRawSteps = rawSteps.map(clearCopiedDataSource)
+  // 复制场景变量池以路由携带的用例信息为准（零步骤副本无树节点可取）
+  const copyPool = caseInfo.session_variables
+  loadedCaseSessionVariables.value = Array.isArray(copyPool) && copyPool.length > 0
+      ? copyPool
+      : pickCaseSessionVariables(cleanedRawSteps)
   const mappedSteps = cleanedRawSteps.map(mapBackendStep).filter(Boolean)
   steps.value = mappedSteps
   selectedKeys.value = [mappedSteps[0]?.id].filter(Boolean)
@@ -1593,6 +1610,7 @@ const loadSteps = async ({ force = false } = {}) => {
     steps.value = []
     selectedKeys.value = []
     appliedCaseMeta.value = { case_id: null, case_code: null }
+    loadedCaseSessionVariables.value = null
     caseInfoPanelRef.value?.hydrateFromStepTree?.([])
     nextTick(() => markDirtyLoaded())
     return
@@ -1603,6 +1621,7 @@ const loadSteps = async ({ force = false } = {}) => {
     const cached = autotestStore.getStepTreeCache(caseId.value, caseCode.value)
     if (cached) {
       caseInfoPanelRef.value?.hydrateFromStepTree?.(cached.rawData)
+      loadedCaseSessionVariables.value = pickCaseSessionVariables(cached.rawData)
       steps.value = JSON.parse(JSON.stringify(cached.steps)).filter(Boolean)
       selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
       quoteStepsMap.value = {}
@@ -1618,6 +1637,7 @@ const loadSteps = async ({ force = false } = {}) => {
     const res = await api.getAutoTestStepTree(params)
     const data = Array.isArray(res?.data) ? res.data : []
     caseInfoPanelRef.value?.hydrateFromStepTree?.(data)
+    loadedCaseSessionVariables.value = pickCaseSessionVariables(data)
     const mappedSteps = data.map(mapBackendStep).filter(Boolean)
     steps.value = mappedSteps
     selectedKeys.value = [steps.value[0]?.id].filter(Boolean)
@@ -1628,6 +1648,7 @@ const loadSteps = async ({ force = false } = {}) => {
     console.error('Failed to load step tree', error)
     steps.value = []
     selectedKeys.value = []
+    loadedCaseSessionVariables.value = null
     caseInfoPanelRef.value?.hydrateFromStepTree?.([])
     quoteStepsMap.value = {}
   }
@@ -1724,6 +1745,20 @@ const currentEditorNeedsBuiltinVars = computed(() => {
   return t === 'http' || t === 'tcp'
 })
 
+/** 用例级初始变量池：取树节点附带的用例信息（含未保存的源数据改动），调试时以前端传递为准，不查库 */
+const caseSessionVariables = computed(() => {
+  let pool = null
+  forEachStep(steps.value, (s) => {
+    if (pool) return
+    const sv = s.original?.case?.session_variables
+    if (Array.isArray(sv) && sv.length > 0) pool = sv
+  })
+  if (pool) return pool
+  // 零步骤用例/全部为新插入步骤时树节点无用例信息，回落到加载时暂存的变量池
+  const stashed = loadedCaseSessionVariables.value
+  return Array.isArray(stashed) && stashed.length > 0 ? stashed : null
+})
+
 /** 右侧动态编辑器 props（引用步骤才传 reselectHandler，避免 HTTP 等多根节点组件透传警告） */
 const editorComponentProps = computed(() => {
   const step = currentStep.value
@@ -1746,6 +1781,8 @@ const editorComponentProps = computed(() => {
   }
   if (step.type === 'http' || step.type === 'tcp') {
     props.hideDataSource = isPublicFamilyCase.value
+    // 调试占位符替换需并入用例级初始变量池（新建未保存步骤无 original.case，由页面统一取）
+    props.caseSessionVariables = caseSessionVariables.value
     // 公共接口：Request 面板「所属应用」锁定为用例所属应用（只读），由父级监听强制同步
     props.lockProject = isPublicApiCase.value
     props.caseProjectId = isPublicApiCase.value ? (caseInfoPanelRef.value?.caseForm?.case_project ?? null) : null

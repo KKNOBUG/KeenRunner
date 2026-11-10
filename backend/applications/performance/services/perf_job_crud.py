@@ -168,8 +168,14 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
         try:
             return await self.create(obj_in=job_dict)
         except IntegrityError as e:
-            error_message: str = f"新增压测数据作业信息失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增压测数据作业信息失败，作业标识可能与现有作业重复或必填数据缺失，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [job_name={job_in.job_name}, job_type={job_in.job_type}, "
+                f"quote_case_id={job_in.quote_case_id}, bind_api_id={job_in.bind_api_id}, "
+                f"bind_scene_id={job_in.bind_scene_id}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_perf_job(self, job_id: Optional[int] = None, job_code: Optional[str] = None) -> PerfJobModel:
@@ -217,9 +223,13 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
                 .order_by(*order_fields).values(*JOB_LIST_FIELDS)
             return total, rows
         except FieldError as e:
-            error_message: str = f"查询压测数据作业信息失败, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise ParameterException(message=error_message)
+            error_message: str = "查询压测数据作业信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [page={page}, page_size={page_size}, order={order}]\n"
+                f"{traceback.format_exc()}"
+            )
+            raise ParameterException(message=error_message) from e
 
     async def mark_pending(self, job_id: int) -> bool:
         """
