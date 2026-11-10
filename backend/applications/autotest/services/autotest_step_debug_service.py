@@ -59,9 +59,19 @@ from backend.services.data_scope import DataScope
 
 
 class StepDebugException(Exception):
-    """调试业务失败（映射为FailureResponse），可携带logs等附加数据。"""
+    """
+    调试业务失败异常（视图层映射为FailureResponse）。
+
+    message为面向用户的主提示；data可携带logs、响应片段等附加数据，便于前端展开排查。
+    """
 
     def __init__(self, message: str, data: Any = None) -> None:
+        """
+        构造调试失败异常。
+
+        :param message: 面向用户的主提示
+        :param data: 附加数据（如{"logs": [...]}或错误明细）
+        """
         self.message = message
         self.data = data
         super().__init__(message)
@@ -69,24 +79,24 @@ class StepDebugException(Exception):
 
 @dataclass
 class EnvEndpoint:
-    """环境配置解析结果。"""
+    """环境配置解析结果（APP/REDIS等节点类型共用）。"""
 
-    env_id: int
-    env_name: str
-    project_id: int
-    config_name: str
-    config_type: AutoTestConfigNodeType
-    config_host: Optional[str]
-    config_port: Optional[str]
-    database_name: Optional[str] = None
+    env_id: int                          # 环境绑定记录ID
+    env_name: str                        # 环境名称
+    project_id: int                      # 应用ID
+    config_name: str                     # 配置名称
+    config_type: AutoTestConfigNodeType  # 节点类型，与绑定表/配置表的env_type一致
+    config_host: Optional[str]           # 主机地址；调用方需自行判空
+    config_port: Optional[str]           # 端口（统一转为字符串）
+    database_name: Optional[str] = None  # 数据库名，仅REDIS等节点使用
 
 
 @dataclass
 class DebugLogger:
     """带时间戳与步骤名的调试日志收集器。"""
 
-    step_name: str
-    logs: List[str]
+    step_name: str   # 日志前缀使用的步骤名称
+    logs: List[str]  # 已格式化日志行，按追加顺序返回前端
 
     def append(self, message: str) -> None:
         """
@@ -100,6 +110,12 @@ class DebugLogger:
 
 
 class StepDebugService:
+    """
+    步骤调试服务：HTTP/TCP/Python/Redis四类步骤的同步调试入口。
+
+    与执行引擎共用autotest_runtime实现（占位符、协议、提取/断言、内置变量），
+    差异仅在于变量池来源、is_core_engine=False与返回日志/请求回显，保证调试结果与执行口径一致。
+    """
 
     @staticmethod
     def make_debug_logger(step_name: str) -> DebugLogger:
@@ -219,6 +235,9 @@ class StepDebugService:
         :param empty_env_message: env_name为空时的完整错误文案
         :param scope: 数据权限上下文；外部调试传入时要求应用与配置创建人均在可见范围
         :return: EnvEndpoint
+        :raises ParameterException: env_name为空
+        :raises NotFoundException: 环境绑定或环境配置不存在
+        :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
         env_name = (env_name or "").strip()
         if not env_name:
@@ -303,6 +322,9 @@ class StepDebugService:
         """
         调试路径提取+断言（is_core_engine=False），并将提取值写回变量池。
 
+        本方法不复用ExtractAssertPipeline，因此提取失败不会因raise_on_failure中止，
+        失败项仅体现在extract_results；断言失败同样只记结果，由调用方根据success汇总。
+
         :param extract_variables: 提取规则
         :param assert_validators: 断言规则
         :param session_variables_lookup: 变量查找表（就地更新）
@@ -319,8 +341,9 @@ class StepDebugService:
         :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
         :param prepend_extract_results: 需前置合并的提取结果（如Redis自动写入）
         :param sync_extract_into_lookup: 是否将提取结果同步写入session_variables_lookup；
-            Redis历史调试接口仅写入finished_variables，需传False以保持契约
+            Redis调试接口仅写入finished_variables，需传False以保持契约
         :return: (extract_results, validator_results)
+        :raises TypeError: 规则列表类型不合法
         """
         extract_data, extract_results = AutoTestToolService.run_extract_variables(
             extract_variables=extract_variables or [],
@@ -414,10 +437,17 @@ class StepDebugService:
         """
         调试HTTP请求步骤。
 
+        流程：合并变量池→相对URL解析环境配置并注入内置变量→解析占位符→组装报文→
+        httpx请求（10秒超时、不读系统代理）→回显响应并按执行口径提取/断言。
+
         :param debug_in: HTTP调试入参
         :param services: CRUD依赖聚合
         :param scope: 数据权限上下文，相对地址解析环境配置时校验应用与配置可见性
         :return: 调试结果字典
+        :raises StepDebugException: 超时、连接失败或请求异常
+        :raises NotFoundException: 相对URL缺少环境配置或配置不完整
+        :raises ParameterException: 环境名称缺失
+        :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
         env_name = (debug_in.env_name or "").strip()
         step_name = debug_in.step_name
@@ -451,6 +481,7 @@ class StepDebugService:
         target_path_raw: str = request_url
         builtin_target_host: Optional[str] = None
         builtin_target_port: Optional[str] = None
+        # 绝对URL不走环境配置；相对URL必须解析出host后才能拼装目标地址
         if not is_absolute_http_url(request_url):
             endpoint = await cls.resolve_env_config(
                 services,
@@ -546,6 +577,7 @@ class StepDebugService:
         )
 
         start_time = time.time()
+        # trust_env=False：不读系统代理，避免调试请求被本机代理环境变量劫持
         async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=10.0), trust_env=False) as client:
             try:
                 response = await client.request(method=request_method, url=request_url, **request_kwargs)
@@ -577,6 +609,7 @@ class StepDebugService:
         response_json = None
         response_text = response.text
         response_headers = dict(response.headers)
+        # 非JSON响应按文本回显；response_json保持None，供提取/断言判定数据源类型
         try:
             response_json = response.json()
             response_data: Any = response_json
@@ -588,6 +621,7 @@ class StepDebugService:
             for cookie in response.cookies.jar:
                 response_cookies[cookie.name] = cookie.value
 
+        # 提取/断言取实际发出的报文：优先序列化后的json_payload，回退原始request_body
         request_json_for_extract = (
             payloads.json_payload if isinstance(payloads.json_payload, (dict, list)) else None
         )
@@ -659,11 +693,19 @@ class StepDebugService:
         """
         调试TCP请求步骤。
 
+        流程：解析环境配置→注入内置变量→解析占位符→按帧配置组包→单次收发→
+        解析响应并按执行口径提取/断言。长连接暂未实现，按短连接降级。
+
         :param debug_in: TCP调试入参
         :param services: CRUD依赖聚合
         :param scope: 数据权限上下文，解析环境配置时校验应用与配置可见性
         :return: 调试结果字典
+        :raises StepDebugException: 环境配置缺失、地址/端口不完整或收发出错
+        :raises ParameterException: 环境名称缺失
+        :raises NotFoundException: 环境或配置不存在
+        :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
+        # 局部导入：仅TCP调试需要，避免模块导入期加载网络工具
         from backend.common import AsyncTcpUtils
 
         env_name = (debug_in.env_name or "").strip()
@@ -755,6 +797,7 @@ class StepDebugService:
             request_args_type, request_text=request_text, request_body=request_body, serialize_json=True
         )
         frame_config = resolve_tcp_frame_config(debug_in)
+        # 请求超时未配置，仅指定响应超时；read_td为空时由AioTcpClient回落30秒
         connect_td, read_td = parse_tcp_timeouts(None, debug_in.tcp_response_timeout)
         log(
             f"TCP帧配置: 帧模式={frame_config.frame_mode.value}, 进制={frame_config.radix}, "
@@ -854,10 +897,14 @@ class StepDebugService:
     @classmethod
     async def debug_python(cls, debug_in: AutoTestPythonCodeDebugRequest) -> Dict[str, Any]:
         """
-        调试Python代码步骤；断言规则与PythonStepExecutor对齐（仅变量池）。
+        调试Python代码步骤；断言规则与PythonStepExecutor对齐（仅允许变量池来源）。
+
+        流程：在StepExecutionContext中执行代码→将返回dict合并进变量池→仅执行断言管线（不做提取）；
+        断言未通过时以StepDebugException携带已产出结果返回。
 
         :param debug_in: Python调试入参
         :return: 调试结果字典（含result/assert_validators）
+        :raises StepDebugException: 代码执行失败或断言未通过
         """
         from backend.applications.autotest.services.autotest_step_engine import (
             StepExecutionContext,
@@ -956,10 +1003,18 @@ class StepDebugService:
         """
         调试Redis请求步骤；查到即止语义与RedisStepExecutor对齐。
 
+        流程：逐条解析配置（project/config/database/expr/variable_name均支持占位符）→
+        执行命令→自动写入variable_name及variable_name_count→可选查到即止→统一提取/断言。
+        单条失败会终止后续操作并抛出StepDebugException。
+
         :param debug_in: Redis调试入参
         :param services: CRUD依赖聚合
         :param scope: 数据权限上下文，解析每条操作的环境配置时校验应用与配置可见性
         :return: 调试结果字典
+        :raises ParameterException: env_name缺失
+        :raises NotFoundException: 应用/环境/配置不存在
+        :raises NoPermissionException: 应用或配置创建人不在可见范围
+        :raises StepDebugException: 单条操作参数缺失或执行失败
         """
         from backend.applications.autotest.services.autotest_step_engine import RedisStepExecutor
 
@@ -991,6 +1046,7 @@ class StepDebugService:
         pool_manager = get_app_redis_pool()
         redis_operates_request: List[Dict[str, Any]] = []
         redis_operates_response: List[Dict[str, Any]] = []
+        # 自动写入变量池的记录，最终前置拼接进extract_results供前端展示
         mark_extract_variables: List[Dict[str, Any]] = []
         start_time = time.time()
 
@@ -1134,6 +1190,7 @@ class StepDebugService:
                 })
                 log(f"{operate_no}：执行完成, 命令数={redis_count}")
 
+                # 查到即止：仅有效结果才终止后续命令
                 if redis_searched and RedisStepExecutor.has_effective_redis_result(redis_data):
                     log(f"【Redis请求】查到即止：{operate_no}已返回有效结果，已终止后续命令")
                     break

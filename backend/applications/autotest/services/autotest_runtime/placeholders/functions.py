@@ -15,17 +15,20 @@ from backend.common.generate_utils import GenerateUtils
 
 
 class PlaceholderFunctions:
-    """解析并动态执行GenerateUtils上的辅助函数。"""
+    """解析 func_name(k=literal, ...) 形式的占位符，并反射调用 GenerateUtils 上的辅助函数。"""
 
     @classmethod
     def _parse_funcname_funcargs(cls, func_string: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
         """
-        解析func_name(key1=val1, key2="a,b")格式字符串，仅支持关键字字面量参数。
+        解析 func_name(key1=val1, key2="a,b") 形式的调用字符串，仅支持关键字字面量参数。
 
-        使用AST解析而非逗号切分，避免字符串参数内含逗号时被错误拆分。
+        使用 AST 解析而非逗号切分，避免字符串参数内含逗号时被错误拆分。失败分两类：
+        非字符串、不以 ")" 结尾、解析结果不是 Name 调用时返回 (None, None) 交由调用方拒绝；
+        语法错误、位置参数、**kwargs、非字面量参数时抛 ValueError 并带上原始调用串。
 
         :param func_string: 函数调用形式的字符串
-        :return: 二元组(函数名, 参数字典)，无法解析时返回(None, None)
+        :return: 二元组(函数名, 参数字典)；不构成调用形态时返回 (None, None)
+        :raises ValueError: 调用串非法或参数不符合"仅关键字字面量"约束
         """
         if not isinstance(func_string, str):
             return None, None
@@ -56,10 +59,14 @@ class PlaceholderFunctions:
     @classmethod
     def execute_func_string_single(cls, content: str) -> Any:
         """
-        针对content为函数调用字符串格式(如func_name(...))的场景, 通过GenerateUtils类实现反射机制动态执行对应函数并返回函数返回值。
+        执行函数调用形式的占位符文本（如 func_name(...)）：反射 GenerateUtils 上的同名函数并返回其结果。
+
+        仅校验 GenerateUtils 上是否存在同名属性（未维护方法白名单），参数必须是字面量关键字参数；
+        解析失败、函数不存在、参数签名不匹配及调用期异常统一包装为 AttributeError，保留原始错误链。
 
         :param content: 如"generate_uuid()"、"generate_string(length=2)"
         :return: 函数返回值
+        :raises AttributeError: 调用串非法、函数未定义或执行失败
         """
         try:
             func_name, func_args = cls._parse_funcname_funcargs(content)

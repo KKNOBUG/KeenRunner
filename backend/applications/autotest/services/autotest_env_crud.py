@@ -39,18 +39,31 @@ from backend.services import DataScope, get_current_username
 
 
 class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, AutoTestEnvUpdate]):
+    """
+    环境绑定CRUD：应用维度的环境绑定（krun_autotest_env_bind）及其全局环境名字典。
+
+    两层结构：
+    - 环境名字典（AutoTestEnvModel）为全局共享，同名前导统一为大写，删除时软删；
+    - 环境绑定 = 应用 + 环境字典 + 节点类型(env_type)，唯一性由三键共同保证。
+
+    引用约束：删除/软删前必须确认无环境配置引用，且无任务以环境名称字符串引用该环境。
+    归属口径：绑定以 created_user 为归属人，环境字典的创建/更新人取登录态（忽略请求体）。
+    """
 
     def __init__(self):
+        """绑定环境绑定模型（krun_autotest_env_bind），供基类通用CRUD复用。"""
         super().__init__(model=AutoTestEnvBindModel)
 
     async def get_by_id(self, env_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestEnvBindModel]:
         """
         根据主键ID查询环境绑定。
 
-        :param env_id: 环境绑定主键
+        :param env_id: 环境绑定主键，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 环境绑定实例或None
+        :raises ParameterException: env_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not env_id:
             error_message: str = "查询环境绑定信息失败, 参数[env_id]不允许为空"
@@ -68,10 +81,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         根据标识代码查询环境绑定。
 
-        :param env_code: 绑定标识代码
+        :param env_code: 绑定标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 环境绑定实例或None
+        :raises ParameterException: env_code 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not env_code:
             error_message: str = "查询环境绑定信息失败, 参数[env_code]不允许为空"
@@ -95,11 +110,16 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         按应用+环境名称解析环境绑定；指定env_type时仅匹配该类型。
 
+        先在全局字典里按名称（忽略大小写）取所有同名字典ID，再到绑定表按应用+类型取首条启用记录；
+        同名环境可能存在多条绑定（不同节点类型），因此不传 env_type 时结果依赖存储顺序，仅用于“取任一条”场景。
+
         :param project_id: 应用主键ID
         :param env_name: 环境名称(忽略大小写)
         :param env_type: 节点类型(app/file/database/redis)，为空则取首条启用绑定
         :param on_error: 未找到时是否抛出异常
         :return: 环境绑定实例或None
+        :raises ParameterException: env_name 为空
+        :raises NotFoundException: on_error=True 且无匹配绑定
         """
         name = (env_name or "").strip()
         if not name:
@@ -133,7 +153,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         :param env_name: 环境名称
         :param exact: True=精确匹配(忽略大小写)，False=模糊包含
-        :return: 字典主键ID列表
+        :return: 字典主键ID列表；名称空白时返回空列表
         """
         name = (env_name or "").strip()
         if not name:
@@ -150,7 +170,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         批量解析环境绑定ID到环境名称的映射，已删除的绑定不解析。
 
         :param env_bind_ids: 环境绑定主键ID列表
-        :return: {绑定ID: 环境名称}
+        :return: {绑定ID: 环境名称}；已软删绑定与字典缺失名称不返回/降为空串
         """
         if not env_bind_ids:
             return {}
@@ -170,7 +190,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         批量查询绑定维度字段。
 
         :param env_bind_ids: 环境绑定主键ID列表
-        :return: {绑定ID: {project_id, env_type, env_enum_id}}
+        :return: {绑定ID: {project_id, env_type, env_enum_id}}；env_type 统一转为原始值字符串
         """
         if not env_bind_ids:
             return {}
@@ -199,8 +219,8 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         :param project_id: 应用ID
         :param env_type: 节点类型
-        :param env_enum_ids: 环境字典ID列表
-        :param state_not: 排除的状态值
+        :param env_enum_ids: 环境字典ID列表；传空列表直接返回空结果
+        :param state_not: 排除的状态值（默认排除软删行 state=1）
         :return: 绑定主键列表
         """
         query = self.model.filter(state__not=state_not)
@@ -222,9 +242,13 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         按环境名称获取或创建全局环境枚举记录。
 
+        名称统一规范为大写；命中软删字典时复活（state=0），并发创建撞唯一索引时回查既有行。
+
         :param env_name: 环境名称(规范化为大写)
-        :param user: 操作人
+        :param user: 操作人（落 created_user/updated_user）
         :return: 环境枚举实例
+        :raises ParameterException: env_name 为空
+        :raises DataBaseStorageException: 并发冲突后仍无法回查到既有记录
         """
         name = (env_name or "").strip().upper()
         if not name:
@@ -272,6 +296,11 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :param strict_duplicate: 为True时，命中启用态绑定直接判重报错，为False时幂等复用已存在绑定
         :param scope: 数据权限上下文，恢复软删环境绑定时要求创建人允许当前用户写入
         :return: 创建或恢复后的环境绑定实例
+        :raises ParameterException: 环境名称为空
+        :raises NotFoundException: 所属应用不存在或已软删
+        :raises NoPermissionException: 所属应用不可读，或软删绑定创建人不可写
+        :raises DataAlreadyExistsException: strict_duplicate=True 且启用态绑定已存在
+        :raises DataBaseStorageException: 落库失败（唯一索引冲突或字典创建失败）
         """
         await load_readable_project(scope, env_in.project_id)
         # 环境字典为全局共享数据，归属人取登录态，忽略请求体回传，防止伪造创建人
@@ -339,6 +368,10 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :param env_in: 环境绑定更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境绑定
         :return: 更新后的环境绑定实例
+        :raises ParameterException: 定位参数为空，或请求中的 env_type/project_id 与已存绑定不一致
+        :raises NotFoundException: 环境绑定不存在或已软删
+        :raises NoPermissionException: 环境绑定创建人不在当前用户可操作范围
+        :raises DataBaseStorageException: 落库失败（改名后与既有绑定冲突）
         """
         env_id: Optional[int] = env_in.env_id
         env_code: Optional[str] = env_in.env_code
@@ -407,7 +440,11 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         校验环境绑定不存在引用关系：环境配置、任务用例执行配置中的环境名。
 
+        两类引用：环境配置走 env_bind_id 外键；任务只存环境名称字符串，因此需按绑定所属应用扫描
+        任务的 cases_execute_config（case级 involve_envs 与步骤级 steps_execute_config 都算引用）。
+
         :param instance: 待删除的环境绑定实例
+        :return: None
         :raises DataAlreadyExistsException: 存在引用关系时拒绝删除
         """
         from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
@@ -453,7 +490,10 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :param env_id: 环境绑定主键，与env_code二选一
         :param env_code: 绑定标识代码，与env_id二选一
         :return: 删除后的环境绑定实例快照
-        :raises DataAlreadyExistsException: 绑定下存在未删除的环境配置
+        :raises ParameterException: 两个定位参数同时为空
+        :raises NotFoundException: 环境绑定不存在或已软删
+        :raises NoPermissionException: 环境绑定创建人不在当前用户可删除范围
+        :raises DataAlreadyExistsException: 存在环境配置或任务引用
         """
         if not env_id and not env_code:
             error_message: str = "删除环境绑定信息失败, 参数[env_id, env_code]不允许同时为空"
@@ -486,6 +526,10 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :param env_in: 环境绑定删除schema
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境绑定
         :return: 更新条数
+        :raises ParameterException: 两个定位参数同时为空，或列表中包含空值
+        :raises NotFoundException: 任一目标绑定不存在或已软删
+        :raises NoPermissionException: 任一绑定创建人不在当前用户可删除范围
+        :raises DataAlreadyExistsException: 任一绑定仍被环境配置或任务引用
         """
         env_ids: Optional[List[int]] = env_in.env_ids
         env_codes: Optional[List[str]] = env_in.env_codes
@@ -547,6 +591,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询/排序字段不被ORM支持
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -558,6 +603,9 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
     async def list_env_names(self, scope: Optional[DataScope] = None) -> List[str]:
         """
         查询未删除的环境名称(去重)。
+
+        环境字典是全局共享的，所以限定范围时无法直接过滤字典行：先按可见范围取绑定引用的字典ID，
+        再回查这些字典的名称；scope 为 None 时直接返回全部启用字典名称。
 
         :param scope: 数据权限上下文，传入时仅返回可见范围内绑定引用的环境名称
         :return: 环境名称列表
@@ -631,9 +679,10 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         按节点类型聚合环境名称（读环境绑定表并联字典）。
 
-        :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用
+        :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用（无绑定的应用也返回空字典）
         :param scope: 数据权限上下文，传入时仅聚合可见范围内的环境绑定
         :return: {app/file/database/redis: [...]} 或 {project_id: {app/file/database/redis: [...]}}
+        :raises ParameterException: 查询异常（含非法节点类型/脏数据），统一转为可读提示
         """
         try:
             allowed_types = set(AutoTestConfigNodeType.get_values())
@@ -686,7 +735,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
     @staticmethod
     async def _get_dict_name_map(dict_ids) -> Dict[int, str]:
-        """批量查询字典ID到环境名称的映射。"""
+        """
+        批量查询字典ID到环境名称的映射；不校验软删状态，供已确认有效的绑定行取名。
+
+        :param dict_ids: 环境字典主键ID集合（可重复）
+        :return: {字典ID: 环境名称}；空入参返回空字典，字典缺失的ID不出现在结果中
+        """
         if not dict_ids:
             return {}
         return dict(await AutoTestEnvModel.filter(id__in=list(dict_ids)).values_list("id", "env_name"))
@@ -695,9 +749,13 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         以环境绑定表分页查询；可选按子配置IP/配置名称过滤。
 
+        is_delete 为历史字段名，实际语义是“该绑定下是否无启用中的子配置”（True=无子配置），
+        前端据此切换删除确认文案，与本表自身的软删状态无关。
+
         :param query_in: 环境分页查询入参(过滤条件与分页)
         :param scope: 数据权限上下文，按创建人过滤可见范围
         :return: (总条数, 当前页记录)；记录含env_id(绑定主键)/project_id/env_name/env_type/project_name/created_user/is_delete/时间字段
+        :raises ParameterException: 查询异常，统一转为可读提示
         """
         try:
             base_qs = self.model.filter(state=0)
@@ -750,6 +808,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             check_ids = [item["id"] for item in page_rows]
             sub_exists = set()
             if check_ids:
+                # 仅统计启用中的子配置：被软删的配置不算“仍有子表配置”
                 config_rows = await AutoTestEnvConfigModel.filter(
                     env_bind_id__in=check_ids,
                     state=0,

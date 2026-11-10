@@ -20,7 +20,12 @@ from backend.common.xpath_utils import XPathUtils
 
 
 class Extractors:
-    """JSON/XML/Text/Headers/Cookies/Form-Data/变量池提取实现与统一入口。"""
+    """
+    提取值实现与统一入口：JSON/XML/Text/Headers/Cookies/Form-Data/变量池。
+
+    extract_from_source 先按规范化source查EXTRACTORS注册表，未命中时回退到DB/Redis
+    操作结果（source为请求中配置的variable_name）提取。
+    """
 
     @classmethod
     def _extract_json_payload(
@@ -35,6 +40,9 @@ class Extractors:
     ) -> Any:
         """
         从JSON对象根据ALL/SOME与可选index提取。
+
+        index仅校验上界（index >= 长度抛ValueError）；负数按Python下标语义取倒数元素；
+        提取值不是list时忽略index。
 
         :param data: 响应或请求JSON（dict/list）
         :param expr: JSONPath；SOME模式必填
@@ -81,6 +89,8 @@ class Extractors:
     ) -> Any:
         """
         从XML文本根据XPath与可选index提取元素文本或序列化片段。
+
+        index缺省时取最后一个匹配（兼容按最新节点取值的使用习惯）；负数按Python下标语义取倒数元素。
 
         :param text: XML字符串
         :param expr: XPath；SOME模式必填
@@ -134,6 +144,8 @@ class Extractors:
     ) -> Any:
         """
         从纯文本根据正则提取匹配串，可选指定分组。
+
+        使用re.search（取首个匹配）并开启re.S，使`.`可跨行匹配。
 
         :param text: 请求或响应正文
         :param expr: 正则表达式；SOME模式必填
@@ -235,6 +247,9 @@ class Extractors:
         """
         使用JSONPath表达式从data中取值，支持标准JSONPath(如$.data[0].id、$.list[*].name)。
 
+        表达式必须以$开头；单匹配返回该值，多匹配返回值的列表；中文等非ASCII键名会被
+        改写为['键名']后重试解析。
+
         :param data: 待取值的对象(dict/list或嵌套结构)
         :param expr: 非空字符串，合法JSONPath表达式(如$.a.b、$.data[0].id、$.items[*].id)
         :return: 单匹配时返回该值，多匹配时返回值的列表
@@ -286,6 +301,13 @@ class Extractors:
         """
         从source指定来源根据表达式提取值，未命中注册表时回退DB/Redis逻辑。
 
+        取数顺序：
+        1. source去空白+小写后查EXTRACTORS注册表；
+        2. request_cookies缺失时从request_headers的Cookie头解析补齐；
+        3. 未命中注册表且response_json为DB/Redis操作结果列表时，按source匹配操作项的
+           variable_name（列表成员判定）取sql_data/redis_data，同名以最后一项有效数据为准；
+        4. 均不匹配时抛ValueError，错误文案区分「存储变量未找到」与「数据源类型不允许」。
+
         :param source: 来源类型或DB/Redis的variable_name
         :param expr: 提取表达式（JSONPath/XPath/正则）
         :param range_type: ALL返回整段数据，SOME根据expr取值
@@ -302,9 +324,12 @@ class Extractors:
         :param session_variables_lookup: 变量池字典
         :param operation_type: 错误信息前缀
         :return: 提取得到的值
+        :raises ValueError: 来源不被允许、表达式未匹配或索引越界
         """
+        # source键统一去空白+小写后查注册表，兼容调用方传入大小写/空白差异
         range_type_n: str = (range_type or "SOME").strip().lower()
         source_key: str = (source or "").strip().lower()
+        # Cookie头未单独传入时从请求头补齐，保证request cookie提取与真实请求一致
         resolved_request_cookies = request_cookies
         if resolved_request_cookies is None and request_headers:
             resolved_request_cookies = KvUtils.parse_cookie_header(request_headers)
@@ -326,6 +351,7 @@ class Extractors:
             return extractor(ctx, expr, range_type_n, index, operation_type)
 
         # 数据库/Redis 请求步骤：source 为「请求」里配置的 variable_name；response_json 为 List[Dict]
+        # 注册表未命中：尝试按DB/Redis操作结果回退（response_json为操作结果列表而非报文）
         source_strip: str = (source or "").strip()
         if source_strip and isinstance(response_json, list) and response_json:
             all_operates_response_safe: bool = all(
@@ -456,6 +482,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
             raise ValueError(str(e) or f"【{operation_type}】变量池 JSONPath匹配失败: {expr}") from e
 
     return {
+        # 报文侧：response/request × json/xml/text；映射侧：headers/cookie/form-data；变量池两个别名
         "response json": json_side("response"),
         "request json": json_side("request"),
         "response xml": xml_side("response"),

@@ -63,7 +63,9 @@ class CaseExcelService:
     # ==================== 常量：协议标识与导出样式 ====================
     TCP_PROTOCOL: str = "TCP"
     HTTP_PROTOCOL: str = "HTTP"
+    # 用例数超过该阈值才额外生成“目录”sheet；等于阈值时不生成
     GENERATE_DIRECTORY_THRESHOLD: int = 2
+    # Excel 页签名长度上限，超长需截断
     SHEET_TITLE_MAX_LENGTH: int = 31
     SHEET_STYLE_ROW_HEIGHT: int = 40
     SHEET_STYLE_COL_WIDTH_MIN: int = 8
@@ -83,6 +85,7 @@ class CaseExcelService:
     # ==================== 常量：脚本模板布局 ====================
     # 公共接口导出开关：为True时输出"变量/提取/断言"三列，为False时不输出；
     EXPORT_VAR_EXT_ASS: bool = True
+    # 可选尾列：必须恒位于列定义末尾，_required_columns 依赖该约定截取必需列
     OPTIONAL_SHEET_COLUMNS: Tuple[str, ...] = ("变量", "提取", "断言")
     TCP_SHEET_NAME = "TCP模板"
     TCP_BASE_COLUMNS: Tuple[str, ...] = (
@@ -97,15 +100,19 @@ class CaseExcelService:
         "请求方式", "配置名称", "请求路径", "请求体类型", "请求体", "请求头",
     )
     HTTP_SHEET_COLUMNS: Tuple[str, ...] = HTTP_BASE_COLUMNS + OPTIONAL_SHEET_COLUMNS
+    # 协议 → (模板页签名, 完整列定义)；导入识别布局与导出定位页签共用这一份定义
     SCRIPT_SHEET_LAYOUTS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
         TCP_PROTOCOL: (TCP_SHEET_NAME, TCP_SHEET_COLUMNS),
         HTTP_PROTOCOL: (HTTP_SHEET_NAME, HTTP_SHEET_COLUMNS),
     }
+    # 导出完成后把模板页签重命名为用户可读名称（模板内页签名固定，不能直接用）
     SCRIPT_EXPORT_SHEET_NAMES: Dict[str, str] = {
         TCP_PROTOCOL: "TCP数据",
         HTTP_PROTOCOL: "HTTP数据",
     }
+    # 模板前两行为表头与填写说明，数据从第3行开始（导出写入与导入读取共用）
     SCRIPT_DATA_START_ROW: int = 3
+    # TCP 帧配置的列名 → 步骤字段名映射：导出取这五列的值，导入按同名五列回写
     TCP_FRAME_CONFIG_COLUMNS: Tuple[Tuple[str, str], ...] = (
         ("报文进制", "tcp_radix"),
         ("长度位", "tcp_radix_length"),
@@ -115,6 +122,7 @@ class CaseExcelService:
     )
 
     # ==================== 常量：TCP 帧配置校验 ====================
+    # 以下取值集合直接取自枚举，保证导入校验与执行引擎可用值一致
     TCP_RADIX_VALUES = frozenset(e.value for e in AutoTestTcpRadix)
     TCP_DATAGRAM_LENGTH_VALUES = frozenset(e.value for e in AutoTestTcpDatagramLength)
     TCP_REQUEST_END_SYMBOL_VALUES = frozenset(e.value for e in AutoTestTcpEndSymbol)
@@ -122,20 +130,25 @@ class CaseExcelService:
     TCP_RESPONSE_END_SYMBOL_MAX = 64
 
     # ==================== 常量：脚本模板文件 ====================
+    # 键为(是否含HTTP, 是否含TCP)，按本次导出的协议组合选择物理模板
     SCRIPT_TEMPLATE_FILES: Dict[Tuple[bool, bool], str] = {
         (True, False): "接口模板-HTTP.xlsx",
         (False, True): "接口模板-TCP.xlsx",
         (True, True): "接口模板-HTTP&TCP.xlsx",
     }
     SCRIPT_IMPORT_TEMPLATE_FILE = "接口模板-HTTP&TCP.xlsx"
+    # 下载时对外显示的名称：与磁盘模板文件名解耦，避免用户看到内部命名
     SCRIPT_IMPORT_TEMPLATE_DOWNLOAD_NAME = "接口模板.xlsx"
 
     # ==================== 常量：脚本导入校验集合 ====================
+    # 导入校验白名单：请求方式/请求体类型直接取自枚举，避免模板与引擎接受值分叉
     HTTP_METHODS = frozenset(e.value for e in HTTPMethod)
     REQ_ARGS_TYPE = frozenset(e.value for e in AutoTestReqArgsType)
+    # TCP 不支持表单类请求体：仅允许 json/xml/raw（与执行引擎 TCP 组包能力一致）
     TCP_ARGS_TYPE = frozenset({AutoTestReqArgsType.XML.value, AutoTestReqArgsType.JSON.value, AutoTestReqArgsType.RAW.value})
 
     # ==================== 常量：步骤查询收窄 ====================
+    # 导出只取渲染模板所需的步骤列，避免整行模型拉取（含模型属性与多余字段）
     STEP_EXPORT_ONLY_FIELDS: Tuple[str, ...] = (
         "id", "case_id", "parent_step_id", "step_no", "step_type", "data_source_id",
         "request_args_type", "request_method", "request_url", "request_config_name",
@@ -170,7 +183,14 @@ class CaseExcelService:
 
     @classmethod
     def _set_sheet_cells_style(cls, sheet: Worksheet, *, start_row: int = 1, row_height: Optional[float] = SHEET_STYLE_ROW_HEIGHT) -> None:
-        """数据区水平/垂直居中并设置四边边框。"""
+        """
+        数据区水平/垂直居中并设置四边边框。
+
+        :param sheet: 目标sheet
+        :param start_row: 起始行，之前的行为表头/说明行不套用
+        :param row_height: 统一行高；传None表示保持原有行高
+        :return: None
+        """
         max_row = sheet.max_row or 0
         max_column = sheet.max_column or 0
         if max_row < start_row or max_column < 1:
@@ -184,6 +204,15 @@ class CaseExcelService:
 
     @staticmethod
     def _file_name(username: Optional[str], label: str) -> str:
+        """
+        生成导出文件名：{用户名}_{业务标签}_{毫秒级时间戳}.xlsx。
+
+        用户名中的路径分隔符/空白等非法字符统一替换为下划线，避免下载名破坏文件系统或响应头。
+
+        :param username: 当前登录账号，为空时省略用户名前缀
+        :param label: 业务标签（报文数据/接口详情数据）
+        :return: xlsx 文件名
+        """
         safe = re.sub(r'[\\/:*?"<>|\s]', "_", str(username or "").strip())
         prefix = f"{safe}_{label}" if safe else label
         stamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
@@ -302,7 +331,13 @@ class CaseExcelService:
 
     @staticmethod
     async def _load_project_names(project_ids: Iterable[Optional[int]], services: Any) -> Dict[Optional[int], str]:
-        """批量查询应用名称；悬空引用回退空名（与逐条查询取不到时口径一致）。"""
+        """
+        批量查询应用名称；悬空引用回退空名（与逐条查询取不到时口径一致）。
+
+        :param project_ids: 待解析的应用主键（允许含None，服务于未关联应用的用例）
+        :param services: CRUD聚合
+        :return: {应用主键: 应用名称}；None 与悬空ID 映射空串
+        """
         names: Dict[Optional[int], str] = {None: ""}
         ids = sorted({project_id for project_id in project_ids if project_id})
         if not ids:
@@ -319,10 +354,22 @@ class CaseExcelService:
 
     @classmethod
     def build_export_file_name(cls, username: Optional[str]) -> str:
+        """
+        通道A导出文件名：{用户名}_接口报文数据_{时间戳}.xlsx。
+
+        :param username: 当前登录账号
+        :return: xlsx 文件名
+        """
         return cls._file_name(username, "接口报文数据")
 
     @classmethod
     def _kv_to_pairs(cls, kv_list: Optional[List[Any]]) -> List[Tuple[str, Any]]:
+        """
+        键值列表转JSONPath列：键统一加 $. 前缀，空键跳过。
+
+        :param kv_list: [{key,value,...}] 或 Schema 对象列表
+        :return: [(JSONPath, 值)]；值为原始类型，由写入侧再做字符串化
+        """
         pairs: List[Tuple[str, Any]] = []
         for item in kv_list or []:
             key = cls._get(item, "key")
@@ -333,6 +380,15 @@ class CaseExcelService:
 
     @classmethod
     def _flatten_jsonpath(cls, data: Any, prefix: str = "$") -> List[Tuple[str, Any]]:
+        """
+        递归展开JSON，把叶子节点转为 $.a.b[0].c 形式的路径-值对。
+
+        空对象/空列表作为叶子保留并写入空串（避免导出后整行丢失）；非空容器继续下钻。
+
+        :param data: 待展开对象
+        :param prefix: 当前路径前缀
+        :return: [(JSONPath, 值)]
+        """
         pairs: List[Tuple[str, Any]] = []
         if isinstance(data, dict):
             for key, value in data.items():
@@ -376,6 +432,7 @@ class CaseExcelService:
         pairs: List[Tuple[str, Any]] = []
 
         def walk(elem: ElementTree.Element, path: str) -> None:
+            """递归下钻：先输出属性列，叶节点写文本列，非叶节点按子标签继续（同名兄弟由本层加下标区分）。"""
             for attr_name, attr_value in elem.attrib.items():
                 local_attr = cls._xml_local_name(attr_name)
                 pairs.append((f"{path}.@{local_attr}", "" if attr_value is None else attr_value))
@@ -402,6 +459,15 @@ class CaseExcelService:
 
     @classmethod
     def _body_to_pairs(cls, step: Any) -> List[Tuple[str, Any]]:
+        """
+        按请求体类型把步骤请求体转成JSONPath列。
+
+        JSON走对象展平、XML走文档序展平、RAW整体作$.raw；
+        表单类先经 FORM_FIELD_BY_ARGS_TYPE 映射到具体步骤字段，再按键值展平。
+
+        :param step: 步骤模型
+        :return: [(JSONPath, 值)]
+        """
         args = getattr(step, "request_args_type", None)
         if args == AutoTestReqArgsType.JSON:
             body = getattr(step, "request_body", None)
@@ -417,6 +483,13 @@ class CaseExcelService:
 
     @classmethod
     async def prepare_export_cases(cls, case_ids: List[int], services: Any) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """
+        通道A前置：装载公共接口用例并转成报文矩阵数据，不合规用例单独返回。
+
+        :param case_ids: 用例主键列表（去重后按入参顺序处理）
+        :param services: CRUD聚合
+        :return: (有效用例列表[{case_name,protocol,project_name,case_desc,created_user,head_pairs,body_pairs}], 不合规明细)
+        """
         loaded, invalid = await cls._load_public_api_cases(case_ids, services)
         valid = [{
             "case_name": item["case_name"],
@@ -448,7 +521,7 @@ class CaseExcelService:
             cls._fill_datagram_sheet(workbook.create_sheet(title=title), case_data)
             sheet_titles.append((title, case_data))
 
-        # 如果Sheet页大于2时, 则创建目录Sheet页
+        # 页签数超过阈值时创建目录页（阈值默认2，等于阈值不建）
         if len(sheet_titles) > cls.GENERATE_DIRECTORY_THRESHOLD:
             cls._build_datagram_directory(workbook, sheet_titles)
 
@@ -563,10 +636,26 @@ class CaseExcelService:
 
     @classmethod
     def build_script_file_name(cls, username: Optional[str]) -> str:
+        """
+        通道B导出文件名：{用户名}_接口详情数据_{时间戳}.xlsx。
+
+        :param username: 当前登录账号
+        :return: xlsx 文件名
+        """
         return cls._file_name(username, "接口详情数据")
 
     @classmethod
     async def prepare_script_export_rows(cls, case_ids: List[int], services: Any) -> Tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
+        """
+        通道B前置：把公共接口用例转为模板行字典，往返不安全项转为不合规明细。
+
+        每行按模板列名扁平化；表单类请求体走键值协议，其余走JSON/XML/RAW序列化；
+        可选三列仅在 EXPORT_VAR_EXT_ASS 开启时编码，关闭时连校验一并跳过。
+
+        :param case_ids: 用例主键列表（去重后按入参顺序处理）
+        :param services: CRUD聚合
+        :return: (模板行字典列表, 不合规明细[{case_id,case_name,reason}])
+        """
         loaded, invalid = await cls._load_public_api_cases(case_ids, services)
         rows: List[Dict[str, str]] = []
         for item in loaded:
@@ -635,6 +724,12 @@ class CaseExcelService:
 
     @staticmethod
     def _script_template_path(file_name: str) -> str:
+        """
+        解析模板资产的磁盘路径：固定取 output/template 目录，模板文件随代码交付。
+
+        :param file_name: 模板文件名
+        :return: 磁盘路径
+        """
         return os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", file_name)
 
     @classmethod
@@ -885,7 +980,7 @@ class CaseExcelService:
         错误按"身份列 → 协议专属列 → 请求体 → 报文列"顺序收集，与模板列顺序一致，便于用户逐列修正。
 
         :param cells: 行单元格字典（键为列名）
-        :param row_no: 行号（仅用于错误定位信息，由调用方拼装）
+        :param row_no: Excel行号，随行字典返回，供不合规明细定位
         :param sheet_protocol: 首个sheet识别出的协议布局
         :return: (行字典, 错误列表)；存在错误时行字典为None
         """
@@ -950,7 +1045,8 @@ class CaseExcelService:
         """
         解析导入模板首个sheet：识别布局、逐行校验，输出可落库行与不合规明细。
 
-        仅读取首个sheet（模板填写说明页明确约定），空行跳过。
+        仅读取首个sheet（模板填写说明页明确约定），空行跳过；
+        文件损坏/非xlsx等解析异常统一转为可读校验明细，不向上抛异常。
 
         :param content: xlsx文件字节
         :return: (行字典列表, 不合规明细[{row, reason}])
@@ -1058,7 +1154,15 @@ class CaseExcelService:
 
     @staticmethod
     async def _load_import_project_ids(rows: List[Dict[str, Any]], services: Any) -> Dict[str, int]:
-        """按模板出现的应用名批量定位启用应用，返回 应用名→主键（缺失即未命中）。"""
+        """
+        按模板出现的应用名批量定位启用应用，返回 应用名→主键（缺失即未命中）。
+
+        名称在库内非唯一，同名多行时取查询结果首条，与逐条查询口径一致。
+
+        :param rows: 解析后的行列表
+        :param services: CRUD聚合
+        :return: {应用名: 应用主键}
+        """
         project_names = list(dict.fromkeys(row["project_name"] for row in rows))
         if not project_names:
             return {}
@@ -1079,6 +1183,9 @@ class CaseExcelService:
         """
         批量定位同应用+同名称+同所属人的公共接口（含软删除，用于恢复覆盖）。
 
+        :param rows: 解析后的行列表（提供接口名称集合）
+        :param project_ids: 应用名→主键映射（仅命中应用参与查询）
+        :param owner_user: 当前登录所属人账号；为空时不做匹配
         :return: (应用ID, 接口名称) → 同名接口列表
         """
         grouped: Dict[Tuple[int, str], List[AutoTestCaseModel]] = defaultdict(list)
@@ -1103,6 +1210,7 @@ class CaseExcelService:
         """
         批量装载命中接口的根步骤（含软删，供软删接口恢复覆盖时计数）。
 
+        :param grouped_cases: (应用ID, 接口名称) → 同名接口列表
         :return: 用例ID → 根步骤列表
         """
         case_ids = [case.id for cases in grouped_cases.values() for case in cases]
@@ -1179,6 +1287,12 @@ class CaseExcelService:
         """
         单事务落库：不存在则新增用例+步骤，存在则更新或恢复覆盖（版本号自增）。
 
+        覆盖更新时显式置空 case_tags 并回写 state=0：模板不含标签列，导入以表格为唯一事实源，
+        软删的接口与步骤在此一并复活。
+
+        :param prepared: 已匹配的应用/用例/步骤行
+        :param services: CRUD聚合
+        :param owner_user: 当前登录所属人账号（新建用例的归属人）
         :return: (新增数, 更新数)
         """
         created = updated = 0

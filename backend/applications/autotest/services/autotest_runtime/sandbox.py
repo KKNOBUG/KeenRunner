@@ -33,30 +33,43 @@ _builtin_import = _builtins_module.__import__
 
 class ReadonlyModuleProxy:
     """
-    白名单模块只读代理。
+    白名单模块的只读代理。
 
-    阻断用户代码改写/删除共享模块属性, 如json.dumps=None污染同进程后续执行；
-    并按模块封禁字符串间接取属性的危险工厂, 如operator.attrgetter/methodcaller以字符串做属性访问, 可完全绕过AST对下划线属性的封禁，串起__base__/__subclasses__反射链逃逸沙箱）。
+    - 阻断改写/删除共享模块属性（如把 json.dumps 置空会污染同进程后续执行）；
+    - 按模块封禁"以字符串间接取属性"的工厂（operator.attrgetter/methodcaller）：
+      这类能力可绕过 AST 对下划线属性的封禁，串起 __base__/__subclasses__ 反射链逃逸沙箱。
     """
 
+    # 限定实例只有两个槽位，避免代理被挂载额外属性
     __slots__ = ("_target", "_blocked")
 
     def __init__(self, target: Any, blocked: frozenset = frozenset()) -> None:
+        """
+        包装目标模块。
+
+        :param target: 被代理的真实模块对象
+        :param blocked: 该模块下额外封禁的属性名集合（如 operator 的 attrgetter/methodcaller）
+        """
+        # 绕过本类 __setattr__ 直接写槽位，否则初始化就会被"禁止改写模块属性"拦截
         object.__setattr__(self, "_target", target)
         object.__setattr__(self, "_blocked", blocked)
 
     def __getattr__(self, item: str) -> Any:
+        """读取真实模块属性；命中封禁名单时拒绝访问。"""
         if item in self._blocked:
             raise AttributeError(f"代码请求(Python)步骤中禁止使用该模块能力: {item}")
         return getattr(self._target, item)
 
     def __setattr__(self, key: str, value: Any) -> None:
+        """禁止改写模块属性（初始化写槽位经 object.__setattr__ 绕过本方法）。"""
         raise AttributeError(f"代码请求(Python)步骤中禁止改写模块属性: {key}")
 
     def __delattr__(self, item: str) -> None:
+        """禁止删除模块属性。"""
         raise AttributeError(f"代码请求(Python)步骤中禁止删除模块属性: {item}")
 
     def __repr__(self) -> str:
+        """以真实模块的 repr 展示代理，便于日志定位。"""
         return repr(self._target)
 
 
@@ -220,17 +233,14 @@ class UserCodeSandbox:
         "reversed": reversed,
         "sorted": sorted,
         "zip": zip,
-        # 类型判断与值处理
+        # 类型判断与值处理（type 刻意不注入：三参调用可动态建类，绕过 AST 对 class 定义的封禁）
         "callable": callable,
         "format": format,
         "hash": hash,
         "id": id,
         "isinstance": isinstance,
         "issubclass": issubclass,
-        # "type": type,
-        # 输出/调试
-        # "print": print,
-        # "repr": repr,
+        # print/repr 刻意不注入：属于输出/调试面，步骤代码无需向 stdout 输出
         # 白名单模块对象（只读代理）；datetime/timedelta预绑定为类（C类型属性天然不可变，无需代理）
         **MODULE_PROXIES,
         "datetime": datetime,
@@ -245,6 +255,7 @@ class UserCodeSandbox:
         builtins逐次浅拷贝（防用户代码写穿共享常量）；namespace剥离__builtins__注入后并入同一字典——
         单命名空间使def函数的__globals__即该字典，函数体内可见namespace变量且支持递归
         （若globals/locals分离，函数__globals__仅含builtins，函数体引用namespace会NameError）。
+
         :param namespace: 执行时的局部命名空间（如变量字典），可选；不改动调用方字典
         :return: exec上下文字典
         """
@@ -262,7 +273,9 @@ class UserCodeSandbox:
         （如datetime.strptime调用时才触发import _strptime），自验失败会在启动报错中指名待加入
         _LAZY_IMPORT_ROOTS的根模块；同时兼作惰性模块预热与Python版本升级回归哨兵。
         新增白名单模块时必须在此追加代表性探针。
+
         :return: None
+        :raises RuntimeError: 探针结果与预期不符（白名单能力被阻断或惰性依赖未放行）
         """
         probe_context = cls.new_exec_context()
         exec(
@@ -279,6 +292,7 @@ class UserCodeSandbox:
             probe_context,
         )
         if probe_context["result"] != 2045:
+            # 2045 = 各探针贡献值合计（2000+1+1+10+1+4+5+2+1+4+1+2+2+6+2+1+1+1），增删探针须同步更新期望值
             raise RuntimeError("代码请求(Python)沙箱启动自验失败: 白名单模块特性探测结果异常")
 
 

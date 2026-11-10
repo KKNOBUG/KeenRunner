@@ -112,6 +112,7 @@ class DataSourceMatrixParser:
         ordered_names = cls.extract_scene_names_from_matrix(norm_matrix, axis)
         step_data: Dict[str, Dict[str, Any]] = {}
         dataset_names: List[str] = []
+        # 先按矩阵中的场景顺序输出，再用解析结果中未出现在顺序里的场景兜底（极端脏数据）
         for scene_name in ordered_names:
             record = parsed.get(scene_name)
             if not record:
@@ -240,6 +241,7 @@ class DataSourceMatrixParser:
         sheet_items: List[Tuple[str, pd.DataFrame]] = [(name, df) for name, df in sheets.items() if not df.empty]
 
         async def _parse_one(df: pd.DataFrame) -> Tuple[Dict[str, Dict[str, Any]], int]:
+            """识别单个sheet的方向并在不丢事件循环的前提下完成解析。"""
             axis = cls.detect_matrix_axis(df.values)
             data = await cls._parse_sheet_async(df, axis)
             return data, axis
@@ -280,6 +282,8 @@ class DataSourceMatrixParser:
         """
         检测二维矩阵方向并校验合法性。
 
+        仅识别第0行或第0列是否含分区标记，不接受其他位置的标记。
+
         :param values: 二维矩阵(DataFrame.values)
         :return: 方向，水平模式(第0行含分区标记)返回AXIS_HORIZONTAL，垂直模式(第0列含分区标记)返回AXIS_VERTICAL
         """
@@ -311,7 +315,7 @@ class DataSourceMatrixParser:
 
     @classmethod
     def _axis_from_padded(cls, padded: List[List[Any]], declared_axis: Optional[int]) -> int:
-        """对已对齐矩阵识别方向；识别失败回落declared_axis，无回落时抛出。"""
+        """对已对齐矩阵识别方向；识别失败时回落declared_axis，无可用回落时重抛ValueError。"""
         try:
             return cls.detect_matrix_axis(pd.DataFrame(padded).values)
         except ValueError:
@@ -509,6 +513,8 @@ class DataSourceMatrixParser:
         """
         垂直模式解析单个sheet(第0行为场景名，第0列为分区标签/字段名)。
 
+        方法名为历史命名（早期仅支持该形态故称fast），实际职责固定为垂直模式解析。
+
         :param df: 无表头(header=None)的sheet DataFrame
         :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
         """
@@ -521,7 +527,7 @@ class DataSourceMatrixParser:
         data_values = values[1:, 1:]
 
         sections: Dict[str, List[int]] = {k: [] for k in cls.SECTION_MARKS}
-        # HEAD/BODY 标签行自身可能带 KV 文本块
+        # HEAD/BODY 标签行自身可能携带 KV 文本块（如 Ammy:7860000182），单独记录行号
         section_row_index: Dict[str, Any] = {"head": None, "body": None}
         current_section = None
 
@@ -593,6 +599,7 @@ class DataSourceMatrixParser:
         data_values = values[1:, 1:]  # 数据块
 
         # 为每个字段列确定 (数据列下标, 分区, 字段名)；分区标记列仅作切换，不作为字段
+        # 同名字段后出现者覆盖先出现者（与dataset字典语义一致）
         field_columns: List[Tuple[int, str, str]] = []
         current_section = None
         for col_idx, cell in enumerate(header):
@@ -630,6 +637,8 @@ class DataSourceMatrixParser:
         """
         将单元格/字段值递归转为JSON可序列化类型。
 
+        pd.isna对list/dict返回数组，直接用于if会抛ValueError，故统一括入try。
+
         :param value: 原始值(可能为NaN/Inf/NaT/numpy类型或嵌套结构)
         :return: JSON可序列化值，NaN/Inf/NaT转为None
         """
@@ -664,6 +673,8 @@ class DataSourceMatrixParser:
     def parse_kv_string(text: str) -> Dict[str, str]:
         """
         将多行key:value文本解析为字典(去除_x000D_回车符)。
+
+        每行仅按首个冒号切分，值中的冒号保留。
 
         :param text: 形如 "Ammy:7860000182_x000D_\nCcy:CNY" 的多行文本
         :return: 解析后的字典，如 {"Ammy": "7860000182", "Ccy": "CNY"}；非字符串入参返回 {}

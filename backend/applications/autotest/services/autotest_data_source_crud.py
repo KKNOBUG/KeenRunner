@@ -25,7 +25,10 @@ from backend.core.exceptions import DataBaseStorageException
 
 def make_cache_key(case_id: int, step_code: str) -> str:
     """
-    生成Redis等使用的缓存键名。
+    生成数据源缓存键名（dataset_{case_id}_{step_code}）。
+
+    该键仅用于落库标识与外部缓存对账；执行期读取按case_id+step_code+dataset_name直接查库，
+    不依赖该键。
 
     :param case_id: 用例主键
     :param step_code: 步骤标识代码
@@ -35,8 +38,15 @@ def make_cache_key(case_id: int, step_code: str) -> str:
 
 
 class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataSourceCreate, AutoTestDataSourceUpdate]):
+    """
+    数据驱动文件（数据源）聚合CRUD。
+
+    职责：按id/code/用例步骤定位记录、读取单场景dataset、创建与软删恢复、更新、
+    上传解析后落库、步骤间复制，以及步骤删除时硬删数据源并清理本地文件。
+    """
 
     def __init__(self):
+        """绑定数据源模型，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestDataSourceModel)
 
     async def get_by_id(self, data_source_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestDataSourceModel]:
@@ -93,6 +103,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         根据用例与步骤标识查询数据源，可返回单条或列表。
 
+        提供step_id或step_code时按首条返回（适用于步骤唯一挂载的场景）；
+        否则返回列表并按step_id、step_code排序。
+
         :param case_id: 用例主键
         :param case_code: 用例标识代码
         :param step_id: 步骤主键
@@ -139,6 +152,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         根据用例、步骤、数据集名称取该步骤下单个场景的结构化数据。
 
+        仅按dataset_name非空即可查；执行期调用方（DatasetLoader）已保证case_id/step_code有效。
+        只读取id与dataset两列，避免把大字段dataframe一并读回。
+
         :param case_id: 用例主键
         :param step_code: 步骤标识代码
         :param dataset_name: 场景/数据集名称
@@ -162,8 +178,15 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         创建数据源，根据用例与步骤定位，已删除则恢复，已启用则拒绝。
 
+        定位键为case_id+step_code（表唯一约束）；状态优先级：存在启用记录时拒绝新增，
+        仅存在软删记录时恢复该记录（state置0，created_user转updated_user）。
+
         :param data_source_in: 创建schema(data_source_code由模型默认值生成，无需传入)
         :return: 新建或恢复后的数据源实例
+        :raises ParameterException: 用例/步骤定位参数缺失
+        :raises DataAlreadyExistsException: 该步骤已存在启用中的数据源
+        :raises NotFoundException: 恢复时目标记录已不存在
+        :raises DataBaseStorageException: 唯一约束冲突或其他入库失败
         """
         data_dict: Dict[str, Any] = data_source_in.model_dump(exclude_none=True, exclude_unset=True)
         case_id = data_dict.get("case_id")
@@ -225,9 +248,16 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         更新数据源，根据id/code或用例步骤组合定位。
 
+        定位优先级：data_source_id > data_source_code > (case_id|case_code)+(step_id|step_code)；
+        更新字段排除定位键与cache_key，无可用更新字段时直接返回已定位实例；
+        只对启用中（state!=1）的记录生效。
+
         :param data_source_in: 更新schema
         :param located_instance: 调用方已定位的实例，传入时跳过定位查询
         :return: 更新后的数据源实例
+        :raises ParameterException: 定位参数缺失
+        :raises NotFoundException: 按定位条件未找到启用记录
+        :raises DataBaseStorageException: 唯一约束冲突或其他入库失败
         """
         case_id: Optional[int] = data_source_in.case_id
         step_id: Optional[int] = data_source_in.step_id
@@ -321,6 +351,9 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         上传解析场景：根据case_id+step_id+step_code若已存在则更新，否则创建。
 
+        每个场景先强制补齐head/body/assert_head/assert_body四键；更新路径中
+        dataset_names/dataframe未传时保留原值（仅覆盖本次解析产物）。
+
         :param case_id: 用例主键
         :param case_code: 用例标识代码
         :param step_id: 步骤主键
@@ -336,6 +369,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         :param created_user: 创建人(更新路径会映射为updated_user)
         :param existing: 调用方已定位的现有数据源实例，传入时跳过定位查询
         :return: 数据源实例
+        :raises ParameterException: parsed_data为空
         """
         if not parsed_data:
             error_message: str = "参数[parsed_data]不允许为空"
@@ -409,7 +443,10 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             source_data_source_id: int,
     ) -> Optional[int]:
         """
-        将源数据源复制为新步骤的独立数据源，仅复制解析数据(dataset/dataframe/dataset_names/axis)，文件字段全部置空。
+        将源数据源复制为新步骤的独立数据源，仅复制解析数据(dataset/dataframe/dataset_names/axis)，
+        文件字段全部置空。
+
+        直接create新记录，不做启用/软删冲突判定；供步骤复制时保持数据驱动内容。
 
         :param case_id: 新步骤所属用例主键
         :param case_code: 新步骤所属用例标识代码
@@ -417,6 +454,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         :param step_code: 新步骤标识代码
         :param source_data_source_id: 源数据源主键ID
         :return: 新数据源主键ID；源数据源不存在时返回None
+        :raises ParameterException: case_id或step_code为空
         """
         if not case_id or not (step_code or "").strip():
             error_message: str = "复制数据源失败, 参数[case_id, step_code]不允许为空"
@@ -447,6 +485,8 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
     async def delete_step_data_sources(self, case_id: int, step_code_list: List[str]) -> None:
         """
         硬删除指定步骤关联的数据源记录，并清理其本地上传文件。
+
+        step_code在步骤表全局唯一（unique=True），因此仅按step_code__in删除；case_id仅用于日志定位。
 
         :param case_id: 用例主键(仅用于日志定位)
         :param step_code_list: 待清理的步骤标识列表

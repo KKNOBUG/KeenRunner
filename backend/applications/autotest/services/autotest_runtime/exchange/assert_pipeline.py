@@ -18,7 +18,11 @@ from backend.applications.autotest.services.autotest_runtime.placeholders.resolv
 
 
 class AssertPipeline:
-    """批量断言验证，以及数据驱动场景的断言追加。"""
+    """
+    断言验证实现：批量执行步骤级断言规则，并为数据驱动场景追加assert_head/assert_body断言。
+
+    两条路径都只记录逐项结果而不抛出业务异常，是否因失败中止由调用方（ExtractAssertPipeline）统一判定。
+    """
 
     @classmethod
     def run_assert_validators(
@@ -40,7 +44,11 @@ class AssertPipeline:
             is_core_engine: bool = False,
     ) -> List[Dict[str, Any]]:
         """
-        根据断言规则列表取实际值并与期望值比较，不完整规则跳过，异常记入该项且不中断其余项。
+        根据断言规则列表取实际值并与期望值比较。
+
+        规则不完整（name/expr/operation/source任一为空）时跳过且不产生结果项；
+        取实际值异常直接记失败（不再解析期望值）；比较为False或比较异常同样记失败，
+        但均继续执行后续规则，失败明细由调用方汇总。
 
         :param assert_validators: 断言规则列表
         :param response_text: 响应正文
@@ -55,8 +63,9 @@ class AssertPipeline:
         :param session_variables_lookup: 变量池字典
         :param log_callback: 可选日志回调
         :param finished_variables: 非空时对except_value先做占位符解析
-        :param is_core_engine: 占位符解析模式
-        :return: 每项断言结果dict列表
+        :param is_core_engine: 占位符解析模式；True核心引擎，False调试
+        :return: 每项断言结果dict列表；success为False时error非空
+        :raises TypeError: assert_validators或其子项类型不合法
         """
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:
@@ -78,6 +87,7 @@ class AssertPipeline:
                         f"参数[name, expr, operation, source]不允许为空, 非空断言时需添加[except_value]参数"
                     )
                 continue
+            # 默认失败文案：比较返回False时使用；比较异常则用异常信息覆盖
             error_message: str = "实际值与预期值不满足指定操作符比较"
             success: bool = False
             actual_value: Any = None
@@ -122,6 +132,7 @@ class AssertPipeline:
                     "error": error_message,
                 })
                 continue
+            # 期望值占位符在拿到实际值后才解析；不能解析时的降级口径由解析器决定（保留原文）
             resolved_except_value = (
                 except_value
                 if finished_variables is None
@@ -132,6 +143,7 @@ class AssertPipeline:
                     finished_variables=finished_variables,
                 )
             )
+            # 比较阶段异常只记失败项，不中断整批断言
             try:
                 success: bool = AssertionCompare.compare_assertion(
                     actual=actual_value,
@@ -190,7 +202,11 @@ class AssertPipeline:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> None:
         """
-        将数据驱动场景的assert_head/assert_body追加到validator_results，response_headers为None时跳过head断言。
+        将数据驱动场景的assert_head/assert_body追加到validator_results。
+
+        断言操作符固定为「等于」：assert_head逐项按response headers提取；assert_body按表达式前缀
+        自动判断来源（$.→JSON、./或//→XML、其他→Text）。response_headers为None（如TCP）时跳过head断言；
+        来源前置条件不足（非JSON却断言JSON等）或提取/比较异常时记录失败项而不抛出。
 
         :param step_struct: 含assert_head/assert_body的数据驱动结构
         :param validator_results: 断言结果列表（原地追加）
@@ -216,7 +232,7 @@ class AssertPipeline:
                 expr: str,
                 skip_error: Optional[str] = None,
         ) -> None:
-            """追加一条断言结果；skip_error非空时直接记失败。"""
+            """追加一条断言结果；操作符固定「等于」，skip_error非空时直接记失败。"""
             if finished_variables is None:
                 resolved_except_value = except_value
             else:
@@ -305,6 +321,7 @@ class AssertPipeline:
             else:
                 detected_source = "response text"
             skip_error: Optional[str] = None
+            # 前置条件不满足时记失败而不抛异常，保证数据驱动断言整批可汇总
             if detected_source == "response json" and response_json is None:
                 skip_error = "响应不是JSON，无法进行JSONPath断言"
             elif detected_source == "response xml" and not response_text:

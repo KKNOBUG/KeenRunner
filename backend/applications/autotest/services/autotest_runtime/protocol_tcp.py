@@ -55,7 +55,8 @@ def parse_response_end_symbol(raw: Any) -> Optional[bytes]:
     """
     解析响应结束符自定义文本为字节序列。
 
-    规则：无/空 → None（不使用，RAW读至EOF）；\\r\\n、\\n、\\r、\\t、\\0、\\xHH等转义序列 → 对应字节；其余按字面字符（UTF-8编码）。
+    规则：无/空 → None（不使用，RAW读至EOF）；\\r\\n、\\n、\\r、\\t、\\0、\\xHH等转义序列 → 对应字节；
+    其余按字面字符（UTF-8编码）；未识别的转义（含\\x后不足两位或非十六进制）保留反斜杠按字面处理。
 
     :param raw: 用户输入文本（兼容存量枚举展示值）
     :return: 结束符字节序列；不使用返回None
@@ -90,15 +91,25 @@ def parse_response_end_symbol(raw: Any) -> Optional[bytes]:
 @dataclass
 class TcpFrameConfig:
     """TCP帧配置推导结果（执行引擎与调试服务共用，单一事实源）。"""
+    # 成帧模式：长度前缀 / 结束符 / RAW（读到EOF）
     frame_mode: TcpFrameMode
+    # 长度前缀进制（10/16），仅 LENGTH_PREFIX 模式参与成帧
     radix: int
+    # 长度前缀字段位数
     radix_length: int
+    # 发送报文是否包含长度前缀本身
     include_length_prefix: bool
+    # 请求结束符字节；长度前缀模式下保留配置值但不参与成帧
     request_end_symbol: Optional[bytes]
+    # 响应结束符字节；非空时即使未配进制也会使 frame_mode 变为 TERMINATOR
     response_end_symbol: Optional[bytes]
+    # 报文编解码字符集
     encoding: str
+    # 响应是否转为大写HEX文本
     hex_string: bool
+    # 只发不收：发送后不读取响应
     send_only: bool
+    # 长连接标记；当前未实现，执行期按短连接降级并记日志
     long_connection: bool
 
 
@@ -117,11 +128,12 @@ def tcp_enum_value(raw: Any) -> Optional[str]:
 
 def resolve_tcp_frame_config(step: Any) -> TcpFrameConfig:
     """
-    按TCP步骤字段组合推导帧配置；
+    按TCP步骤字段组合推导帧配置，缺省值：进制=不使用、报文长度=不包含、请求结束符=不使用、连接=短连接。
 
-    进制数≠不使用 → 长度前缀（结束符字段保留但不参与成帧计算）；进制数=不使用且配置了结束符 → 结束符；均未配置 → RAW
+    优先级：进制数≠不使用 → 长度前缀（请求结束符保留但不参与成帧）；
+    否则请求结束符或响应结束符任一配置 → 结束符模式；均未配置 → RAW。
 
-    :param step: 步骤对象
+    :param step: 步骤对象（容忍字段缺失，按缺省值处理）
     :return: 帧配置对象
     """
     radix_value = tcp_enum_value(getattr(step, "tcp_radix", None)) or AutoTestTcpRadix.NONE.value
@@ -156,8 +168,11 @@ def resolve_tcp_frame_config(step: Any) -> TcpFrameConfig:
 @dataclass
 class TcpParsedResponse:
     """TCP响应解析结果。"""
+    # 解码后的响应文本；启用HEX时为大写HEX字符串
     response_text: str
+    # 响应文本为JSON对象/数组时的解析结果，否则None
     response_json: Optional[Any]
+    # 展示用数据：JSON解析成功取对象，否则取文本
     response_data: Optional[Union[str, dict, list]]
 
 
@@ -170,6 +185,9 @@ def select_tcp_payload(
 ) -> Any:
     """
     按请求体类型选择TCP载荷；调试路径可将JSON对象序列化为字符串。
+
+    JSON 取 request_body，RAW/XML 取 request_text；其余类型优先 request_text（非 None/空串），
+    为空时回落 request_body；serialize_json 仅对 dict/list 生效。
 
     :param request_args_type: 请求体类型
     :param request_text: 文本/XML/RAW载荷
@@ -197,7 +215,8 @@ def build_tcp_debug_request_info_body(
     """
     组装TCP调试回显的请求体，形态对齐引擎落库的request_body。
 
-    JSON返回原始对象供前端格式化，XML/RAW返回文本。
+    JSON 返回原始对象供前端格式化；JSON 为字符串时尝试解析为对象，解析失败或非对象形态则原样返回；
+    XML/RAW 返回文本。
 
     :param request_args_type: 请求体类型
     :param request_text: 文本/XML/RAW载荷
@@ -223,7 +242,9 @@ def parse_tcp_timeouts(
         read_timeout: Any,
 ) -> Tuple[Optional[timedelta], Optional[timedelta]]:
     """
-    将连接/读取超时秒数解析为timedelta；非法值视为None。
+    将连接/读取超时秒数解析为timedelta；非法值（含空串）视为None。
+
+    仅做数值转换，不校验正数：负数会原样成为负 timedelta。
 
     :param connect_timeout: 连接超时（秒，可为数字或字符串）
     :param read_timeout: 读取超时（秒）
@@ -252,6 +273,9 @@ def parse_tcp_response(
 ) -> TcpParsedResponse:
     """
     解析TCP响应原始字节：文本解码后对JSON形态自动识别，避免解析失败时重发请求。
+
+    启用 hex_string 时直接返回大写HEX且不尝试JSON解析（response_json=None）；
+    文本解码使用 errors="ignore"，非法字节被丢弃而不报错；仅当去空白后以 "{"/"[" 开头才尝试JSON解析。
 
     :param raw_bytes: TCP响应原始字节
     :param encoding: 解码字符集
@@ -295,7 +319,9 @@ def resolve_tcp_request_extract_sources(
     """
     为TCP提取/断言准备request_json与request_text来源。
 
-    执行期传实际发送payload（用于request_text为空时回落），调试期不传payload。
+    request_json 优先取 dict/list 形态的 request_body；否则尝试把以 "{"/"[" 开头的 request_text 解析为对象。
+    request_text 为空时回落：实际发送 payload（字符串）或 request_body 的紧凑JSON。
+    执行期传实际发送payload，调试期不传payload。
 
     :param request_body: 原始/解析后的请求体
     :param request_text: 请求文本

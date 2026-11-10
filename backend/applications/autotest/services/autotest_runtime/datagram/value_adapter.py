@@ -32,10 +32,13 @@ __all__ = [
 
 def expand_dataset_special_value(value: Any) -> Any:
     """
-    数据源(AutoTestDataSourceModel.dataset)命中字段对应的注入数据为特殊值常量占位时替换为具体值。
+    将数据源单元格中的特殊值占位文本展开为具体值。
+
+    匹配前先 strip（允许单元格前后带空白）：#空字符串→空串、#NULL→None（大小写不敏感）、#单个空格→单个空格；
+    非字符串或未命中时原样返回，并可通过返回值与入参的 is 判断是否发生替换。
 
     :param value: 注入数据
-    :return: #空字符串=空串、#NULL=None(大小写不敏感)、#单个空格=单个空格
+    :return: 展开后的值
     """
     if isinstance(value, str):
         crt_value = (value or "").strip()
@@ -50,7 +53,7 @@ def expand_dataset_special_value(value: Any) -> Any:
 
 def expand_dataset_general_value(value: Any) -> str:
     """
-    数据源(AutoTestDataSourceModel.dataset)命中字段对应的注入数据转为协议文本；
+    将注入数据转为协议文本（字符串通道直写用）：None→空串，bool→"true"/"false"，其余 str()。
 
     :param value: 注入数据
     :return: 协议文本
@@ -63,15 +66,15 @@ def expand_dataset_general_value(value: Any) -> str:
 
 
 class DatasetValueAdapter:
-    """数据源(AutoTestDataSourceModel.dataset)命中字段对应的注入数据的类型适配器。"""
+    """按报文原字段类型适配数据集注入值（仅在类型可贴合时转换，否则原样接受）。"""
 
     @staticmethod
     def _accept_raw(raw_value: str, target_value: Any) -> Any:
         """
         原样接受线路。
 
-        适用：str字段；null字段与查询哨兵(类型参考不可用，由用户负责，为后续按dataset文本做类型恢复预留扩展口)；
-        未注册类型兜底(容器值等无贴合语义场景，由用户负责)。
+        适用：str字段；null字段与查询哨兵（类型参考不可用，由用户负责）；
+        未注册类型兜底（容器值等无贴合语义场景，由用户负责）。
         """
         return raw_value
 
@@ -103,6 +106,7 @@ class DatasetValueAdapter:
         """浮点字段线路：整数/浮点文本转float，其余原样接受(由用户负责)。"""
         return DatasetValueAdapter._convert_float(raw_value)
 
+    # 按报文原字段的精确类型分派转换线路；子类未单独注册时回落 _accept_raw（不做 isinstance 匹配）
     _routes: Dict[type, Callable[[str, Any], Any]] = {
         type(None): _accept_raw,
         str: _accept_raw,

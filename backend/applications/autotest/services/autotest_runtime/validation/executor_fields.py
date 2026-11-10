@@ -14,12 +14,21 @@ from backend.applications.autotest.schemas.autotest_step_schema import AutoTestS
 
 
 class ExecutorFieldsValidation:
-    """根据步骤类型校验各执行器的必填字段组合。"""
+    """
+    按步骤类型校验执行器必填字段组合（validate_tree的第3层深度校验：树结构→执行器字段→变量引用链）。
+
+    递归覆盖children、branch_items.branch_children与quote_steps；step_type非法同样记为错误，
+    保证保存前能一次性给出完整缺失清单。
+    """
 
     @classmethod
     def validate_executor_fields(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:
         """
-        根据步骤类型校验各执行器的必填字段组合（第三层校验）。
+        根据步骤类型校验各执行器的必填字段组合（validate_tree的第3层深度校验）。
+
+        字段口径：HTTP/TCP校验请求目标与报文；DATABASE/REDIS校验每个操作项；
+        LOOP按模式校验迭代源；IF校验分支条件；ASSERT/EXTRACT校验每项规则；
+        非法step_type直接记为错误。
 
         :param steps: 根步骤列表
         :return: 错误项列表，每项含step_code、step_name、step_type、missing（缺失字段名列表）、message
@@ -40,7 +49,7 @@ class ExecutorFieldsValidation:
                 return None
 
         def _check_step(step: AutoTestStepTreeUpdateItem) -> None:
-            """根据步骤类型校验必填字段，缺失则写入errors。"""
+            """根据步骤类型校验必填字段，缺失则写入errors；子步骤随后递归校验。"""
             step_type = _norm_step_type(step.step_type)
             step_code = step.step_code
             step_name = step.step_name
@@ -56,6 +65,7 @@ class ExecutorFieldsValidation:
                 })
                 return
 
+            # 按步骤类型收集缺失字段；同一类型内多项缺失会一次性全部记录
             if step_type == AutoTestStepType.HTTP:
                 if not step.request_url:
                     missing.append("request_url")
@@ -158,6 +168,7 @@ class ExecutorFieldsValidation:
                                     missing.append(f"branch_items[{bi}].branch_conditions.condition_compare")
 
             elif step_type == AutoTestStepType.WAIT:
+                # wait=0是合法等待时长，仅None视为缺失
                 if step.wait is None:
                     missing.append("wait")
 
@@ -208,6 +219,7 @@ class ExecutorFieldsValidation:
                     "message": f"步骤({step_code or step_name or 'N/A'})缺少必填字段: {', '.join(missing)}",
                 })
 
+            # 容器步骤的子步骤同样参与校验：普通子步骤、条件分支子步骤、引用步骤
             for child in (step.children or []):
                 _check_step(child)
             if step.branch_items:

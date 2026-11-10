@@ -18,12 +18,20 @@ from backend.applications.autotest.services.autotest_runtime.sandbox import User
 
 
 class VariableFlowValidation:
-    """校验步骤树中变量引用与产出的对应关系。"""
+    """
+    变量流校验：汇总步骤树可产出的变量名，并检查${...}引用是否均已定义。
+
+    覆盖children、branch_items.branch_children与quote_steps；不做定义/引用先后校验
+    （全树先收集产出，再统一检查引用），即允许引用后置步骤的产出。
+    """
 
     @classmethod
     def collect_session_variables(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
         递归收集步骤树中所有步骤的session_variables，合并为扁平列表。
+
+        仅递归children与quote_steps，不进入branch_items（条件分支子步骤的变量不参与合并）；
+        结果不去重，同名覆盖由调用方自行处理。
 
         :param steps: 根步骤或子步骤列表
         :return: 合并后的StepVariablesBase列表（不去重）
@@ -42,14 +50,21 @@ class VariableFlowValidation:
         """
         校验步骤树中${var}引用是否有对应的变量产出。
 
+        产出集合包含：循环内置变量（loop_index/loop_value/loop_key）、循环自定义变量名、
+        session_variables/defined_variables/extract_variables的key、DB/Redis操作的
+        variable_name及variable_name_count。全树先收集产出再检查引用，不校验先后顺序。
+
+        边界：引用收集只递归str/dict/list/tuple，Pydantic模型子项内部字段不深入。
+
         :param steps: 根步骤列表
         :return: 未匹配的引用错误项列表
         """
         produced: Set[str] = set()
+        # 循环结构内置产出：未自定义循环变量名时也视为已定义
         produced.update({"loop_index", "loop_value", "loop_key"})
 
         def _collect_produced(step: AutoTestStepTreeUpdateItem) -> None:
-            """递归收集步骤树上可产出的变量名到produced。"""
+            """递归收集步骤树上可产出的变量名到produced（含分支子步骤与引用步骤）。"""
             # 循环结构自定义变量名同样视为产出项
             for attr in ("loop_index", "loop_key", "loop_value"):
                 name = getattr(step, attr, None)
@@ -90,7 +105,11 @@ class VariableFlowValidation:
                 _collect_produced(quote_step)
 
         def _collect_refs_in_value(value: Any) -> List[str]:
-            """递归收集任意值中的${...}占位符内部变量名（排除函数调用形式）。"""
+            """
+            递归收集任意值中的${...}占位符内部变量名（排除函数调用形式）。
+
+            仅深入str/dict/list/tuple；模型对象字段不递归，故模型内部字段的占位符不参与校验。
+            """
             refs: List[str] = []
             if isinstance(value, str):
                 for match in UserCodeSandbox.RE_PLACEHOLDER.finditer(value):
@@ -108,7 +127,7 @@ class VariableFlowValidation:
             return refs
 
         def _step_ref_fields(step: AutoTestStepTreeUpdateItem) -> Dict[str, Any]:
-            """返回该步骤中可能含${...}的字段及其值，供引用收集。"""
+            """返回该步骤中可能含${...}的字段及其值，供引用收集（值保持原类型，由收集函数递归）。"""
             fields: Dict[str, Any] = {}
             for attr in (
                     "request_url", "request_port", "request_text", "request_body",
@@ -144,7 +163,7 @@ class VariableFlowValidation:
         errors: List[Dict[str, Any]] = []
 
         def _check_refs(step: AutoTestStepTreeUpdateItem) -> None:
-            """检查步骤字段中的${var}是否均已产出，未匹配则写入errors。"""
+            """检查步骤字段中的${var}是否均已产出，未匹配则写入errors（含分支子步骤与引用步骤）。"""
             fields = _step_ref_fields(step)
             for field_name, field_value in fields.items():
                 refs = _collect_refs_in_value(field_value)
@@ -173,10 +192,9 @@ class VariableFlowValidation:
             for quote_step in (step.quote_steps or []):
                 _check_refs(quote_step)
 
-        # 先收集全部产出
+        # 先全树收集产出，再全树检查引用：不校验先后顺序，引用后置步骤的产出也视为已定义
         for root_step in steps:
             _collect_produced(root_step)
-        # 再检查全部引用（产出在前，引用在后，允许后置引用前置产出）
         for root_step in steps:
             _check_refs(root_step)
         return errors

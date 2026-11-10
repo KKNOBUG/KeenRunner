@@ -26,13 +26,18 @@ class CaseScriptCodec:
     - 提取列：变量名:提取来源:提取范围[:提取表达式[:索引]];
     - 断言列：断言名称:断言对象:断言表达式:匹配规则[:预期值];，为空/不为空规则不输出预期值；
     - 行尾分号为英文分号，空行忽略，非法行按列名收集可读错误。
+
+    本类只做结构化字段与多行文本的对称转换，不校验业务数据、不落库；
+    导出前须先过 check_extract_roundtrip / check_assert_roundtrip，把不可逆项拦在写文件之前。
     """
 
     # ==================== 常量：文本协议字段与取值集合 ====================
-    # 提取范围：与模板填写指引、历史数据保持中文原文
+    # 提取范围的中文写法：与模板填写指引、历史导出数据保持一致，导入时按原文匹配
     SCOPE_ALL = "整个返回数据"
     SCOPE_SOME = "提取部分"
+    # 提取范围的内部取值（落库与跨层传递用）：与上面的中文展示文案是两套值，不能混用
     EXTRACT_SCOPES = frozenset({"ALL", "SOME"})
+    # 表单类请求体类型 → 步骤字段名：三类共用键值文本协议，但落库字段各不相同
     FORM_FIELD_BY_ARGS_TYPE: Dict[str, str] = {
         AutoTestReqArgsType.PARAMS.value: "request_params",
         AutoTestReqArgsType.FORM_DATA.value: "request_form_data",
@@ -46,6 +51,7 @@ class CaseScriptCodec:
         "request_form_data",
         "request_form_urlencoded",
     )
+    # 提取来源白名单：与前端提取下拉选项一致，导入时据此拦截非法来源
     EXTRACT_SOURCES = frozenset({
         "Request Form-Data",
         "Request Text",
@@ -59,6 +65,7 @@ class CaseScriptCodec:
         "Response Headers",
         "Response Cookie",
     })
+    # 断言对象白名单：在提取来源基础上多“变量池”（断言可读会话变量），两者不可合并复用
     ASSERT_SOURCES = frozenset({
         "Request Form-Data",
         "Request Text",
@@ -73,7 +80,9 @@ class CaseScriptCodec:
         "Response Cookie",
         "变量池",
     })
+    # 断言匹配规则全集：直接取自枚举，新增枚举值即自动纳入导入校验
     ASSERT_OPERATIONS = frozenset(e.value for e in AutoTestAssertionOperation)
+    # 无预期值的规则：为空/不为空，协议中不输出第五段
     ASSERT_NO_EXPECTED_OPERATIONS = frozenset({
         AutoTestAssertionOperation.IS_EMPTY.value,
         AutoTestAssertionOperation.NOT_EMPTY.value,
@@ -152,6 +161,7 @@ class CaseScriptCodec:
             source = str(cls._get(item, "source") or "").strip()
             if not name or not source:
                 continue
+            # 只认内部值 ALL；其余一律按“提取部分”输出表达式与可选索引
             if cls._get(item, "scope") == "ALL":
                 lines.append(f"{name}:{source}:{cls.SCOPE_ALL};")
                 continue
@@ -180,6 +190,7 @@ class CaseScriptCodec:
             if not name or not source or not expr or not operation:
                 continue
             segment = f"{name}:{source}:{expr}:{operation}"
+            # 为空/不为空不带预期值段；其余规则第5段恒输出（None 归一为空串，保证段位稳定）
             if operation not in cls.ASSERT_NO_EXPECTED_OPERATIONS:
                 raw_except = cls._get(item, "except_value")
                 segment += f":{'' if raw_except is None else raw_except}"
@@ -188,7 +199,12 @@ class CaseScriptCodec:
 
     @classmethod
     def encode_step_body(cls, step: Any) -> str:
-        """非表单类请求体序列化；调用方已拦截表单类，此处仅处理JSON/XML/RAW。"""
+        """
+        非表单类请求体序列化；调用方已拦截表单类，此处仅处理JSON/XML/RAW。
+
+        :param step: 步骤模型（读取 request_args_type 与对应的请求体字段）
+        :return: 请求体单元格文本；JSON 仅在 request_body 为 dict 时序列化，其余情况返回空串
+        """
         args = cls._enum_text(getattr(step, "request_args_type", None))
         if args == AutoTestReqArgsType.JSON.value:
             body = getattr(step, "request_body", None)
@@ -236,7 +252,8 @@ class CaseScriptCodec:
         "提取部分"允许表达式内含冒号，末尾纯整数段视为索引（与导出侧追加索引的写法对称）。
 
         :param text: 多行文本
-        :return: (提取配置列表或空列表, 错误列表)
+        :return: (提取配置列表, 错误列表)；每项含 name/source/expr/scope/index，
+            scope 内部值为 ALL/SOME，ALL 时 expr 恒为空串、index 恒为 None
         """
         items: List[Dict[str, Any]] = []
         errors: List[str] = []
@@ -281,7 +298,8 @@ class CaseScriptCodec:
         预期值允许含冒号（取第5段起拼接）；为空/不为空忽略预期值并归一为空字符串。
 
         :param text: 多行文本
-        :return: (断言配置列表或空列表, 错误列表)
+        :return: (断言配置列表, 错误列表)；每项含 name/source/expr/operation/except_value，
+            为空/不为空规则的 except_value 恒为空串
         """
         items: List[Dict[str, Any]] = []
         errors: List[str] = []
@@ -329,7 +347,8 @@ class CaseScriptCodec:
 
         :param args_type: 请求体类型
         :param body_text: 请求体单元格文本
-        :return: (请求体字段字典, 错误列表)
+        :return: (请求体字段字典, 错误列表)；字典恒包含 BODY_STEP_FIELDS 全部键，未命中字段为 None，
+            供导入更新时直接覆盖旧值（避免残留上一次请求体）
         """
         result: Dict[str, Any] = {field: None for field in cls.BODY_STEP_FIELDS}
         errors: List[str] = []
@@ -362,7 +381,12 @@ class CaseScriptCodec:
 
     @classmethod
     def check_extract_roundtrip(cls, extract_list: Optional[List[Any]]) -> List[str]:
-        """提取列往返安全检测：冒号/换行会破坏多行文本编解码，导出前拦截。"""
+        """
+        提取列往返安全检测：冒号/换行会破坏多行文本编解码，导出前拦截。
+
+        :param extract_list: 提取配置列表
+        :return: 问题描述列表；空列表表示可安全编码，非空时调用方应中断导出
+        """
         problems: List[str] = []
         for item in extract_list or []:
             name = str(cls._get(item, "name") or "")
@@ -387,7 +411,12 @@ class CaseScriptCodec:
 
     @classmethod
     def check_assert_roundtrip(cls, assert_list: Optional[List[Any]]) -> List[str]:
-        """断言列往返安全检测：冒号/换行会破坏多行文本编解码，导出前拦截。"""
+        """
+        断言列往返安全检测：冒号/换行会破坏多行文本编解码，导出前拦截。
+
+        :param assert_list: 断言配置列表
+        :return: 问题描述列表；空列表表示可安全编码，非空时调用方应中断导出
+        """
         problems: List[str] = []
         for item in assert_list or []:
             name = str(cls._get(item, "name") or "")

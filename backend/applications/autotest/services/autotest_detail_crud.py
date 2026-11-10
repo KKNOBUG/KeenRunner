@@ -32,6 +32,17 @@ from backend.services import DataScope
 
 
 class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate, AutoTestDetailUpdate]):
+    """
+    执行明细CRUD：步骤级执行快照的落库、查询与树组装。
+
+    数据形态：一行明细 = 一个步骤（或一次循环/分支）的执行结果快照，只追加不回写步骤定义；
+    通过 parent_step_id 串成树，report_code 归属报告，唯一约束为 (report_code, case_code, step_code, loop_cycles)。
+
+    写入口径：单条 create_detail 做用例/报告存在校验；批量 create_details 供执行引擎事务内使用，
+    跳过校验以省去逐条查询，由外层事务保证报告同源。
+    归属口径：明细以 created_user 为归属人。
+    """
+
     # 明细轻量列清单：分页查询与树模式全量查询共用，保证两模式返回字段结构一致
     DETAIL_LIGHT_COLUMNS: Tuple[str, ...] = (
         "id", "case_id", "case_code", "report_code", "parent_step_id",
@@ -42,16 +53,19 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
     )
 
     def __init__(self):
+        """绑定明细模型，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestDetailModel)
 
     async def get_by_id(self, detail_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestDetailModel]:
         """
         根据主键ID查询明细。
 
-        :param detail_id: 明细主键ID
+        :param detail_id: 明细主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 明细实例或None
+        :raises ParameterException: detail_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not detail_id:
             error_message: str = "查询明细信息失败, 参数[detail_id]不允许为空"
@@ -67,12 +81,14 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
     async def get_by_code(self, detail_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDetailModel]:
         """
-        根据报告标识代码查询明细。
+        按报告标识代码取其下第一条明细（报告内明细不唯一，仅供报告级定位）。
 
-        :param detail_code: 报告标识代码report_code
+        :param detail_code: 报告标识代码 report_code
         :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 明细实例或None
+        :raises ParameterException: detail_code 为空
+        :raises NotFoundException: on_error=True 且报告下无明细
         """
         if not detail_code:
             error_message: str = "查询明细信息失败, 参数[detail_code]不允许为空"
@@ -93,6 +109,8 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         :param detail_in: 明细创建schema
         :param skip_report_check: 为True时不校验报告是否存在
         :return: 创建后的明细实例
+        :raises NotFoundException: 关联用例或报告不存在/已软删
+        :raises DataBaseStorageException: 落库失败（唯一约束冲突或其他异常）
         """
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
@@ -145,6 +163,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
         :param details_in: 明细创建schema列表
         :return: 创建后的明细实例列表(自增主键不回填)
+        :raises DataBaseStorageException: 任一明细写入失败（含唯一约束冲突）
         """
         if not details_in:
             return []
@@ -178,6 +197,10 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         :param detail_in: 明细更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的明细
         :return: 更新后的明细实例
+        :raises ParameterException: 定位参数不足（detail_id 与 report_code+step_code 均未给全）
+        :raises NotFoundException: 用例/报告/明细不存在或已软删
+        :raises NoPermissionException: 明细创建人不在当前用户可操作范围
+        :raises DataBaseStorageException: 落库失败
         """
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
@@ -254,6 +277,9 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         :param step_code: 步骤标识代码
         :param report_code: 报告标识代码
         :return: 删除前的明细实例快照
+        :raises ParameterException: 定位参数不足
+        :raises NotFoundException: 明细不存在或已软删
+        :raises NoPermissionException: 明细创建人不在当前用户可删除范围
         """
         if not detail_id and (not report_code or not step_code):
             error_message: str = f"参数[detail_id]或[report_code, step_code]不允许为空"
@@ -285,6 +311,8 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
         :param detail_in: 明细ID列表入参
         :return: 实际删除的明细数量
+        :raises NotFoundException: 任一目标明细不存在或已软删
+        :raises NoPermissionException: 任一明细创建人不在当前用户可删除范围
         """
         detail_ids: List[int] = list(dict.fromkeys(int(did) for did in detail_in.detail_ids))
         targets: List[AutoTestDetailModel] = await self.model.filter(id__in=detail_ids, state__not=1).all()
@@ -317,6 +345,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页轻量列字典列表，大字段请通过/get详情接口按行获取)
+        :raises ParameterException: 查询/排序字段不被ORM支持
         """
         try:
             query = self.model.filter(search)
@@ -337,6 +366,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         :param search: Tortoise Q查询条件
         :param order: 排序字段列表(固定执行时间线序, 保证父行先于子行)
         :return: (总条数, 全量轻量列字典列表)
+        :raises ParameterException: 查询/排序字段不被ORM支持
         """
         try:
             query = self.model.filter(search)
@@ -373,6 +403,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
                 parent["children"].append(node)
             else:
                 roots.append(node)
+            # 登记当前行作为该 step_id 的“最近活跃父行”，供后续同容器子行挂载
             last_node_by_step_id[row.get("step_id")] = node
 
         def walk(nodes: List[Dict[str, Any]], prefix: str) -> List[Dict[str, Any]]:

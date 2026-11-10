@@ -40,8 +40,10 @@ def extract_task_involve_envs(cases_execute_config: Any) -> List[str]:
     """
     累积各用例involve_envs并去重，生成task级涉及环境名称列表。
 
+    结果落库到task_involve_envs，供环境删除前反查“该环境是否仍被任务引用”。
+
     :param cases_execute_config: 任务级用例执行配置字典
-    :return: 排序后的环境名称列表
+    :return: 排序后的环境名称列表；非字典输入返回空列表
     """
     if not isinstance(cases_execute_config, dict):
         return []
@@ -62,6 +64,7 @@ def extract_steps_execute_envs(cases_execute_config: Any) -> Dict[str, str]:
 
     跨用例key重复时后者覆盖前者：step_id格式key全局唯一不受影响，
     仅@@step_name格式key(或历史脏数据)存在极小概率冲突。
+    视图层用它回显列表的steps_execute_env，环境删除前用它反查单步骤引用。
 
     :param cases_execute_config: 任务级用例执行配置字典
     :return: {步骤配置键(step_id|step_id_@@op_index): 环境名称}映射
@@ -90,7 +93,7 @@ def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str
     解析用例执行配置。
 
     :param task_dict: 任务字段字典
-    :return: cases_execute_config字典或None
+    :return: cases_execute_config字典；缺省或非字典类型均返回None
     """
     cases_cfg = task_dict.get("cases_execute_config")
     return cases_cfg if isinstance(cases_cfg, dict) else None
@@ -100,8 +103,10 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
     """
     规范化task_kwargs：仅承载initial_variables及未知扩展键。
 
+    非字典输入一律降为空字典，避免脏值写进JSONField后执行期取键报错。
+
     :param task_kwargs: 原始task_kwargs
-    :return: 清洗后的字典；输入None时返回None
+    :return: 清洗后的字典；输入None时返回None（区别于显式传空对象）
     """
     if task_kwargs is None:
         return None
@@ -111,8 +116,16 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
 
 
 class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoTestTaskUpdate]):
+    """
+    任务CRUD：任务创建/软删复活、复制、更新、删除、启停调度与执行权抢占。
+
+    唯一键为（task_name, task_project），含软删行判重（复活复用原记录）。
+    归属口径：任务以 created_user 为归属人（无独立 owner_user），删除只校验删除范围。
+    并发口径：执行入口统一经 claim_execution 原子抢占，避免多端点击/Beat重投重复执行。
+    """
 
     def __init__(self):
+        """绑定任务模型，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestTaskModel)
 
     @staticmethod
@@ -205,10 +218,12 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         """
         根据主键ID查询任务。
 
-        :param task_id: 任务主键ID
+        :param task_id: 任务主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 任务实例或None
+        :raises ParameterException: task_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not task_id:
             error_message: str = "查询任务信息失败, 参数[task_id]不允许为空"
@@ -225,10 +240,12 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         """
         根据任务标识代码查询任务。
 
-        :param task_code: 任务标识代码
+        :param task_code: 任务标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 任务实例或None
+        :raises ParameterException: task_code 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not task_code:
             error_message: str = "查询任务信息失败, 参数[task_code]不允许为空"
@@ -248,6 +265,11 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         :param task_in: 任务创建schema
         :param scope: 数据权限上下文，恢复软删任务时要求创建人允许当前用户写入
         :return: 创建后的任务实例
+        :raises ParameterException: 定时表达式与时效不匹配（normalize_schedule 校验失败）
+        :raises NotFoundException: 所属应用不存在或已软删
+        :raises NoPermissionException: 所属应用不可读、挂载用例不可见，或软删任务创建人不可写
+        :raises DataAlreadyExistsException: 同应用下同名启用态任务已存在
+        :raises DataBaseStorageException: 落库失败（唯一索引冲突或关联数据无效）
         """
         task_name: str = task_in.task_name
         task_project: int = task_in.task_project
@@ -320,6 +342,10 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         :param operate_user: 当前操作人，作为新任务的created_user/updated_user
         :param scope: 数据权限上下文，源任务须在当前用户可见范围内
         :return: 复制生成的新任务实例
+        :raises NotFoundException: 源任务不存在或已软删
+        :raises NoPermissionException: 源任务创建人不在当前用户可见范围
+        :raises ParameterException: 复制结果定时表达式校验失败
+        :raises DataBaseStorageException: 新任务落库失败
         """
         source = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         await scope.load_owners([source.created_user])
@@ -353,9 +379,17 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         """
         更新任务，根据task_id或task_code定位并校验(task_name, task_project)唯一。
 
+        定时表达式显式置空时同步停用调度；时效/定时任一变更都会以合并后的值重新
+        校验并生成最终 task_schedule_expr，避免只改时效导致存量定时失配。
+
         :param task_in: 任务更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的任务
         :return: 更新后的任务实例
+        :raises ParameterException: 定时表达式校验失败
+        :raises NotFoundException: 任务或目标应用不存在/已软删
+        :raises NoPermissionException: 任务创建人不可写，或目标应用/用例不可见
+        :raises DataAlreadyExistsException: 改后与应用内其他任务同名
+        :raises DataBaseStorageException: 落库失败（并发删除或索引冲突）
         """
         task_id: Optional[int] = task_in.task_id
         task_code: Optional[str] = task_in.task_code
@@ -448,10 +482,15 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         """
         软删除任务并关闭调度。
 
+        先软删再单独回写task_enabled=False：两者分开可避免基类软删字段集不含task_enabled。
+
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的任务
         :param task_id: 任务主键ID，与task_code二选一
         :param task_code: 任务标识代码，与task_id二选一
         :return: 软删除后的任务实例
+        :raises ParameterException: 两个定位参数均未命中
+        :raises NotFoundException: 任务不存在或已软删
+        :raises NoPermissionException: 任务创建人不在当前用户可删除范围
         """
         if task_id:
             instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)

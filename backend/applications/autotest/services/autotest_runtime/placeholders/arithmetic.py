@@ -16,15 +16,19 @@ import orjson
 
 
 class PlaceholderArithmetic:
-    """占位符场景下的数值判定、表达式拼接与安全算术计算。"""
+    """占位符场景下的数值判定、表达式拼接与安全算术（AST 白名单，仅数字常量与四则运算）。"""
 
+    # 多占位符算术路径的骨架白名单：骨架只允许数字、四则运算符、括号与空白（变量名内的符号不计入骨架）
     _RE_ARITHMETIC_ONLY = re.compile(r"^[\d+\-*/().\s]+$")
+    # 表达式长度上限：防超长算式拖垮 AST 解析与求值
     _MAX_ARITH_EXPR_CHARS = 8192
 
     @classmethod
     def _is_calculated_numeric(cls, value: Any) -> Optional[float]:
         """
-        判断value能否作为数值参与算术计算，返回float可参与计算，None则走字符串拼接。
+        判断 value 能否作为数值参与算术计算，返回 float 可参与计算，None 则回退字符串拼接。
+
+        仅接受 int/float 与可转 float 的字符串；bool 虽为 int 子类也刻意排除（布尔语义不应参与加减）。
 
         :param value: 目标值
         :return: 可参与算术的float；否则None
@@ -52,10 +56,14 @@ class PlaceholderArithmetic:
             regularly_slots: List[Tuple[re.Match[str], Optional[Any], Optional[str]]],
     ) -> bool:
         """
-        判断占位符模板是否应进入纯算术计算路径，模板中占位符之外只能含算术字符。
+        判断占位符模板是否应进入纯算术计算路径。
+
+        单占位符：骨架必须含 + - * / 之一，且该占位符的值可转为 float（如 "${n}+1"）；
+        多占位符：骨架只允许数字、四则运算符、括号与空白（如 "${a}+${b}"）。
+        骨架指模板去除占位符后剩余的文本，变量名内的 -/+ 等字符不属于骨架。
 
         :param content: 待解析的占位符模板字符串
-        :param regularly_slots: 占位符匹配与解析结果列表
+        :param regularly_slots: 占位符匹配与解析结果三元组列表（match, value, failed_content）
         :return: 是否应进入纯算术计算路径
         """
         if len(regularly_slots) == 1:
@@ -168,7 +176,10 @@ class PlaceholderArithmetic:
         安全计算纯算术表达式字符串结果，基于AST白名单校验，禁止变量/函数调用等非算术语法。
 
         :param expr: 算术表达式字符串
-        :return: 计算结果（int或float）
+        :return: 计算结果（int或float，浮点整数值归一为int）
+        :raises ValueError: 表达式为空/超长，或包含白名单外的语法结构、运算符与常量类型
+        :raises ZeroDivisionError: 除法运算除数为 0
+        :raises SyntaxError: 表达式无法被 Python 语法解析
         """
         expr = expr.strip()
         if not expr:
@@ -187,7 +198,7 @@ class PlaceholderArithmetic:
                 if isinstance(node.value, (int, float)):
                     return float(node.value)
                 raise ValueError("计算内容仅支持数字常量, 不支持字符串、布尔值等其他类型")
-            if isinstance(node, ast.Num):  # Python 3.7 及更早
+            if isinstance(node, ast.Num):  # 兼容 Python <3.8 的旧版 AST（3.8+ 数字统一为 Constant）
                 return float(node.n)
             if isinstance(node, ast.UnaryOp):
                 if isinstance(node.op, ast.USub):

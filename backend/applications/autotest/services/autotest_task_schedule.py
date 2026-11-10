@@ -5,6 +5,15 @@
 @Project : KeenRunner
 @Module  : autotest_task_schedule
 @DateTime: 2026/9/1 10:00
+
+任务结构化定时表达式(task_schedule_expr)的校验与运行时视图。
+
+两条职责严格分离：
+- normalize_schedule：落库前唯一校验入口，非法即抛 ParameterException；
+- TaskSchedule：Beat扫描/页面预览用的容错解析视图，脏数据只告警并返回None（该任务不参与扫描）。
+
+触发判定口径：反推“不晚于当前的最近触发点”与 last_execute_time 比较，对齐原Cron幂等语义；
+ONLY_ONCE 全部触发点被派发后由 is_completed 关闭调度。
 """
 from __future__ import annotations
 
@@ -210,6 +219,7 @@ class TaskSchedule:
     """
 
     __slots__ = ("_periodic", "_trigger_dates", "_cycle", "_times", "_weeks", "_month")
+    # 字段含义见 __init__：ONLY_ONCE只用 _trigger_dates，UNBOUNDED只用 _cycle/_times/_weeks/_month
 
     def __init__(
             self,
@@ -326,6 +336,7 @@ class TaskSchedule:
             target_day = now.date() - timedelta(days=back)
             if not self._match_day(target_day):
                 continue
+            # 回看更早日期(back>0)时当天全部时间点均已过去，不再受 now 限制
             candidates = [
                 datetime.combine(target_day, of_day)
                 for of_day in self._times
@@ -389,7 +400,7 @@ async def fetch_schedulable_tasks(task_type: Any) -> List[Any]:
     if not type_val:
         return []
     q = (
-            Q(state=0)
+            Q(state=0)  # state=0 为启用态，软删任务不参与扫描
             & Q(task_enabled=True)
             & Q(task_type=type_val)
             & ~Q(task_schedule_expr__isnull=True)
@@ -413,8 +424,10 @@ def is_task_due(task: Any, now: Optional[datetime] = None) -> bool:
         return False
 
     now = now or datetime.now()
+    # 优先用上次执行时间做基准；从未执行过时回落到创建时间（避免新建任务错过首个触发点）
     last_run = getattr(task, "last_execute_time", None) or getattr(task, "created_time", None)
     if last_run and getattr(last_run, "tzinfo", None):
+        # 库内可能读出带时区/字符串形态，统一转为 naive 本地时间再与结构化时间点比较
         last_run = last_run.replace(tzinfo=None)
     if isinstance(last_run, str):
         for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):

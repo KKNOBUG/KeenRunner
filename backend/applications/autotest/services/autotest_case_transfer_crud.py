@@ -28,8 +28,15 @@ from backend.services import get_current_username, normalize_username
 
 
 class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestCaseTransferCreate, AutoTestCaseTransferCreate]):
+    """
+    用例转让记录CRUD：转让唯一入口为 transfer_case。
+
+    转让不改 created_user，仅变更 owner_user（数据归属随转让转移）；
+    改写归属与写转让记录在同一事务内完成，保证两侧结果一致。
+    """
 
     def __init__(self):
+        """绑定转让记录模型，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestCaseTransferModel)
 
     async def get_by_id(
@@ -41,10 +48,12 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
         """
         根据主键ID查询转让记录。
 
-        :param transfer_id: 转让记录主键ID
+        :param transfer_id: 转让记录主键ID，必填
         :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 转让记录或None
+        :raises ParameterException: transfer_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not transfer_id:
             error_message: str = "查询用例转让记录失败, 参数[transfer_id]不允许为空"
@@ -62,8 +71,15 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
         """
         转让用例所属人：仅当前所属人可操作，写入转让记录并改owner_user，不改created_user。
 
-        :param transfer_in: 转让入参
+        转让前先按目标唯一键（应用+名称+类型+转入人）做冲突预检，避免事务提交时
+        撞上唯一索引只能向用户抛笼统的落库失败；写入记录时 created_user 由基类按登录态自动盖章。
+
+        :param transfer_in: 转让入参（case_id/next_owner_user/transfer_desc）
         :return: 新增的转让记录
+        :raises ParameterException: 转入人为空、登录态为空、用例无归属人、非当前所属人操作、转入人与当前所属人相同
+        :raises NotFoundException: 用例不存在或已软删
+        :raises DataAlreadyExistsException: 转入人名下已存在同应用同类型同名用例
+        :raises DataBaseStorageException: 事务落库失败（并发冲突或状态已变）
         """
         case_id: int = transfer_in.case_id
         next_owner_user = normalize_username(transfer_in.next_owner_user)
@@ -115,6 +131,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
 
         try:
             async with in_transaction():
+                # 先改归属再记流水：任一写入失败均回滚，避免出现“有转让记录但归属未变”
                 await case_crud.update(
                     id=case_id,
                     obj_in={
@@ -153,6 +170,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: 总条数与当前页记录
+        :raises ParameterException: 查询/排序字段不被ORM支持
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

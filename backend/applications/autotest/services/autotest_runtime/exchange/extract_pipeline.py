@@ -15,7 +15,12 @@ from backend.applications.autotest.services.autotest_runtime.exchange.extractors
 
 
 class ExtractPipeline:
-    """批量执行变量提取并汇总name->value与逐项结果。"""
+    """
+    批量执行变量提取，同时产出「name -> value」字典与逐项结果列表。
+
+    规则不完整时跳过且不产生结果项；单项异常只记入该项结果，不中断其余规则；
+    成功项的name写入字典，同名以最后一次成功值为准。
+    """
 
     @classmethod
     def run_extract_variables(
@@ -35,7 +40,10 @@ class ExtractPipeline:
             log_callback: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        根据提取规则列表从请求/响应/变量池中提取变量，不完整规则跳过，异常记入该项且不中断其余项。
+        根据提取规则列表从请求/响应/变量池中提取变量。
+
+        完整性口径：name、source为必填，scope不为ALL时expr必填；不完整规则仅记日志并跳过（不产生结果项）。
+        每条规则独立try捕获，异常只让该项success=False，不中断其余规则。
 
         :param extract_variables: 提取规则列表
         :param response_text: 响应正文
@@ -49,7 +57,8 @@ class ExtractPipeline:
         :param request_form_data: 请求Form-Data/X-WWW-Form-Urlencoded合并映射
         :param session_variables_lookup: 变量池字典
         :param log_callback: 可选日志回调
-        :return: (name->value字典, 逐项结果列表)；成功项才写入字典
+        :return: (name->value字典, 逐项结果列表)；成功项才写入字典，同名后者覆盖前者
+        :raises TypeError: extract_variables或其子项类型不合法
         """
         extract_results_dict: Dict[str, Any] = {}
         extract_results_list: List[Dict[str, Any]] = []
@@ -69,6 +78,7 @@ class ExtractPipeline:
             source = extract_config.source
             range_type = extract_config.scope
             index = extract_config.index
+            # 完整性口径与ExecutorFieldsValidation对齐：scope=ALL返回整段数据，可省略表达式
             scope_is_all = str(range_type or "").strip().upper() == "ALL"
             if not name or not source or (not scope_is_all and not expr):
                 if log_callback:
@@ -120,6 +130,7 @@ class ExtractPipeline:
                         f"提取数据: {extract_value}\n\t"
                         f"错误描述: {error_message}"
                     )
+            # 逐项结果供上层汇总失败明细；success以是否捕获到异常为准
             item = {
                 "name": name,
                 "source": source,
@@ -132,5 +143,6 @@ class ExtractPipeline:
             }
             extract_results_list.append(item)
             if error_message == "":
+                # 同名提取后写覆盖先写，与变量池同名覆盖语义一致
                 extract_results_dict[name] = extract_value
         return extract_results_dict, extract_results_list

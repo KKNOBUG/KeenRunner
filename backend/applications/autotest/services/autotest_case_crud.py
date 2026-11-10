@@ -38,18 +38,28 @@ from backend.services import DataScope, get_current_username, normalize_username
 
 
 class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoTestCaseUpdate]):
+    """
+    用例CRUD：用例定位、创建（含软删复活）、更新、删除（单条硬删/批量软删）与批量导入保存。
+
+    唯一键口径：应用 + 用例名称 + 精确用例类型 + 所属人；跨类型同名允许，仅同精确类型冲突。
+    归属口径：owner_user 为用例归属人（转让后变更），创建时等于 created_user，转让不改 created_user。
+    父资源校验：创建与跨应用迁移均经 load_readable_project 确认目标应用对当前用户可读。
+    """
 
     def __init__(self):
+        """绑定用例模型，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestCaseModel)
 
     async def get_by_id(self, case_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestCaseModel]:
         """
         根据主键ID查询用例。
 
-        :param case_id: 用例主键ID
+        :param case_id: 用例主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 用例实例或None
+        :raises ParameterException: case_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not case_id:
             error_message: str = "查询用例信息失败, 参数[case_id]不允许为空"
@@ -67,10 +77,12 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         根据用例标识代码查询用例。
 
-        :param case_code: 用例标识代码
+        :param case_code: 用例标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 用例实例或None
+        :raises ParameterException: case_code 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not case_code:
             error_message: str = "查询用例信息失败, 参数[case_code]不允许为空"
@@ -86,12 +98,17 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
     async def get_by_unique(self, case_id: int, case_code: str, **kwargs) -> Optional[AutoTestCaseModel]:
         """
-        根据case_id优先、否则case_code定位启用中的用例。
+        按 case_id 优先、否则按 case_code 定位用例。
+
+        定位命中与否由内部 get_by_id/get_by_code 以 on_error=True 强制抛错，因此本方法不会返回 None；
+        是否只取启用态由调用方通过 kwargs 传入 state__not=1 决定。
 
         :param case_id: 用例主键ID
         :param case_code: 用例标识代码
         :param kwargs: 额外过滤条件
-        :return: 用例实例或None
+        :return: 用例实例
+        :raises ParameterException: case_id 与 case_code 同时为空
+        :raises NotFoundException: 记录不存在
         """
         if case_id:
             return await self.get_by_id(case_id=case_id, on_error=True, **kwargs)
@@ -106,11 +123,14 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             request_args_type: Optional[AutoTestReqArgsType] = None,
     ) -> Optional[List[int]]:
         """
-        根据请求步骤类型与参数类型查询关联用例ID列表。
+        按请求步骤类型与参数类型筛选关联用例ID（distinct去重）。
+
+        只统计启用中的 HTTP/TCP 步骤，并排除未挂用例的游离步骤（case_id 为空）；
+        用于按接口形态批量圈定候选用例。
 
         :param step_type: 请求步骤类型；可选
         :param request_args_type: 请求参数类型；可选
-        :return: 关联用例ID列表；两者皆空时返回None
+        :return: 关联用例ID列表；两者皆空时返回None表示不限制
         """
         if step_type is None and request_args_type is None:
             return None
@@ -139,7 +159,8 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         按业务唯一键查找用例，含软删，不滤state。
 
         唯一性按精确用例类型判定：公共脚本、用户脚本、公共接口两两允许同名，仅同精确类型冲突。
-        命中多行时按启用态(state=0)优先、再按最近更新返回，确保调用方先看到启用态冲突再考虑软删复活。
+        不滤 state 是为了让调用方拿到软删行做复活；命中多行时按启用态(state=0)优先、
+        再按最近更新返回，确保调用方先看到启用态冲突再考虑软删复活。
 
         :param case_project: 所属应用
         :param case_name: 用例名称
@@ -147,6 +168,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         :param owner_user: 所属人员
         :param exclude_id: 更新时排除自身
         :return: 命中的用例或None
+        :raises ParameterException: owner_user 为空
         """
         if not owner_user:
             error_message: str = "按业务唯一键查找用例失败, 所属人员不允许为空"
@@ -165,10 +187,13 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
     async def _restore_and_overwrite_case(self, existing: AutoTestCaseModel, overwrite: Dict[str, Any]) -> AutoTestCaseModel:
         """
-        唤醒软删用例并按本次创建数据覆盖表头，不改created_user、owner_user、case_code。
+        唤醒软删用例并按本次创建数据覆盖表头字段。
+
+        定位键（created_user/case_code/case_id）一律剔除，owner_user 沿用原归属人；
+        state 置回 0 并递增 case_version，使复用同一条记录而非新增行。
 
         :param existing: 软删用例
-        :param overwrite: 覆盖字段
+        :param overwrite: 覆盖字段（就地剔除定位键）
         :return: 恢复后的用例
         """
         overwrite.pop("created_user", None)
@@ -186,7 +211,15 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             *,
             context: str = "用例"
     ) -> Optional[List[int]]:
-        """打标签管控：公共接口禁止打标签；用户脚本必选标签；公共脚本允许打标签(可选)。"""
+        """
+        用例标签准入：公共接口禁止打标签；用户脚本与普通用例必选标签；公共脚本可选。
+
+        :param case_type: 用例类型，决定标签是否必需
+        :param case_tags: 标签ID列表
+        :param context: 报错文案前缀（批量导入时携带第N条定位）
+        :return: 规范化后的标签列表；无需/未打标签时为None
+        :raises ParameterException: 公共接口携带标签，或必选类型未提供标签
+        """
         if case_type in NO_TAG_CASE_TYPES:
             if case_tags:
                 error_message: str = f"{context}, 用例类型为[公共接口]时不支持打标签"
@@ -209,6 +242,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         :param case_in: 用例创建schema
         :param scope: 数据权限上下文，用于校验父资源(应用)是否可读
         :return: 创建或恢复后的用例实例
+        :raises ParameterException: 标签准入不通过或所属人不为空校验失败
+        :raises NotFoundException: 所属应用不存在或已软删
+        :raises NoPermissionException: 所属应用归属不在当前用户可见范围
+        :raises DataAlreadyExistsException: 同唯一键的启用态用例已存在
+        :raises DataBaseStorageException: 落库失败（唯一索引冲突或关联标签无效）
         """
         case_name: str = case_in.case_name
         case_project: int = case_in.case_project
@@ -247,6 +285,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             case_dict.pop("created_user", None)
             case_dict["case_tags"] = case_tags
             if existing_case:
+                # 命中软删行时复用原记录（保留 case_code/created_user），避免唯一索引报错
                 instance = await self._restore_and_overwrite_case(existing_case, case_dict)
                 LOGGER.info(
                     f"新增用例命中软删记录, 已恢复覆盖: id={instance.id}, "
@@ -267,7 +306,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         将公共接口请求步骤所属应用级联对齐为用例所属应用。
 
+        仅对 PUBLIC_API 用例生效：用户脚本以外的普通用例允许步骤跨应用取报文原值，
+        而公共接口被引用时以用例所属应用为执行环境，步骤应用必须与用例一致。
+
         :param case_instance: 更新后的用例实例(非公共接口或无应用时静默跳过)
+        :return: None
         """
         if case_instance.case_type != AutoTestCaseType.PUBLIC_API or not case_instance.case_project:
             return
@@ -283,11 +326,19 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
     async def update_case(self, case_in: AutoTestCaseUpdate, scope: DataScope) -> AutoTestCaseModel:
         """
-        更新用例，根据case_id或case_code定位并递增case_version。
+        更新用例：按 case_id 优先/case_code 兜底定位，校验写权限后递增 case_version。
+
+        涉及名称/应用/类型变更时重做唯一性校验；切换为公共接口/公共脚本前额外校验
+        数据源未挂载（公共接口还需根步骤形态合规），应用变更时级联对齐公共接口步骤应用。
 
         :param case_in: 用例更新schema，需含case_id或case_code
         :param scope: 数据权限上下文，校验用例所属人是否允许当前用户写入
         :return: 更新后的用例实例
+        :raises ParameterException: 定位参数为空、标签准入不通过、类型切换前置校验不通过
+        :raises NotFoundException: 用例不存在/已软删，或目标应用不存在
+        :raises NoPermissionException: 用例所属人或目标应用归属不在当前用户可操作范围
+        :raises DataAlreadyExistsException: 改后唯一键与其他用例冲突
+        :raises DataBaseStorageException: 落库失败（并发删除或索引冲突）
         """
         case_id: Optional[int] = case_in.case_id
         case_code: Optional[str] = case_in.case_code
@@ -322,6 +373,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         self.explicit_restored_null_fields(
             payload=case_in,
             update_dict=update_dict,
+            # 这两个容器字段允许前端显式传null清空，不能被 exclude_none 过滤
             field_names=("case_tags", "session_variables")
         )
         effective_type = update_dict.get("case_type", instance.case_type)
@@ -360,6 +412,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 raise DataAlreadyExistsException(message=message_error)
 
         if case_type == AutoTestCaseType.PUBLIC_API and original_case_type != AutoTestCaseType.PUBLIC_API:
+            # 仅“首次切为公共类型”才需要校验；已是公共类型的重复保存不再卡存量形态
             await self._validate_switch_to_public_api(instance)
             await self._ensure_no_mounted_data_source(instance, AutoTestCaseType.PUBLIC_API)
         elif case_type == AutoTestCaseType.PUBLIC_SCRIPT and original_case_type != AutoTestCaseType.PUBLIC_SCRIPT:
@@ -389,6 +442,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
         :param case_instance: 待切换的用例实例
         :param target_type: 切换目标用例类型(用于提示语)
+        :return: None
         :raises ParameterException: 用例下存在启用中的数据源
         """
         mounted = await AutoTestDataSourceModel.filter(case_id=case_instance.id, state__not=1).exists()
@@ -407,12 +461,18 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             case_code: Optional[str] = None,
     ) -> AutoTestCaseModel:
         """
-        物理删除用例及其全部步骤，并清理步骤关联的数据源/生成记录/本地文件；公共接口/公共脚本需无引用。
+        物理删除用例及其全部步骤，同步清理步骤关联的数据源记录与上传文件。
 
-        :param scope: 数据权限上下文，校验用例所属人是否允许当前用户写入
+        公共接口/公共脚本仍被引用时拒绝删除；步骤与数据源均为硬删，不保留痕迹。
+
+        :param scope: 数据权限上下文，校验用例所属人是否允许当前用户删除
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
         :return: 删除前的用例实例快照
+        :raises ParameterException: case_id 与 case_code 同时为空
+        :raises NotFoundException: 用例不存在或已软删
+        :raises NoPermissionException: 用例所属人不在当前用户可删除范围
+        :raises DataAlreadyExistsException: 公共用例仍被引用步骤引用
         """
         if not case_id and not case_code:
             error_message: str = "删除用例信息失败, 参数[case_id]或[case_code]不允许为空"
@@ -438,7 +498,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        # 硬删用例时步骤不再保留任何痕迹：先清理步骤关联的数据源/上传文件，再删步骤与用例
+        # 硬删用例时步骤不再保留任何痕迹：先取步骤标识，再删步骤，最后按 step_code 清数据源及其上传文件
         from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
         from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 
@@ -459,10 +519,14 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         批量软删除用例及其步骤（批量入口保持软删除，与单条硬删除区分）。
 
-        :param scope: 数据权限上下文，逐条校验用例所属人是否允许当前用户写入
+        :param scope: 数据权限上下文，逐条校验用例所属人是否允许当前用户删除
         :param case_ids: 用例主键列表，与case_codes二选一
         :param case_codes: 用例标识代码列表，与case_ids二选一
         :return: 实际软删除的用例数量
+        :raises ParameterException: 两个定位参数同时为空
+        :raises NotFoundException: 任一目标用例不存在或已软删
+        :raises NoPermissionException: 任一所属人不在当前用户可删除范围
+        :raises DataAlreadyExistsException: 公共用例仍被引用步骤引用
         """
         if not case_ids and not case_codes:
             error_message: str = "批量删除用例失败, 参数[case_ids]或[case_codes]不允许为空"
@@ -532,6 +596,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询/排序字段不被ORM支持
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -545,7 +610,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         校验切换为公共接口前存量步骤树形态是否合规。
 
+        公共接口有且仅需1个根步骤，且必须为 HTTP/TCP 请求步骤（被引用时直接作为报文来源）。
+
         :param case_instance: 待切换的用例实例
+        :return: None
+        :raises ParameterException: 根步骤数量不为1或根步骤类型非HTTP/TCP
         """
         root_steps: List[AutoTestStepModel] = await AutoTestStepModel.filter(
             case_id=case_instance.id, parent_step_id=None, state__not=1
@@ -574,9 +643,17 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         批量新增或更新用例：无case_id/case_code则新增，有则更新。
 
+        处理非原子：按入参顺序逐条落库，中途抛错时此前已提交的记录不回滚，
+        因此调用方应将报错信息直接回显给用户逐条修正，而不是整批重试。
+
         :param cases_data: 用例更新schema列表
         :param scope: 数据权限上下文，校验待更新用例所属人是否允许当前用户写入
         :return: 含created_count、updated_count、success_detail的字典
+        :raises ParameterException: 新增必填字段缺失、标签准入不通过
+        :raises NotFoundException: 新增目标应用不存在或已软删
+        :raises NoPermissionException: 所属应用不可读，或待更新用例所属人不可写
+        :raises DataAlreadyExistsException: 同唯一键的启用态用例已存在
+        :raises DataBaseStorageException: 单条落库失败（异常信息带第N条定位）
         """
         created_count: int = 0
         updated_count: int = 0

@@ -21,7 +21,7 @@ from backend.configure import LOGGER
 
 
 class XmlDatagram:
-    """根据XPath映射更新XML请求报文。"""
+    """按XPath映射更新XML请求报文（注入值统一展开特殊值并转为wire文本）。"""
 
     @staticmethod
     def replace_xml_datagram(
@@ -36,12 +36,14 @@ class XmlDatagram:
         实现要点：
         - 整篇报文只解析一次、只在确有命中时序列化一次，避免逐字段重解析与命名空间反复改写；
         - 序列化统一走 XmlUtils，保留默认命名空间/XML声明/注释，避免 ElementTree 生成 ns0 前缀；
-        - 支持叶子文本与 @attr 属性路径；未命中路径汇总告警但不阻断步骤（与历史语义一致）。
+        - 注入值先展开数据集特殊值再转wire文本（None→空串、bool→true/false）；
+        - 支持叶子文本与 @attr 属性路径；未命中路径汇总告警但不阻断步骤。
 
         :param body_map: XPath表达式->注入值的映射
         :param request_text: XML报文字符串
         :param logger_object: 可选的步骤日志回调；传入时未命中明细同步写入步骤日志
         :return: 替换后的XML字符串；无命中时原样返回
+        :raises ValueError: 报文非合法XML、XPath表达式执行失败或序列化失败
         """
         if not request_text:
             return request_text

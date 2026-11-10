@@ -43,18 +43,34 @@ from backend.services import DataScope
 
 
 class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate, AutoTestReportUpdate]):
+    """
+    执行报告CRUD：报告增删改查，以及报告聚合出来的三层查询视图。
+
+    数据形态：一行报告 = 一个用例在某一轮/某一数据源上的一次执行（多数据源会展开成多行）；
+    同一次任务执行由 batch_code 串联，无 batch_code 的行是单次执行（非任务触发）。
+
+    查询分层（供前端三个抽屉逐层下钻）：
+    - search_reports：执行维度主查询（batch_code 唯一化为一行）；
+    - search_task_batches / search_batch_scripts：任务执行历史 → 批次内脚本；
+    - search_script_round_reports / search_batch_reports：脚本轮次明细 → 批次报告明细。
+
+    归属口径：报告以 created_user 为归属人，读过滤由调用方传入的 DataScope.read_q 拼接。
+    """
 
     def __init__(self):
+        """绑定报告模型，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestReportModel)
 
     async def get_by_id(self, report_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestReportModel]:
         """
         根据主键ID查询报告。
 
-        :param report_id: 报告主键ID
+        :param report_id: 报告主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 报告实例或None
+        :raises ParameterException: report_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not report_id:
             error_message: str = "查询报告信息失败, 参数[report_id]不允许为空"
@@ -72,10 +88,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         根据报告标识代码查询报告。
 
-        :param report_code: 报告标识代码
+        :param report_code: 报告标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 报告实例或None
+        :raises ParameterException: report_code 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not report_code:
             error_message: str = "查询报告信息失败, 参数[report_code]不允许为空"
@@ -91,10 +109,14 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
     async def create_report(self, report_in: AutoTestReportCreate) -> AutoTestReportModel:
         """
-        创建报告，校验用例存在。
+        创建报告，先校验关联用例存在且未软删。
+
+        仅执行引擎/内部流程调用（对外写接口需超管），因此不带数据权限参数。
 
         :param report_in: 报告创建schema
         :return: 创建后的报告实例
+        :raises NotFoundException: 关联用例不存在或已软删
+        :raises DataBaseStorageException: 落库失败（report_code 重复或用例外键无效）
         """
         case_id: int = report_in.case_id
         case_code: str = report_in.case_code
@@ -127,6 +149,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param report_in: 报告更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的报告
         :return: 更新后的报告实例
+        :raises NotFoundException: 报告不存在或已软删
+        :raises NoPermissionException: 报告创建人不在当前用户可操作范围
+        :raises DataBaseStorageException: 落库失败
         """
         report_id: Optional[int] = report_in.report_id
         report_code: Optional[str] = report_in.report_code
@@ -173,6 +198,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param report_id: 报告主键ID，与report_code二选一
         :param report_code: 报告标识代码，与report_id二选一
         :return: 删除前的报告实例快照
+        :raises NotFoundException: 报告不存在或已软删
+        :raises NoPermissionException: 报告创建人不在当前用户可删除范围
         """
         if report_id:
             instance = await self.get_by_id(report_id=report_id, on_error=True, state__not=1)
@@ -202,6 +229,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
         :param report_in: 报告ID列表或报告标识代码列表
         :return: 实际删除的报告数量
+        :raises ParameterException: 两个定位参数同时为空
+        :raises NotFoundException: 任一目标报告不存在或已软删
+        :raises NoPermissionException: 任一报告创建人不在当前用户可删除范围
         """
         report_ids: Optional[List[int]] = report_in.report_ids
         report_codes: Optional[List[str]] = report_in.report_codes
@@ -259,6 +289,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询/排序字段不被ORM支持
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -271,6 +302,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
     def _parse_elapsed_seconds(val: Any) -> float:
         """
         将耗时字段解析为秒数浮点值。
+
+        兼容“1.234s”这类带单位的存量字符串（去尾部s/S）；任何非法值统一归0，避免聚合页报错。
 
         :param val: 耗时原始值
         :return: 秒数；无法解析时返回0.0
@@ -288,6 +321,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         判断用例执行状态是否表示成功。
 
+        case_state 为布尔字段，但存量/异构写入可能落成字符串 "true"，两种形态都视为成功。
+
         :param case_state: 用例执行状态
         :return: 是否成功
         """
@@ -299,7 +334,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         合并报告行涉及环境列表，保持首次出现顺序去重。
 
         :param rows: 报告行字典列表
-        :return: 去重后的环境名称列表
+        :return: 去重后的环境名称列表（空白项丢弃）
         """
         envs: List[str] = []
         seen: Set[str] = set()
@@ -337,6 +372,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :return: 批次汇总数据
         """
         report_script_count: int = len(script_aggs)
+        # 脚本级成功 = 轮次总数>0且全部轮次通过；批次状态按成功脚本占比判定
         success_script_count: int = sum(1 for agg in script_aggs if 0 < agg["round_total"] == agg["round_passed"])
         if 0 < report_script_count == success_script_count:
             exec_status: AutoTestTaskStatus = AutoTestTaskStatus.SUCCESS
@@ -368,6 +404,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         :param task_code: 任务标识代码
         :return: (任务名称, 绑定用例ID列表, 最近一次执行状态)
+        :raises NotFoundException: 任务记录不存在（含已软删）
         """
         task_rows: List[Dict[str, Any]] = await AutoTestTaskCrud().model.filter(
             task_code=task_code,
@@ -401,6 +438,8 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param batch_in: 批次查询入参
         :param scope: 数据权限上下文，传入时仅聚合可见范围内的报告
         :return: (批次总数, 当前页批次列表)
+        :raises ParameterException: task_code 为空
+        :raises NotFoundException: 任务记录不存在
         """
         batch_count: int = 0
         batch_statement: List[AutoTestReportBatchItem] = []
@@ -515,6 +554,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param script_in: 脚本维度查询入参
         :param scope: 数据权限上下文，传入时仅聚合可见范围内的报告
         :return: (脚本总数, 当前页脚本行列表)
+        :raises ParameterException: batch_code 为空
         """
         batch_code: str = (script_in.batch_code or "").strip()
         if not batch_code:
@@ -622,6 +662,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param report_in: 脚本明细查询入参
         :param scope: 数据权限上下文，传入时仅返回可见范围内的报告
         :return: (报告总数, 当前页报告行列表)
+        :raises ParameterException: batch_code 或 case_id 为空
         """
         batch_code: str = (report_in.batch_code or "").strip()
         if not batch_code:
@@ -763,7 +804,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param page_size: 每页数量
         :param order: 排序字段列表
         :param batch_code: 批次标识代码(精确等值, 命中batch_code索引)
-        :param state: 状态(0:启用, 1:禁用)
+        :param state: 状态(0:启用, 1:软删)
         :param case_id: 用例ID(可选, 传入时按用例过滤, 与batch_code命中复合索引(batch_code, case_id, round_no)左前缀)
         :param scope: 数据权限上下文，传入时仅返回可见范围内的报告
         :return: (报告总数, 当前页报告行列表)

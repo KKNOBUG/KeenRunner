@@ -28,6 +28,8 @@ async def load_readable_project(scope: Optional[DataScope], project_id: int) -> 
     :param scope: 当前请求数据权限上下文；None表示调用方未启用校验
     :param project_id: 应用ID
     :return: 应用实例
+    :raises NotFoundException: 应用不存在或已软删
+    :raises NoPermissionException: 应用归属不在当前用户可见范围
     """
     project = await AutoTestProjectModel.filter(id=int(project_id), state__not=1).first()
     if not project:
@@ -42,11 +44,15 @@ async def assert_parent_readable(scope: Optional[DataScope], tag: str, parent: A
     """
     校验父资源对当前用户可见（B级防护：父资源可读才允许挂载子资源）。
 
+    公共脚本/公共接口（case_type在PUBLIC_CASE_TYPES中）直接放行；归属优先owner_user，
+    回落created_user（兼容无归属人字段的应用/环境等父资源）。
+
     :param scope: 当前请求数据权限上下文；None表示调用方未启用校验
     :param tag: 父资源所属资源族标签
     :param parent: 父资源实例
     :param label: 父资源中文名，用于错误提示
     :return: None
+    :raises NoPermissionException: 父资源归属不在当前用户可见范围
     """
     if scope is None:
         return
@@ -68,12 +74,14 @@ async def assert_case_writable(scope: Optional[DataScope], case: AutoTestCaseMod
     校验用例既可读又可写。
 
     步骤、数据源等子资源没有独立归属，读写范围必须按父用例资源族解析；
-    用子资源自身标签判定会让角色对 autotest.case 的覆盖配置对子资源失效。
+    用子资源自身标签判定会让角色对autotest.case的覆盖配置对子资源失效。
+    公共用例类型读取放行，但写入仍按归属人收敛。
 
     :param scope: 当前请求数据权限上下文；None表示调用方为内部可信路径
     :param case: 归属用例
     :param action: 操作名，用于错误提示
     :return: None
+    :raises NoPermissionException: 用例归属不在当前用户可见或可写范围
     """
     if scope is None:
         return
@@ -94,9 +102,13 @@ async def assert_cases_readable(scope: Optional[DataScope], case_ids: Iterable[O
     """
     批量校验用例对当前用户可见，供任务挂载/执行等多用例入口统一做父资源校验。
 
+    只校验实际查到的用例；read_depts为None（不限部门范围）时直接放行，不查库；
+    公共用例类型逐条跳过。
+
     :param scope: 当前请求数据权限上下文；None表示调用方未启用校验
     :param case_ids: 待校验的用例ID集合
     :return: None
+    :raises NoPermissionException: 任一用例归属不在当前用户可见范围
     """
     ids: set[int] = {int(case_id) for case_id in case_ids or [] if case_id}
     if scope is None or not ids:

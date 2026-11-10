@@ -82,12 +82,16 @@ class DataSourceService:
         """
         定位用例与步骤，并校验步骤属于该用例。
 
+        id/code同时传入时由get_by_unique优先按id定位；两对参数均需至少命中一个。
+
         :param services: CRUD聚合
         :param case_id: 用例主键，与case_code二选一，id优先
         :param case_code: 用例标识
         :param step_id: 步骤主键，与step_code二选一，id优先
         :param step_code: 步骤标识
         :return: (用例, 步骤)
+        :raises ParameterException: 用例或步骤定位参数缺失
+        :raises NotFoundException: 用例/步骤不存在，或步骤不属于该用例
         """
         has_case = bool(case_id) or bool(DataSourceService._text(case_code))
         has_step = bool(step_id) or bool(DataSourceService._text(step_code))
@@ -105,7 +109,9 @@ class DataSourceService:
         仅HTTP/TCP请求步骤允许绑定数据源；用户脚本宿主下的引用公共接口步骤除外（数据源挂载在宿主引用步骤上）。
 
         :param step: 步骤模型实例
-        :param case: 步骤所属用例模型实例；传入时放行用户脚本宿主下的引用公共接口步骤，不传保持仅HTTP/TCP的历史口径
+        :param case: 步骤所属用例模型实例；传入时放行非公共用例下用户脚本宿主的引用公共接口步骤，
+            不传时仅放行HTTP/TCP
+        :raises ParameterException: 步骤类型不允许挂载数据源
         """
         if step.step_type in cls.REQUEST_STEP_TYPES:
             return
@@ -115,7 +121,13 @@ class DataSourceService:
 
     @staticmethod
     def ensure_case_allows_data_source(case: AutoTestCaseModel) -> None:
-        """公共脚本/公共接口不允许绑定数据源。"""
+        """
+        公共脚本/公共接口不允许绑定数据源。
+
+        :param case: 归属用例
+        :return: None
+        :raises ParameterException: 用例为公共类型
+        """
         if case.case_type in PUBLIC_CASE_TYPES:
             raise ParameterException(message="公共脚本/公共接口不允许使用数据源")
 
@@ -155,6 +167,7 @@ class DataSourceService:
         owner_step = await services.step_curd.model.filter(
             case_id=instance.case_id, step_code=instance.step_code, state__not=1
         ).first()
+        # 归属步骤已删除时不阻断数据源自身清理；存在时再校验其类型是否允许挂载
         if owner_step is not None:
             cls.ensure_request_step(owner_step, case=owner_case)
 
@@ -202,6 +215,7 @@ class DataSourceService:
                 state__not=1,
             ).order_by("case_id", "step_no", "id")
             for inner_step in inner_steps:
+                # 每个被引用用例只取排序后的首个请求步骤（step_no、id升序）
                 inner_step_map.setdefault(inner_step.case_id, inner_step)
 
         resolved_map: Dict[int, AutoTestStepModel] = {}
@@ -236,6 +250,8 @@ class DataSourceService:
         :param step_code: 步骤标识
         :param on_error: 未找到时是否抛出异常
         :return: 数据源实例或None
+        :raises ParameterException: 仅传data_source_code为空并回落到用例+步骤时定位参数缺失
+        :raises NotFoundException: on_error为True且未找到
         """
         if data_source_id:
             return await services.data_source_curd.get_by_id(
@@ -275,6 +291,7 @@ class DataSourceService:
         :param dataframe: 二维矩阵
         :param axis: 调用方声明的方向；与矩阵结构冲突时以分区标记识别结果为准
         :return: 解析结果字典；dataframe为None时返回None（表示本次不改矩阵）
+        :raises ParameterException: 清洗后无任何带字段值的场景
         """
         if dataframe is None:
             return None
@@ -329,6 +346,8 @@ class DataSourceService:
     def _flatten_json_leaf_values(data: Any, prefix: str = "$") -> Dict[str, Any]:
         """
         将JSON展平为叶子JSONPath→原始值映射，保留文档序，值维持原类型。
+
+        空dict/空list视为叶子直接记录，不再往下展平。
 
         :param data: dict/list/标量
         :param prefix: 当前路径前缀
@@ -392,6 +411,7 @@ class DataSourceService:
         originals: Dict[str, Any] = {}
 
         def walk(elem: ElementTree.Element, xpath_prefix: str) -> None:
+            """递归记录属性与叶子文本；同名兄弟节点追加[序号]以保证路径唯一。"""
             for attr_name, attr_value in elem.attrib.items():
                 local_attr = DataSourceService._xml_local_name(attr_name)
                 if xpath_prefix == ".":
@@ -576,6 +596,8 @@ class DataSourceService:
         """
         字段同步取场景值：保留字段搬移原值；新增字段其余场景补空，正交易场景按报文原始值回填。
 
+        仅新增字段（old_values为None）会回填；已存在字段即使报文值变化也保留用户维护的场景值。
+
         :param old_values: 原矩阵中该字段的场景值行/列，字段不存在时为None
         :param empty: 补空基准(与场景数等长)
         :param normal_index: 正交易场景在场景维度中的序号，-1表示未导入
@@ -757,7 +779,11 @@ class DataSourceService:
 
     @staticmethod
     def _scene_names_from_dataframe(dataframe: Any, axis: Any = None) -> Optional[List[str]]:
-        """从 dataframe 矩阵头/首列提取场景名（单元格全空时仍可得到列名）。"""
+        """
+        从dataframe矩阵头/首列提取场景名（单元格全空时仍可得到列名）。
+
+        axis非法或缺失时按垂直模式处理；无有效名称返回None。
+        """
         if not isinstance(dataframe, list) or not dataframe:
             return None
         used_axis = axis if axis in (DataSourceMatrixParser.AXIS_HORIZONTAL,
@@ -830,7 +856,11 @@ class DataSourceService:
             file_name: Optional[str],
             file_desc: Optional[str],
     ) -> None:
-        """回写步骤上的数据源指针。"""
+        """
+        回写步骤上的数据源指针。
+
+        仅更新未软删（state=0）的步骤；文件名/描述截断至2048；无匹配步骤时不报错。
+        """
         step_vals: Dict[str, Any] = {
             "data_source_id": data_source_id,
             "data_source_name": (file_name or "")[:2048] or None,
@@ -851,7 +881,10 @@ class DataSourceService:
             case_id: int,
             step_code: Optional[str] = None,
     ) -> int:
-        """清空步骤上的数据源指针；step_code为空时清空该用例全部可挂数据源步骤(含引用公共接口)。"""
+        """清空步骤上的数据源指针；step_code为空时清空该用例全部可挂数据源步骤(含引用公共接口)。
+
+        :return: 实际更新的步骤行数
+        """
         step_vals: Dict[str, Any] = {
             "data_source_id": None,
             "data_source_name": None,

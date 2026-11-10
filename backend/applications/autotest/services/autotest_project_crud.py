@@ -34,8 +34,17 @@ from backend.services import DataScope
 
 
 class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCreate, AutoTestProjectUpdate]):
+    """
+    应用（项目）CRUD：autotest 的根容器，用例/环境/标签/任务均挂在其下。
+
+    唯一口径：(project_name, project_mark) 联合唯一，数据库索引不区分 state，
+    因此软删行同样占用名称；同组合的软删记录在写权限内直接复用复活。
+    project_code 为系统生成的全局唯一标识代码，与用户填写的 project_mark 是两个不同字段。
+    归属口径：以 created_user 为归属人；删除前须确认用例/环境配置/环境绑定/标签/任务均无引用。
+    """
 
     def __init__(self):
+        """绑定应用模型（krun_autotest_project），供基类通用CRUD复用。"""
         super().__init__(model=AutoTestProjectModel)
 
     async def get_by_id(self, project_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestProjectModel]:
@@ -46,6 +55,8 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
+        :raises ParameterException: project_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not project_id:
             error_message: str = "查询应用信息失败, 参数[project_id]不允许为空"
@@ -66,12 +77,17 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             **kwargs
     ) -> Optional[Union[bool, List[AutoTestProjectModel]]]:
         """
-        根据主键ID列表批量查询应用。
+        根据主键ID列表批量查询应用；用于列表回显时批量取回关联应用。
+
+        先只查一次主键判断缺失：有缺失且 on_error=False 时直接返回 False（而非空列表，
+        历史契约，调用方须按真值判断），全部存在才二次查询返回完整实例列表。
 
         :param project_ids: 应用主键ID列表
-        :param on_error: 未找到时是否抛出异常
+        :param on_error: 存在缺失ID时是否抛出异常
         :param kwargs: 额外过滤条件
-        :return: 应用列表；缺失且on_error为False时返回False
+        :return: 应用列表；存在缺失且on_error为False时返回False
+        :raises ParameterException: 列表为空或元素不是int
+        :raises NotFoundException: on_error=True 且存在缺失ID
         """
         if not project_ids:
             error_message: str = "查询应用信息失败, 参数[project_ids]不允许为空"
@@ -96,10 +112,12 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         """
         根据应用标识代码查询应用。
 
-        :param project_code: 应用标识代码
+        :param project_code: 应用标识代码（系统生成的唯一代码，非 project_mark）
         :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
+        :raises ParameterException: project_code 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not project_code:
             error_message: str = "查询应用信息失败, 参数[project_code]不允许为空"
@@ -121,6 +139,8 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 应用实例或None
+        :raises ParameterException: project_name 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not project_name:
             error_message: str = "查询应用信息失败, 参数[project_name]不允许为空"
@@ -136,11 +156,17 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
 
     async def create_project(self, project_in: AutoTestProjectCreate, scope: DataScope) -> AutoTestProjectModel:
         """
-        创建应用；同名软删记录在写权限内恢复并更新，活跃同名报错。
+        创建应用；同名称+标识的软删记录在写权限内恢复并覆盖，活跃记录直接报错。
+
+        project_mark 去首尾空白后落库（与唯一索引口径一致）；四个负责人列表统一按小写排序，
+        保证同一组人员的存储顺序稳定。
 
         :param project_in: 应用创建schema
         :param scope: 数据权限上下文，恢复软删应用时要求创建人允许当前用户写入
         :return: 创建或恢复后的应用实例
+        :raises DataAlreadyExistsException: 名称+标识组合已存在，或并发写入撞唯一索引
+        :raises NoPermissionException: 待恢复的软删应用归属人不在当前用户可写范围
+        :raises NotFoundException: 恢复时目标记录已不存在
         """
         project_name: str = project_in.project_name
         project_mark: str = (project_in.project_mark or "").strip()
@@ -198,11 +224,17 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
 
     async def update_project(self, project_in: AutoTestProjectUpdate, scope: DataScope) -> AutoTestProjectModel:
         """
-        更新应用，根据project_id或project_code定位并校验名称唯一。
+        更新应用，根据project_id或project_code定位并校验名称+标识唯一。
+
+        仅在入参触及 project_name/project_mark 时重做组合判重，比对包含软删行（与库内索引同口径）。
 
         :param project_in: 应用更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的应用
         :return: 更新后的应用实例
+        :raises ParameterException: 两个定位参数同时为空
+        :raises NotFoundException: 应用不存在或已软删
+        :raises NoPermissionException: 归属人不在当前用户可写范围
+        :raises DataAlreadyExistsException: 改名/改标识后与库内组合重复（含软删行）
         """
         project_id: Optional[int] = project_in.project_id
         project_code: Optional[str] = project_in.project_code
@@ -264,10 +296,13 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
 
     async def assert_project_deletable(self, instance: AutoTestProjectModel) -> None:
         """
-        校验应用不存在引用关系：用例、标签、环境绑定、环境配置、任务。
+        校验应用不存在引用关系：用例 → 环境配置 → 环境绑定 → 标签 → 任务，逐项短路。
+
+        环境部分先查该应用下启用中的配置数：有配置报配置数；无配置但仍存在环境绑定时报绑定数。
 
         :param instance: 待删除应用实例
-        :raises DataBaseStorageException: 存在引用关系时拒绝删除
+        :return: None
+        :raises DataBaseStorageException: 任一引用存在即拒绝删除
         """
         from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
 
@@ -307,12 +342,16 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             project_code: Optional[str] = None
     ) -> AutoTestProjectModel:
         """
-        物理删除应用；需无关联用例、环境绑定、标签、任务。
+        物理删除应用；删除前校验无引用（用例/环境配置/环境绑定/标签/任务）。
 
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
         :param project_id: 应用主键ID，与project_code二选一
         :param project_code: 应用标识代码，与project_id二选一
         :return: 删除后的应用实例快照
+        :raises ParameterException: 两个定位参数同时为空
+        :raises NotFoundException: 应用不存在或已软删
+        :raises NoPermissionException: 归属人不在当前用户可删范围
+        :raises DataBaseStorageException: 存在引用关系
         """
         if not project_id and not project_code:
             error_message: str = "删除应用信息失败, 参数[project_id, project_code]不允许同时为空"
@@ -337,9 +376,16 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         """
         根据ID或code列表批量软删除应用；软删与物理删同样拒绝存在引用关系的应用。
 
+        先一次性批量定位并批量校验行级权限与引用关系，全部通过后再单次批量软删，
+        因此中途失败不会落库，具备全有或全无语义。
+
         :param project_in: 应用删除schema
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
-        :return: 更新条数
+        :return: 实际软删条数
+        :raises ParameterException: 两个ID/code列表同时为空，或列表内存在空值
+        :raises NotFoundException: 列表内存在不存在或已软删的应用
+        :raises NoPermissionException: 任一归属人不在当前用户可删范围
+        :raises DataBaseStorageException: 任一应用存在引用关系
         """
         project_ids: Optional[List[int]] = project_in.project_ids
         project_codes: Optional[List[str]] = project_in.project_codes
@@ -396,11 +442,12 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         """
         根据条件分页查询应用列表。
 
-        :param search: Tortoise Q查询条件
+        :param search: Tortoise Q查询条件（归属过滤由视图层拼接）
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询或排序字段不被ORM支持
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -416,7 +463,10 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
             scope: Optional[DataScope] = None,
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
-        分页查询全部启用应用。
+        分页查询全部启用应用，供下拉/选择器使用。
+
+        返回项中的 project_mark 实际回填 project_code：前端历史字段沿用 mark 命名，
+        值为系统唯一标识代码，与库内用户填写的 project_mark 字段不是同一含义，不要混用。
 
         :param page: 页码
         :param page_size: 每页条数

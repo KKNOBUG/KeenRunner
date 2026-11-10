@@ -32,8 +32,18 @@ from backend.services import DataScope
 
 
 class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTestTagUpdate]):
+    """
+    标签CRUD：应用下的二级配置项，用例通过 case_tags(ID数组) 引用标签。
+
+    唯一口径：(tag_project, tag_mode, tag_name) 联合唯一，数据库索引不区分 state，
+    因此软删行同样占用组合；同组合的软删记录在写权限内复用复活。
+    父资源校验：创建时经 load_readable_project 确认所属应用对当前用户可读（B级）。
+    引用约束：物理/批量软删前须确认无用例标签数组引用，否则拒绝删除。
+    归属口径：以 created_user 为归属人。
+    """
 
     def __init__(self):
+        """绑定标签模型（krun_autotest_tag），供基类通用CRUD复用。"""
         super().__init__(model=AutoTestTagModel)
 
     async def get_by_id(self, tag_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestTagModel]:
@@ -44,6 +54,8 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 标签实例或None
+        :raises ParameterException: tag_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not tag_id:
             error_message: str = "查询标签信息失败, 参数[tag_id]不允许为空"
@@ -59,12 +71,17 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
     async def get_by_ids(self, tag_ids: List[int], on_error: bool = False, **kwargs) -> Union[bool, List[AutoTestTagModel]]:
         """
-        校验一批标签ID是否均存在；全部存在时返回实例列表。
+        根据主键ID列表批量查询标签；用于用例写入时校验标签存在与列表回显。
+
+        先只查一次主键判断缺失：有缺失且 on_error=False 时直接返回 False（而非空列表，
+        历史契约，调用方须按真值判断），全部存在才二次查询返回完整实例列表。
 
         :param tag_ids: 标签主键ID列表
-        :param on_error: 未找到时是否抛出异常
+        :param on_error: 存在缺失ID时是否抛出异常
         :param kwargs: 额外过滤条件
-        :return: 全部存在时返回标签列表；有缺失且on_error为False时返回False
+        :return: 全部存在时返回标签列表；存在缺失且on_error为False时返回False
+        :raises ParameterException: 列表为空或类型不是 list
+        :raises NotFoundException: on_error=True 且存在缺失ID
         """
         if not tag_ids:
             error_message: str = "查询标签信息失败, 参数[tag_ids]不允许为空"
@@ -93,6 +110,8 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         :param on_error: 未找到时是否抛出异常
         :param kwargs: 额外过滤条件
         :return: 标签实例或None
+        :raises ParameterException: tag_code 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not tag_code:
             error_message: str = "查询标签信息失败, 参数[tag_code]不允许为空"
@@ -108,11 +127,15 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
     async def create_tag(self, tag_in: AutoTestTagCreate, scope: DataScope) -> AutoTestTagModel:
         """
-        创建标签；同应用下同大类/名称活跃记录报错，软删记录在写权限内恢复并更新。
+        创建标签；同应用下同大类/名称的活跃记录报错，软删记录在写权限内恢复并更新。
 
         :param tag_in: 标签创建schema
         :param scope: 数据权限上下文，恢复软删标签时要求创建人允许当前用户写入
         :return: 创建或恢复后的标签实例
+        :raises NotFoundException: 所属应用不存在或已软删
+        :raises NoPermissionException: 应用归属不可见，或待恢复标签的创建人不在可写范围
+        :raises DataAlreadyExistsException: 同应用同大类同名的活跃标签已存在
+        :raises DataBaseStorageException: 落库失败（并发撞唯一索引或关联应用无效）
         """
         tag_mode: str = tag_in.tag_mode
         tag_name: str = tag_in.tag_name
@@ -120,7 +143,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
         # 业务层验证：应用必须存在且对当前用户可读(B级父资源校验)
         await load_readable_project(scope, tag_project)
-        # 业务层验证：同应用下相同大类及名称仅允许一条记录（含已禁用，命中则恢复启用）
+        # 业务层验证：同应用下相同大类及名称仅允许一条记录（唯一索引不区分state，含软删行；命中软删则恢复启用）
         tag_dict: Dict[str, Any] = tag_in.model_dump(exclude_none=True, exclude_unset=True)
         existing_tag = await self.model.filter(
             tag_project=tag_project,
@@ -168,9 +191,17 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         """
         更新标签，根据tag_id或tag_code定位并校验(tag_project, tag_mode, tag_name)唯一。
 
+        仅在入参触及三键时重做判重；与创建不同，这里的判重只比对非软删行，
+        只要目标组合还处于软删态就不算冲突。
+
         :param tag_in: 标签更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的标签
         :return: 更新后的标签实例
+        :raises ParameterException: tag_id 与 tag_code 同时为空（由 get_by_code 抛出）
+        :raises NotFoundException: 标签不存在或已软删
+        :raises NoPermissionException: 归属人不在当前用户可写范围
+        :raises DataAlreadyExistsException: 目标三键与另一条启用标签重复
+        :raises DataBaseStorageException: 落库失败（并发撞唯一索引或关联应用无效）
         """
         tag_id: Optional[int] = tag_in.tag_id
         tag_code: Optional[str] = tag_in.tag_code
@@ -228,12 +259,16 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
     async def delete_tag(self, scope: DataScope, tag_id: Optional[int] = None, tag_code: Optional[str] = None) -> AutoTestTagModel:
         """
-        物理删除标签；需无用例关联该标签。
+        物理删除标签；删除前校验无启用用例的标签数组引用该标签。
 
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
         :param tag_id: 标签主键ID，与tag_code二选一
         :param tag_code: 标签标识代码，与tag_id二选一
         :return: 删除后的标签实例快照
+        :raises ParameterException: 两个定位参数同时为空
+        :raises NotFoundException: 标签不存在或已软删
+        :raises NoPermissionException: 归属人不在当前用户可删范围
+        :raises DataAlreadyExistsException: 仍有启用用例引用该标签
         """
         if not tag_id and not tag_code:
             error_message: str = "删除标签信息失败, 参数[tag_id]或[tag_code]不允许为空"
@@ -262,11 +297,18 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
     async def delete_tags(self, tag_in: AutoTestTagDelete, scope: DataScope) -> int:
         """
-        根据ID或code列表批量软删除标签；逐条复用单删关联校验。
+        根据ID或code列表批量软删除标签；逐条复用单删的归属与引用校验。
+
+        先一次性批量定位，再逐条校验权限与引用，全部通过后才单次批量软删，
+        中途失败不会落库，具备全有或全无语义。
 
         :param tag_in: 标签删除schema
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
-        :return: 更新条数
+        :return: 实际软删条数
+        :raises ParameterException: 两个ID/code列表同时为空，或列表内存在空值
+        :raises NotFoundException: 列表内存在不存在或已软删的标签
+        :raises NoPermissionException: 任一归属人不在当前用户可删范围
+        :raises DataAlreadyExistsException: 任一标签仍被启用用例引用
         """
         tag_ids: Optional[List[int]] = tag_in.tag_ids
         tag_codes: Optional[List[str]] = tag_in.tag_codes
@@ -328,11 +370,12 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         """
         根据条件分页查询标签列表。
 
-        :param search: Tortoise Q查询条件
+        :param search: Tortoise Q查询条件（归属过滤由视图层拼接）
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询或排序字段不被ORM支持
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)

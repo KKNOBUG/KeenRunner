@@ -14,12 +14,19 @@ from backend.applications.autotest.schemas.autotest_step_schema import AutoTestS
 
 
 class StepTreeValidation:
-    """校验步骤树结构：无自循环引用，且仅允许特定类型包含子步骤。"""
+    """
+    步骤树结构校验：循环引用检测与子步骤挂载类型限制。
+
+    循环检测只沿祖先链判定（每个子节点复制visited/path），兄弟分支间复用同一step_id
+    不视为循环；quote_steps（引用的公共脚本）不在本校验范围。
+    """
 
     @classmethod
     def validate_step_tree_structure(cls, steps_data: List[AutoTestStepTreeUpdateItem]) -> Tuple[bool, Optional[str]]:
         """
         校验步骤树结构：无自循环引用，且仅有「循环结构」「条件分支」类型可包含子步骤。
+
+        递归覆盖children与branch_items.branch_children；branch_items仅允许出现在条件分支。
 
         :param steps_data: 根步骤列表(每项可为带children的树节点)
         :return: (True, None)表示通过；(False, str)表示失败及错误信息
@@ -31,17 +38,20 @@ class StepTreeValidation:
 
         def check_step_recursive(step: AutoTestStepTreeUpdateItem, visited_ids: Set[Any], path: List[Any]) -> Tuple[bool, Optional[str]]:
             """
-            递归校验单个步骤节点及其子步骤，检查自循环与子步骤类型合法性。
+            递归校验单个步骤节点及其子步骤。
+
+            visited_ids/path为当前祖先链快照（调用方对每个子节点传入副本），
+            因此只拦截祖先链上的重复step_id/step_code，不拦截兄弟分支复用。
 
             :param step: 当前步骤节点
-            :param visited_ids: 已访问step_id集合
-            :param path: 访问路径step_code列表
+            :param visited_ids: 当前祖先链上已访问的step_id集合
+            :param path: 当前祖先链的step_code列表
             :return: (True, None)表示通过；(False, str)表示失败及错误信息
             """
             step_id = step.step_id
             step_code = step.step_code
 
-            # 检查自循环引用
+            # 祖先链查重：step_id优先；step_code兼容尚未分配step_id的草稿节点
             if step_id and step_id in visited_ids:
                 return False, f"步骤(step_id={step_id}, step_code={step_code or 'N/A'})存在自循环引用"
             if step_code and step_code in path:
@@ -61,7 +71,7 @@ class StepTreeValidation:
                         f"step_type={step.step_type})不允许包含子步骤, 仅允许'循环结构'和'条件分支'类型的步骤包含子步骤"
                     )
 
-                # 递归检查子步骤
+                # 递归检查子步骤；副本保证循环判定仅沿各自的祖先链
                 for child in step.children:
                     child_is_valid, child_error_msg = check_step_recursive(child, visited_ids.copy(), path.copy())
                     if not child_is_valid:

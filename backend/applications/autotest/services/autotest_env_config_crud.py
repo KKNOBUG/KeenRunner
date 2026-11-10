@@ -40,18 +40,31 @@ from backend.services import DataScope
 
 
 class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConfigCreate, AutoTestEnvConfigUpdate]):
+    """
+    环境配置CRUD：一个环境绑定下的具体节点配置（app/file/database/redis）。
+
+    层级：应用 → 环境绑定(env_bind) → 环境配置(config_name, host/port/database_name)；
+    创建/更新时按 project+env_name+env_type 自动获取或创建绑定，请求体不直接写 env_bind_id。
+
+    唯一性：同绑定下 config_name 唯一，且 host+port(+database_name) 唯一。
+    引用约束：删除/软删前需确认无步骤按 config_name 引用（请求配置/数据库操作/Redis操作）。
+    归属口径：配置以 created_user 为归属人。
+    """
 
     def __init__(self):
+        """绑定环境配置模型，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestEnvConfigModel)
 
     async def get_by_id(self, config_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestEnvConfigModel]:
         """
         根据主键ID查询环境配置。
 
-        :param config_id: 配置主键
+        :param config_id: 配置主键，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 配置实例或None
+        :raises ParameterException: config_id 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not config_id:
             error_message: str = "查询配置信息失败, 参数[config_id]不允许为空"
@@ -68,10 +81,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         """
         根据配置标识代码查询环境配置。
 
-        :param config_code: 配置标识代码
+        :param config_code: 配置标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件
+        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
         :return: 配置实例或None
+        :raises ParameterException: config_code 为空
+        :raises NotFoundException: on_error=True 且记录不存在
         """
         if not config_code:
             error_message: str = "查询配置信息失败, 参数[config_code]不允许为空"
@@ -92,6 +107,11 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param config_in: 环境配置创建schema（project_id/env_name/env_type用于解析绑定，不落配置表）
         :param scope: 数据权限上下文，恢复软删配置时要求创建人允许当前用户写入
         :return: 配置ORM实例
+        :raises ParameterException: 环境名称为空
+        :raises NotFoundException: 所属应用/环境绑定不存在或已软删
+        :raises NoPermissionException: 应用或环境归属不在当前用户可操作范围
+        :raises DataAlreadyExistsException: 同绑定下已存在启用态同名配置，或 host/port 重复
+        :raises DataBaseStorageException: 落库失败（索引冲突或关联数据无效）
         """
         env_type = config_in.env_type
         project_id = int(config_in.project_id)
@@ -156,9 +176,17 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         """
         更新环境配置，根据config_id或config_code定位。
 
+        改名/改绑定都会重做唯一性校验（config_name 对比 state=0 行、host/port 对比全量配置）；
+        未传 env_name 时回查当前绑定对应的环境名，保证绑定解析路径与存量一致。
+
         :param config_in: 环境配置更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
         :return: 配置ORM实例
+        :raises ParameterException: 定位参数为空、所属应用/环境节点不匹配、环境名为空
+        :raises NotFoundException: 配置或关联环境绑定不存在
+        :raises NoPermissionException: 配置创建人或目标环境归属不在当前用户可操作范围
+        :raises DataAlreadyExistsException: 同绑定下重名或 host/port 重复
+        :raises DataBaseStorageException: 落库失败
         """
         config_id: Optional[int] = config_in.config_id
         config_code: Optional[str] = config_in.config_code
@@ -245,6 +273,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         同应用的配置合并扫描，单次取出步骤行后按配置名匹配，避免逐条查库。
 
         :param targets: 待删除的环境配置实例列表
+        :return: None
+        :raises NotFoundException: 配置关联的环境绑定已不存在
         :raises DataAlreadyExistsException: 任一配置被步骤引用时拒绝删除
         """
         if not targets:
@@ -295,6 +325,10 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param config_in: 删除入参
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境配置
         :return: 删除后的配置实例快照
+        :raises ParameterException: 环境节点类型不匹配
+        :raises NotFoundException: 配置或关联环境绑定不存在
+        :raises NoPermissionException: 配置创建人不在当前用户可删除范围
+        :raises DataAlreadyExistsException: 配置仍被步骤引用
         """
         instance = await self.get_by_id(config_id=config_in.config_id, on_error=True)
         bind = await AutoTestEnvBindModel.filter(id=instance.env_bind_id).first()
@@ -320,6 +354,10 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param config_in: 环境配置批量删除schema
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境配置
         :return: 更新条数
+        :raises ParameterException: 两个定位参数同时为空，或列表中包含空值
+        :raises NotFoundException: 任一目标配置不存在或已软删，或关联环境丢失
+        :raises NoPermissionException: 任一配置创建人不在当前用户可删除范围
+        :raises DataAlreadyExistsException: 任一配置仍被步骤引用
         """
         config_ids: Optional[List[int]] = config_in.config_ids
         config_codes: Optional[List[str]] = config_in.config_codes
@@ -379,6 +417,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param page_size: 每页条数
         :param order: 排序字段列表
         :return: (总条数, 当前页记录列表)
+        :raises ParameterException: 查询/排序字段不被ORM支持
         """
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
@@ -396,10 +435,14 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         """
         按应用ID列表查询未删除配置并分类。
 
+        返回结构固定包含传入的每个应用；已出现环境会预置全部节点类型的空桶，
+        使调用方（调试/执行取环境）无需做层级判空。无环境名称或未知节点类型的配置会被跳过并告警。
+
         :param project_ids: 应用ID列表
         :param config_names: 配置名称列表(可选)；非空时仅返回这些配置所在的环境及其配置
         :param scope: 数据权限上下文，传入时仅返回可见范围内的配置
         :return: project_id -> env_name -> api|file|database|redis -> config_name -> 主机信息
+        :raises ParameterException: project_ids 为空
         """
         if not project_ids:
             error_message: str = "按应用列表查询环境配置失败, 参数[project_ids]不允许为空"
@@ -481,6 +524,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         """
         未删除配置中config_name去重后的列表。
 
+        定位优先级：env_id 直接限定绑定；否则 project_id/env_type 经绑定表换算出绑定ID集合。
+
         :param project_id: 应用ID，经绑定表过滤
         :param env_id: 环境绑定主键
         :param env_type: 节点类型，经绑定表过滤
@@ -511,6 +556,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
     ) -> List[str]:
         """
         按应用/配置名称/节点类型查询符合的环境名称列表。
+
+        与 list_distinct_config_names 不同，这里经外键反向取环境名（env_bind__env_enum__env_name）。
 
         :param query_in: 指派配置环境查询入参(三条件均可选)
         :param scope: 数据权限上下文，传入时仅返回可见范围内的配置所对应的环境名称
@@ -578,6 +625,10 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param env_type: 节点类型(app/file/database/redis)
         :param created_user: 无登录上下文时的回落创建人；有登录上下文时由Scaffold覆盖
         :return: 环境绑定实例
+        :raises ParameterException: 环境名称为空
+        :raises NotFoundException: 应用不存在或已软删
+        :raises NoPermissionException: 应用/环境绑定归属不在当前用户可操作范围
+        :raises DataBaseStorageException: 绑定落库失败
         """
         name = (env_name or "").strip().upper()
         if not name:
@@ -604,11 +655,14 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         """
         校验同绑定下host/port(/database_name)唯一。
 
+        未传 host 时视为不限制（凭据型配置可能只有名称）；仅 DB 节点额外比较 database_name。
+
         :param env_bind_id: 环境绑定ID
         :param env_type: 节点类型（仅影响DB提示文案与database_name条件）
         :param mapped: 已映射的落库字段
         :param exclude_id: 更新时排除的配置ID
         :return: None
+        :raises DataAlreadyExistsException: 命中同 host/port(/database_name) 的启用态配置
         """
         host = mapped.get("config_host")
         if not host:
@@ -649,6 +703,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param page_size: 每页条数
         :param scope: 数据权限上下文，传入时仅返回可见范围内的配置（含凭据信息）
         :return: (总条数, 当前页列表)
+        :raises ParameterException: 查询异常，统一转为可读提示
         """
         try:
             env_crud = AutoTestEnvCrud()
@@ -716,6 +771,9 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param database_name: 数据库名称
         :param scope: 数据权限上下文，传入时要求配置创建人在可见范围内
         :return: 连接成功时的摘要信息
+        :raises NotFoundException: 环境绑定或配置不存在
+        :raises NoPermissionException: 配置创建人不在当前用户可见范围
+        :raises DataBaseStorageException: 连接池创建失败
         """
         env_row = await AutoTestEnvCrud().get_bind_by_env_name(
             project_id=project_id,
