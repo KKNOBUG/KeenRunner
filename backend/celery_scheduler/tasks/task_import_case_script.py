@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
+from backend.applications.autotest.dependencies import AutoTestServices, get_autotest_api_services
 from backend.applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from backend.celery_scheduler.celery_worker import celery
 from backend.common import AsyncEventLoopContextIOPool
