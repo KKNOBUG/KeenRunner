@@ -31,8 +31,16 @@ from backend.core.responses import (
 )
 
 
-# 当 FastAPI 在解析和验证请求数据时发现问题，会触发 RequestValidationError 异常
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError) -> BaseResponse:
+    """
+    将请求参数校验失败汇总为参数错误响应。
+
+    错误明细按字段路径与提示依次拼接，让前端能直接定位到出错字段。
+
+    :param request: 当前请求，处理器签名需要但本函数未使用
+    :param exc: Pydantic 请求校验异常，errors 提供字段位置与提示
+    :return: 参数错误响应，message 为拼接后的校验明细
+    """
     error_message: str = ""
     for error in exc.errors():
         error_message += ".".join(map(str, error.get("loc"))) + ":" + error.get("msg") + "; "
@@ -40,8 +48,16 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
     return ParameterResponse(message=error_message.strip())
 
 
-# 当 FastAPI 在解析和验证响应数据时发现问题，会触发 ResponseValidationError 异常
 async def response_validation_exception_handler(request: Request, exc: ResponseValidationError) -> BaseResponse:
+    """
+    将响应模型校验失败汇总为参数错误响应。
+
+    与请求校验使用同一拼接规则，便于区分是入参还是出参与响应模型不符。
+
+    :param request: 当前请求，处理器签名需要但本函数未使用
+    :param exc: Pydantic 响应校验异常，errors 提供字段位置与提示
+    :return: 参数错误响应，message 为拼接后的校验明细
+    """
     error_message: str = ""
     for error in exc.errors():
         error_message += ".".join(map(str, error.get("loc"))) + ":" + error.get("msg") + "; "
@@ -49,8 +65,18 @@ async def response_validation_exception_handler(request: Request, exc: ResponseV
     return ParameterResponse(message=error_message.strip())
 
 
-# 当发生 HTTP 相关的异常时，如 403 禁止访问、404 未找到等，会触发 HTTPException 异常
 async def http_exception_handler(request: Request, exc: HTTPException) -> BaseResponse:
+    """
+    将 Starlette HTTPException 映射为项目统一响应。
+
+    401 与 403 保留原始 detail；404、405、408、429 按请求方法或路径生成可读提示；
+    500、502、504 使用固定文案；其余状态码的 message 只暴露状态码。
+    403 分支会写入 request.state.audit_denied，供审计中间件统一落库。
+
+    :param request: 当前请求，提供方法、路径与审计标记的存放位置
+    :param exc: Starlette HTTP 异常，携带状态码与 detail
+    :return: 与状态码对应的统一响应
+    """
     if exc.status_code == status.HTTP_401_UNAUTHORIZED:
         return UnauthorizedResponse(
             http_status_code=status.HTTP_401_UNAUTHORIZED,
@@ -85,20 +111,35 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> BaseRe
         return GatewayTimeoutResponse()
 
     else:
-        # 仅回传状态码，避免 exc.detail 携带内部细节
+        # 未知状态码：message 只暴露状态码，detail 仍通过 data 透传，保持既有响应契约
         return FailureResponse(message=f"请求处理失败, 状态码: {exc.status_code}", data=exc.detail)
 
 
 async def no_permission_exception_handler(request: Request, exc: NoPermissionException) -> BaseResponse:
-    """业务层拒绝数据越权操作时统一返回403，避免被通用异常处理成500。"""
-    # 与接口权限拒绝同口径标记，由审计中间件统一落库
+    """
+    将业务层数据越权拒绝统一转为 403 响应。
+
+    与接口权限拒绝同口径标记 request.state.audit_denied，由审计中间件统一落库；
+    单独处理可避免该异常被通用兜底处理器转成 500。
+
+    :param request: 当前请求，用于写入审计拒绝标记
+    :param exc: 业务层越权异常，message 为可直接展示的中文提示
+    :return: 403 响应
+    """
     request.state.audit_denied = True
     return ForbiddenResponse(message=exc.message)
 
 
-# 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常
 async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> BaseResponse:
-    # ORM 原文含模型名与查询条件，只写日志；用户侧统一为可理解的业务提示
+    """
+    将 Tortoise 查询结果为空转为 404 响应。
+
+    ORM 原文包含模型名与查询条件，只写入日志；用户侧统一为可理解的业务提示。
+
+    :param request: 当前请求，用于日志记录请求方法与路径
+    :param exc: ORM 的 DoesNotExist 异常
+    :return: 404 响应
+    """
     error_message: str = "查询目标数据不存在或已被删除，请刷新后重试"
     LOGGER.error(
         f"{error_message}, "
@@ -108,9 +149,16 @@ async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> B
     return NotFoundResponse(message=error_message)
 
 
-# 当发生未被其他特定异常处理器处理的异常时，会触发此函数
 async def app_exception_handler(request: Request, exc: Exception) -> BaseResponse:
-    """未预期异常统一兜底：完整堆栈只写服务端日志，响应体不携带任何回溯内容。"""
+    """
+    未预期异常的最终兜底处理。
+
+    完整堆栈只写服务端日志，响应体不携带任何回溯内容与异常原文。
+
+    :param request: 当前请求，用于日志记录请求方法与路径
+    :param exc: 未被其他处理器匹配的异常
+    :return: 失败响应，提示用户稍后重试
+    """
     error_message: str = "服务器发生未知错误，请稍后重试，或点击右上角二维码加入答疑群"
     LOGGER.error(
         f"{error_message}, "

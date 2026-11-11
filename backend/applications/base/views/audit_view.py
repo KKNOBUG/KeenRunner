@@ -37,18 +37,21 @@ def _build_audit_search_q(
         apply_default_time_window: bool = True,
 ) -> Q:
     """
-    组装审计列表查询条件，偏向索引友好匹配。
+    组装审计列表查询条件。
 
-    :param username: 用户账号前缀
-    :param request_tags: 路由标签包含匹配
-    :param request_summary: 摘要包含匹配
-    :param request_method: 请求方式等值匹配
-    :param request_router: 路由前缀匹配
-    :param response_code: 响应代码等值匹配
-    :param start_time: 起始时间
-    :param end_time: 结束时间
-    :param apply_default_time_window: 未传时间时是否默认最近7天
-    :return: Tortoise Q查询条件
+    各筛选项按索引友好方式匹配：账号/路由前缀匹配，方法/响应码等值匹配；标签同时兼容
+    资源族 code 与历史中文标签；未显式传时间范围时默认只查最近 7 天。
+
+    :param username: 用户账号，前缀匹配
+    :param request_tags: 请求模块，资源族 code 或中文标签的包含匹配
+    :param request_summary: 请求接口，包含匹配
+    :param request_method: 请求方式，等值匹配（大小写不敏感）
+    :param request_router: 请求路由，前缀匹配
+    :param response_code: 响应代码，等值匹配
+    :param start_time: 起始时间，格式与 GLOBAL_CONFIG.DATETIME_FORMAT2 一致
+    :param end_time: 结束时间，格式同上
+    :param apply_default_time_window: 未传时间范围时是否默认只查最近 7 天
+    :return: Tortoise Q 查询条件
     """
     q = Q()
 
@@ -62,7 +65,7 @@ def _build_audit_search_q(
     end_time = (end_time or "").strip() or None
 
     if username:
-        # 前缀匹配可利用username索引；全模糊改为startswith
+        # 账号使用前缀匹配以命中 username 索引，不做全模糊查询
         q &= Q(username__startswith=username)
     if request_tags:
         # 新数据存资源族 code，历史数据存中文标签；两种口径同时匹配
@@ -80,7 +83,6 @@ def _build_audit_search_q(
         q &= Q(request_router__startswith=request_router)
     if response_code:
         q &= Q(response_code=response_code)
-
     if start_time and end_time:
         q &= Q(created_time__range=[start_time, end_time])
     elif start_time:
@@ -88,18 +90,23 @@ def _build_audit_search_q(
     elif end_time:
         q &= Q(created_time__lte=end_time)
     elif apply_default_time_window:
-        # 未传时间范围时默认只查最近N天，缩小扫描范围以命中created_time相关索引；
-        # 需要全量历史时显式传入足够大的start_time/end_time。
-        default_start = (datetime.now() - timedelta(days=7)).strftime(
-            GLOBAL_CONFIG.DATETIME_FORMAT2
-        )
+        # 未传时间范围时默认只查最近N天，缩小扫描范围以命中created_time相关索引；需要全量历史时显式传入足够大的start_time/end_time。
+        default_start = (datetime.now() - timedelta(days=7)).strftime(GLOBAL_CONFIG.DATETIME_FORMAT2)
         q &= Q(created_time__gte=default_start)
 
     return q
 
 
 async def _serialize_audit_list(audit_log_objs) -> list:
-    """列表序列化：显式排除大字段，并把资源族 code 映射为展示 label。"""
+    """
+    将审计日志模型批量序列化为列表字典。
+
+    显式排除请求/响应头与参数等大字段，避免列表响应体膨胀；同时把资源族 code
+    映射为展示用 label。
+
+    :param audit_log_objs: 审计日志模型列表
+    :return: 字典列表，主键字段为 audit_id，并补充 request_tags_label
+    """
     result = []
     for audit_log in audit_log_objs:
         data = await audit_log.to_dict(
@@ -132,21 +139,23 @@ async def list_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    查询日志列表。
+    按条件分页查询审计日志（Query 入参）。
+
+    未传时间范围时默认只查最近 7 天；结果不包含请求/响应头等大字段。
 
     :param page: 页码
     :param page_size: 每页条数
-    :param order: 排序字段
-    :param username: 用户名称
-    :param request_tags: 请求模块
-    :param request_summary: 请求接口
-    :param request_method: 请求方式
-    :param request_router: 请求路由
-    :param response_code: 响应代码
+    :param order: 排序字段，默认按创建时间倒序
+    :param username: 用户账号，前缀匹配
+    :param request_tags: 请求模块，支持资源族 code 或中文标签
+    :param request_summary: 请求接口，包含匹配
+    :param request_method: 请求方式，等值匹配
+    :param request_router: 请求路由，前缀匹配
+    :param response_code: 响应代码，等值匹配
     :param start_time: 开始时间
     :param end_time: 结束时间
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，成功时 data 为日志列表，total 为总条数
     """
     q = _build_audit_search_q(
         username=username,
@@ -179,11 +188,13 @@ async def search_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    查询日志列表。
+    按条件分页查询审计日志（Body 入参）。
+
+    与 Query 版本共用筛选规则；request_method 同时接受枚举与字符串。
 
     :param audit_in: 审计日志查询入参
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，成功时 data 为日志列表，total 为总条数
     """
     method_value = audit_in.request_method.value if hasattr(audit_in.request_method, "value") else audit_in.request_method
     q = _build_audit_search_q(
@@ -220,11 +231,13 @@ async def get_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据id查询审计日志。
+    根据 ID 查询单条审计日志详情。
 
-    :param audit_id: 审计日志ID
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    详情包含请求/响应头等完整字段，并补充 request_tags_label；记录不存在时返回 404。
+
+    :param audit_id: 审计日志 ID
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，成功时 data 为日志详情，主键字段为 audit_id
     """
     try:
         instance = await audit_crud.get_by_id(audit_id=audit_id)
@@ -254,16 +267,18 @@ async def get_audit_by_user(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    获取指定用户的审计日志（默认最近若干天，可按时间范围扩大）。
+    分页查询指定用户的审计日志。
 
-    :param user_id: 用户ID
+    未传时间范围时默认只查最近 7 天，需要更早数据时显式传 start_time 与 end_time。
+
+    :param user_id: 用户 ID
     :param page: 页码
     :param page_size: 每页条数
-    :param order: 排序字段
+    :param order: 排序字段，默认按创建时间倒序
     :param start_time: 开始时间
     :param end_time: 结束时间
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，成功时 data 为日志列表，total 为总条数
     """
     try:
         q = Q(user_id=user_id) & _build_audit_search_q(
@@ -293,12 +308,12 @@ async def get_recent_audits(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据条件获取最近审计日志。
+    获取最近若干条审计日志（按创建时间倒序）。
 
-    :param limit: 返回数量
-    :param user_id: 用户ID
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param limit: 返回条数上限，范围 1～100
+    :param user_id: 用户 ID，不传则查询全部用户
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，成功时 data 为日志列表，total 为实际返回条数
     """
     try:
         audit_logs = await audit_crud.get_recent_audits(limit=limit, user_id=user_id)
@@ -320,11 +335,11 @@ async def get_audit_statistics(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    获取指定用户的审计日志统计信息。
+    统计指定用户的审计日志分布。
 
-    :param user_id: 用户ID
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param user_id: 用户 ID
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，data 含 total_count、method_statistics 与 code_statistics
     """
     try:
         data = await audit_crud.get_statistics_by_user(user_id=user_id)
@@ -345,11 +360,11 @@ async def delete_audit(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据id删除审计日志。
+    根据 ID 删除单条审计日志（物理删除）。
 
-    :param audit_id: 审计日志ID
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param audit_id: 审计日志 ID
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，成功时 data 为被删除的日志，主键字段为 audit_id
     """
     try:
         instance = await audit_crud.delete_by_id(audit_id=audit_id)
@@ -373,11 +388,11 @@ async def batch_delete_audits(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    根据id列表删除审计日志。
+    根据 ID 列表批量删除审计日志（物理删除）。
 
-    :param body_in: 审计日志批量删除入参
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param body_in: 批量删除入参，audit_ids 为空时不执行删除
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，data 中 affected 为实际删除条数，total 同值
     """
     try:
         count = await audit_crud.delete_by_ids(body_in.audit_ids)
@@ -398,11 +413,11 @@ async def delete_audits_by_user(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    删除指定用户的所有审计日志。
+    删除指定用户的全部审计日志（物理删除）。
 
-    :param user_id: 用户ID
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param user_id: 用户 ID
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，data 中 affected 为实际删除条数
     """
     try:
         count = await audit_crud.delete_by_user_id(user_id=user_id)
@@ -424,12 +439,12 @@ async def delete_audits_by_time(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    删除指定时间范围内的审计日志。
+    删除指定时间范围内的审计日志（物理删除）。
 
     :param start_time: 开始时间
     :param end_time: 结束时间
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，data 中 deleted 为实际删除条数
     """
     try:
         count = await audit_crud.delete_by_time_range(start_time=start_time, end_time=end_time)
@@ -449,10 +464,10 @@ async def clear_all_audits(
         audit_crud: AuditCrud = Depends(get_audit_crud),
 ):
     """
-    清空所有审计日志（危险操作）。
+    清空全部审计日志（危险操作，物理删除）。
 
-    :param audit_crud: 审计日志CRUD服务
-    :return: 统一HTTP响应
+    :param audit_crud: 审计日志 CRUD 服务
+    :return: 统一响应，data 中 affected 为删除前的记录总数
     """
     try:
         count = await audit_crud.clear_all()

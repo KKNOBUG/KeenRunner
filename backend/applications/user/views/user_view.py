@@ -54,7 +54,7 @@ from backend.enums import BuiltinRoleCode
 from backend.services import CTX_USER_ID, AuthControl, create_access_token, verify_password
 from backend.services.dependency import load_request_roles
 
-# 公开端点：登录不要求令牌
+# 公开端点：登录与幂等登出不要求令牌（登出由中间件执行可选认证）
 user_public = APIRouter()
 
 # 仅认证端点：当前登录用户自身操作，不做 RBAC 鉴权
@@ -72,9 +72,11 @@ async def create_user(
     """
     新增用户。
 
-    :param user_in: 用户入参
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    账号、手机号、邮箱均受唯一约束；密码仅入库，不随响应返回。
+
+    :param user_in: 用户入参（账号、密码、姓名、部门、角色等）
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，成功时 data 为新增后的用户信息，不含密码，主键字段为 user_id
     """
     try:
         instance = await user_crud.create_user(user_in=user_in)
@@ -88,7 +90,7 @@ async def create_user(
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except IntegrityError:
-        # 用户账号、手机号、邮箱均为唯一列, 冲突只可能是重复或并发新增
+        # 用户账号、手机号、邮箱均为唯一列，冲突只可能是重复或并发新增
         error_message: str = "新增失败, 用户已存在"
         LOGGER.error(
             f"{error_message}, "
@@ -112,11 +114,13 @@ async def delete_user(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    删除用户。
+    根据 ID 删除用户（软删除）。
 
-    :param user_id: 用户ID
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    删除同时递增 token_version，使该用户已签发的令牌立即失效。
+
+    :param user_id: 用户 ID
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，成功时 data 为删除后的用户信息，不含密码，主键字段为 user_id
     """
     try:
         instance = await user_crud.delete_user(user_id)
@@ -145,11 +149,13 @@ async def batch_delete_users(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    根据id列表删除用户。
+    根据 ID 列表批量删除用户（软删除）。
 
-    :param user_in: 用户入参
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    不存在的用户会被跳过，响应返回实际删除成功的 ID 列表。
+
+    :param user_in: 批量删除入参，user_ids 为空时不执行删除
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，data 中 deleted 为实际删除的 ID 列表，total 为条数
     """
     try:
         deleted_ids = await user_crud.delete_users(user_in=user_in)
@@ -171,11 +177,13 @@ async def update_user(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    更新用户。
+    根据 ID 更新用户。
 
-    :param user_in: 用户入参
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    仅在入参显式传入 role_ids 时同步角色绑定，更新与绑定在同一事务内完成。
+
+    :param user_in: 用户入参，user_id 指定待更新用户
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，成功时 data 为更新后的用户信息，不含密码，主键字段为 user_id
     """
     try:
         async with in_transaction():
@@ -221,12 +229,14 @@ async def get_user(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    查询用户信息。
+    根据 ID 查询用户详情。
 
-    :param user_id: 用户ID
-    :param user_crud: 用户CRUD服务
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    仅查询未删除用户；部门引用失效时降级为空对象，不影响详情返回。
+
+    :param user_id: 用户 ID
+    :param user_crud: 用户 CRUD 服务
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，成功时 data 为用户详情，含 roles 与 dept，主键字段为 user_id
     """
     try:
         instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
@@ -262,11 +272,11 @@ async def get_user_by_username(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    查询用户信息。
+    根据账号查询用户。
 
     :param username: 用户账号
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，成功时 data 为用户信息，不含密码，主键字段为 user_id
     """
     try:
         instance = await user_crud.get_by_username(username=username)
@@ -289,11 +299,11 @@ async def _attach_departments(data: List[dict], dept_crud: DepartmentCrud) -> No
     批量为用户列表挂载部门信息。
 
     一次查询全部部门，避免逐条查库造成 N+1；脏 dept_id 降级为空对象，
-    保证单条坏数据不会让整张用户表返回 999999。
+    保证单条坏数据不会让整张用户表返回失败。
 
-    :param data: 用户列表字典（就地修改）
-    :param dept_crud: 部门CRUD服务
-    :return: None
+    :param data: 用户字典列表，就地写入 dept 并移除 dept_id
+    :param dept_crud: 部门 CRUD 服务
+    :return: 无返回值，就地修改 data
     """
     dept_ids = {item.get("dept_id") for item in data if item.get("dept_id")}
     dept_map: dict = {}
@@ -323,23 +333,26 @@ async def search_users(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    查询用户列表。
+    按条件分页查询用户列表（Query 入参）。
+
+    username、alias、email 与 phone 为包含匹配；state 不传时
+    默认只查未删除（state=0）用户。
 
     :param page: 页码
     :param page_size: 每页条数
     :param order: 排序字段
     :param username: 用户账号
-    :param alias: 查询参数
-    :param email: 查询参数
-    :param phone: 查询参数
-    :param gender: 查询参数
-    :param user_type: 查询参数
-    :param state: 状态(0:启用, 1:禁用)
-    :param is_superuser: 查询参数
-    :param dept_id: 主键 ID
-    :param user_crud: 用户CRUD服务
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    :param alias: 用户姓名
+    :param email: 邮箱地址
+    :param phone: 用户电话
+    :param gender: 用户性别：0 未知、1 男、2 女
+    :param user_type: 用户类型
+    :param state: 状态（0 启用、1 禁用）
+    :param is_superuser: 是否为超级管理员
+    :param dept_id: 部门 ID
+    :param user_crud: 用户 CRUD 服务
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，成功时 data 为用户列表，含 roles 与 dept，不含密码，total 为总条数
     """
     try:
         q = Q()
@@ -397,12 +410,15 @@ async def list_users(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    查询用户列表。
+    按条件分页查询用户列表（Body 入参）。
 
-    :param user_in: 用户入参
-    :param user_crud: 用户CRUD服务
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    比 Query 版本多支持签名、住址、紧急联系人等字段；state 不传时
+    默认只查未删除（state=0）用户。
+
+    :param user_in: 用户查询入参
+    :param user_crud: 用户 CRUD 服务
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，成功时 data 为用户列表，含 roles 与 dept，不含密码，total 为总条数
     """
     try:
         q = Q()
@@ -467,11 +483,13 @@ async def update_user_password(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    修改密码。
+    修改当前登录用户的密码。
 
-    :param req_in: 修改密码入参
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    先校验旧密码，再更新密码并递增 token_version，使已签发令牌全部失效。
+
+    :param req_in: 修改密码入参（旧密码、新密码）
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，成功时 data 为更新后的用户信息，不含密码
     """
     try:
         user_id = CTX_USER_ID.get()
@@ -502,11 +520,13 @@ async def reset_password(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    重置密码。
+    管理员重置指定用户的密码。
 
-    :param user_id: 用户ID
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    密码重置为服务层默认值并递增 token_version；目标为超级用户时由服务层拒绝。
+
+    :param user_id: 用户 ID
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，data 为重置后的账号信息，不含 id 与密码
     """
     try:
         data = await user_crud.reset_password(user_id)
@@ -530,11 +550,14 @@ async def logout(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    用户登出；有效Token吊销全部会话，失效或无Token仅返回幂等成功，不修改用户数据。
+    注销当前用户的全部会话。
 
-    :param request: 当前请求，可选认证成功后由中间件写入current_user
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    令牌有效时递增 token_version 使全部会话失效；无令牌或令牌已过期时
+    直接返回幂等成功，不修改用户数据。
+
+    :param request: 当前请求，可选认证结果由中间件写入 request.state.current_user
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，令牌失效时 data 为空对象
     """
     current_user: Optional[User] = getattr(request.state, "current_user", None)
     if current_user is None:
@@ -563,11 +586,13 @@ async def login(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    验证用户密码和状态并生成令牌。
+    校验账号密码与状态并签发访问令牌。
 
-    :param credentials: 登录凭证入参
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    账号不存在与密码错误统一返回 401，避免账号枚举；登录成功会刷新最后登录时间。
+
+    :param credentials: 登录凭证（账号、密码）
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，成功时 data 为 JWTOut，含令牌与用户公开信息
     """
     try:
         try:
@@ -610,7 +635,7 @@ async def login(
         )
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception:
-        # 原始异常与口令信息只进日志, 对外统一为可重试提示
+        # 原始异常与口令信息只进日志，对外统一为可重试提示
         error_message: str = "登录失败，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
@@ -626,14 +651,14 @@ async def transfer_login(
         user_crud: UserCrud = Depends(get_user_crud),
 ):
     """
-    第三方平台用户迁移登录：本地账号不存在时按第三方平台校验并接纳为新用户后生成令牌。
+    第三方迁移登录。
 
-    与 /user/login 的差异仅在于账号不存在分支：校验第三方账号真实性并自动注册，
-    其余口令/状态校验与令牌签发逻辑与原接口一致。
+    本地账号不存在时按第三方平台校验并自动注册新用户，其余口令与状态校验
+    与 /login 一致。
 
-    :param credentials: 登录凭证入参
-    :param user_crud: 用户CRUD服务
-    :return: 统一HTTP响应
+    :param credentials: 登录凭证（账号、密码）
+    :param user_crud: 用户 CRUD 服务
+    :return: 统一响应，成功时 data 为 JWTOut，含令牌与用户公开信息
     """
     try:
         try:
@@ -681,7 +706,7 @@ async def transfer_login(
         )
         return SuccessResponse(message="登录成功", data=data.model_dump())
     except Exception:
-        # 原始异常与口令信息只进日志, 对外统一为可重试提示
+        # 原始异常与口令信息只进日志，对外统一为可重试提示
         error_message: str = "登录失败，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
@@ -698,11 +723,14 @@ async def get_user_info(
         current_user: User = Depends(AuthControl.is_authed),
 ):
     """
-    查看当前用户信息。
+    查询当前登录用户信息。
+
+    复用认证链路已加载的用户对象与请求级角色缓存，避免重复查库；is_admin
+    表示超管或管理员角色，前端据此放开行级删除等归属限制。
 
     :param request: 当前请求，用于复用请求级角色缓存
-    :param current_user: 已认证用户，认证链路已查库并缓存，避免重复查询
-    :return: 统一HTTP响应
+    :param current_user: 已认证用户
+    :return: 统一响应，data 为用户信息，不含密码，并附加 is_admin
     """
     try:
         data = await current_user.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
@@ -727,9 +755,12 @@ async def get_user_info(
 @user_self.post("/menu/list", summary="查询当前用户菜单", description="查询当前登录用户的菜单信息")
 async def get_user_menu():
     """
-    查看当前用户菜单。
+    查询当前登录用户可见的菜单树。
 
-    :return: 统一HTTP响应
+    超管与管理员角色直接返回全量菜单；其他角色按角色菜单绑定去重后组装，
+    仅保留 parent_id 为 0 的顶级节点及其子节点。
+
+    :return: 统一响应，data 为菜单树，节点主键字段为 menu_id
     """
     try:
         user_id = CTX_USER_ID.get()
@@ -771,9 +802,12 @@ async def get_user_menu():
 @user_self.post("/get_user_routers", summary="查询当前用户路由", description="查询当前登录用户的路由权限")
 async def get_user_routers():
     """
-    查看当前用户路由权限键。
+    查询当前登录用户可访问的接口权限键。
 
-    :return: 统一HTTP响应
+    超管与管理员角色返回全量接口；其他角色按角色接口绑定去重。权限键为
+    方法小写加路由路径，前端据此生成按钮权限。
+
+    :return: 统一响应，data 为排序后的权限键列表
     """
     try:
         user_id = CTX_USER_ID.get()

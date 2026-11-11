@@ -34,10 +34,12 @@ menu = APIRouter()
 
 def _norm_menu_type(v) -> str:
     """
-    规范化菜单类型值。
+    将菜单类型统一归一为字符串。
 
-    :param v: 原始菜单类型（可为枚举、字符串或None）
-    :return: 规范化后的菜单类型字符串
+    兼容枚举取 value、字符串与 None（归一为空串），使筛选时可以直接比较。
+
+    :param v: 原始菜单类型
+    :return: 归一后的菜单类型字符串
     """
     if v is None:
         return ""
@@ -48,12 +50,14 @@ def _norm_menu_type(v) -> str:
 
 def _filter_menu_tree(nodes: list, *, name_kw: str, type_kw: str) -> list:
     """
-    根据名称子串、类型筛选菜单树：节点自身命中或子树有命中则保留。
+    根据名称子串与类型筛选菜单树。
 
-    :param nodes: 菜单树节点列表
-    :param name_kw: 菜单名称关键字
-    :param type_kw: 菜单类型关键字
-    :return: 筛选后的菜单树
+    节点自身命中或子树命中均保留，保证命中节点的祖先链路完整；无筛选条件时原样返回。
+
+    :param nodes: 菜单树节点列表，每项含 children
+    :param name_kw: 菜单名称关键字，空串表示不筛选
+    :param type_kw: 菜单类型关键字，空串表示不筛选
+    :return: 筛选后的菜单树，节点结构保持不变
     """
     if not name_kw and not type_kw:
         return nodes
@@ -83,9 +87,9 @@ async def create_menu(
     """
     新增菜单。
 
-    :param menu_in: 菜单入参
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
+    :param menu_in: 菜单入参（名称、类型、路径、组件、父级等）
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一响应，成功时 data 为新增后的菜单信息，主键字段为 menu_id，total 为 1
     """
     try:
         instance = await menu_crud.create_menu(menu_in=menu_in)
@@ -110,11 +114,13 @@ async def delete_menu(
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """
-    删除菜单。
+    根据 ID 删除菜单。
 
-    :param id: 菜单ID
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
+    存在子菜单时拒绝删除，避免产生孤儿节点。
+
+    :param id: 菜单 ID
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一响应，成功时 data 为被删除的菜单信息，主键字段为 menu_id，total 为 1
     """
     try:
         # 子菜单预检同样纳入 try，避免查询报错时游离于统一异常处理与日志之外
@@ -144,11 +150,11 @@ async def update_menu(
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """
-    更新菜单。
+    根据 ID 更新菜单。
 
-    :param menu_in: 菜单入参
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
+    :param menu_in: 菜单入参，id 指定待更新记录
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一响应，成功时 data 为更新后的菜单信息，主键字段为 menu_id，total 为 1
     """
     try:
         instance = await menu_crud.update_menu(menu_in=menu_in)
@@ -177,20 +183,23 @@ async def list_menu(
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """
-    查看菜单列表。
+    查询菜单树。
 
-    :param name: 菜单名称（子串匹配）
-    :param menu_type: 菜单类型
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
+    从顶级菜单递归装配 children，再可选地按名称子串与菜单类型筛选；结果中
+    total 为筛选后的顶级节点数。
+
+    :param name: 菜单名称，子串匹配
+    :param menu_type: 菜单类型（catalog/menu），等值匹配
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一响应，成功时 data 为菜单树，节点主键字段为 menu_id
     """
 
     async def get_menu_with_children(menu_id: int):
         """
         递归获取菜单及其子菜单。
 
-        :param menu_id: 菜单ID
-        :return: 含 children 的菜单字典，或未找到时的响应
+        :param menu_id: 菜单 ID
+        :return: 含 children 的菜单字典；记录缺失时返回 NotFoundResponse，由调用方过滤
         """
         menu = await menu_crud.get_by_id(menu_id=menu_id, on_error=False)
         if not menu:
@@ -204,6 +213,7 @@ async def list_menu(
     try:
         parent_menus = await menu_crud.model.filter(parent_id=0).order_by("order")
         res_menu = [await get_menu_with_children(menu.id) for menu in parent_menus]
+        # 过滤掉记录缺失时返回的 NotFoundResponse，只保留真实菜单节点
         res_menu = [m for m in res_menu if isinstance(m, dict)]
         nk = name.strip() if name else ""
         tk = menu_type.strip() if menu_type else ""
@@ -226,11 +236,11 @@ async def get_menu(
         menu_crud: MenuCrud = Depends(get_menu_crud),
 ):
     """
-    查看菜单。
+    根据 ID 查询单条菜单。
 
-    :param menu_id: 菜单ID
-    :param menu_crud: 菜单CRUD服务
-    :return: 统一HTTP响应
+    :param menu_id: 菜单 ID
+    :param menu_crud: 菜单 CRUD 服务
+    :return: 统一响应，成功时 data 为菜单对象序列化结果，主键字段为 id，total 为 1
     """
     try:
         result = await menu_crud.get_by_id(menu_id=menu_id, on_error=True)

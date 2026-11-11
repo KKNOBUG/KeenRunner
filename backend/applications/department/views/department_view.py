@@ -35,6 +35,7 @@ from backend.core.responses import (
     ParameterResponse,
 )
 
+# 部门管理端点：最终挂载在 /dept，属 RBAC 权限端点
 dept = APIRouter()
 
 
@@ -44,11 +45,13 @@ async def create_department(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    新增部门信息。
+    新增部门。
 
-    :param department_in: 部门入参
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    部门代码与名称组合受唯一约束；parent_id 为上级部门 ID，0 表示顶级。
+
+    :param department_in: 部门入参（代码、名称、父级、排序等）
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，成功时 data 为新增后的部门信息，主键字段为 dept_id，total 为 1
     """
     try:
         instance = await dept_crud.create_department(department_in=department_in)
@@ -74,11 +77,13 @@ async def delete_department(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    删除部门信息。
+    根据 ID 删除部门（物理删除）。
+
+    存在子部门或被在用用户引用时由服务层拒绝；部门记录与闭包表关系在同一事务内清理。
 
     :param department_id: 部门 ID
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，成功时 data 为被删除的部门信息，主键字段为 dept_id，total 为 1
     """
     try:
         instance = await dept_crud.delete_department(department_id)
@@ -104,11 +109,13 @@ async def batch_delete_departments(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    批量删除部门。
+    根据 ID 列表批量删除部门（软删除）。
 
-    :param department_in: 批量删除入参
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    与单删同样校验引用关系，存在子部门或在用用户时整批拒绝；不存在的 ID 会被跳过。
+
+    :param department_in: 批量删除入参，department_ids 为空时不执行删除
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，data 中 deleted 为实际删除的 ID 列表，total 为条数
     """
     try:
         deleted_ids = await dept_crud.delete_departments(department_in=department_in)
@@ -134,11 +141,13 @@ async def update_department(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    更新部门信息。
+    根据 ID 更新部门。
 
-    :param department_in: 部门入参
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    允许变更上级部门并重建闭包表；含子部门的顶级部门不能改为子部门。
+
+    :param department_in: 部门入参，id 指定待更新部门
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，成功时 data 为更新后的部门信息，主键字段为 dept_id，total 为 1
     """
     try:
         instance = await dept_crud.update_department(department_in=department_in)
@@ -168,11 +177,11 @@ async def get_department(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    查询部门信息。
+    根据 ID 查询部门。
 
-    :param department_id: 部门ID
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    :param department_id: 部门 ID
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，成功时 data 为部门信息，主键字段为 dept_id，total 为 1
     """
     try:
         instance = await dept_crud.get_or_none(id=department_id)
@@ -197,11 +206,13 @@ async def list_departments(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    查询部门列表。
+    查询部门树。
 
-    :param name: 部门名称
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    始终只包含未删除部门；传入名称时先按名称模糊过滤再建树。
+
+    :param name: 部门名称，包含匹配；不传则返回全量
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，data 为顶级部门节点列表，节点含 children，主键字段为 dept_id，total 为顶级节点数
     """
     try:
         dept_tree = await dept_crud.get_dept_tree(name)
@@ -222,11 +233,13 @@ async def search_departments(
         dept_crud: DepartmentCrud = Depends(get_dept_crud),
 ):
     """
-    查询部门列表。
+    按条件分页查询部门列表（Body 入参）。
 
-    :param department_in: 部门入参
-    :param dept_crud: 部门CRUD服务
-    :return: 统一HTTP响应
+    code、name 与 description 为包含匹配，固定只查未删除部门；返回平铺列表而非树。
+
+    :param department_in: 部门查询入参
+    :param dept_crud: 部门 CRUD 服务
+    :return: 统一响应，data 为部门列表，主键字段为 dept_id，total 为总条数
     """
     try:
         page = department_in.page

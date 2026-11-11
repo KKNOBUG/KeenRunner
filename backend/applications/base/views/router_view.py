@@ -35,11 +35,11 @@ async def create_router(
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
-    新增路由信息。
+    新增路由。
 
-    :param router_in: 路由入参
-    :param router_crud: 路由CRUD服务
-    :return: 统一HTTP响应
+    :param router_in: 路由入参（路径、方法、摘要、标签）
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一响应，成功时 data 为新增后的路由信息，主键字段为 router_id，total 为 1
     """
     try:
         instance = await router_crud.create_router(router_in=router_in)
@@ -63,11 +63,11 @@ async def delete_router(
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
-    删除路由信息。
+    根据 ID 删除路由。
 
-    :param router_id: 路由ID
-    :param router_crud: 路由CRUD服务
-    :return: 统一HTTP响应
+    :param router_id: 路由 ID
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一响应，成功时 data 为被删除的路由信息，主键字段为 router_id，total 为 1
     """
     try:
         instance = await router_crud.delete_router(router_id)
@@ -91,11 +91,11 @@ async def update_router(
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
-    更新路由信息。
+    根据 ID 更新路由。
 
-    :param router_in: 路由入参
-    :param router_crud: 路由CRUD服务
-    :return: 统一HTTP响应
+    :param router_in: 路由入参，id 指定待更新记录
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一响应，成功时 data 为更新后的路由信息，主键字段为 router_id，total 为 1
     """
     try:
         instance = await router_crud.update_router(router_in)
@@ -123,11 +123,11 @@ async def get_router(
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
-    查询路由信息。
+    根据 ID 查询单条路由。
 
-    :param router_id: 路由ID
-    :param router_crud: 路由CRUD服务
-    :return: 统一HTTP响应
+    :param router_id: 路由 ID，未传时按空 ID 查询，由查询结果决定是否返回 404
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一响应，成功时 data 为路由信息，主键字段为 router_id，total 为 1
     """
     try:
         instance = await router_crud.get_or_none(id=router_id)
@@ -152,11 +152,13 @@ async def get_routers(
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
-    查询路由列表。
+    按条件分页查询路由列表（Body 入参）。
 
-    :param router_in: 路由查询入参
-    :param router_crud: 路由CRUD服务
-    :return: 统一HTTP响应
+    path、summary 与 tags 为包含匹配；method 为枚举字段，仅支持等值匹配。
+
+    :param router_in: 路由查询入参，含分页、排序与筛选条件
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一响应，成功时 data 为路由列表，主键字段为 router_id，total 为总条数
     """
     try:
         page = router_in.page
@@ -170,7 +172,7 @@ async def get_routers(
         q = Q()
         if path:
             q &= Q(path__contains=path)
-        # method为CharEnumField(HTTPMethod)，仅支持等值匹配，不支持contains
+        # method 为 CharEnumField(HTTPMethod)，仅支持等值匹配，不支持 contains
         if method:
             method_value = method.value if hasattr(method, "value") else method
             q &= Q(method=method_value)
@@ -204,7 +206,9 @@ async def list_router(
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
-    查询路由列表。
+    按条件分页查询路由列表（Query 入参）。
+
+    path、summary 与 tags 为包含匹配，不提供方法筛选。
 
     :param page: 页码
     :param page_size: 每页条数
@@ -212,8 +216,8 @@ async def list_router(
     :param path: 路由请求路径
     :param summary: 路由作用简介
     :param tags: 路由所属标签
-    :param router_crud: 路由CRUD服务
-    :return: 统一HTTP响应
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一响应，成功时 data 为路由列表，主键字段为 router_id，total 为总条数
     """
     try:
         q = Q()
@@ -249,11 +253,14 @@ async def refresh_router(
         router_crud: RouterCrud = Depends(get_router_crud),
 ):
     """
-    刷新路由列表。
+    刷新路由列表（仅管理员可调用）。
 
-    :param request: HTTP 请求对象
-    :param router_crud: 路由CRUD服务
-    :return: 统一HTTP响应
+    重新扫描 FastAPI 应用路由，只收录需要 RBAC 的接口：删除废弃项并清理角色绑定，
+    新增或更新现有项，最后按权限规则为内置角色补绑路由。
+
+    :param request: HTTP 请求对象，用于获取 FastAPI 应用实例
+    :param router_crud: 路由 CRUD 服务
+    :return: 统一响应，成功时 data 为同步后的全部路由列表，total 为其条数
     """
     try:
         app = request.app
