@@ -62,12 +62,22 @@ async def upload_file(
         )
 
         if not state:
-            LOGGER.error(f"上传文件失败，异常描述: {detail}")
-            return FailureResponse(message=f"上传失败，异常描述: {detail}")
+            # detail 由 FileTransfer 返回，可能携带原始异常，只能进日志
+            error_message: str = "上传文件失败，请检查文件名称、格式与大小是否符合要求后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [filename={file.filename}, destination={path}, 失败原因={detail}]"
+            )
+            return FailureResponse(message=error_message)
         return SuccessResponse(message="上传成功", data=detail)
-    except Exception as e:
-        LOGGER.error(f"上传文件失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"上传失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "上传文件失败，暂时无法完成上传，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [filename={file.filename}, destination={path}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @file_transfer.post("/download", summary="下载文件", description="根据路径下载文件")
@@ -104,10 +114,18 @@ async def read_file(path: Union[str, Path] = Form(..., description="文件读取
             content: str = fp.read()
         return SuccessResponse(data=content, message="文件读取成功")
     except FileNotFoundError:
-        return NotFoundResponse(message=f"文件:{filepath}未找到")
-    except Exception as e:
-        LOGGER.error(f"读取文件失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"读取失败，异常描述: {e}", data={"error": str(e)})
+        # 绝对路径只写日志，避免把服务器目录结构返回给用户
+        error_message: str = "读取文件失败，文件不存在或已被删除，请确认文件路径后重试"
+        LOGGER.warning(f"{error_message}, 关键字段: [filepath={filepath}]")
+        return NotFoundResponse(message=error_message)
+    except Exception:
+        error_message: str = "读取文件失败，暂时无法读取文件内容，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [filepath={filepath}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @file_transfer.post("/move", summary="更新文件位置", description="根据路径移动文件位置")
@@ -127,6 +145,11 @@ async def move_file(
     try:
         state: bool = FileUtils.move_directory(src_file_path, dst_file_path)
         return SuccessResponse(message="文件移动成功", data={"src_path": src_file_path, "dst_path": dst_file_path, "state": state})
-    except Exception as e:
-        LOGGER.error(f"移动文件失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"移动失败，异常描述: {e}", data={"error": str(e)})
+    except Exception:
+        error_message: str = "移动文件失败，请确认源文件是否存在、目标路径是否可用后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [src_path={src_file_path}, dst_path={dst_file_path}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)

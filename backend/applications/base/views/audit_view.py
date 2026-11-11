@@ -163,9 +163,14 @@ async def list_audit(
         total, audit_log_objs = await audit_crud.list_audit(page=page, page_size=page_size, order=order, search=q)
         data = await _serialize_audit_list(audit_log_objs)
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"根据条件分页查询日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询审计日志失败，暂时无法获取日志数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [page={page}, page_size={page_size}, username={username}, request_router={request_router}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.post("/search", summary="查询日志列表(Body)", description="根据条件分页查询日志信息(Body)")
@@ -198,9 +203,15 @@ async def search_audit(
         )
         data = await _serialize_audit_list(audit_log_objs)
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"根据条件分页查询日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询审计日志失败，暂时无法获取日志数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [page={audit_in.page}, page_size={audit_in.page_size}, "
+            f"username={audit_in.username}, request_router={audit_in.request_router}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.get("/get", summary="查询日志", description="根据id查询日志信息")
@@ -222,9 +233,14 @@ async def get_audit(
         return SuccessResponse(message="查询成功", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id查询日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询审计日志详情失败，暂时无法获取该条日志，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [audit_id={audit_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.get("/by_user", summary="查询用户日志", description="根据用户id分页查询日志信息")
@@ -260,9 +276,14 @@ async def get_audit_by_user(
         )
         data = await _serialize_audit_list(audit_log_objs)
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"根据用户id分页查询日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户审计日志失败，暂时无法获取日志数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_id}, page={page}, page_size={page_size}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.get("/recent", summary="查询最近日志", description="根据条件获取最近日志信息")
@@ -283,9 +304,14 @@ async def get_recent_audits(
         audit_logs = await audit_crud.get_recent_audits(limit=limit, user_id=user_id)
         data = await _serialize_audit_list(audit_logs)
         return SuccessResponse(message="查询成功", data=data, total=len(data))
-    except Exception as e:
-        LOGGER.error(f"根据条件获取最近日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询最近审计日志失败，暂时无法获取日志数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [limit={limit}, user_id={user_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.get("/statistics", summary="查询日志统计", description="根据用户id查询日志统计信息")
@@ -303,9 +329,14 @@ async def get_audit_statistics(
     try:
         data = await audit_crud.get_statistics_by_user(user_id=user_id)
         return SuccessResponse(message="统计成功", data=data)
-    except Exception as e:
-        LOGGER.error(f"根据用户id查询日志统计信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"统计失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "统计审计日志失败，暂时无法生成统计数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.delete("/delete", summary="删除日志", description="根据id删除日志信息")
@@ -326,9 +357,14 @@ async def delete_audit(
         return SuccessResponse(message="删除成功", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id删除日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "删除审计日志失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [audit_id={audit_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.post("/deletes", summary="批量删除日志", description="根据id列表批量删除日志信息")
@@ -346,9 +382,14 @@ async def batch_delete_audits(
     try:
         count = await audit_crud.delete_by_ids(body_in.audit_ids)
         return SuccessResponse(message="删除成功", data={"affected": count}, total=count)
-    except Exception as e:
-        LOGGER.error(f"根据id列表批量删除日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "批量删除审计日志失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [audit_count={len(body_in.audit_ids or [])}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.delete("/delete_by_user", summary="删除用户日志", description="根据用户id删除全部日志信息")
@@ -366,9 +407,14 @@ async def delete_audits_by_user(
     try:
         count = await audit_crud.delete_by_user_id(user_id=user_id)
         return SuccessResponse(message="删除成功", data={"affected": count})
-    except Exception as e:
-        LOGGER.error(f"根据用户id删除全部日志信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "删除用户审计日志失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.delete("/delete_by_time", summary="删除时间范围日志", description="根据时间范围删除日志信息")
@@ -388,9 +434,14 @@ async def delete_audits_by_time(
     try:
         count = await audit_crud.delete_by_time_range(start_time=start_time, end_time=end_time)
         return SuccessResponse(message="删除成功", data={"deleted": count})
-    except Exception as e:
-        LOGGER.error(f"根据时间删除审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "删除时间范围审计日志失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [start_time={start_time}, end_time={end_time}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @audit.delete("/clear_all", summary="删除全部审计日志", description="删除所有审计日志(危险操作)")
@@ -406,6 +457,7 @@ async def clear_all_audits(
     try:
         count = await audit_crud.clear_all()
         return SuccessResponse(message="清空成功", data={"affected": count})
-    except Exception as e:
-        LOGGER.error(f"清空审计日志失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"清空失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "清空审计日志失败，暂时无法完成清空，请稍后重试"
+        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        return FailureResponse(message=error_message)

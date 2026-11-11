@@ -93,9 +93,15 @@ async def create_menu(
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"新增菜单失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "新增菜单失败，暂时无法完成创建，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [name={menu_in.name}, menu_type={menu_in.menu_type}, "
+            f"path={menu_in.path}, parent_id={menu_in.parent_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @menu.delete("/delete", summary="删除菜单", description="根据id删除菜单信息")
@@ -110,10 +116,11 @@ async def delete_menu(
     :param menu_crud: 菜单CRUD服务
     :return: 统一HTTP响应
     """
-    child_menu_count = await menu_crud.model.filter(parent_id=id).count()
-    if child_menu_count > 0:
-        return FailureResponse(message="不能删除带有子菜单的菜单")
     try:
+        # 子菜单预检同样纳入 try，避免查询报错时游离于统一异常处理与日志之外
+        child_menu_count = await menu_crud.model.filter(parent_id=id).count()
+        if child_menu_count > 0:
+            return FailureResponse(message="不能删除带有子菜单的菜单")
         instance = await menu_crud.delete_menu(menu_id=id)
         data = await instance.to_dict(replace_fields={"id": "menu_id"})
         return SuccessResponse(message="删除成功", data=data, total=1)
@@ -121,9 +128,14 @@ async def delete_menu(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id删除菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "删除菜单失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [menu_id={id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @menu.post("/update", summary="更新菜单", description="根据id更新菜单信息")
@@ -148,9 +160,14 @@ async def update_menu(
         return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id更新菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "更新菜单失败，暂时无法完成更新，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [menu_id={menu_in.id}, name={menu_in.name}, path={menu_in.path}, parent_id={menu_in.parent_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @menu.post("/list", summary="查询菜单列表", description="根据name或type查询菜单信息")
@@ -193,9 +210,14 @@ async def list_menu(
         if nk or tk:
             res_menu = _filter_menu_tree(res_menu, name_kw=nk, type_kw=tk)
         return SuccessResponse(message="查询成功", data=res_menu, total=len(res_menu))
-    except Exception as e:
-        LOGGER.error(f"根据name或type查询菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询菜单列表失败，暂时无法获取菜单数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [name={name}, menu_type={menu_type}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @menu.get("/get", summary="查询菜单", description="根据id查询菜单信息")
@@ -217,6 +239,11 @@ async def get_menu(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"根据id查询菜单信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询菜单信息失败，暂时无法获取菜单数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [menu_id={menu_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)

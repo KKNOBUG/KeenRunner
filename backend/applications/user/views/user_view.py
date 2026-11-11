@@ -87,12 +87,23 @@ async def create_user(
         return DataAlreadyExistsResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except IntegrityError as e:
-        LOGGER.error(f"新增失败, 用户已存在: {e}\n{traceback.format_exc()}")
-        return DataAlreadyExistsResponse(message="新增失败, 用户已存在")
-    except Exception as e:
-        LOGGER.error(f"新增失败, 异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败, 异常描述: {e}")
+    except IntegrityError:
+        # 用户账号、手机号、邮箱均为唯一列, 冲突只可能是重复或并发新增
+        error_message: str = "新增失败, 用户已存在"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [username={user_in.username}, phone={user_in.phone}, "
+            f"email={user_in.email}]\n{traceback.format_exc()}"
+        )
+        return DataAlreadyExistsResponse(message=error_message)
+    except Exception:
+        error_message: str = "新增用户失败，暂时无法完成创建，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [username={user_in.username}, alias={user_in.alias}, "
+            f"dept_id={user_in.dept_id}]\n{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_secure.delete("/delete", summary="删除用户", description="根据id删除用户信息")
@@ -118,9 +129,14 @@ async def delete_user(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "删除用户失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_secure.post("/deletes", summary="批量删除用户", description="根据id列表批量删除用户信息")
@@ -139,9 +155,14 @@ async def batch_delete_users(
         deleted_ids = await user_crud.delete_users(user_in=user_in)
         deleted_num = len(deleted_ids)
         return SuccessResponse(message="删除成功", data={"deleted": deleted_ids}, total=deleted_num)
-    except Exception as e:
-        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "批量删除用户失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_ids={user_in.user_ids}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_secure.post("/update", summary="更新用户", description="根据id更新用户信息")
@@ -174,13 +195,23 @@ async def update_user(
         return DataAlreadyExistsResponse(message=str(e.message))
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
-    except IntegrityError as e:
+    except IntegrityError:
         # 并发改名落到唯一索引：按已存在返回，不能落成服务异常
-        LOGGER.error(f"更新失败, 用户账号已存在: {e}\n{traceback.format_exc()}")
-        return DataAlreadyExistsResponse(message="更新失败, 用户账号已存在")
-    except Exception as e:
-        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
+        error_message: str = "更新失败, 用户账号已存在"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_in.user_id}, username={user_in.username}, phone={user_in.phone}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return DataAlreadyExistsResponse(message=error_message)
+    except Exception:
+        error_message: str = "更新用户失败，暂时无法完成更新，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_in.user_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_secure.get("/get", summary="查询用户", description="根据id查询用户信息")
@@ -200,7 +231,7 @@ async def get_user(
     try:
         instance = await user_crud.get_by_id(user_id=user_id, state__not=1)
         if not instance:
-            return NotFoundResponse(message=f"用户(id={user_id})信息不存在")
+            return NotFoundResponse(message=f"未找到 id 为 {user_id} 的用户，请刷新后重试")
         data: dict = await instance.to_dict(
             m2m=True,
             exclude_fields=["password"],
@@ -215,9 +246,14 @@ async def get_user(
             if department_instance:
                 data["dept"] = await department_instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户信息失败，暂时无法获取用户数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_secure.get("/by_username", summary="查询用户(按用户名)", description="根据username查询用户信息")
@@ -235,12 +271,17 @@ async def get_user_by_username(
     try:
         instance = await user_crud.get_by_username(username=username)
         if not instance:
-            return NotFoundResponse(message=f"用户[username={username}]信息不存在")
+            return NotFoundResponse(message=f"未找到账号为 {username} 的用户，请确认账号后重试")
         data: dict = await instance.to_dict(exclude_fields=["password"], replace_fields={"id": "user_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户信息失败，暂时无法获取用户数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [username={username}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 async def _attach_departments(data: List[dict], dept_crud: DepartmentCrud) -> None:
@@ -339,9 +380,14 @@ async def search_users(
         ]
         await _attach_departments(data, dept_crud)
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户列表失败，暂时无法获取用户数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [page={page}, page_size={page_size}, username={username}, dept_id={dept_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_secure.post("/search", summary="查询用户列表(Body)", description="根据条件分页查询用户列表信息(Body)")
@@ -405,9 +451,14 @@ async def list_users(
         ]
         await _attach_departments(data, dept_crud)
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户列表失败，暂时无法获取用户数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [page={user_in.page}, page_size={user_in.page_size}, username={user_in.username}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_self.post("/update_password", summary="更新用户密码(个人)", description="根据当前登录用户ID修改密码")
@@ -435,9 +486,14 @@ async def update_user_password(
             replace_fields={"id": "user_id"}
         )
         return SuccessResponse(message="更新成功", data=data, total=1)
-    except Exception as e:
-        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "修改密码失败，暂时无法完成修改，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={CTX_USER_ID.get()}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_secure.post("/reset_password", summary="更新用户密码(重置)", description="根据id重置用户密码")
@@ -457,9 +513,14 @@ async def reset_password(
         return SuccessResponse(message="重置成功", data=data, total=1)
     except NoPermissionException:
         raise
-    except Exception as e:
-        LOGGER.error(f"重置失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"重置失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "重置密码失败，暂时无法完成重置，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={user_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 # ==================== 公开端点：幂等登出（由中间件执行可选认证） ====================
@@ -485,9 +546,14 @@ async def logout(
             replace_fields={"id": "user_id"}
         )
         return SuccessResponse(message="登出成功", data=data, total=1)
-    except Exception as e:
-        LOGGER.error(f"登出失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"登出失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "登出失败，暂时无法完成登出，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={current_user.id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 # ==================== 公开端点：登录 ====================
@@ -543,9 +609,15 @@ async def login(
             exp=expire_time.astimezone().strftime(GLOBAL_CONFIG.DATETIME_FORMAT2),
         )
         return SuccessResponse(message="登录成功", data=data.model_dump())
-    except Exception as e:
-        LOGGER.error(f"登录失败，请稍后重试: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message="登录失败，请稍后重试")
+    except Exception:
+        # 原始异常与口令信息只进日志, 对外统一为可重试提示
+        error_message: str = "登录失败，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [username={credentials.username}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_public.post("/transfer_login", summary="第三方迁移登录", description="账号不存在时按第三方平台校验并接纳为新用户后生成令牌")
@@ -608,9 +680,15 @@ async def transfer_login(
             exp=expire_time.astimezone().strftime(GLOBAL_CONFIG.DATETIME_FORMAT2),
         )
         return SuccessResponse(message="登录成功", data=data.model_dump())
-    except Exception as e:
-        LOGGER.error(f"登录失败，请稍后重试: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message="登录失败，请稍后重试")
+    except Exception:
+        # 原始异常与口令信息只进日志, 对外统一为可重试提示
+        error_message: str = "登录失败，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [username={credentials.username}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 # ==================== 仅认证端点：当前用户自身 ====================
@@ -636,9 +714,14 @@ async def get_user_info(
             role.code for role in roles
         )
         return SuccessResponse(message="查询成功", data=data)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户信息失败，暂时无法获取当前用户数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={current_user.id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_self.post("/menu/list", summary="查询当前用户菜单", description="查询当前登录用户的菜单信息")
@@ -675,9 +758,14 @@ async def get_user_menu():
                     parent_menu_dict["children"].append(await menu.to_dict(replace_fields={"id": "menu_id"}))
             res.append(parent_menu_dict)
         return SuccessResponse(message="查询成功", data=res)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户菜单失败，暂时无法获取菜单数据，请刷新页面后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={CTX_USER_ID.get()}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @user_self.post("/get_user_routers", summary="查询当前用户路由", description="查询当前登录用户的路由权限")
@@ -701,6 +789,11 @@ async def get_user_routers():
             router_objs = []
         routers = sorted({router.method.lower() + router.path for router in router_objs})
         return SuccessResponse(message="查询成功", data=routers)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询用户接口权限失败，暂时无法获取权限数据，请刷新页面后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [user_id={CTX_USER_ID.get()}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)

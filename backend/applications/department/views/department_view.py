@@ -58,9 +58,14 @@ async def create_department(
         return DataAlreadyExistsResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"新增失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "新增部门失败，暂时无法完成创建，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [code={department_in.code}, name={department_in.name}, parent_id={department_in.parent_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @dept.delete("/delete", summary="删除部门", description="根据id删除部门信息")
@@ -83,9 +88,14 @@ async def delete_department(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "删除部门失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [department_id={department_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @dept.post("/deletes", summary="批量删除部门", description="根据id列表批量删除部门信息")
@@ -108,9 +118,14 @@ async def batch_delete_departments(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "批量删除部门失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [department_ids={department_in.department_ids}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @dept.post("/update", summary="更新部门", description="根据id更新部门信息")
@@ -137,9 +152,14 @@ async def update_department(
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "更新部门失败，暂时无法完成更新，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [department_id={department_in.id}, name={department_in.name}, parent_id={department_in.parent_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @dept.get("/get", summary="查询部门", description="根据id查询部门信息")
@@ -157,13 +177,18 @@ async def get_department(
     try:
         instance = await dept_crud.get_or_none(id=department_id)
         if not instance:
-            return NotFoundResponse(message=f"记录[id={department_id}]不存在")
+            return NotFoundResponse(message=f"未找到 id 为 {department_id} 的部门，请刷新后重试")
 
         data: dict = await instance.to_dict(replace_fields={"id": "dept_id"})
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询部门信息失败，暂时无法获取部门数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [department_id={department_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @dept.get("/list", summary="查询部门列表(Query)", description="根据name查询部门列表信息")
@@ -181,9 +206,14 @@ async def list_departments(
     try:
         dept_tree = await dept_crud.get_dept_tree(name)
         return SuccessResponse(message="查询成功", data=dept_tree, total=len(dept_tree))
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询部门列表失败，暂时无法获取部门数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [name={name}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @dept.post("/search", summary="查询部门列表(Body)", description="根据条件分页查询部门列表信息(Body)")
@@ -224,6 +254,11 @@ async def search_departments(
         total, instances = await dept_crud.list(page=page, page_size=page_size, order=order, search=q)
         data = [await obj.to_dict(replace_fields={"id": "dept_id"}) for obj in instances]
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询部门列表失败，暂时无法获取部门数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [page={department_in.page}, page_size={department_in.page_size}, code={department_in.code}, name={department_in.name}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)

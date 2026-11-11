@@ -64,13 +64,23 @@ async def create_role(
         return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
-    except IntegrityError as e:
-        error_message: str = f"新增失败, 违反约束规则: {e}"
-        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+    except IntegrityError:
+        # 角色代码与角色名称均为唯一列, 冲突只可能是重名或并发新增
+        error_message: str = "新增角色失败，角色代码或角色名称已存在，请修改后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [code={role_in.code}, name={role_in.name}]\n"
+            f"{traceback.format_exc()}"
+        )
         return DataBaseStorageResponse(message=error_message)
-    except Exception as e:
-        LOGGER.error(f"新增失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "新增角色失败，暂时无法完成创建，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [code={role_in.code}, name={role_in.name}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.delete("/delete", summary="删除角色", description="根据id删除角色信息")
@@ -93,9 +103,14 @@ async def delete_role(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "删除角色失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [role_id={role_id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.post("/deletes", summary="批量删除角色", description="根据角色id或code列表删除")
@@ -119,9 +134,14 @@ async def batch_delete_roles(
         return SuccessResponse(message="删除成功", data={"deleted": deleted_ids_or_codes}, total=deleted_num)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"删除失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "批量删除角色失败，暂时无法完成删除，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [role_ids={role_in.role_ids}, role_codes={role_in.role_codes}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.post("/update", summary="更新角色", description="根据id更新角色信息")
@@ -144,17 +164,27 @@ async def update_role(
         return ParameterResponse(message=str(e.message))
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
-    except IntegrityError as e:
-        error_message: str = f"更新失败, 违反约束规则: {e}"
-        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+    except IntegrityError:
+        # 服务层已先行校验重名, 此处兜底并发改名撞唯一索引
+        error_message: str = "更新角色失败，角色代码或角色名称可能与现有角色重复，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [role_id={role_in.id}, code={role_in.code}, name={role_in.name}]\n"
+            f"{traceback.format_exc()}"
+        )
         return DataBaseStorageResponse(message=error_message)
     except DataBaseStorageException as e:
         return DataBaseStorageResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "更新角色失败，暂时无法完成更新，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [role_id={role_in.id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.get("/get", summary="查询角色", description="根据角色id或code或name查询角色信息")
@@ -188,9 +218,14 @@ async def get_role(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询角色信息失败，暂时无法获取角色数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [role_id={role_id}, code={code}, name={name}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.get("/list", summary="查询角色列表(Query)", description="根据角色name查询角色信息")
@@ -220,9 +255,14 @@ async def search_roles(
         )
         data = [await obj.to_dict(replace_fields={"id": "role_id"}) for obj in role_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询角色列表失败，暂时无法获取角色数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [page={page}, page_size={page_size}, name={name}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.post("/search", summary="查询角色列表(Body)", description="根据条件分页查询角色列表信息(Body)")
@@ -251,9 +291,15 @@ async def search_roles_by_body(
         )
         data = [await obj.to_dict(replace_fields={"id": "role_id"}) for obj in role_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询角色列表失败，暂时无法获取角色数据，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [page={role_in.page}, page_size={role_in.page_size}, "
+            f"code={role_in.code}, name={role_in.name}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.get(
@@ -287,9 +333,14 @@ async def get_role_authorized(
         # 管理员角色运行期固定全量权限，前端据此渲染只读提示并隐藏保存入口
         data["builtin_admin"] = role_obj.code == BuiltinRoleCode.ADMIN.value
         return SuccessResponse(message="查询成功", data=data, total=1)
-    except Exception as e:
-        LOGGER.error(f"查询失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "查询角色权限失败，暂时无法获取权限配置，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [role_id={id}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
 
 
 @role.post(
@@ -326,6 +377,12 @@ async def update_role_authorized(
         return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
-    except Exception as e:
-        LOGGER.error(f"更新失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {e}")
+    except Exception:
+        error_message: str = "更新角色权限失败，暂时无法保存权限配置，请稍后重试"
+        LOGGER.error(
+            f"{error_message}, "
+            f"关键字段: [role_id={role_in.id}, menu_count={len(role_in.menu_ids)}, "
+            f"router_count={len(role_in.router_infos)}]\n"
+            f"{traceback.format_exc()}"
+        )
+        return FailureResponse(message=error_message)
