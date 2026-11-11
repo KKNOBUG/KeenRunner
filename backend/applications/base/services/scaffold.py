@@ -17,7 +17,7 @@ from typing import Dict, Generic, List, Tuple, Type, TypeVar, Union, Optional, S
 from pydantic import BaseModel, GetCoreSchemaHandler
 from pydantic_core import core_schema
 from tortoise import fields, models
-from tortoise.exceptions import DoesNotExist, FieldError, IntegrityError, OperationalError
+from tortoise.exceptions import DoesNotExist, OperationalError
 from tortoise.expressions import Q
 from tortoise.fields import JSONField
 from tortoise.models import Model
@@ -30,7 +30,11 @@ from backend.core.exceptions import ParameterException, NotFoundException, DataB
 
 def unique_identify() -> str:
     """
-    生成唯一标识字符串，由时间戳与UUID组合而成。
+    生成唯一标识字符串。
+
+    时间戳保证趋势递增，随机 UUID 保证同一秒内不重复。
+
+    :return: 时间戳与大写 UUID 以连字符拼接的字符串
     """
     timestamp: int = int(datetime.now().timestamp())
     uuid4_str: str = uuid.uuid4().hex.upper()
@@ -39,11 +43,22 @@ def unique_identify() -> str:
 
 class UpperStr(str):
     """
-    大写字符串类型，用于Pydantic模型验证。
+    大写字符串类型，用于 Pydantic 模型校验。
+
+    非字符串输入直接判定校验失败，字符串一律转为大写后返回。
     """
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
+        """
+        注册校验后置处理器。
+
+        先由父类型完成字符串校验，再交由本类完成大小写转换。
+
+        :param source_type: 声明类型，此处固定为字符串
+        :param handler: 父类型 schema 生成器
+        :return: 带后置校验的字符串 schema
+        """
         return core_schema.with_info_after_validator_function(
             cls._validate,
             handler(str),
@@ -53,7 +68,11 @@ class UpperStr(str):
     @classmethod
     def _validate(cls, v: Optional[str], info: Any) -> 'UpperStr':
         """
-        验证并转换为大写字符串。
+        校验入参为字符串并转换为大写。
+
+        :param v: 待校验的字符串
+        :param info: 校验上下文，本方法不使用
+        :return: 转大写后的字符串
         """
         if not isinstance(v, str):
             raise ValueError("必须是字符串类型")
@@ -62,11 +81,22 @@ class UpperStr(str):
 
 class LowerStr(str):
     """
-    小写字符串类型，用于Pydantic模型验证。
+    小写字符串类型，用于 Pydantic 模型校验。
+
+    非字符串输入直接判定校验失败，字符串一律转为小写后返回。
     """
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> core_schema.CoreSchema:
+        """
+        注册校验后置处理器。
+
+        先由父类型完成字符串校验，再交由本类完成大小写转换。
+
+        :param source_type: 声明类型，此处固定为字符串
+        :param handler: 父类型 schema 生成器
+        :return: 带后置校验的字符串 schema
+        """
         return core_schema.with_info_after_validator_function(
             cls._validate,
             handler(str),
@@ -76,7 +106,11 @@ class LowerStr(str):
     @classmethod
     def _validate(cls, v: Optional[str], info: Any) -> 'LowerStr':
         """
-        验证并转换为小写字符串。
+        校验入参为字符串并转换为小写。
+
+        :param v: 待校验的字符串
+        :param info: 校验上下文，本方法不使用
+        :return: 转小写后的字符串
         """
         if not isinstance(v, str):
             raise ValueError("必须是字符串类型")
@@ -85,15 +119,30 @@ class LowerStr(str):
 
 class UpperCharField(fields.CharField):
     """
-    大写字符串字段，写入/读出时自动转大写。
+    大写字符串字段。
+
+    写入数据库与从数据库读出时均自动转为大写，保证库内外口径一致。
     """
 
     def to_db_value(self, value: Any, instance) -> Optional[str]:
+        """
+        写入数据库前将字符串转为大写。
+
+        :param value: 待写入的字段值
+        :param instance: 字段所属模型实例
+        :return: 转大写后的字段值
+        """
         if isinstance(value, str):
             value = value.upper()
         return super().to_db_value(value, instance)
 
     def to_python_value(self, value: Any) -> Optional[str]:
+        """
+        从数据库读出后将字符串转为大写。
+
+        :param value: 数据库中的原始值
+        :return: 转大写后的字段值
+        """
         value = super().to_python_value(value)
         if isinstance(value, str):
             return value.upper()
@@ -102,15 +151,30 @@ class UpperCharField(fields.CharField):
 
 class LowerCharField(fields.CharField):
     """
-    小写字符串字段，写入/读出时自动转小写。
+    小写字符串字段。
+
+    写入数据库与从数据库读出时均自动转为小写，保证库内外口径一致。
     """
 
     def to_db_value(self, value: Any, instance) -> Optional[str]:
+        """
+        写入数据库前将字符串转为小写。
+
+        :param value: 待写入的字段值
+        :param instance: 字段所属模型实例
+        :return: 转小写后的字段值
+        """
         if isinstance(value, str):
             value = value.lower()
         return super().to_db_value(value, instance)
 
     def to_python_value(self, value: Any) -> Optional[str]:
+        """
+        从数据库读出后将字符串转为小写。
+
+        :param value: 数据库中的原始值
+        :return: 转小写后的字段值
+        """
         value = super().to_python_value(value)
         if isinstance(value, str):
             return value.lower()
@@ -119,12 +183,24 @@ class LowerCharField(fields.CharField):
 
 class JSONTextField(JSONField):
     """
-    以TEXT类型存储JSON格式的数据字段，避免MySQL的JSON列在落库时会对对象键做归一化（根据键长度、字节值排序），导致字段顺序丢失。
+    以文本列存储 JSON 数据的字段。
+
+    MySQL 的 JSON 列落库时会按键长度与字节值重排对象键，导致字段顺序丢失；
+    该字段改用文本列原样保存序列化结果，读出时由父类完成反序列化。
     """
 
+    # 覆盖父类的列类型，避免 MySQL 对 JSON 列做键重排
     SQL_TYPE = "LONGTEXT"
 
     def to_python_value(self, value: Any) -> Any:
+        """
+        将库内文本反序列化为 Python 对象。
+
+        空串视为未赋值，直接返回空值，其余交给父类解析。
+
+        :param value: 数据库中的原始文本
+        :return: 反序列化后的对象或空值
+        """
         if isinstance(value, str) and not value.strip():
             return None
         return super().to_python_value(value)
@@ -132,36 +208,36 @@ class JSONTextField(JSONField):
 
 class UUIDModel:
     """
-    UUID唯一标识Mixin，为模型添加uid字段。
+    为模型提供唯一标识字段的混入类。
+
+    字段可空且唯一，允许历史数据不携带该标识。
     """
     uid = fields.UUIDField(unique=True, null=True, description="唯一标识符")
 
 
 class PacketModel:
     """
-    分组标识Mixin，为模型添加pid字段用于分组。
+    为模型提供分组标识字段的混入类。
+
+    字段建立索引且不允许为空，用于按分组聚合查询。
     """
     pid = fields.BigIntField(index=True, description="分组标识符")
 
 
 class StateModel:
     """
-    状态模型Mixin，为模型添加state字段。
+    为模型提供软删除标记字段的混入类。
 
-    状态约定：
-    - 0: 启用/正常
-    - 1: 禁用/软删
-
-    配合ScaffoldCrud的软删除方法使用：
-        await crud.soft_delete(id=1)      # state = 1
-        await crud.soft_delete_restore(id=1)  # state = 0
+    字段为 0 表示启用，为 1 表示禁用，软删除与恢复由 ScaffoldCrud 的对应方法维护。
     """
     state = fields.SmallIntField(default=0, index=True, description="状态(0:启用, 1:禁用)")
 
 
 class ClassModel:
     """
-    分类模型Mixin，为模型添加代码、名称、描述字段。
+    为模型提供代码、名称与描述字段的混入类。
+
+    代码与名称均唯一，描述可空，适合字典类业务表。
     """
     code = fields.CharField(max_length=16, unique=True, description="代码")
     name = fields.CharField(max_length=64, unique=True, description="名称")
@@ -170,10 +246,9 @@ class ClassModel:
 
 class TimestampMixin:
     """
-    时间戳Mixin，自动记录创建和更新时间。
+    为模型提供创建时间与更新时间字段的混入类。
 
-    - created_time: 记录首次创建时间，不可变
-    - updated_time: 每次保存自动更新，可用于记录最后操作时间(如软删除时间)
+    创建时间仅在首次写入时记录，更新时间每次保存自动刷新，可用于记录最后操作时间。
     """
     created_time = fields.DatetimeField(auto_now_add=True, description="创建时间")
     updated_time = fields.DatetimeField(auto_now=True, description="更新时间")
@@ -181,11 +256,9 @@ class TimestampMixin:
 
 class MaintainMixin:
     """
-    维护信息Mixin，记录数据的创建人和最后更新人。
+    为模型提供创建人与更新人字段的混入类。
 
-    - created_user: 记录数据的创建者（自动转大写）
-    - updated_user: 记录数据的最后更新者（自动转大写；创建时由
-      ScaffoldCrud.fill_created_user 与created_user同值回填，对齐updated_time的auto_now语义）
+    字段写入时自动转大写；创建时更新人与创建人同值回填，对齐更新时间的自动刷新语义。
     """
     created_user = UpperCharField(max_length=16, default=None, null=True, description="创建人员")
     updated_user = UpperCharField(max_length=16, default=None, null=True, description="更新人员")
@@ -193,7 +266,9 @@ class MaintainMixin:
 
 class ReserveFields:
     """
-    备用字段Mixin，为模型预留扩展字段。
+    为模型提供预留扩展字段的混入类。
+
+    三个字段均可空，依次覆盖短文本、结构化数据与长文本三种存储需求。
     """
     reserve_1 = fields.CharField(max_length=255, default=None, null=True, description="备用字段1")
     reserve_2 = fields.JSONField(default=None, null=True, description="备用字段2")
@@ -204,8 +279,7 @@ class ScaffoldModel(models.Model):
     """
     脚手架模型基类，提供通用的模型序列化能力。
 
-    所有业务模型应继承此类，以获得to_dict序列化支持。
-    支持本表字段的包含/排除/别名，以及外键和多对多关系的递归序列化。
+    业务模型继承后即可按需输出本表字段、外键对象与多对多集合，并支持字段裁剪与字段改名。
     """
     id = fields.BigIntField(pk=True, description="主键")
 
@@ -224,26 +298,23 @@ class ScaffoldModel(models.Model):
             _cache: Optional[Dict[int, Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
-        将模型实例转换为字典形式，支持灵活配置要包含或排除的字段，以及是否处理多对多关系和外键关系。
+        将模型实例序列化为字典。
 
-        缓存机制说明：
-        - 使用_cache参数传入缓存字典，避免同一请求中重复查询关联对象
-        - 缓存键格式：{instance_id: {field_name: value}}
-        - 适用于列表查询时多个对象共享关联数据的场景
-        - 缓存仅在单次to_dict调用链中有效，不会持久化
+        默认输出全部本表字段，可按需裁剪或改名；外键与多对多关系需显式开启后才会展开。
+        同一实例在单次调用链内命中缓存时直接返回，缓存键为实例内存地址，不跨请求共享。
 
-        :param include_fields: 需要引入的本表字段列表，默认为None(表示包含所有字段)
-        :param exclude_fields: 需要排除的本表字段列表，默认为None
-        :param replace_fields: 字段别名映射，如 {"old_name": "new_name"}
-        :param m2m: 是否获取多对多关系字段的数据，默认为False
-        :param m2m_include_fields: 多对多关系中需要引入的字段列表
-        :param m2m_exclude_fields: 多对多关系中需要排除的字段列表
-        :param m2m_replace_fields: 多对多关联对象的字段别名映射，按m2m字段名指定，如 {"menus": {"id": "menu_id"}}
-        :param fk: 是否获取外键字段对应的数据，默认为False
-        :param fk_include_fields: 外键关系中需要引入的字段列表
-        :param fk_exclude_fields: 外键关系中需要排除的字段列表
-        :param _cache: 内部缓存字典，用于避免重复查询(外部调用无需传入)
-        :return: 包含模型数据的字典
+        :param include_fields: 需要输出的本表字段，为空表示全部字段
+        :param exclude_fields: 需要排除的本表字段
+        :param replace_fields: 本表字段别名映射，键为原字段名，值为输出字段名
+        :param m2m: 是否展开多对多关系
+        :param m2m_include_fields: 多对多关联对象需要输出的字段
+        :param m2m_exclude_fields: 多对多关联对象需要排除的字段
+        :param m2m_replace_fields: 按多对多字段名指定的关联对象字段别名映射
+        :param fk: 是否展开外键关系
+        :param fk_include_fields: 外键关联对象需要输出的字段
+        :param fk_exclude_fields: 外键关联对象需要排除的字段
+        :param _cache: 内部缓存字典，外部调用无需传入
+        :return: 模型数据字典
         """
         # 初始化缓存
         cache = _cache or {}
@@ -302,15 +373,13 @@ class ScaffoldModel(models.Model):
     @classmethod
     async def __format_value(cls, value: Any):
         """
-        格式化字段值为可序列化的类型。
+        将字段值转换为可序列化类型。
 
-        支持的类型转换：
-        - Decimal: str
-        - datetime: str
-        - date: str
-        - time: str
-        - bytes: str
-        - timedelta: str
+        Decimal 与 timedelta 转为字符串，日期时间按全局格式转为字符串，字节按 UTF-8 解码；
+        其余类型原样返回。
+
+        :param value: 字段原始值
+        :return: 可直接写入字典的值
         """
         if isinstance(value, Decimal):
             return str(value)
@@ -328,13 +397,15 @@ class ScaffoldModel(models.Model):
 
     async def __fetch_fk_field(self, field, fk_include_fields, fk_exclude_fields, cache):
         """
-        获取外键字段关联对象的数据，并将其转换为字典形式。
+        展开单个外键字段。
+
+        关联对象存在时递归序列化，递归过程中禁止继续展开多对多与外键，避免环形引用导致无限递归。
 
         :param field: 外键字段名
-        :param fk_include_fields: 需要引入的外键表字段列表
-        :param fk_exclude_fields: 需要排除的外键表字段列表
-        :param cache: 缓存字典，避免重复查询
-        :return: (字段名, 关联对象字典或None)
+        :param fk_include_fields: 关联对象需要输出的字段
+        :param fk_exclude_fields: 关联对象需要排除的字段
+        :param cache: 序列化缓存，避免同一对象重复查询
+        :return: 字段名与关联对象字典，关联对象为空时字典为空值
         """
         fk_instance = getattr(self, field)
         if fk_instance:
@@ -349,14 +420,16 @@ class ScaffoldModel(models.Model):
 
     async def __fetch_m2m_field(self, field, m2m_include_fields, m2m_exclude_fields, m2m_replace_fields, cache):
         """
-        获取多对多关系字段的数据，并将其转换为字典列表。
+        展开单个多对多字段。
+
+        逐个序列化关联对象并汇总为列表，递归过程中禁止继续展开，别名映射按当前多对多字段名透传。
 
         :param field: 多对多字段名
-        :param m2m_include_fields: 需要引入的多对多表字段列表
-        :param m2m_exclude_fields: 需要排除的多对多表字段列表
-        :param m2m_replace_fields: 按m2m字段名指定的关联对象字段别名映射
-        :param cache: 缓存字典，避免重复查询
-        :return: (字段名, 关联对象字典列表)
+        :param m2m_include_fields: 关联对象需要输出的字段
+        :param m2m_exclude_fields: 关联对象需要排除的字段
+        :param m2m_replace_fields: 按多对多字段名指定的关联对象字段别名映射
+        :param cache: 序列化缓存，避免同一对象重复查询
+        :return: 字段名与关联对象字典列表
         """
         instances = await getattr(self, field).all()
         values = []
@@ -375,7 +448,9 @@ class ScaffoldModel(models.Model):
 
     class Meta:
         """
-        元数据配置。
+        模型元数据。
+
+        作为抽象基类不建表，统一使用默认数据库连接。
         """
         abstract = True  # 抽象基类，不会在数据库中创建表
         default_connection = "default"  # 默认数据库连接
@@ -392,32 +467,32 @@ UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
 class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """
-    通用CRUD操作基类，基于Tortoise-ORM实现。
+    通用 CRUD 操作基类，基于 Tortoise ORM 实现。
 
-    提供标准的增删改查操作，以及基于StateModel的软删除支持。
-    通过泛型参数实现类型安全，子类只需指定Model和Schema类型。
+    提供标准的增删改查、批量操作、事务写入与基于状态字段的软删除能力，子类只需绑定
+    模型与读写 Schema 即可复用；模型未继承状态混入类时，软删除相关方法直接拒绝执行。
 
-    类型参数：
-        ModelType: 数据库模型类(如User)
-        CreateSchemaType: 创建数据的Pydantic Schema
-        UpdateSchemaType: 更新数据的Pydantic Schema
-
-    使用示例：
-        class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
-            def __init__(self):
-                super().__init__(model=User)
+    泛型参数依次为数据库模型、创建 Schema 与更新 Schema。
     """
 
     def __init__(self, model: Type[ModelType]):
+        """
+        绑定业务模型。
+
+        :param model: 数据库模型类，决定后续所有操作的默认表
+        """
+        # 子类无需重复声明模型，统一由构造函数注入
         self.model = model
 
     @staticmethod
     def normalize_order_fields(order: Optional[list]) -> list:
         """
-        规范化排序字段列表：过滤None/空串，拒绝非字符串元素。
+        规范化排序字段列表。
+
+        过滤空值与空白项，剔除仅由正负号构成的无效项；非字符串元素直接拒绝。
 
         :param order: 原始排序字段列表
-        :return: 可用于order_by的字段列表
+        :return: 可用于排序的字段列表
         """
         if not order:
             return []
@@ -435,10 +510,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def fill_created_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
-        创建时自动写入created_user，并同步回填updated_user(与created_user同值)。
+        创建时写入创建人与更新人。
 
-        :param obj_dict: 待写入字段字典
-        :param model: 目标模型；默认self.model
+        登录上下文存在时以服务端当前用户为准，否则沿用入参值；模型不含相应字段时直接跳过。
+
+        :param obj_dict: 待写入字段字典，就地修改
+        :param model: 目标模型，默认使用当前绑定的模型
+        :return: 无返回值，结果直接写入入参字典
         """
         target = model or self.model
         if not hasattr(target, "created_user"):
@@ -461,10 +539,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def fill_updated_user(self, obj_dict: Dict[str, Any], model: Optional[Type[Model]] = None) -> None:
         """
-        更新时自动写入updated_user；有登录上下文时以服务端当前用户为准，无登录上下文时保留显式传入值。
+        更新时写入更新人。
 
-        :param obj_dict: 待写入字段字典
-        :param model: 目标模型；默认 self.model
+        登录上下文存在时以服务端当前用户为准，否则保留入参中的显式取值；模型不含该字段时直接跳过。
+
+        :param obj_dict: 待写入字段字典，就地修改
+        :param model: 目标模型，默认使用当前绑定的模型
+        :return: 无返回值，结果直接写入入参字典
         """
         target = model or self.model
         if not hasattr(target, "updated_user"):
@@ -483,12 +564,15 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     @staticmethod
     def explicit_restored_null_fields(payload: Any, update_dict: Dict[str, Any], field_names: Tuple[str, ...]) -> None:
         """
-        显式回补置空字段到更新模型，避免exclude_none丢弃None导致旧值残留。
+        将显式置空的字段回补到更新字典。
 
-        :param payload: 更新入参
-        :param update_dict: model_dump产出的更新字典
-        :param field_names: 需要回补的字段名
-        :return: None
+        更新模型常以排除空值方式导出，字段被显式置空时会被丢弃，导致库内旧值残留；
+        本方法根据入参的显式字段集合把空值写回更新字典。
+
+        :param payload: 更新入参模型
+        :param update_dict: 更新字典，就地修改
+        :param field_names: 需要检查并回补的字段名
+        :return: 无返回值，结果直接写入更新字典
         """
         for field_name in field_names:
             if field_name in payload.model_fields_set and getattr(payload, field_name, None) is None:
@@ -496,10 +580,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def soft_delete_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
         """
-        构造软删除更新字典: state=1 + 按统一规则填充updated_user字段。
+        构造软删除的更新字典。
 
-        :param updated_user: 无登录上下文时的回落更新人员字段
-        :return: 可直接用于filter().update(**values)的字段字典
+        固定写入禁用状态，并按统一规则填充更新人；登录上下文缺失时使用入参回落。
+
+        :param updated_user: 无登录上下文时回落的更新人
+        :return: 可直接用于条件更新的字段字典
         """
         values: Dict[str, Any] = {"state": 1}
         if updated_user is not None and str(updated_user).strip():
@@ -511,10 +597,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def soft_restore_values(self, updated_user: Optional[str] = None) -> Dict[str, Any]:
         """
-        构造软删除恢复更新字典: state=0 + 按统一规则填充updated_user字段。
+        构造软删除恢复的更新字典。
 
-        :param updated_user: 无登录上下文时的回落更新人员字段
-        :return: 可直接用于filter().update(**values)的字段字典
+        固定写入启用状态，并按统一规则填充更新人；登录上下文缺失时使用入参回落。
+
+        :param updated_user: 无登录上下文时回落的更新人
+        :return: 可直接用于条件更新的字段字典
         """
         values: Dict[str, Any] = {"state": 0}
         if updated_user is not None and str(updated_user).strip():
@@ -526,9 +614,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get_or_error(self, id: int, **kwargs) -> ModelType:
         """
-        根据ID获取对象，不存在时抛出异常。
+        按主键获取单条记录。
 
-        :param id: 对象唯一标识符
+        记录不存在时转为记录不存在异常，存在则原样返回。
+
+        :param id: 记录主键
         :param kwargs: 额外的过滤条件
         :return: 数据库模型实例
         """
@@ -540,34 +630,46 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get_or_none(self, id: int, **kwargs) -> Optional[ModelType]:
         """
-        根据ID获取对象，不存在时返回None。
+        按主键获取单条记录。
 
-        :param id: 对象唯一标识符
+        与 get_or_error 的区别是记录不存在时返回空值而不抛出异常。
+
+        :param id: 记录主键
         :param kwargs: 额外的过滤条件
-        :return: 数据库模型实例或None
+        :return: 数据库模型实例或空值
         """
         return await self.model.filter(id=id, **kwargs).first()
 
     async def get_by_conditions(self, only_one: bool = True, on_error: bool = True, **kwargs) -> Optional[Union[ModelType, List[ModelType]]]:
         """
-        根据条件查询对象。
+        按条件查询单条记录或记录列表。
 
-        :param only_one: True返回单条记录，False返回列表
-        :param on_error: 未找到时是否抛出异常
+        查询条件直接映射为模型字段过滤，字段不合法或数据库执行失败统一转为参数异常；
+        查询结果为空且要求报错时转为记录不存在异常，否则原样返回空值。
+
+        :param only_one: 是否只取首条记录
+        :param on_error: 结果为空时是否抛出记录不存在异常
         :param kwargs: 查询条件字段
-        :return: 单条记录、记录列表或None
+        :return: 单条记录、记录列表或空值
         """
         try:
             stmt: QuerySet = self.model.filter(**kwargs)
             instances = await (stmt.first() if only_one else stmt.all())
-        except (FieldError, Exception) as e:
-            error_message: str = f"根据条件[{kwargs}]查询数据异常: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        except Exception as e:
+            error_message: str = "查询数据失败，请检查查询条件后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, only_one={only_one}, conditions={kwargs}]\n"
+                f"{traceback.format_exc()}"
+            )
             raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
-            error_message: str = f"根据条件[{kwargs}]查询数据为空"
-            LOGGER.error(error_message)
+            error_message: str = "查询目标数据不存在或已被删除，请刷新后重试"
+            LOGGER.warning(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, only_one={only_one}, conditions={kwargs}]"
+            )
             raise NotFoundException(message=error_message)
         return instances
 
@@ -580,14 +682,16 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             related: Optional[list] = None
     ) -> Tuple[int, List[ModelType]]:
         """
-        根据条件分页查询记录列表。
+        按条件分页查询记录列表。
 
-        :param page: 页码，从1开始
+        排序字段先经规范化，非法排序字段直接拒绝；总数与当前页数据同查询一起返回。
+
+        :param page: 页码，从 1 开始
         :param page_size: 每页记录数
-        :param search: 搜索条件，使用Q对象组合复杂查询
-        :param order: 排序字段列表，如["-created_time"]表示根据创建时间倒序
-        :param related: 预加载的关联字段列表
-        :return: (总记录数, 当前页记录列表)
+        :param search: 搜索条件，使用 Q 对象组合复杂查询
+        :param order: 排序字段列表，字段名前缀减号表示倒序
+        :param related: 需要预加载的关联字段列表
+        :return: 记录总数与当前页记录列表
         """
         order: list = self.normalize_order_fields(order)
         related: list = related or []
@@ -599,9 +703,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def create(self, obj_in: Union[CreateSchemaType, Dict]) -> ModelType:
         """
-        创建新记录。
+        创建单条记录。
 
-        :param obj_in: 创建数据，可以是Pydantic Schema实例或字典
+        入参为字典时直接使用，为 Schema 实例时先导出为字典；创建人与更新人按统一规则补齐。
+
+        :param obj_in: 创建数据，Pydantic Schema 实例或字典
         :return: 创建成功的数据库对象
         """
         if isinstance(obj_in, Dict):
@@ -615,10 +721,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def batch_create(self, obj_list: List[Union[CreateSchemaType, Dict]]) -> List[ModelType]:
         """
-        批量创建记录(单次批量INSERT)。
+        批量创建记录。
 
-        :param obj_list: 创建数据列表，每个元素可以是Pydantic Schema实例或字典
-        :return: 创建成功的数据库对象列表(仅含传入字段值与模型默认值，数据库生成的主键不回填)
+        所有记录合并为一次批量写入；返回对象仅携带入参字段与模型默认值，数据库生成的主键不回填。
+
+        :param obj_list: 创建数据列表，元素为 Pydantic Schema 实例或字典
+        :return: 创建成功的数据库对象列表
         """
         if not obj_list:
             return []
@@ -638,10 +746,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def update(self, id: int, obj_in: Union[UpdateSchemaType, Dict[str, Any]]) -> ModelType:
         """
-        更新记录。
+        更新单条记录。
 
-        :param id: 要更新的记录ID
-        :param obj_in: 更新数据，可以是Pydantic Schema实例或字典
+        记录不存在时抛出记录不存在异常；并发修改唯一值时把死锁与锁等待超时转为可重试的存储异常。
+
+        :param id: 记录主键
+        :param obj_in: 更新数据，Pydantic Schema 实例或字典
         :return: 更新后的数据库对象
         """
         obj = await self.get_or_error(id=id)
@@ -653,15 +763,18 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         obj = obj.update_from_dict(obj_dict)
         try:
             await obj.save()
-        except IntegrityError:
-            raise
         except OperationalError as e:
             # 并发改唯一值时 InnoDB 可能抛死锁(1213)/锁等待超时(1205)，转为可重试的存储异常
             raw = e.args[0] if e.args else None
             errno = raw.args[0] if isinstance(raw, BaseException) and getattr(raw, "args", None) else None
             if errno in (1213, 1205):
-                LOGGER.error(f"更新并发冲突: {self.model.__name__}(id={id}), 错误: {e}")
-                raise DataBaseStorageException(message="并发冲突, 请稍后重试") from e
+                error_message: str = "更新数据失败，操作存在并发冲突，请稍后重试"
+                LOGGER.error(
+                    f"{error_message}, "
+                    f"关键字段: [model={self.model.__name__}, id={id}, errno={errno}]\n"
+                    f"{traceback.format_exc()}"
+                )
+                raise DataBaseStorageException(message=error_message) from e
             raise
         LOGGER.info(f"更新成功: {self.model.__name__}(id={id}), 字段: {list(obj_dict.keys())}")
         return obj
@@ -670,16 +783,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         批量更新记录。
 
-        :param updates: 更新数据列表，每个元素必须包含key_field指定的字段
-        :param key_field: 作为更新条件的字段名，默认为"id"
-        :param strict: 是否严格校验字段
-        :return: 实际更新的记录数
+        逐条按条件字段更新，缺少条件字段的记录直接跳过；字段不合法时按严格模式决定跳过整条
+        还是忽略越界字段后继续。
 
-        使用示例：
-            await crud.batch_update([
-                {"id": 1, "name": "张三", "age": 20},
-                {"id": 2, "name": "李四", "age": 25},
-            ])
+        :param updates: 更新数据列表，每项必须包含条件字段
+        :param key_field: 作为更新条件的字段名
+        :param strict: 字段不合法时是否跳过整条记录
+        :return: 实际更新的记录数
         """
         if not updates:
             return 0
@@ -723,9 +833,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def remove_or_error(self, id: int, **kwargs) -> ModelType:
         """
-        硬删除：不存在时抛出异常。
+        删除单条记录。
 
-        :param id: 要删除的记录ID
+        记录不存在时抛出记录不存在异常，删除为物理删除且不写日志。
+
+        :param id: 记录主键
         :param kwargs: 额外的过滤条件
         :return: 被删除的数据库对象
         """
@@ -735,9 +847,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def hard_delete(self, id: int) -> ModelType:
         """
-        硬删除：从数据库中永久移除记录，无论记录是否已软删除，都将被物理删除。
+        物理删除单条记录。
 
-        :param id: 要硬删除的记录ID
+        不区分记录是否已被软删除，一律从数据库中移除。
+
+        :param id: 记录主键
         :return: 被删除的数据库对象
         """
         obj = await self.get_or_error(id=id)
@@ -747,9 +861,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def hard_batch_delete(self, ids: List[int]) -> int:
         """
-        批量硬删除：从数据库中永久移除多条记录。
+        批量物理删除记录。
 
-        :param ids: 要硬删除的记录ID列表
+        不区分记录是否已被软删除，一律从数据库中移除。
+
+        :param ids: 记录主键列表
         :return: 实际删除的记录数
         """
         if not ids:
@@ -761,49 +877,41 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     def query(self) -> 'QueryBuilder[ModelType]':
         """
-        获取查询构建器，支持链式调用构建复杂查询。
+        获取查询构建器。
 
-        使用示例：
-            # 链式查询
-            results = await crud.query().filter(age__gte=18).exclude(state=1).order_by("-created_time").limit(10).all()
-
-            # 分页查询
-            total, items = await crud.query().filter(state=0).paginate(page=1, page_size=20)
-
-            # 条件组合
-            results = await crud.query().filter(
-                Q(name__contains="张") | Q(email__contains="zhang")
-            ).filter(state=0).all()
+        构建器支持链式添加过滤、排序与分页条件，执行时才真正访问数据库。
 
         :return: 查询构建器实例
         """
         return QueryBuilder(self.model)
 
     async def count(self, search: Q = Q()) -> int:
-        """统计记录数量。"""
+        """
+        统计符合条件的记录数量。
+
+        :param search: 搜索条件
+        :return: 记录数量
+        """
         return await self.model.filter(search).count()
 
     async def exists(self, **kwargs) -> bool:
-        """检查是否存在符合条件的记录。"""
+        """
+        判断是否存在符合条件的记录。
+
+        :param kwargs: 查询条件字段
+        :return: 存在返回真，否则返回假
+        """
         return await self.model.filter(**kwargs).exists()
 
     async def aggregate(self, search: Q = Q(), **aggregations) -> Dict[str, Any]:
         """
-        聚合查询，支持sum/avg/max/min/count。
+        执行聚合查询。
 
-        使用示例：
-            result = await crud.aggregate(
-                Q(state=0),
-                total_balance=Sum("balance"),
-                avg_age=Avg("age"),
-                max_score=Max("score"),
-                min_score=Min("score"),
-                user_count=Count("id")
-            )
-            # 返回: {"total_balance": 10000, "avg_age": 25.5, "max_score": 100, "min_score": 0, "user_count": 100}
+        支持求和、均值、最大值、最小值与计数，结果键与入参聚合表达式同名；无匹配记录时
+        每个结果键的值为空。
 
         :param search: 搜索条件
-        :param aggregations: 聚合函数字典
+        :param aggregations: 聚合表达式，键为结果字段名
         :return: 聚合结果字典
         """
 
@@ -819,23 +927,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def group_by(self, field: str, search: Q = Q(), **aggregations) -> List[Dict[str, Any]]:
         """
-        分组统计查询。
+        按指定字段分组统计。
 
-        使用示例：
-            results = await crud.group_by(
-                "gender",
-                Q(state=0),
-                count=Count("id"),
-                avg_age=Avg("age")
-            )
-            # 返回: [
-            #     {"gender": 1, "count": 50, "avg_age": 26},
-            #     {"gender": 2, "count": 45, "avg_age": 24}
-            # ]
+        每条结果同时包含分组字段与各聚合表达式的结果，目前仅支持单个分组字段。
 
         :param field: 分组字段
         :param search: 搜索条件
-        :param aggregations: 聚合函数字典
+        :param aggregations: 聚合表达式，键为结果字段名
         :return: 分组统计结果列表
         """
 
@@ -847,14 +945,9 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     @staticmethod
     def transactional(func):
         """
-        事务装饰器，自动包装异步函数在数据库事务中执行。
+        将异步函数包装进数据库事务。
 
-        使用示例：
-            class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
-                @ScaffoldCrud.transactional
-                async def transfer_money(self, from_id: int, to_id: int, amount: Decimal):
-                    await self.update(from_id, {"balance": F("balance") - amount})
-                    await self.update(to_id, {"balance": F("balance") + amount})
+        被装饰函数会收到注入的数据库连接关键字参数，函数抛出异常时事务整体回滚。
 
         :param func: 要包装的异步函数
         :return: 包装后的函数
@@ -881,10 +974,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             related_data: Optional[Dict[str, List[Union[BaseModel, Dict]]]] = None
     ) -> ModelType:
         """
-        创建记录及其关联数据(在事务中执行)。
+        在事务中创建主记录及其关联数据。
+
+        主记录与关联记录共用同一连接，任一步失败整体回滚；关联模型含维护字段时同样补齐
+        创建人与更新人。
 
         :param obj_in: 主记录创建数据
-        :param related_data: 关联数据字典，格式为{"field_name": [obj1, obj2, ...]}
+        :param related_data: 关联数据，键为关联字段名，值为待创建记录列表
         :return: 创建成功的主记录对象
         """
         async with in_transaction() as connection:
@@ -925,11 +1021,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             related_updates: Optional[Dict[str, List[Dict[str, Any]]]] = None
     ) -> ModelType:
         """
-        更新记录及其关联数据(在事务中执行)。
+        在事务中更新主记录及其关联数据。
 
-        :param id: 要更新的记录ID
+        主记录与关联记录共用同一连接，任一步失败整体回滚；关联项缺少主键时跳过。
+
+        :param id: 主记录主键
         :param obj_in: 主记录更新数据
-        :param related_updates: 关联数据更新字典，格式为{"field_name": [{"id": 1, "data": {...}}, ...]}
+        :param related_updates: 关联数据，键为关联字段名，值为带主键与更新字段的列表
         :return: 更新后的主记录对象
         """
         async with in_transaction() as connection:
@@ -964,10 +1062,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete(self, id: int, updated_user: Optional[str] = None) -> ModelType:
         """
-        软删除：将记录标记为已删除。
+        软删除单条记录。
 
-        :param id: 要软删除的记录ID
-        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
+        模型未继承状态混入类时拒绝执行；仅更新状态与更新人字段。
+
+        :param id: 记录主键
+        :param updated_user: 无登录上下文时回落的更新人
         :return: 更新后的数据库对象
         """
         obj = await self.get_or_error(id=id)
@@ -985,10 +1085,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete_restore(self, id: int, updated_user: Optional[str] = None) -> ModelType:
         """
-        恢复软删除的记录。
+        恢复已软删除的单条记录。
 
-        :param id: 要恢复的记录ID
-        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
+        模型未继承状态混入类时拒绝执行；仅更新状态与更新人字段。
+
+        :param id: 记录主键
+        :param updated_user: 无登录上下文时回落的更新人
         :return: 恢复后的数据库对象
         """
         obj = await self.get_or_error(id=id)
@@ -1013,13 +1115,15 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             order: Optional[list] = None
     ) -> Tuple[int, List[ModelType]]:
         """
-        查询已软删除的记录列表。
+        分页查询已软删除的记录。
 
-        :param page: 页码，从1开始
+        状态条件由方法强制注入，入参搜索条件与之取交集。
+
+        :param page: 页码，从 1 开始
         :param page_size: 每页记录数
         :param search: 额外的搜索条件
-        :param order: 排序字段列表，默认根据updated_time倒序
-        :return: (总记录数, 已删除记录列表)
+        :param order: 排序字段列表
+        :return: 记录总数与已删除记录列表
         """
         if not hasattr(self.model, 'state'):
             error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法查询已删除记录"
@@ -1032,10 +1136,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete_batch(self, ids: List[int], updated_user: Optional[str] = None) -> int:
         """
-        批量软删除。
+        批量软删除记录。
 
-        :param ids: 要软删除的记录ID列表
-        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
+        模型未继承状态混入类时拒绝执行；已处于删除状态的记录不重复更新。
+
+        :param ids: 记录主键列表
+        :param updated_user: 无登录上下文时回落的更新人
         :return: 实际更新的记录数
         """
         if not hasattr(self.model, 'state'):
@@ -1053,10 +1159,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def soft_delete_restore_batch(self, ids: List[int], updated_user: Optional[str] = None) -> int:
         """
-        批量恢复软删除的记录。
+        批量恢复已软删除的记录。
 
-        :param ids: 要恢复的记录ID列表
-        :param updated_user: 无登录上下文时的回落更新人；有登录上下文时以当前用户为准
+        模型未继承状态混入类时拒绝执行；仅更新处于删除状态的记录。
+
+        :param ids: 记录主键列表
+        :param updated_user: 无登录上下文时回落的更新人
         :return: 实际恢复的记录数
         """
         if not hasattr(self.model, 'state'):
@@ -1075,30 +1183,20 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
 class QueryBuilder(Generic[ModelType]):
     """
-    查询构建器，支持链式调用构建复杂查询。
+    链式查询构建器。
 
-    使用示例：
-        # 基础查询
-        results = await crud.query().filter(age__gte=18).all()
-
-        # 链式条件
-        results = await crud.query().filter(state=0).exclude(state=1).order_by("-created_time").limit(10).all()
-
-        # 分页
-        total, items = await crud.query().filter(state=0).paginate(page=1, page_size=20)
-
-        # 预加载关联
-        results = await crud.query().prefetch("roles", "permissions").all()
-
-        # 安全复用(使用clone)
-        base = crud.query().filter(state=0)
-        active_users = await base.clone().filter(state=0).all()
-        inactive_users = await base.clone().filter(state=1).all()
+    过滤、排除、排序、分页与预加载条件先累积在实例上，执行方法被调用时才组装并发出查询；
+    克隆方法返回互不影响的副本，便于复用同一组基础条件。
     """
 
     def __init__(self, model: Type[ModelType]):
+        """
+        初始化空条件的查询构建器。
+
+        :param model: 查询目标模型
+        """
         self.model = model
-        self._query = model.filter()
+        # 以下字段均为累积中的查询条件，执行时才参与查询组装
         self._filters: List[Q] = []
         self._excludes: List[Q] = []
         self._order_by: List[str] = []
@@ -1107,7 +1205,13 @@ class QueryBuilder(Generic[ModelType]):
         self._prefetch: List[str] = []
 
     def clone(self) -> 'QueryBuilder[ModelType]':
-        """克隆当前查询构建器，创建独立副本。"""
+        """
+        复制当前查询构建器。
+
+        新实例持有各条件列表的副本，与源实例互不影响。
+
+        :return: 条件相同的独立构建器
+        """
         new_builder = QueryBuilder(self.model)
         new_builder._filters = self._filters.copy()
         new_builder._excludes = self._excludes.copy()
@@ -1119,7 +1223,13 @@ class QueryBuilder(Generic[ModelType]):
 
     def filter(self, *args, **kwargs) -> 'QueryBuilder[ModelType]':
         """
-        添加过滤条件。
+        追加过滤条件。
+
+        位置参数按原样透传，关键字参数转为 Q 对象；返回自身以支持链式调用。
+
+        :param args: Q 对象或其他过滤表达式
+        :param kwargs: 字段过滤条件
+        :return: 当前构建器
         """
         if args:
             self._filters.extend(args)
@@ -1129,7 +1239,13 @@ class QueryBuilder(Generic[ModelType]):
 
     def exclude(self, *args, **kwargs) -> 'QueryBuilder[ModelType]':
         """
-        添加排除条件。
+        追加排除条件。
+
+        位置参数按原样透传，关键字参数转为 Q 对象；返回自身以支持链式调用。
+
+        :param args: Q 对象或其他排除表达式
+        :param kwargs: 字段排除条件
+        :return: 当前构建器
         """
         if args:
             self._excludes.extend(args)
@@ -1139,35 +1255,53 @@ class QueryBuilder(Generic[ModelType]):
 
     def order_by(self, *fields: str) -> 'QueryBuilder[ModelType]':
         """
-        添加排序字段。
+        追加排序字段。
+
+        字段名前缀减号表示倒序，返回自身以支持链式调用。
+
+        :param fields: 排序字段
+        :return: 当前构建器
         """
         self._order_by.extend(fields)
         return self
 
     def offset(self, offset: int) -> 'QueryBuilder[ModelType]':
         """
-        设置偏移量。
+        设置结果起始偏移量。
+
+        :param offset: 跳过的记录数
+        :return: 当前构建器
         """
         self._offset = offset
         return self
 
     def limit(self, limit: int) -> 'QueryBuilder[ModelType]':
         """
-        设置限制数量。
+        设置单次返回的最大记录数。
+
+        :param limit: 最大记录数
+        :return: 当前构建器
         """
         self._limit = limit
         return self
 
     def prefetch(self, *fields: str) -> 'QueryBuilder[ModelType]':
         """
-        预加载关联字段。
+        追加需要预加载的关联字段。
+
+        :param fields: 关联字段名
+        :return: 当前构建器
         """
         self._prefetch.extend(fields)
         return self
 
     def _build_query(self) -> QuerySet:
         """
-        构建最终查询。
+        按累积条件组装查询集。
+
+        依次应用过滤、排除、排序、分页与预加载，未设置的分页参数不参与组装。
+
+        :return: 可直接执行的查询集
         """
         query = self.model.filter()
 
@@ -1197,29 +1331,37 @@ class QueryBuilder(Generic[ModelType]):
 
     async def all(self) -> List[ModelType]:
         """
-        执行查询，返回所有结果。
+        执行查询并返回全部结果。
+
+        :return: 模型实例列表
         """
         return await self._build_query().all()
 
     async def first(self) -> Optional[ModelType]:
         """
-        执行查询，返回第一条结果。
+        执行查询并返回首条结果。
+
+        :return: 首条模型实例，无结果时为空值
         """
         return await self._build_query().first()
 
     async def count(self) -> int:
         """
-        统计数量。
+        统计满足条件的记录数。
+
+        :return: 记录数量
         """
         return await self._build_query().count()
 
     async def paginate(self, page: int = 1, page_size: int = 10) -> Tuple[int, List[ModelType]]:
         """
-        分页查询。
+        执行分页查询。
 
-        :param page: 页码，从1开始
+        先取总数，再按页码与每页数量计算偏移后取当前页数据。
+
+        :param page: 页码，从 1 开始
         :param page_size: 每页数量
-        :return: (总记录数, 当前页记录列表)
+        :return: 记录总数与当前页记录列表
         """
         query = self._build_query()
         total = await query.count()
@@ -1232,6 +1374,8 @@ class QueryBuilder(Generic[ModelType]):
 
     async def exists(self) -> bool:
         """
-        检查是否存在。
+        判断是否存在满足条件的记录。
+
+        :return: 存在返回真，否则返回假
         """
         return await self._build_query().exists()

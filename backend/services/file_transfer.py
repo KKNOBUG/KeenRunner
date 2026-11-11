@@ -23,6 +23,11 @@ from backend.core.exceptions import UploadFileException, FileExtensionException,
 
 
 class FileTransfer:
+    """
+    文件传输工具集。
+
+    提供 base64 解码、分块落盘与分块读取三项能力，全部以静态方法提供，不持有实例状态。
+    """
 
     @staticmethod
     async def process_base64_file(
@@ -30,10 +35,14 @@ class FileTransfer:
             original_filename: str,
     ) -> Tuple[bytes, str, str]:
         """
-        处理base64编码的文件数据
-        :param base64_data: base64编码的文件数据
-        :param original_filename: 原始文件名
-        :return: (文件内容, 文件名, content_type)
+        解析 base64 编码的文件数据。
+
+        同时兼容 data URI 与纯 base64 两种输入，data URI 携带的媒体类型优先于文件名推断结果；
+        解码失败统一转为值错误，由调用方决定后续提示。
+
+        :param base64_data: base64 编码的文件数据，可携带 data URI 前缀
+        :param original_filename: 原始文件名，用于推断媒体类型
+        :return: 解码后的文件内容、文件名与媒体类型
         """
         try:
             # 解析 data URI
@@ -51,7 +60,7 @@ class FileTransfer:
 
             return file_content, original_filename, content_type
         except Exception as e:
-            raise ValueError(f"处理base64文件数据失败: {str(e)}")
+            raise ValueError("处理 base64 文件数据失败，请检查文件内容是否完整") from e
 
     @staticmethod
     async def save_upload_file_chunks(
@@ -68,18 +77,22 @@ class FileTransfer:
             upload_file_size: Literal["tiny", "micro", "small", "medium", "large", "huge"] = 'tiny',
     ) -> Tuple[bool, str]:
         """
-        将上传的文件以分块的方式保存到指定的目标路径
-        :param upload_file: 上传的文件对象
-        :param destination: 文件保存地址
-        :param add_timestamp: 是否为上传的文件添加时间戳
-        :param check_filename: 是否检查文件名称是否符合规范
-        :param check_filetype: 是否检查文件后缀是否符合规范
-        :param check_filesize: 是否检查文件体积是否符合规范
-        :param add_left_identifier: 是否为上传的文件添加标识符(左边)
-        :param add_right_identifier: 是否为上传的文件添加标识符(左边)
-        :param chunk_size: 异步分块的大小
-        :param upload_file_size: 文件的体积限制
-        :return:
+        将上传文件分块写入上传目录。
+
+        依次执行文件名清洗、类型校验、体积校验与目录创建，任一项不通过即抛出对应异常；
+        写入阶段（含写入路径二次校验）失败不再抛出，统一返回失败标记与可读提示，由调用方决定响应。
+
+        :param upload_file: 上传文件对象，或包含 file 与 filename 的数据字典
+        :param destination: 上传目录下的子目录
+        :param add_timestamp: 是否在文件名前追加时间戳
+        :param check_filename: 是否清洗文件名中的特殊字符
+        :param check_filetype: 是否校验文件后缀
+        :param check_filesize: 是否校验文件体积
+        :param add_left_identifier: 追加在文件名左侧的标识
+        :param add_right_identifier: 追加在文件名右侧的标识
+        :param chunk_size: 单次异步读取的分块大小
+        :param upload_file_size: 体积限制档位，对应体积限制配置的键
+        :return: 写入结果与落盘后的绝对路径，失败时第二项为可读提示
         """
         # 处理不同类型的文件上传
         if isinstance(upload_file, dict):
@@ -149,25 +162,34 @@ class FileTransfer:
                     # 确保上传文件资源被正确释放
                     await upload_file.close()
             return True, destination_path
-        except Exception as e:
-            error_msg = f"上传或更新数据文件发生错误: {str(e)}"
-            LOGGER.error(traceback.format_exc())
-            return False, error_msg
+        except Exception:
+            # 返回值会进入上传接口日志，原始异常只写服务端日志
+            error_message: str = "上传文件失败，请检查文件名称、格式与大小是否符合要求后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [destination={destination}, filename={filename}, file_size={file_size}]\n"
+                f"{traceback.format_exc()}"
+            )
+            return False, error_message
 
     @staticmethod
     async def iter_download_file_chunks(download_file: str, chunk_size: int = 1024 * 1024, add_bom: bool = False) -> Iterable[bytes]:
         """
-        用于以分块的方式读取指定文件的内容，并通过生成器逐块返回，适用于流式下载文件
-        :param download_file: 下载的文件对象
-        :param chunk_size: 块的大小
-        :param add_bom: Windows 系统中记事本对于编码支持较差，UTF-8无BOM会导致内容乱码，加上BOM可解决因为 Windows 记事本不兼容问题，但二进制文件，如xlsx、zip、mp3等文件不可添加，否则会导致文件损坏
-        :return:
+        以分块方式读取文件，用于流式下载。
+
+        读取前校验路径必须落在输出目录内，越界直接抛出无权限异常；响应头一经发出便无法
+        再转为统一响应，因此迭代阶段的非权限异常只记录日志后原样抛出。
+
+        :param download_file: 待下载文件的绝对路径
+        :param chunk_size: 单次读取的分块大小
+        :param add_bom: 是否为 UTF-8 文本补充 BOM，二进制文件不可开启
+        :return: 文件内容分块的可迭代对象
         """
         download_file: str = os.path.normpath(download_file)
         if not download_file.startswith(PROJECT_CONFIG.OUTPUT_DIR):
             raise NoPermissionException(message="请求路径不被允许")
 
-        # 检查文件是否为UTF-8编码
+        # 预读文件头，判断内容是否已带 BOM
         UTF8_BOM = b"\xef\xbb\xbf"
         async with aiofiles.open(file=download_file, mode="rb") as pre_read:
             start = await pre_read.read(3)
@@ -186,5 +208,14 @@ class FileTransfer:
                         first_chunk = False
                     # 生成当前块的数据
                     yield chunk
-        except Exception as e:
-            raise NoPermissionException(message="请求路径不被允许")
+        except NoPermissionException:
+            raise
+        except Exception:
+            # 迭代阶段响应头已发出，异常无法转为统一响应，记录后中断下载
+            error_message: str = "下载文件失败，暂时无法读取文件内容，请稍后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [filepath={download_file}]\n"
+                f"{traceback.format_exc()}"
+            )
+            raise
