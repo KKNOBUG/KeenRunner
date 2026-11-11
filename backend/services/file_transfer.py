@@ -38,7 +38,7 @@ class FileTransfer:
         解析 base64 编码的文件数据。
 
         同时兼容 data URI 与纯 base64 两种输入，data URI 携带的媒体类型优先于文件名推断结果；
-        解码失败统一转为值错误，由调用方决定后续提示。
+        解码失败统一转为上传文件异常，由调用方决定后续提示。
 
         :param base64_data: base64 编码的文件数据，可携带 data URI 前缀
         :param original_filename: 原始文件名，用于推断媒体类型
@@ -60,7 +60,7 @@ class FileTransfer:
 
             return file_content, original_filename, content_type
         except Exception as e:
-            raise ValueError("处理 base64 文件数据失败，请检查文件内容是否完整") from e
+            raise UploadFileException(message="文件内容解析失败，请确认文件完整后重新上传") from e
 
     @staticmethod
     async def save_upload_file_chunks(
@@ -98,7 +98,7 @@ class FileTransfer:
         if isinstance(upload_file, dict):
             # 处理base64编码的文件数据
             if 'file' not in upload_file or 'filename' not in upload_file:
-                raise ValueError("缺少必要的文件信息")
+                raise UploadFileException(message="文件信息不完整，请重新选择文件后上传")
 
             file_content, filename, content_type = await FileTransfer.process_base64_file(
                 upload_file['file'],
@@ -189,15 +189,14 @@ class FileTransfer:
         if not download_file.startswith(PROJECT_CONFIG.OUTPUT_DIR):
             raise NoPermissionException(message="请求路径不被允许")
 
-        # 预读文件头，判断内容是否已带 BOM
+        # 预读文件头判断 BOM，与正式读取同处 try 内，文件缺失等异常才能落到日志
         UTF8_BOM = b"\xef\xbb\xbf"
-        async with aiofiles.open(file=download_file, mode="rb") as pre_read:
-            start = await pre_read.read(3)
-        not_exist_bom: bool = start != UTF8_BOM
-
         first_chunk = True
         # 使用 aiofiles 异步打开文件，以二进制读取模式
         try:
+            async with aiofiles.open(file=download_file, mode="rb") as pre_read:
+                start = await pre_read.read(3)
+            not_exist_bom: bool = start != UTF8_BOM
             async with aiofiles.open(file=download_file, mode="rb") as out_file:
                 if not download_file.startswith(PROJECT_CONFIG.OUTPUT_DIR):
                     raise NoPermissionException(message="请求路径不被允许")

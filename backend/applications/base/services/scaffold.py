@@ -497,11 +497,16 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         if not order:
             return []
         cleaned: list = []
-        for item in order:
+        for index, item in enumerate(order):
             if item is None:
                 continue
             if not isinstance(item, str):
-                raise ParameterException(message=f"排序字段必须为字符串, 实际: {type(item).__name__}")
+                error_message: str = "排序字段必须为字符串，请检查排序参数的写法"
+                LOGGER.warning(
+                    f"{error_message}, "
+                    f"关键字段: [index={index}, type={type(item).__name__}]"
+                )
+                raise ParameterException(message=error_message)
             field = item.strip()
             if not field or field in ("-", "+"):
                 continue
@@ -625,7 +630,11 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         try:
             return await self.model.get(id=id, **kwargs)
         except DoesNotExist as e:
-            error_message: str = f"查询{self.model.__name__}失败, 记录[id={id}]不存在"
+            error_message: str = "查询目标数据不存在或已被删除，请刷新后重试"
+            LOGGER.warning(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, id={id}, conditions={kwargs}]"
+            )
             raise NotFoundException(message=error_message) from e
 
     async def get_or_none(self, id: int, **kwargs) -> Optional[ModelType]:
@@ -741,7 +750,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             instances.append(self.model(**obj_dict))
 
         await self.model.bulk_create(instances)
-        LOGGER.info(f"批量创建成功: {self.model.__name__}, 数量={len(instances)}")
+        LOGGER.info(f"批量创建成功, 关键字段: [model={self.model.__name__}, count={len(instances)}]")
         return instances
 
     async def update(self, id: int, obj_in: Union[UpdateSchemaType, Dict[str, Any]]) -> ModelType:
@@ -776,7 +785,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 )
                 raise DataBaseStorageException(message=error_message) from e
             raise
-        LOGGER.info(f"更新成功: {self.model.__name__}(id={id}), 字段: {list(obj_dict.keys())}")
+        LOGGER.info(f"更新成功, 关键字段: [model={self.model.__name__}, id={id}, fields={list(obj_dict.keys())}]")
         return obj
 
     async def batch_update(self, updates: List[Dict[str, Any]], key_field: str = "id", strict: bool = True) -> int:
@@ -799,10 +808,13 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         valid_fields.update(self.model._meta.fk_fields)
 
         total_updated = 0
-        for update_data in updates:
+        for index, update_data in enumerate(updates):
             key_value = update_data.get(key_field)
             if not key_value:
-                LOGGER.warning(f"批量更新跳过: 缺少{key_field}字段")
+                LOGGER.warning(
+                    f"批量更新跳过, 缺少条件字段, "
+                    f"关键字段: [model={self.model.__name__}, index={index}, key_field={key_field}]"
+                )
                 continue
 
             # 移除条件字段
@@ -812,10 +824,16 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             invalid_fields = set(update_dict.keys()) - valid_fields
             if invalid_fields:
                 if strict:
-                    LOGGER.error(f"批量更新跳过(id={key_value}): 包含不存在的字段: {invalid_fields}")
+                    LOGGER.warning(
+                        f"批量更新跳过, 包含不存在的字段, "
+                        f"关键字段: [model={self.model.__name__}, id={key_value}, invalid_fields={invalid_fields}]"
+                    )
                     continue
                 else:
-                    LOGGER.warning(f"批量更新忽略字段(id={key_value}): {invalid_fields}")
+                    LOGGER.warning(
+                        f"批量更新忽略字段, "
+                        f"关键字段: [model={self.model.__name__}, id={key_value}, invalid_fields={invalid_fields}]"
+                    )
                     for field in invalid_fields:
                         update_dict.pop(field, None)
 
@@ -828,14 +846,14 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             count = await self.model.filter(**{key_field: key_value}).update(**update_dict)
             total_updated += count
 
-        LOGGER.info(f"批量更新成功: {self.model.__name__}, 数量={total_updated}")
+        LOGGER.info(f"批量更新成功, 关键字段: [model={self.model.__name__}, count={total_updated}]")
         return total_updated
 
     async def remove_or_error(self, id: int, **kwargs) -> ModelType:
         """
         删除单条记录。
 
-        记录不存在时抛出记录不存在异常，删除为物理删除且不写日志。
+        记录不存在时抛出记录不存在异常，删除为物理删除。
 
         :param id: 记录主键
         :param kwargs: 额外的过滤条件
@@ -843,6 +861,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         obj = await self.get_or_error(id=id, **kwargs)
         await obj.delete()
+        LOGGER.info(f"删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
         return obj
 
     async def hard_delete(self, id: int) -> ModelType:
@@ -856,7 +875,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         obj = await self.get_or_error(id=id)
         await obj.delete()
-        LOGGER.info(f"硬删除成功: {self.model.__name__}(id={id})")
+        LOGGER.info(f"硬删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
         return obj
 
     async def hard_batch_delete(self, ids: List[int]) -> int:
@@ -872,7 +891,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return 0
 
         count = await self.model.filter(id__in=ids).delete()
-        LOGGER.info(f"批量硬删除成功: {self.model.__name__}, 数量={count}, ids={ids}")
+        LOGGER.info(f"批量硬删除成功, 关键字段: [model={self.model.__name__}, count={count}, ids={ids}]")
         return count
 
     def query(self) -> 'QueryBuilder[ModelType]':
@@ -1011,7 +1030,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                             self.fill_created_user(item_dict, model=related_model)
                         await related_manager.create(**item_dict, using_db=connection)
 
-            LOGGER.info(f"事务创建成功: {self.model.__name__}(id={obj.id})")
+            LOGGER.info(f"事务创建成功, 关键字段: [model={self.model.__name__}, id={obj.id}]")
             return obj
 
     async def update_with_related(
@@ -1057,7 +1076,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                                 self.fill_updated_user(item_data, model=related_model)
                             await related_manager.filter(id=item_id).update(**item_data, using_db=connection)
 
-            LOGGER.info(f"事务更新成功: {self.model.__name__}(id={id})")
+            LOGGER.info(f"事务更新成功, 关键字段: [model={self.model.__name__}, id={id}]")
             return obj
 
     async def soft_delete(self, id: int, updated_user: Optional[str] = None) -> ModelType:
@@ -1072,15 +1091,18 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         obj = await self.get_or_error(id=id)
         if not hasattr(obj, 'state'):
-            error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行软删除"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+            error_message: str = "当前功能暂不可用，请联系管理员处理"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, id={id}, action=soft_delete]"
+            )
+            raise DataBaseStorageException(message=error_message)
 
         values = self.soft_delete_values(updated_user=updated_user)
         for key, value in values.items():
             setattr(obj, key, value)
         await obj.save(update_fields=list(values.keys()))
-        LOGGER.info(f"软删除成功: {self.model.__name__}(id={id})")
+        LOGGER.info(f"软删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
         return obj
 
     async def soft_delete_restore(self, id: int, updated_user: Optional[str] = None) -> ModelType:
@@ -1096,15 +1118,18 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         obj = await self.get_or_error(id=id)
 
         if not hasattr(obj, 'state'):
-            error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行恢复操作"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+            error_message: str = "当前功能暂不可用，请联系管理员处理"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, id={id}, action=soft_delete_restore]"
+            )
+            raise DataBaseStorageException(message=error_message)
 
         values = self.soft_restore_values(updated_user=updated_user)
         for key, value in values.items():
             setattr(obj, key, value)
         await obj.save(update_fields=list(values.keys()))
-        LOGGER.info(f"恢复软删除成功: {self.model.__name__}(id={id})")
+        LOGGER.info(f"恢复软删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
         return obj
 
     async def soft_deleted_list(
@@ -1126,9 +1151,12 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :return: 记录总数与已删除记录列表
         """
         if not hasattr(self.model, 'state'):
-            error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法查询已删除记录"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+            error_message: str = "当前功能暂不可用，请联系管理员处理"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, action=soft_deleted_list]"
+            )
+            raise DataBaseStorageException(message=error_message)
 
         # 强制添加 state=1 条件
         q = Q(state=1) & search
@@ -1145,16 +1173,19 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :return: 实际更新的记录数
         """
         if not hasattr(self.model, 'state'):
-            error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量软删除"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+            error_message: str = "当前功能暂不可用，请联系管理员处理"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, ids={ids}, action=soft_delete_batch]"
+            )
+            raise DataBaseStorageException(message=error_message)
 
         if not ids:
             return 0
 
         update_fields = self.soft_delete_values(updated_user=updated_user)
         count = await self.model.filter(id__in=ids, state__not=1).update(**update_fields)
-        LOGGER.info(f"批量软删除成功: {self.model.__name__}, 数量={count}, ids={ids}")
+        LOGGER.info(f"批量软删除成功, 关键字段: [model={self.model.__name__}, count={count}, ids={ids}]")
         return count
 
     async def soft_delete_restore_batch(self, ids: List[int], updated_user: Optional[str] = None) -> int:
@@ -1168,16 +1199,19 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         :return: 实际恢复的记录数
         """
         if not hasattr(self.model, 'state'):
-            error_message: str = f"模型[{self.model.__name__}]未继承 StateModel，无法执行批量恢复"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+            error_message: str = "当前功能暂不可用，请联系管理员处理"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [model={self.model.__name__}, ids={ids}, action=soft_delete_restore_batch]"
+            )
+            raise DataBaseStorageException(message=error_message)
 
         if not ids:
             return 0
 
         update_fields = self.soft_restore_values(updated_user=updated_user)
         count = await self.model.filter(id__in=ids, state=1).update(**update_fields)
-        LOGGER.info(f"批量恢复成功: {self.model.__name__}, 数量={count}, ids={ids}")
+        LOGGER.info(f"批量恢复成功, 关键字段: [model={self.model.__name__}, count={count}, ids={ids}]")
         return count
 
 
