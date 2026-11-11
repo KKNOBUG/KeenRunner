@@ -14,7 +14,7 @@ from loguru import logger as LOGGER
 from starlette.exceptions import HTTPException
 from tortoise.exceptions import DoesNotExist
 
-from backend.core.exceptions.base_exceptions import NoPermissionException
+from backend.core.exceptions.base_exceptions import BaseExceptions, NoPermissionException
 from backend.core.responses import (
     BaseResponse,
     ParameterResponse,
@@ -130,21 +130,41 @@ async def no_permission_exception_handler(request: Request, exc: NoPermissionExc
     return ForbiddenResponse(message=exc.message)
 
 
+async def base_exceptions_handler(request: Request, exc: BaseExceptions) -> BaseResponse:
+    """
+    将项目自定义业务异常映射为统一失败响应。
+
+    业务异常属于可预期失败，只记录告警与错误码，不输出堆栈；
+    响应沿用失败响应的状态码与错误码，提示文案取自异常携带的业务提示。
+
+    :param request: 当前请求，用于日志记录请求方法与路径
+    :param exc: 项目自定义异常，携带业务错误码与可读提示
+    :return: 失败响应，message 为异常携带的业务提示
+    """
+    LOGGER.warning(
+        f"{exc.message}, "
+        f"关键字段: [method={request.method}, path={request.url.path}, "
+        f"code={exc.code}, exception_type={type(exc).__name__}]"
+    )
+    return FailureResponse(message=exc.message)
+
+
 async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> BaseResponse:
     """
     将 Tortoise 查询结果为空转为 404 响应。
 
-    ORM 原文包含模型名与查询条件，只写入日志；用户侧统一为可理解的业务提示。
+    查询结果为空属于可预期情况，只记录告警，不输出堆栈；
+    ORM 原文包含模型名与查询条件，不返回给用户。
 
     :param request: 当前请求，用于日志记录请求方法与路径
     :param exc: ORM 的 DoesNotExist 异常
     :return: 404 响应
     """
     error_message: str = "查询目标数据不存在或已被删除，请刷新后重试"
-    LOGGER.error(
+    LOGGER.warning(
         f"{error_message}, "
-        f"关键字段: [method={request.method}, path={request.url.path}]\n"
-        f"{traceback.format_exc()}"
+        f"关键字段: [method={request.method}, path={request.url.path}, "
+        f"exception_type={type(exc).__name__}]"
     )
     return NotFoundResponse(message=error_message)
 

@@ -27,12 +27,13 @@ from tortoise.contrib.fastapi import register_tortoise
 from tortoise.exceptions import DoesNotExist
 
 from backend.configure import PROJECT_CONFIG, LOGGER
-from backend.core.exceptions import NoPermissionException
+from backend.core.exceptions import BaseExceptions, NoPermissionException
 from backend.core.exceptions.http_exceptions import (
     request_validation_exception_handler,
     response_validation_exception_handler,
     http_exception_handler,
     no_permission_exception_handler,
+    base_exceptions_handler,
     null_point_exception_handler,
     app_exception_handler,
 )
@@ -169,6 +170,11 @@ def register_exceptions(app: FastAPI) -> None:
     app.add_exception_handler(
         exc_class_or_status_code=NoPermissionException,
         handler=no_permission_exception_handler
+    )
+    # 其余项目自定义业务异常统一按告警记录并还原业务提示，避免被通用兜底改写为未知错误
+    app.add_exception_handler(
+        exc_class_or_status_code=BaseExceptions,
+        handler=base_exceptions_handler
     )
     # 当使用 Tortoise ORM 进行数据库查询时，如果查询结果为空，会触发 DoesNotExist 异常
     app.add_exception_handler(
