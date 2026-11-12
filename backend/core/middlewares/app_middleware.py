@@ -56,6 +56,21 @@ MASKED_VALUE: str = "******"
 NON_JSON_CONTENT: str = "<NON-JSON CONTENT>"
 
 
+def _mask_secret_value(value: Any) -> Any:
+    """
+    遮蔽单个凭证值并保留首尾各三分之一；非字符串与空值原样返回，长度不足三时整体遮蔽。
+
+    :param value: 凭证字段值
+    :returns: 遮蔽后的值
+    """
+    if not isinstance(value, str) or not value:
+        return value
+    keep: int = len(value) // 3
+    if keep <= 0:
+        return MASKED_VALUE
+    return f"{value[:keep]}{MASKED_VALUE}{value[-keep:]}"
+
+
 def _mask_sensitive(payload: Any) -> Any:
     """递归遮蔽字典/列表中的凭证字段，保留原始结构以保留审计可读性。
 
@@ -65,7 +80,7 @@ def _mask_sensitive(payload: Any) -> Any:
     if isinstance(payload, dict):
         return {
             key: (
-                f"{value[:int(len(str(value)) / 3)]}{MASKED_VALUE}{value[-(int(len(str(value)) / 3)):]}"
+                _mask_secret_value(value)
                 if any(word in str(key).lower() for word in MASKED_FIELD_KEYWORDS)
                 else _mask_sensitive(value)
             )
