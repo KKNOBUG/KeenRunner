@@ -943,7 +943,7 @@ async def execute_step_tree(
                     f"dataset_count={len(selected_dataset_names)}"
                 )
                 return SuccessResponse(
-                    message="执行任务已提交后台执行，请稍后在异步中心查看结果",
+                    message="执行任务已提交后台执行，请稍后在执行历史中查看结果",
                     data={
                         "parameterized": True,
                         "async": True,
