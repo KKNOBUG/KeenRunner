@@ -13,7 +13,8 @@
       "text_login": "Login",
       "message_input_username_password": "Please enter username and password",
       "message_verifying": "Verifying...",
-      "message_login_success": "Login successful"
+      "message_login_success": "Login successful",
+      "message_password_too_long": "Password must not exceed 32 characters"
     },
     "workbench": {
       "label_workbench": "Workbench",
@@ -51,7 +52,8 @@
       "message_old_password_required": "Please enter the old password",
       "message_new_password_required": "Please enter a new password",
       "message_password_confirmation_required": "Please enter confirm password",
-      "message_password_confirmation_diff": "Two password inputs are inconsistent"
+      "message_password_confirmation_diff": "Two password inputs are inconsistent",
+      "message_password_too_long": "Password must not exceed 32 characters"
     },
     "errors": {
       "label_error": "Error",

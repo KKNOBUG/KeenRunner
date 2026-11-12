@@ -147,6 +147,12 @@ views/autotest_data_source_view.py (/autotest/data_source/*)
 - 报告读模型：`/report/search`（手工报告）、`/report/search_task_batches`（task_code 批次）、`/report/search_batch_scripts`（batch_code 脚本维度）、`/report/search_script_round_reports`（batch_code+case_id+round_no）、`/report/search_batch_reports`；报告明细树由 `/detail/search_tree` 后端组装。
 - 列表页与删除入口：报告 `/report/search`、执行明细 `/detail/search`（菜单 `/autotest/detail`）、执行记录 `/task/record/search`（菜单 `/task/record`）、异步中心（同执行记录接口 + `task_type_in` 过滤）；四页均支持列表多选批量删除，行级删除按钮按后端回传的 `can_delete` 控制。
 
+**环境配置命名约定**：
+- `config_name` 是同应用、同节点类型（app/file/database/redis）下的**跨环境逻辑唯一键**：步骤编辑按名称选配置，执行/调试时才由环境确定具体 host/port。
+- 四个 `/autotest/config/{app|file|database|redis}/update` 共用 `AutoTestEnvConfigCrud.update_config`；检测到 `config_name` 变化时由 `_rename_config_across_envs` 在同一事务内把同项目同 `env_type` 下所有启用绑定中的同名启用配置一起改名。缺失该配置的环境不同步也不补建，软删绑定/软删配置不参与；目标名称在任一环境被占用（含软删记录）或任一待改配置无写权限时整体拒绝，错误文案点出具体环境。
+- 改名与换环境不能同时提交（同步范围会失去唯一口径），由 `update_config` 直接拒绝；`config_name` 为空或纯空白同样在服务层兜底拒绝，不能依赖前端必填校验。
+- 改名**不级联**步骤与压测引用：步骤里的旧 `config_name` 会在调试/执行按名查库时报“配置不存在”，需在步骤编辑重新选择；任务 `cases_execute_config` 是 host/port 快照，已保存的执行配置不受影响。
+
 **调试模式**（不落库，顺序严格对齐执行模式）：
 ```
 views (/http_debugging, /tcp_debugging)

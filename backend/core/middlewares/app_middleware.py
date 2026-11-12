@@ -65,7 +65,7 @@ def _mask_sensitive(payload: Any) -> Any:
     if isinstance(payload, dict):
         return {
             key: (
-                MASKED_VALUE
+                f"{value[:int(len(str(value)) / 3)]}{MASKED_VALUE}{value[-(int(len(str(value)) / 3)):]}"
                 if any(word in str(key).lower() for word in MASKED_FIELD_KEYWORDS)
                 else _mask_sensitive(value)
             )
@@ -208,11 +208,12 @@ async def logging_middleware(request: Request, call_next):
     # 路由排除（静态文件&OpenApi文档&审计自身查询）；拒绝事件响应体很小，
     # 即使是排除路由也要落审计，避免越权探测无痕
     excluded_route: bool = request_router.startswith("/static/") or request_router in (
-            '/',
-            '/base/audit/list',
-            PROJECT_CONFIG.APP_DOCS_URL,
-            PROJECT_CONFIG.APP_REDOC_URL,
-            PROJECT_CONFIG.APP_OPENAPI_URL,
+        '/',
+        '/base/audit/list',
+        '/base/audit/search',
+        PROJECT_CONFIG.APP_DOCS_URL,
+        PROJECT_CONFIG.APP_REDOC_URL,
+        PROJECT_CONFIG.APP_OPENAPI_URL,
     )
     if not excluded_route or denied:
         # 消费响应体

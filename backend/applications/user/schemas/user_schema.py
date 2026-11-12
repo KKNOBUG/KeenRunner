@@ -45,7 +45,7 @@ class UserCreate(UserBase):
     """新增用户入参。"""
 
     username: str = Field(..., min_length=1, max_length=16, description="用户账号")
-    password: str = Field(..., min_length=1, max_length=255, description="用户密码")
+    password: str = Field(..., min_length=1, max_length=32, description="用户密码(明文，最长32位)")
     alias: str = Field(..., max_length=32, description="用户姓名")
     email: Optional[EmailStr] = Field(default=None, max_length=64, description="用户邮箱(非必填)")
     gender: int = Field(default=0, ge=0, le=2, description="用户性别: 0未知 1男 2女")
@@ -58,7 +58,7 @@ class UserCreate(UserBase):
     @field_validator("username", mode="before")
     @classmethod
     def _validate_username(cls, value):
-        """用户账号去空白；空白账号直接拒绝，避免写入不可登录的脏账号。"""
+        """用户账号去空白。"""
         if isinstance(value, str):
             value = value.strip()
             if not value:
@@ -82,11 +82,12 @@ class UserUpdate(UserBase):
     user_id: int = Field(..., ge=1, description="用户ID")
     state: Optional[int] = Field(default=None, description="状态(0:启用, 1:禁用)")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
+    password: Optional[str] = Field(default=None, description="禁止通过本接口修改密码，传值将被拒绝")
 
     @field_validator("username", mode="before")
     @classmethod
     def _validate_username(cls, value):
-        """更新时同样禁止把账号改成空白。"""
+        """用户账号去空白。"""
         if isinstance(value, str):
             value = value.strip()
             if not value:
@@ -112,5 +113,5 @@ class UserSelect(UserBase):
 class UpdatePassword(BaseModel):
     """用户修改密码入参。"""
 
-    old_password: str = Field(description="旧密码")
-    new_password: str = Field(description="新密码")
+    old_password: str = Field(..., min_length=1, max_length=32, description="旧密码(明文，最长32位)")
+    new_password: str = Field(..., min_length=1, max_length=32, description="新密码(明文，最长32位)")

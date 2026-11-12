@@ -82,11 +82,21 @@ const passwordFormRules = {
       message: t('views.profile.message_old_password_required'),
       trigger: ['input', 'blur', 'change'],
     },
+    {
+      validator: validatePasswordLength,
+      message: t('views.profile.message_password_too_long'),
+      trigger: ['input', 'blur', 'change'],
+    },
   ],
   new_password: [
     {
       required: true,
       message: t('views.profile.message_new_password_required'),
+      trigger: ['input', 'blur', 'change'],
+    },
+    {
+      validator: validatePasswordLength,
+      message: t('views.profile.message_password_too_long'),
       trigger: ['input', 'blur', 'change'],
     },
   ],
@@ -107,6 +117,10 @@ const passwordFormRules = {
       trigger: ['blur', 'password-input'],
     },
   ],
+}
+function validatePasswordLength(rule, value) {
+  // 超长不做截断，交给表单提示，保证用户看到的与实际提交的一致
+  return !value || value.length <= 32
 }
 function validatePasswordStartWith(rule, value) {
   return (

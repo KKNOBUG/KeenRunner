@@ -30,7 +30,6 @@
               type="password"
               show-password-on="mousedown"
               placeholder="KFuser01@!"
-              :maxlength="20"
               @keypress.enter="handleLogin"
           />
         </div>
@@ -89,6 +88,11 @@ async function handleLogin() {
   const {username, password} = loginInfo.value
   if (!username || !password) {
     $message.warning(t('views.login.message_input_username_password'))
+    return
+  }
+  // 超长密码不做截断（截断会改变用户输入导致永远登不上），直接提示修改
+  if (password.length > 32) {
+    $message.error(t('views.login.message_password_too_long'))
     return
   }
   try {

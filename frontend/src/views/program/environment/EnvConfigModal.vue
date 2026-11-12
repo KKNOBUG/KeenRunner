@@ -13,7 +13,12 @@
             path="config_name"
             :rule="{ required: true, message: '请输入配置名称', trigger: ['input', 'blur'] }"
         >
-          <NInput v-model:value="form.config_name" maxlength="128"/>
+          <div class="config-name-field">
+            <NInput v-model:value="form.config_name" maxlength="128"/>
+            <NText v-if="mode === 'edit'" depth="3" class="config-name-hint">
+              修改名称将同步该应用下所有环境的同名配置
+            </NText>
+          </div>
         </NFormItem>
         <NFormItem
             label="环境"
@@ -159,7 +164,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpace } from 'naive-ui'
+import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpace, NText } from 'naive-ui'
 import api from '@/api'
 import { useUserStore } from '@/store'
 import { ENV_TYPE, ENV_TYPE_LABEL } from './envType'
@@ -348,5 +353,16 @@ watch(
 
 .full-row {
   grid-column: 1 / -1;
+}
+
+.config-name-field {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.config-name-hint {
+  margin-top: 2px;
+  font-size: 12px;
 }
 </style>

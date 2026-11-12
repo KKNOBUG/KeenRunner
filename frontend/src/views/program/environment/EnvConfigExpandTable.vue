@@ -17,7 +17,7 @@
         :config-type="modalType"
         :env-row="envRow"
         :config-row="modalRow"
-        @saved="reload"
+        @saved="onConfigSaved"
     />
   </div>
 </template>
@@ -44,6 +44,8 @@ const props = defineProps({
 const vPermission = resolveDirective('permission')
 const userStore = useUserStore()
 const envType = props.envRow.env_type || ENV_TYPE.APP
+/** 配置改名会同步所有环境的同名配置，需上抛父级刷新其他已展开子表 */
+const emit = defineEmits(['saved'])
 
 const EDIT_PERM = UPDATE_CONFIG_PERM
 const CREATE_PERM = CREATE_CONFIG_PERM
@@ -222,6 +224,11 @@ async function reload() {
   } finally {
     loading.value = false
   }
+}
+
+function onConfigSaved() {
+  reload()
+  emit('saved')
 }
 
 onMounted(reload)

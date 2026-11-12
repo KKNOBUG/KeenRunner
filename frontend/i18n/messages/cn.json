@@ -13,7 +13,8 @@
       "text_login": "登录",
       "message_input_username_password": "请输入用户名和密码",
       "message_verifying": "正在验证...",
-      "message_login_success": "登录成功"
+      "message_login_success": "登录成功",
+      "message_password_too_long": "密码长度不能超过32位"
     },
     "workbench": {
       "label_workbench": "工作台",
@@ -51,7 +52,8 @@
       "message_old_password_required": "请输入旧密码",
       "message_new_password_required": "请输入新密码",
       "message_password_confirmation_required": "请再次输入密码",
-      "message_password_confirmation_diff": "两次密码输入不一致"
+      "message_password_confirmation_diff": "两次密码输入不一致",
+      "message_password_too_long": "密码长度不能超过32位"
     },
     "errors": {
       "label_error": "错误页面",

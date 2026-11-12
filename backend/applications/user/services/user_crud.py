@@ -111,12 +111,12 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         user = await self.model.filter(username=credentials.username).first()
         if not user:
             error_message: str = "用户名不存在"
-            LOGGER.error(error_message)
+            LOGGER.error(f"{error_message}, 关键字段: [username={credentials.username}]")
             raise NotFoundException(message=error_message)
         verified = verify_password(credentials.password, user.password)
         if not verified:
             error_message: str = "用户名或密码错误"
-            LOGGER.error(error_message)
+            LOGGER.error(f"{error_message}, 关键字段: [username={credentials.username}, user_id={user.id}]")
             raise NoAuthenticateException(message=error_message)
         if user.state == 1:
             error_message: str = "用户待岗或已离职"
@@ -133,7 +133,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         user = await self.get_by_id(user_id=user_id, on_error=True)
         user.last_login = datetime.now()
-        await user.save()
+        # 只写登录时间，避免整行回写把并发提交的密码覆盖成旧值
+        await user.save(update_fields=["last_login"])
 
     async def create_user(self, user_in: UserCreate) -> User:
         """
@@ -207,6 +208,11 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         :return: 更新后的用户实例
         """
         user_id: int = user_in.user_id
+        # 改密必须走专用接口：Pydantic 默认丢弃未知字段会让调用方误以为改成功，这里显式拒绝
+        if "password" in user_in.model_fields_set:
+            error_message: str = "不支持通过更新用户接口修改密码, 请使用修改密码接口"
+            LOGGER.error(f"{error_message}, 关键字段: [user_id={user_id}, username={user_in.username}]")
+            raise ParameterException(message=error_message)
         user_if: dict = user_in.model_dump(exclude_none=True)
         # 邮箱非必填：显式传空表示清空，exclude_none 会把它当成未修改，需要单独回填
         if "email" in user_in.model_fields_set:
@@ -276,7 +282,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
 
         instance.password = get_password_hash(password="KFuser01@!")
         instance.token_version += 1  # 吊销用户所有Token
-        await instance.save()
+        # 只写密码与版本号，避免整行回写覆盖并发变更的其他字段
+        await instance.save(update_fields=["password", "token_version"])
         data = await instance.to_dict(exclude_fields=["id", "password"])
         return data
 
@@ -291,7 +298,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         instance = await self.get_by_id(user_id=user_id, on_error=True)
         instance.password = get_password_hash(password=new_password)
         instance.token_version += 1  # 吊销用户所有Token
-        await instance.save()
+        # 只写密码与版本号，避免整行回写覆盖并发变更的其他字段
+        await instance.save(update_fields=["password", "token_version"])
         return instance
 
     async def logout(self, user_id: int) -> User:
@@ -303,7 +311,8 @@ class UserCrud(ScaffoldCrud[User, UserCreate, UserUpdate]):
         """
         instance = await self.get_by_id(user_id=user_id, on_error=True)
         instance.token_version += 1
-        await instance.save()
+        # 只写版本号，避免整行回写把并发提交的密码覆盖成旧值
+        await instance.save(update_fields=["token_version"])
         return instance
 
     @staticmethod

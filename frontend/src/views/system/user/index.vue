@@ -372,6 +372,17 @@ const validateAddUser = {
       message: '请输入密码',
       trigger: ['input', 'blur', 'change'],
     },
+    {
+      trigger: ['input', 'blur', 'change'],
+      // 与后端 32 位明文上限对齐：超长不静默截断，直接提示
+      validator: (rule, value, callback) => {
+        if ((value || '').length > 32) {
+          callback('密码长度不能超过32位')
+          return
+        }
+        callback()
+      },
+    },
   ],
   confirmPassword: [
     {

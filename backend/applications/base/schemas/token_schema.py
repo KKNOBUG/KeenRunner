@@ -16,7 +16,7 @@ class CredentialsSchema(BaseModel):
     """登录凭证入参。"""
 
     username: str = Field(..., min_length=1, max_length=32, description="用户账号[电子邮箱或手机号码]")
-    password: str = Field(..., min_length=1, max_length=255, description="用户密码[a-zZ-Z0-9_-.*@!]")
+    password: str = Field(..., min_length=1, max_length=32, description="用户密码[a-zZ-Z0-9_-.*@!]")
 
     @field_validator("username", mode="before")
     @classmethod
