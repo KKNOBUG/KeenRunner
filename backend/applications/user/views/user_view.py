@@ -598,7 +598,6 @@ async def login(
         try:
             user: User = await user_crud.authenticate(credentials)
         except (NotFoundException, NoAuthenticateException):
-            # 账号不存在与密码错误统一返回401，避免账号枚举；失败响应不回显密码
             return UnauthorizedResponse(message="用户名或密码错误")
         except NoPermissionException as e:
             return ForbiddenResponse(message=str(e.message))
