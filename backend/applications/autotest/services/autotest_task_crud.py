@@ -220,7 +220,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
 
         :param task_id: 任务主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 任务实例或None
         :raises ParameterException: task_id 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -242,7 +242,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
 
         :param task_code: 任务标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 任务实例或None
         :raises ParameterException: task_code 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -263,7 +263,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         创建任务；同名软删记录在写权限内恢复并更新，活跃同名报错。
 
         :param task_in: 任务创建schema
-        :param scope: 数据权限上下文，恢复软删任务时要求创建人允许当前用户写入
+        :param scope: 数据权限上下文
         :return: 创建后的任务实例
         :raises ParameterException: 定时表达式与时效不匹配（normalize_schedule 校验失败）
         :raises NotFoundException: 所属应用不存在或已软删
@@ -301,7 +301,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
                 # 软删恢复不得跨写范围接管他人任务，且不覆盖原创建人
                 await scope.load_owners([existing_task.created_user])
                 if not scope.can_write(existing_task.created_user):
-                    error_message: str = f"新增任务信息失败, 任务[{task_name}]创建人[{existing_task.created_user}]不在当前用户可操作范围内, 无权操作"
+                    error_message: str = f"新增任务信息失败, 任务[{task_name}]创建人[{existing_task.created_user}]不在当前用户可操作范围内"
                     LOGGER.error(error_message)
                     raise NoPermissionException(message=error_message)
                 task_dict.pop("created_user", None)
@@ -401,7 +401,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
 
         await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"更新任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -499,7 +499,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
 
         await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+            error_message: str = f"删除任务信息失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可删除范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -529,7 +529,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         instance = await self.get_by_id(task_id=task_id, on_error=True, state__not=1)
         await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"启停任务调度失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"启停任务调度失败, 任务[{instance.task_name}]创建人[{instance.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         # 无定时表达式的任务启用后永不触发，误导为“已启动”；启动前强制校验

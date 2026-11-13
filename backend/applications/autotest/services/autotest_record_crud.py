@@ -81,7 +81,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
 
         :param record_id: 执行记录主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 执行记录实例或None
         :raises ParameterException: record_id 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -307,7 +307,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         record = await self.get_by_id(record_id=record_id, on_error=True, state__not=1)
         await scope.load_owners([record.created_user])
         if not scope.can_delete(record.created_user):
-            error_message: str = f"删除执行记录失败, 记录[id={record_id}]创建人[{record.created_user}]不在当前用户可删除范围内, 无权操作"
+            error_message: str = f"删除执行记录失败, 记录[id={record_id}]创建人[{record.created_user}]不在当前用户可删除范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         status_val = getattr(record.celery_status, "value", record.celery_status)
@@ -344,7 +344,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         for instance in targets:
             if not scope.can_delete(instance.created_user):
                 error_message: str = (
-                    f"批量删除执行记录失败, 记录[id={instance.id}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+                    f"批量删除执行记录失败, 记录[id={instance.id}]创建人[{instance.created_user}]不在当前用户可删除范围内"
                 )
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)

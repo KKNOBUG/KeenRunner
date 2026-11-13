@@ -87,7 +87,7 @@ async def _resolve_script_name(services: AutoTestServices, case_project: int, ca
     """
     解析生成脚本名称：脚本名称=接口名称；同应用下已有同精确类型同名记录(含软删)时按「{接口名称}-{时间戳}」命名。
 
-    查重范围与 AutoTestCaseCrud._get_by_owner_key 一致：公共脚本、用户脚本、公共接口按精确类型独立判定，
+    查重范围与 AutoTestCaseCrud.get_by_owner 一致：公共脚本、用户脚本、公共接口按精确类型独立判定，
     跨类型同名不追加时间戳，同精确类型冲突仍提前规避，减少落库判重失败。
 
     :param services: 自动化测试CRUD服务聚合
@@ -96,7 +96,7 @@ async def _resolve_script_name(services: AutoTestServices, case_project: int, ca
     :param case_type: 目标脚本类型(用户脚本/公共脚本)
     :return: 生成脚本名称
     """
-    # 与 _get_by_owner_key 保持一致：仅同精确类型同名影响生成名称
+    # 与 get_by_owner 保持一致：仅同精确类型同名影响生成名称
     ct_val = getattr(case_type, "value", case_type)
     exists = await services.case_curd.model.filter(
         case_project=case_project,

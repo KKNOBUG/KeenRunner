@@ -78,7 +78,7 @@ async def get_case_transfer(
 
     :param transfer_id: 转让记录主键ID
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，转让双方或记录创建人可见
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -114,7 +114,7 @@ async def search_case_transfers(
 
     :param transfer_in: 查询入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回转让双方或创建人在可见范围内的记录
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

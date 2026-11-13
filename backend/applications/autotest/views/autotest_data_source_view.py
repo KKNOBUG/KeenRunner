@@ -194,7 +194,7 @@ async def create_data_source(
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -267,7 +267,7 @@ async def delete_data_source(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -309,7 +309,7 @@ async def unbind_case_data_source(
 
     :param data_in: case_id或case_code
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -349,7 +349,7 @@ async def update_data_source(
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -416,7 +416,7 @@ async def save_or_update_data_source(
 
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -528,7 +528,7 @@ async def _unbind_empty_data_source(
     :param services: 自动化测试CRUD依赖聚合
     :param data_source_in: 数据源入参(用于定位用例/步骤)
     :param has_ds_locator: 入参是否携带data_source_id或data_source_code
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 是否实际执行了解绑(定位到并软删了记录)
     """
     kwargs: Dict[str, Any] = {"services": services, "on_error": True}
@@ -573,7 +573,7 @@ async def update_data_source_fields(
 
     :param data_in: 数据源定位入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -635,7 +635,7 @@ async def build_data_source(
 
     :param build_in: 数据源矩阵构建定位条件
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按数据源所属用例校验可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -729,7 +729,7 @@ async def get_data_source(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按数据源所属用例校验可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -781,7 +781,7 @@ async def get_dataset_names(
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按用例所属人校验可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     if not case_id:
@@ -816,7 +816,7 @@ async def search_data_sources(
 
     :param data_source_in: 数据源查询入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按所属用例所属人过滤可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -880,7 +880,7 @@ async def get_data_source_by_case_step(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按用例所属人校验可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -922,7 +922,7 @@ async def get_scene_names_by_case(
     :param case_id: 用例主键ID
     :param case_code: 用例标识代码
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按用例所属人校验可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -1028,7 +1028,7 @@ async def get_dataset_scenario(
     :param step_code: 步骤业务标识
     :param dataset_name: 数据集场景名称
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按用例所属人校验可见范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -1093,7 +1093,7 @@ async def single_step_dataset_upload(
     :param file_desc: 文件描述
     :param file: 上传文件
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     if not (file.filename or "").endswith(".xlsx"):
@@ -1235,7 +1235,7 @@ async def single_step_dataset_download(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按用例所属人校验可见范围
+    :param scope: 数据权限上下文
     :return: 文件流响应
     """
     try:
@@ -1288,7 +1288,7 @@ async def single_step_template_download(
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按用例所属人校验可见范围
+    :param scope: 数据权限上下文
     :return: 文件流响应
     """
     try:
@@ -1344,7 +1344,7 @@ async def batch_step_dataset_upload(
     :param file_desc: 文件描述
     :param file: 上传文件
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，数据源归属跟随用例所属人
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     if not case_id:

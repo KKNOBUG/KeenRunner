@@ -70,7 +70,7 @@ frontend/
 - 后端唯一入口 `backend/services/data_scope.py` 的 `DataScope`：`read_q(owner_field)` 构造列表过滤（`None` 表示不限），`can_write/can_delete(owner)` 判定归属，`for_tag(tag)` 按父资源族重解析，`DataScope.system()` 供任务执行、引擎回写等内部可信路径。部门范围按归属人**当前部门**动态解析，不落业务表快照。
 - 父资源可读校验（B 级）：用例/任务/标签/环境/环境配置的创建与配置更新经 `autotest_scope_guard` 校验所属项目/环境对当前用户可读，避免向不可见父资源挂载子资源。
 - 服务层写方法把 `scope: DataScope` 作为必填参数，越权抛 `NoPermissionException`；view 注入 `DependTagScope` 并 `except NoPermissionException: raise`（否则被 `except Exception` 吞掉），由全局处理器返回 403（`code=400403`，HTTP 200）。
-- 归属口径：用例为 `owner_user`（转让后变更），其余资源为 `created_user`；步骤与数据源归属跟随所属用例；环境字典 `created_user/updated_user` 取登录态，忽略请求体。用例转让始终仅当前所属人本人可操作；性能压测模块不参与数据权限收口。
+- 归属口径：用例为 `owner_user`（转让后变更），其余资源为 `created_user`；步骤与数据源归属跟随所属用例；环境字典（`krun_autotest_env`）是全局共享纯词典，只存名称与标识代码，无归属与软删状态。用例转让始终仅当前所属人本人可操作；性能压测模块不参与数据权限收口。
 - 读过滤只作用于各资源**列表/主列表**接口；报告/明细批次下钻（`batch_code`/`task_code`）、项目/环境下拉、步骤树（按 `case_id`）不过滤。用例列表对 `PUBLIC_SCRIPT`/`PUBLIC_API` 放行。
 - 内置角色接口绑定：Guests 在业务域（应用/自动化/任务/工具）全部放行，系统域只读；接口放行不等于可删他人数据，删除归属校验在 service 层兜底。
 - 报告/明细写接口（create/update）仅超管或管理员角色可直调（`DependSuperUser`），执行引擎/内部流程走 service 直写；删除仍按归属人 + 接口权限双闸门。

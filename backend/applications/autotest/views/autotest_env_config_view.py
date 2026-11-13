@@ -7,7 +7,7 @@
 @DateTime: 2026/4/16 15:54
 """
 import traceback
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Body, Query, Depends
 from tortoise.expressions import Q
@@ -49,12 +49,21 @@ from backend.services import DataScope, DependTagScope
 autotest_env_config = APIRouter()
 
 
-async def _serialize_config_response(services: AutoTestServices, instance, env_name: Optional[str] = None):
-    """将配置ORM序列化为响应字典；未传env_name时按env_bind_id解析。"""
-    if env_name is None:
-        env_name_map = await services.env_curd.get_env_name_map([instance.env_bind_id])
-        env_name = env_name_map.get(instance.env_bind_id, "")
-    return await services.env_config_curd.serialize_config(instance, env_name)
+async def _serialize_config_response(
+        services: AutoTestServices,
+        instance,
+        env_name: Optional[str] = None,
+        bind_meta: Optional[Dict[str, Any]] = None,
+):
+    """将配置ORM序列化为响应字典；未传env_name或bind_meta时按env_bind_id解析。"""
+    if env_name is None or bind_meta is None:
+        bind_map = await services.env_curd.get_bind_map([instance.env_bind_id])
+        if bind_meta is None:
+            bind_meta = bind_map.get(instance.env_bind_id)
+        if env_name is None:
+            env_name_map = await services.env_curd.get_env_name_map([instance.env_bind_id])
+            env_name = env_name_map.get(instance.env_bind_id, "")
+    return await services.env_config_curd.serialize_config(instance, env_name, bind_meta)
 
 
 @autotest_env_config.post("/app/create", summary="新增APP类型环境配置", description="新增APP类型环境配置信息")
@@ -71,6 +80,8 @@ async def create_app_config(
     :return: 统一HTTP响应
     """
     try:
+        # 节点类型由接口路径固定，配置只能挂到对应类型的母表绑定下
+        config_in.env_type = AutoTestConfigNodeType.APP
         instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增APP配置成功", data=data, total=1)
@@ -103,6 +114,8 @@ async def create_file_config(
     :return: 统一HTTP响应
     """
     try:
+        # 节点类型由接口路径固定，配置只能挂到对应类型的母表绑定下
+        config_in.env_type = AutoTestConfigNodeType.FILE
         instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增FILE配置成功", data=data, total=1)
@@ -135,6 +148,8 @@ async def create_db_config(
     :return: 统一HTTP响应
     """
     try:
+        # 节点类型由接口路径固定，配置只能挂到对应类型的母表绑定下
+        config_in.env_type = AutoTestConfigNodeType.DB
         instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增DB配置成功", data=data, total=1)
@@ -167,6 +182,8 @@ async def create_redis_config(
     :return: 统一HTTP响应
     """
     try:
+        # 节点类型由接口路径固定，配置只能挂到对应类型的母表绑定下
+        config_in.env_type = AutoTestConfigNodeType.REDIS
         instance = await services.env_config_curd.create_config(config_in, scope=scope)
         data = await _serialize_config_response(services, instance, config_in.env_name)
         return SuccessResponse(message="新增Redis配置成功", data=data, total=1)
@@ -196,12 +213,14 @@ async def update_redis_config(
 
     :param config_in: Redis环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in, scope=scope)
-        data = await _serialize_config_response(services, instance, config_in.env_name)
+        # 节点类型由接口路径固定，忽略请求体中的节点声明
+        config_in.env_type = AutoTestConfigNodeType.REDIS
+        instance, env_name, bind_meta = await services.env_config_curd.update_config(config_in, scope=scope)
+        data = await _serialize_config_response(services, instance, env_name, bind_meta)
         return SuccessResponse(message="修改Redis配置成功", data=data, total=1)
     except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
         raise
@@ -229,7 +248,7 @@ async def delete_env_config(
 
     :param config_in: 环境配置删除入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境配置
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -260,12 +279,14 @@ async def update_app_config(
 
     :param config_in: APP环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in, scope=scope)
-        data = await _serialize_config_response(services, instance, config_in.env_name)
+        # 节点类型由接口路径固定，忽略请求体中的节点声明
+        config_in.env_type = AutoTestConfigNodeType.APP
+        instance, env_name, bind_meta = await services.env_config_curd.update_config(config_in, scope=scope)
+        data = await _serialize_config_response(services, instance, env_name, bind_meta)
         return SuccessResponse(message="修改APP配置成功", data=data, total=1)
     except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
         raise
@@ -293,12 +314,14 @@ async def update_file_config(
 
     :param config_in: FILE环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in, scope=scope)
-        data = await _serialize_config_response(services, instance, config_in.env_name)
+        # 节点类型由接口路径固定，忽略请求体中的节点声明
+        config_in.env_type = AutoTestConfigNodeType.FILE
+        instance, env_name, bind_meta = await services.env_config_curd.update_config(config_in, scope=scope)
+        data = await _serialize_config_response(services, instance, env_name, bind_meta)
         return SuccessResponse(message="修改FILE配置成功", data=data, total=1)
     except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
         raise
@@ -326,12 +349,14 @@ async def update_db_config(
 
     :param config_in: DB环境配置更新入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境配置
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
-        instance = await services.env_config_curd.update_config(config_in, scope=scope)
-        data = await _serialize_config_response(services, instance, config_in.env_name)
+        # 节点类型由接口路径固定，忽略请求体中的节点声明
+        config_in.env_type = AutoTestConfigNodeType.DB
+        instance, env_name, bind_meta = await services.env_config_curd.update_config(config_in, scope=scope)
+        data = await _serialize_config_response(services, instance, env_name, bind_meta)
         return SuccessResponse(message="修改DB配置成功", data=data, total=1)
     except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
         raise
@@ -361,7 +386,7 @@ async def get_env_config(
     :param config_id: 环境配置主键ID
     :param config_code: 环境配置业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，配置含凭据信息需校验创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -490,7 +515,7 @@ async def get_env_config_names(
     :param env_id: 环境主键ID
     :param env_type: 配置类型
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回可见配置的名称
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -518,7 +543,7 @@ async def query_assign_config_envs(
 
     :param query_in: 指派配置环境查询入参(三条件均可选)
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回可见配置对应的环境名称
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -549,7 +574,7 @@ async def list_env_configs(
     :param page: 页码
     :param page_size: 每页条数
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，配置含凭据信息需按创建人过滤
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -584,7 +609,7 @@ async def test_db_connection(
 
     :param config_in: 数据库连接测试入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，要求配置创建人在可见范围内
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

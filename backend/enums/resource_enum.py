@@ -8,7 +8,7 @@
 """
 from typing import Optional, Sequence
 
-from .base_enum_cls import StringEnum
+from base_enum_cls import StringEnum
 
 
 class ResourceDomain(StringEnum):
@@ -115,3 +115,11 @@ class ResourceTag(StringEnum):
         """code 转展示 label；未知 code 原样返回，避免历史数据丢失可读性。"""
         member = cls.from_code(code)
         return member.desc if member else str(code or "")
+
+
+if __name__ == '__main__':
+    print(ResourceTag.USER)
+    print(ResourceTag.USER.value)
+    print(ResourceTag.from_code("system.user"))
+    print(ResourceTag.of_tags(["系统管理:用户"]))
+    print(ResourceTag.label_of("system.user"))

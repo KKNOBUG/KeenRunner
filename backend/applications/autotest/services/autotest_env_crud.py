@@ -43,11 +43,11 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
     环境绑定CRUD：应用维度的环境绑定（krun_autotest_env_bind）及其全局环境名字典。
 
     两层结构：
-    - 环境名字典（AutoTestEnvModel）为全局共享，同名前导统一为大写，删除时软删；
+    - 环境字典（AutoTestEnvModel）为全局共享的环境枚举；
     - 环境绑定 = 应用 + 环境字典 + 节点类型(env_type)，唯一性由三键共同保证。
 
     引用约束：删除/软删前必须确认无环境配置引用，且无任务以环境名称字符串引用该环境。
-    归属口径：绑定以 created_user 为归属人，环境字典的创建/更新人取登录态（忽略请求体）。
+    归属口径：绑定以 created_user 为归属人；环境字典为纯词典，无归属与状态字段。
     """
 
     def __init__(self):
@@ -60,7 +60,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         :param env_id: 环境绑定主键，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 环境绑定实例或None
         :raises ParameterException: env_id 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -83,7 +83,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         :param env_code: 绑定标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 环境绑定实例或None
         :raises ParameterException: env_code 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -127,9 +127,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        dict_ids = await AutoTestEnvModel.filter(
-            env_name__iexact=name, state__not=1
-        ).values_list("id", flat=True)
+        dict_ids = await AutoTestEnvModel.filter(env_name__iexact=name).values_list("id", flat=True)
         instance: Optional[AutoTestEnvBindModel] = None
         if dict_ids:
             filters: Dict[str, Any] = {
@@ -158,7 +156,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         name = (env_name or "").strip()
         if not name:
             return []
-        query = AutoTestEnvModel.filter(state__not=1)
+        query = AutoTestEnvModel.all()
         if exact:
             query = query.filter(env_name__iexact=name)
         else:
@@ -234,18 +232,13 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             query = query.filter(env_enum_id__in=list(env_enum_ids))
         return await query.values_list("id", flat=True)
 
-    async def _get_or_create_env_dict(
-            self,
-            env_name: str,
-            user: Optional[str] = None,
-    ) -> AutoTestEnvModel:
+    async def get_or_create_env(self, env_name: str) -> AutoTestEnvModel:
         """
         按环境名称获取或创建全局环境枚举记录。
 
-        名称统一规范为大写；命中软删字典时复活（state=0），并发创建撞唯一索引时回查既有行。
+        名称统一规范为大写；字典为纯词典，无归属与状态；并发创建撞唯一索引时回查既有行。
 
         :param env_name: 环境名称(规范化为大写)
-        :param user: 操作人（落 created_user/updated_user）
         :return: 环境枚举实例
         :raises ParameterException: env_name 为空
         :raises DataBaseStorageException: 并发冲突后仍无法回查到既有记录
@@ -258,18 +251,9 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         dict_row = await AutoTestEnvModel.filter(env_name=name).first()
         if dict_row:
-            if dict_row.state == 1:
-                update_dict: Dict[str, Any] = {"state": 0}
-                if user:
-                    update_dict["updated_user"] = user
-                await AutoTestEnvModel.filter(id=dict_row.id).update(**update_dict)
-                dict_row = await AutoTestEnvModel.get(id=dict_row.id)
             return dict_row
         try:
-            return await AutoTestEnvModel.create(
-                env_name=name,
-                created_user=user,
-            )
+            return await AutoTestEnvModel.create(env_name=name)
         except IntegrityError as e:
             # 并发创建触发唯一约束时回查既有记录
             dict_row = await AutoTestEnvModel.filter(env_name=name).first()
@@ -283,18 +267,13 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             )
             raise DataBaseStorageException(message=error_message) from e
 
-    async def create_env(
-            self,
-            env_in: AutoTestEnvCreate,
-            scope: DataScope,
-            strict_duplicate: bool = False,
-    ) -> AutoTestEnvBindModel:
+    async def create_env(self, env_in: AutoTestEnvCreate, scope: DataScope, strict_duplicate: bool = False) -> AutoTestEnvBindModel:
         """
         创建环境绑定；同应用+环境+类型已存在则恢复启用（软删恢复需写权限）。
 
         :param env_in: 环境创建schema定义
         :param strict_duplicate: 为True时，命中启用态绑定直接判重报错，为False时幂等复用已存在绑定
-        :param scope: 数据权限上下文，恢复软删环境绑定时要求创建人允许当前用户写入
+        :param scope: 数据权限上下文
         :return: 创建或恢复后的环境绑定实例
         :raises ParameterException: 环境名称为空
         :raises NotFoundException: 所属应用不存在或已软删
@@ -303,17 +282,16 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         :raises DataBaseStorageException: 落库失败（唯一索引冲突或字典创建失败）
         """
         await load_readable_project(scope, env_in.project_id)
-        # 环境字典为全局共享数据，归属人取登录态，忽略请求体回传，防止伪造创建人
-        actor: Optional[str] = scope.username or get_current_username() or env_in.created_user
-        dict_row = await self._get_or_create_env_dict(
-            env_name=env_in.env_name,
-            user=actor,
-        )
-        existing_bind: Optional[AutoTestEnvBindModel] = await self.model.filter(
-            env_enum_id=dict_row.id,
-            project_id=env_in.project_id,
-            env_type=env_in.env_type,
-        ).first()
+        # 绑定表保留归属人，取登录态，忽略请求体回传，防止伪造创建人
+        operator: Optional[str] = scope.username or get_current_username() or env_in.created_user
+        # 环境字典为全局共享的纯词典，无归属与状态，直接复用或创建
+        dict_row = await self.get_or_create_env(env_name=env_in.env_name)
+        bind_filter: Dict[str, Any] = {
+            "env_enum_id": dict_row.id,
+            "project_id": env_in.project_id,
+            "env_type": env_in.env_type,
+        }
+        existing_bind: Optional[AutoTestEnvBindModel] = await self.model.filter(**bind_filter).first()
         if not existing_bind:
             payload = env_in.model_dump(
                 exclude_none=True,
@@ -321,17 +299,20 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                 exclude={"env_name"},
             )
             payload["env_enum_id"] = dict_row.id
-            payload["created_user"] = actor
+            payload["created_user"] = operator
             try:
                 return await self.create(obj_in=payload)
             except IntegrityError as e:
-                error_message: str = "新增环境绑定信息失败，相同应用、环境及节点类型可能已存在，或关联应用、环境无效，请检查后重试"
-                LOGGER.error(
-                    f"{error_message}, "
-                    f"关键字段: [project_id={env_in.project_id}, env_enum_id={dict_row.id}, env_type={env_in.env_type}]\n"
-                    f"{traceback.format_exc()}"
-                )
-                raise DataBaseStorageException(message=error_message) from e
+                # 并发插入撞唯一键：回查另一事务已提交的绑定，按相同语义复用或判重
+                existing_bind = await self.model.filter(**bind_filter).first()
+                if not existing_bind:
+                    error_message: str = "新增环境绑定信息失败，相同应用、环境及节点类型已存在"
+                    LOGGER.error(
+                        f"{error_message}, "
+                        f"关键字段: [project_id={env_in.project_id}, env_enum_id={dict_row.id}, env_type={env_in.env_type}]\n"
+                        f"{traceback.format_exc()}"
+                    )
+                    raise DataBaseStorageException(message=error_message) from e
 
         # 已启用则直接复用；仅软删记录需要恢复
         if existing_bind.state == 0:
@@ -342,15 +323,15 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         if scope is not None:
             await scope.load_owners([existing_bind.created_user])
         if scope is not None and not scope.can_write(existing_bind.created_user):
-            error_message: str = f"新增环境绑定信息失败, 环境绑定[code={existing_bind.env_code}]创建人[{existing_bind.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"新增环境绑定信息失败, 环境绑定[code={existing_bind.env_code}]创建人[{existing_bind.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         try:
             restore_dict: Dict[str, Any] = {"state": 0}
             if env_in.env_desc is not None:
                 restore_dict["env_desc"] = env_in.env_desc
-            if actor:
-                restore_dict["updated_user"] = actor
+            if operator:
+                restore_dict["updated_user"] = operator
             return await self.update(id=existing_bind.id, obj_in=restore_dict)
         except (DoesNotExist, IntegrityError) as e:
             error_message: str = "新增环境绑定信息失败，目标环境绑定可能已被删除或与现有记录冲突，请刷新后重试"
@@ -364,14 +345,15 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
     async def update_env(self, env_in: AutoTestEnvUpdate, scope: DataScope) -> AutoTestEnvBindModel:
         """
         按env_id/env_code精准更新单条环境绑定；描述写在绑定表，不影响同名其他节点类型。
+        所属应用允许变更，换应用时目标应用必须存在且可读；节点类型创建后不可变更。
 
         :param env_in: 环境绑定更新schema
-        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的环境绑定
+        :param scope: 数据权限上下文
         :return: 更新后的环境绑定实例
-        :raises ParameterException: 定位参数为空，或请求中的 env_type/project_id 与已存绑定不一致
-        :raises NotFoundException: 环境绑定不存在或已软删
-        :raises NoPermissionException: 环境绑定创建人不在当前用户可操作范围
-        :raises DataBaseStorageException: 落库失败（改名后与既有绑定冲突）
+        :raises ParameterException: 定位参数为空、名称为空，或请求中的 env_type 与已存绑定不一致
+        :raises NotFoundException: 环境绑定或目标应用不存在、已软删
+        :raises NoPermissionException: 环境绑定创建人不在写范围，或目标应用不可读
+        :raises DataBaseStorageException: 落库失败（改名或换应用后与既有绑定冲突）
         """
         env_id: Optional[int] = env_in.env_id
         env_code: Optional[str] = env_in.env_code
@@ -389,31 +371,36 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"更新环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
-
+        # 所属节点由创建时确定，不允许换节点
         if env_in.env_type is not None and instance.env_type != env_in.env_type:
-            raise ParameterException(message="配置关联的环境节点不匹配")
-        if env_in.project_id is not None and int(instance.project_id) != int(env_in.project_id):
-            raise ParameterException(message="配置关联的环境信息不存在")
+            raise ParameterException(message="不支持修改环境所属节点类型")
+        # 所属应用允许变更，换应用时目标应用必须存在且可读
+        target_project_id: int = int(env_in.project_id) if env_in.project_id is not None else int(instance.project_id)
+        if target_project_id != int(instance.project_id):
+            await load_readable_project(scope, target_project_id)
 
         update_dict: Dict[str, Any] = env_in.model_dump(
             exclude_none=True,
             exclude_unset=True,
-            exclude={"env_id", "env_code", "env_type", "project_id", "created_user", "updated_user"},
+            exclude={"env_id", "env_code", "env_type", "created_user", "updated_user"},
         )
+        # 显式提交空名称时拒绝，避免静默跳过改名却返回成功
+        if "env_name" in env_in.model_fields_set and not str(env_in.env_name or "").strip():
+            error_message: str = "更新环境绑定信息失败, 参数[env_name]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+
         new_env_name = update_dict.pop("env_name", None)
-        # 环境字典为全局共享数据，归属人取登录态，忽略请求体回传，防止伪造更新人
-        actor: Optional[str] = scope.username or get_current_username() or env_in.updated_user
-        if actor:
-            update_dict["updated_user"] = actor
+        # 环境字典为纯词典，更新人只落在绑定表
+        operator: Optional[str] = scope.username or get_current_username() or env_in.updated_user
+        if operator:
+            update_dict["updated_user"] = operator
         # env_desc保留在update_dict，落绑定表
         if new_env_name:
-            dict_row = await self._get_or_create_env_dict(
-                env_name=new_env_name,
-                user=actor,
-            )
+            dict_row = await self.get_or_create_env(env_name=new_env_name)
             update_dict["env_enum_id"] = dict_row.id
 
         try:
@@ -428,57 +415,70 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             )
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = "更新环境绑定信息失败，相同应用、环境及节点类型可能已存在，或关联环境无效，请检查后重试"
+            error_message: str = "更新环境绑定信息失败，相同应用、环境及节点类型已存在"
             LOGGER.error(
                 f"{error_message}, "
-                f"关键字段: [env_id={env_id}, env_code={env_code}, project_id={instance.project_id}, env_type={instance.env_type}]\n"
+                f"关键字段: [env_id={env_id}, env_code={env_code}, project_id={target_project_id}, env_type={instance.env_type}, "
+                f"env_name={new_env_name}]\n"
                 f"{traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
 
-    async def _assert_env_not_referenced(self, instance: AutoTestEnvBindModel) -> None:
+    async def _assert_envs_not_referenced(self, targets: List[AutoTestEnvBindModel]) -> None:
         """
-        校验环境绑定不存在引用关系：环境配置、任务用例执行配置中的环境名。
+        批量校验环境绑定不存在引用关系：环境配置、任务用例执行配置中的环境名。
 
+        配置按绑定一次分组统计，任务按应用一次取回后在内存匹配，避免逐条扫描；
         两类引用：环境配置走 env_bind_id 外键；任务只存环境名称字符串，因此需按绑定所属应用扫描
         任务的 cases_execute_config（case级 involve_envs 与步骤级 steps_execute_config 都算引用）。
 
-        :param instance: 待删除的环境绑定实例
+        :param targets: 待删除的环境绑定实例列表
         :return: None
-        :raises DataAlreadyExistsException: 存在引用关系时拒绝删除
+        :raises DataAlreadyExistsException: 任一绑定存在引用关系时拒绝删除
         """
+        if not targets:
+            return
         from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
-        from backend.applications.autotest.services.autotest_task_crud import (
-            extract_steps_execute_envs,
-            extract_task_involve_envs,
-        )
+        from backend.applications.autotest.services.autotest_task_crud import extract_steps_execute_envs, extract_task_involve_envs
 
         # 外键为RESTRICT，物理删除本会被拦截；应用层前置校验给出可读文案
-        config_count: int = await AutoTestEnvConfigModel.filter(env_bind_id=instance.id, state__not=1).count()
-        if config_count > 0:
-            error_message: str = f"删除环境绑定信息失败, 存在{config_count}个环境配置, 无法直接删除"
-            LOGGER.error(error_message)
-            raise DataAlreadyExistsException(message=error_message)
+        config_rows = await AutoTestEnvConfigModel.filter(
+            env_bind_id__in=[int(instance.id) for instance in targets],
+            state__not=1,
+        ).values_list("env_bind_id", flat=True)
+        config_counts: Dict[int, int] = defaultdict(int)
+        for bind_id in config_rows:
+            config_counts[int(bind_id)] += 1
+        for instance in targets:
+            config_count: int = config_counts.get(int(instance.id), 0)
+            if config_count > 0:
+                error_message: str = f"删除环境绑定信息失败, 存在{config_count}个环境配置, 无法直接删除"
+                LOGGER.error(error_message)
+                raise DataAlreadyExistsException(message=error_message)
 
-        # 任务以环境名称字符串引用环境，物理删除前需扫描同应用下的任务执行配置
-        env_names: List[str] = await AutoTestEnvModel.filter(
-            id=instance.env_enum_id, state__not=1
-        ).values_list("env_name", flat=True)
-        env_name = env_names[0] if env_names else None
-        if not env_name:
+        # 任务以环境名称字符串引用环境，物理删除前按应用归组扫描任务执行配置
+        dict_names: Dict[int, str] = await self._get_dict_name_map({int(instance.env_enum_id) for instance in targets})
+        names_by_project: Dict[int, set] = defaultdict(set)
+        for instance in targets:
+            env_name = dict_names.get(int(instance.env_enum_id))
+            if env_name:
+                names_by_project[int(instance.project_id)].add(env_name)
+        if not names_by_project:
             return
         task_rows: List[Dict[str, Any]] = await AutoTestTaskModel.filter(
-            task_project=instance.project_id, state__not=1
-        ).values("task_name", "cases_execute_config")
+            task_project__in=list(names_by_project), state__not=1
+        ).values("task_project", "task_name", "cases_execute_config")
         for row in task_rows:
             cases_cfg = row.get("cases_execute_config")
             if not isinstance(cases_cfg, dict):
                 continue
-            referenced = env_name in extract_task_involve_envs(cases_cfg)
-            if not referenced:
-                referenced = env_name in set(extract_steps_execute_envs(cases_cfg).values())
-            if referenced:
-                error_message: str = f"删除环境绑定信息失败, 环境[{env_name}]被任务[{row.get('task_name')}]引用, 无法直接删除"
+            target_names: Optional[set] = names_by_project.get(int(row["task_project"]))
+            if not target_names:
+                continue
+            referenced_envs = set(extract_task_involve_envs(cases_cfg)) | set(extract_steps_execute_envs(cases_cfg).values())
+            hit_name: Optional[str] = next((name for name in sorted(target_names) if name in referenced_envs), None)
+            if hit_name:
+                error_message: str = f"删除环境绑定信息失败, 环境[{hit_name}]被任务[{row.get('task_name')}]引用, 无法直接删除"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
@@ -486,7 +486,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         """
         物理删除环境绑定；绑定下仍存在未删除的环境配置时禁止删除。
 
-        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境绑定
+        :param scope: 数据权限上下文
         :param env_id: 环境绑定主键，与env_code二选一
         :param env_code: 绑定标识代码，与env_id二选一
         :return: 删除后的环境绑定实例快照
@@ -506,17 +506,27 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+            error_message: str = f"删除环境绑定信息失败, 环境绑定[code={instance.env_code}]创建人[{instance.created_user}]不在当前用户可删除范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
         # 外键为RESTRICT，物理删除本会被拦截；启用态配置必须为空，已软删配置随绑定清理
-        await self._assert_env_not_referenced(instance)
+        await self._assert_envs_not_referenced([instance])
 
-        async with in_transaction() as conn:
-            # 已软删配置仍占用 RESTRICT 外键；历史行随绑定一并物理清理，避免删除后受阻
-            await AutoTestEnvConfigModel.filter(env_bind_id=instance.id, state=1).using_db(conn).delete()
-            await instance.delete(using_db=conn)
+        try:
+            async with in_transaction() as conn:
+                # 已软删配置仍占用 RESTRICT 外键；历史行随绑定一并物理清理，避免删除后受阻
+                await AutoTestEnvConfigModel.filter(env_bind_id=instance.id, state=1).using_db(conn).delete()
+                await instance.delete(using_db=conn)
+        except IntegrityError as e:
+            # 校验与删除之间可能并发新增子配置，外键拦截转为可读提示
+            error_message: str = "删除环境绑定信息失败, 环境绑定下仍存在环境配置, 请刷新后重试"
+            LOGGER.error(
+                f"{error_message}, "
+                f"关键字段: [env_id={instance.id}, env_code={instance.env_code}]\n"
+                f"{traceback.format_exc()}"
+            )
+            raise DataAlreadyExistsException(message=error_message) from e
         return instance
 
     async def delete_envs(self, env_in: AutoTestEnvDelete, scope: DataScope) -> int:
@@ -524,7 +534,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         根据ID或code列表批量软删除环境绑定；软删与物理删同样拒绝存在引用关系的环境绑定。
 
         :param env_in: 环境绑定删除schema
-        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境绑定
+        :param scope: 数据权限上下文
         :return: 更新条数
         :raises ParameterException: 两个定位参数同时为空，或列表中包含空值
         :raises NotFoundException: 任一目标绑定不存在或已软删
@@ -573,12 +583,11 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
         await scope.load_owners([instance.created_user for instance in targets])
         if not all(scope.can_delete(instance.created_user) for instance in targets):
-            error_message: str = "删除环境绑定信息失败, 存在不在当前用户可删除范围内的环境绑定, 无权操作"
+            error_message: str = "删除环境绑定信息失败, 存在不在当前用户可删除范围内的环境绑定"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         # 软删同样受引用关系约束：先全量校验再落库，保证批量操作全有或全无
-        for instance in targets:
-            await self._assert_env_not_referenced(instance)
+        await self._assert_envs_not_referenced(targets)
         await self.soft_delete_batch(ids=[instance.id for instance in targets])
         return len(targets)
 
@@ -602,22 +611,22 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
     async def list_env_names(self, scope: Optional[DataScope] = None) -> List[str]:
         """
-        查询未删除的环境名称(去重)。
+        查询去重后的环境名称。
 
-        环境字典是全局共享的，所以限定范围时无法直接过滤字典行：先按可见范围取绑定引用的字典ID，
-        再回查这些字典的名称；scope 为 None 时直接返回全部启用字典名称。
+        环境字典是全局共享的纯词典，无法直接按行级过滤：限定范围时先按可见范围取绑定引用的字典ID，
+        再回查这些字典的名称；scope 为 None 时直接返回全部字典名称。
 
-        :param scope: 数据权限上下文，传入时仅返回可见范围内绑定引用的环境名称
+        :param scope: 数据权限上下文
         :return: 环境名称列表
         """
         owner_q = scope.read_q("created_user") if scope is not None else None
         if owner_q is None:
-            return await AutoTestEnvModel.filter(state__not=1).distinct().values_list("env_name", flat=True)
+            return await AutoTestEnvModel.all().distinct().values_list("env_name", flat=True)
         enum_ids = await self.model.filter(owner_q, state__not=1).values_list("env_enum_id", flat=True)
         if not enum_ids:
             return []
         return await AutoTestEnvModel.filter(
-            id__in=list(set(enum_ids)), state__not=1
+            id__in=list(set(enum_ids))
         ).distinct().values_list("env_name", flat=True)
 
     async def serialize_env(self, bind: AutoTestEnvBindModel, with_audit: bool = False) -> Dict[str, Any]:
@@ -680,7 +689,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         按节点类型聚合环境名称（读环境绑定表并联字典）。
 
         :param project_id: None=全局聚合；[]=全部应用；[ids]=指定应用（无绑定的应用也返回空字典）
-        :param scope: 数据权限上下文，传入时仅聚合可见范围内的环境绑定
+        :param scope: 数据权限上下文
         :return: {app/file/database/redis: [...]} 或 {project_id: {app/file/database/redis: [...]}}
         :raises ParameterException: 查询异常（含非法节点类型/脏数据），统一转为可读提示
         """
@@ -696,7 +705,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                 name_map = await self._get_dict_name_map({row["env_enum_id"] for row in rows})
                 env_map: Dict[str, set] = defaultdict(set)
                 for row in rows:
-                    env_type = row["env_type"].value
+                    env_type = row["env_type"].value if hasattr(row["env_type"], "value") else str(row["env_type"])
                     name = name_map.get(row["env_enum_id"])
                     if env_type in allowed_types and name:
                         env_map[env_type].add(name)
@@ -714,7 +723,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             name_map = await self._get_dict_name_map({row["env_enum_id"] for row in rows})
             grouped: Dict[int, Dict[str, set]] = defaultdict(lambda: defaultdict(set))
             for row in rows:
-                env_type = row["env_type"].value
+                env_type = row["env_type"].value if hasattr(row["env_type"], "value") else str(row["env_type"])
                 name = name_map.get(row["env_enum_id"])
                 if env_type in allowed_types and name:
                     grouped[row["project_id"]][env_type].add(name)
@@ -736,7 +745,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
     @staticmethod
     async def _get_dict_name_map(dict_ids) -> Dict[int, str]:
         """
-        批量查询字典ID到环境名称的映射；不校验软删状态，供已确认有效的绑定行取名。
+        批量查询字典ID到环境名称的映射；字典无状态字段，供已确认有效的绑定行取名。
 
         :param dict_ids: 环境字典主键ID集合（可重复）
         :return: {字典ID: 环境名称}；空入参返回空字典，字典缺失的ID不出现在结果中
@@ -753,7 +762,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         前端据此切换删除确认文案，与本表自身的软删状态无关。
 
         :param query_in: 环境分页查询入参(过滤条件与分页)
-        :param scope: 数据权限上下文，按创建人过滤可见范围
+        :param scope: 数据权限上下文
         :return: (总条数, 当前页记录)；记录含env_id(绑定主键)/project_id/env_name/env_type/project_name/created_user/is_delete/时间字段
         :raises ParameterException: 查询异常，统一转为可读提示
         """

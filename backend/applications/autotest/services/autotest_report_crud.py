@@ -67,7 +67,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         :param report_id: 报告主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 报告实例或None
         :raises ParameterException: report_id 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -90,7 +90,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         :param report_code: 报告标识代码，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 报告实例或None
         :raises ParameterException: report_code 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -147,7 +147,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         更新报告，根据report_id或report_code定位。
 
         :param report_in: 报告更新schema
-        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的报告
+        :param scope: 数据权限上下文
         :return: 更新后的报告实例
         :raises NotFoundException: 报告不存在或已软删
         :raises NoPermissionException: 报告创建人不在当前用户可操作范围
@@ -164,7 +164,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"更新报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -194,7 +194,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         物理删除报告，并同步物理删除该报告下所有明细。
 
-        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
+        :param scope: 数据权限上下文
         :param report_id: 报告主键ID，与report_code二选一
         :param report_code: 报告标识代码，与report_id二选一
         :return: 删除前的报告实例快照
@@ -208,7 +208,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+            error_message: str = f"删除报告信息失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可删除范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -226,7 +226,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         批量物理删除报告及其全部明细；先全量校验归属，任一报告无权则整批拒绝。
 
-        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的报告
+        :param scope: 数据权限上下文
         :param report_in: 报告ID列表或报告标识代码列表
         :return: 实际删除的报告数量
         :raises ParameterException: 两个定位参数同时为空
@@ -265,7 +265,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         for instance in targets:
             if not scope.can_delete(instance.created_user):
                 error_message: str = (
-                    f"批量删除报告失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+                    f"批量删除报告失败, 报告[{instance.report_code}]创建人[{instance.created_user}]不在当前用户可删除范围内"
                 )
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
@@ -436,7 +436,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         脚本/报告维度的下钻由/search_batch_scripts与/search_script_round_reports接口承担。
 
         :param batch_in: 批次查询入参
-        :param scope: 数据权限上下文，传入时仅聚合可见范围内的报告
+        :param scope: 数据权限上下文
         :return: (批次总数, 当前页批次列表)
         :raises ParameterException: task_code 为空
         :raises NotFoundException: 任务记录不存在
@@ -552,7 +552,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         轮次列表由前端按case_execute_count构建, 轮次内数据源名称由/search_script_round_reports按全轮次计算返回。
 
         :param script_in: 脚本维度查询入参
-        :param scope: 数据权限上下文，传入时仅聚合可见范围内的报告
+        :param scope: 数据权限上下文
         :return: (脚本总数, 当前页脚本行列表)
         :raises ParameterException: batch_code 为空
         """
@@ -660,7 +660,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         两种形态统一按执行时间升序排列。
 
         :param report_in: 脚本明细查询入参
-        :param scope: 数据权限上下文，传入时仅返回可见范围内的报告
+        :param scope: 数据权限上下文
         :return: (报告总数, 当前页报告行列表)
         :raises ParameterException: batch_code 或 case_id 为空
         """

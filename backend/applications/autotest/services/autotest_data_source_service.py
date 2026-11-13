@@ -147,7 +147,7 @@ class DataSourceService:
 
         :param services: CRUD聚合
         :param instance: 已定位的启用中数据源
-        :param scope: 数据权限上下文，数据源归属跟随用例所属人
+        :param scope: 数据权限上下文
         :param case_id: 入参用例ID(可选)
         :param case_code: 入参用例标识(可选)
         :raises NoPermissionException: 归属用例所属人不在当前用户可操作范围内

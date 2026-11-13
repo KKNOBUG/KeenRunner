@@ -106,10 +106,7 @@ class RedisConnPoolFromConfig:
             raise RuntimeError(error_message) from e
 
         # AutoTestEnvModel主键对外语义为env_enum_id
-        env_enum_ids = await AutoTestEnvModel.filter(
-            env_name__iexact=env_name,
-            state__not=1,
-        ).values_list("id", flat=True)
+        env_enum_ids = await AutoTestEnvModel.filter(env_name__iexact=env_name).values_list("id", flat=True)
         if not env_enum_ids:
             self.logger.warning(f"未找到环境枚举 env_name(忽略大小写)={env_name!r}")
             return None

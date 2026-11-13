@@ -204,7 +204,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
         # 软删恢复不得跨写范围接管他人应用，且不覆盖原创建人
         await scope.load_owners([existing_project.created_user])
         if not scope.can_write(existing_project.created_user):
-            error_message: str = f"新增应用信息失败, 应用[{project_name}]创建人[{existing_project.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"新增应用信息失败, 应用[{project_name}]创建人[{existing_project.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -250,7 +250,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
 
         await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新应用信息失败, 应用[{instance.project_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"更新应用信息失败, 应用[{instance.project_name}]创建人[{instance.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -364,7 +364,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
 
         await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除应用信息失败, 应用[{instance.project_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+            error_message: str = f"删除应用信息失败, 应用[{instance.project_name}]创建人[{instance.created_user}]不在当前用户可删除范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
 
@@ -429,7 +429,7 @@ class AutoTestProjectCrud(ScaffoldCrud[AutoTestProjectModel, AutoTestProjectCrea
 
         await scope.load_owners([instance.created_user for instance in targets])
         if not all(scope.can_delete(instance.created_user) for instance in targets):
-            error_message: str = "删除应用信息失败, 存在不在当前用户可删除范围内的应用, 无权操作"
+            error_message: str = "删除应用信息失败, 存在不在当前用户可删除范围内的应用"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         # 软删同样受引用关系约束：先全量校验再落库，保证批量操作全有或全无

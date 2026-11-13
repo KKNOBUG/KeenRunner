@@ -64,7 +64,7 @@ async def create_case(
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验用例所属应用是否可读
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -107,7 +107,7 @@ async def delete_case(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的用例
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -146,7 +146,7 @@ async def batch_delete_cases(
 
     :param case_in: 用例删除入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的用例
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -178,7 +178,7 @@ async def update_case(
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的用例
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -221,7 +221,7 @@ async def get_case(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -367,7 +367,7 @@ async def search_cases(
 
     :param case_in: 用例入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，按所属人过滤可见范围，公共用例全员可见
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -413,9 +413,9 @@ async def search_cases(
             # 公共脚本/公共接口对所有用户可见可复制，不随数据范围收窄
             q &= owner_q | Q(case_type__in=PUBLIC_CASE_TYPES)
         if case_in.step_type is not None or case_in.request_args_type is not None:
-            matched_case_ids: Optional[List[int]] = await services.case_curd.get_case_ids_by_request_step(
+            matched_case_ids: Optional[List[int]] = await services.case_curd.get_by_step(
                 step_type=case_in.step_type,
-                request_args_type=case_in.request_args_type,
+                args_type=case_in.request_args_type,
             )
             if not matched_case_ids:
                 return SuccessResponse(message="查询成功", data=[], total=0)
@@ -515,7 +515,7 @@ async def get_request_step_selected_project_ids(
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验用例所属人的读范围
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

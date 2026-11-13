@@ -79,7 +79,7 @@ async def create_project(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，恢复软删应用时要求创建人允许当前用户写入
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -118,7 +118,7 @@ async def delete_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -157,7 +157,7 @@ async def batch_delete_projects(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的应用
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -187,7 +187,7 @@ async def update_project(
 
     :param project_in: 应用入参
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的应用
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -230,7 +230,7 @@ async def get_project(
     :param project_id: 应用主键ID
     :param project_code: 应用业务标识
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，校验应用创建人可见性
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:
@@ -273,7 +273,7 @@ async def get_project_names(
     查询去重后的应用名称列表。
 
     :param services: 自动化测试CRUD依赖聚合
-    :param scope: 数据权限上下文，仅返回可见范围内的应用名称
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

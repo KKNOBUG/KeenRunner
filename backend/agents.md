@@ -149,8 +149,10 @@ views/autotest_data_source_view.py (/autotest/data_source/*)
 
 **环境配置命名约定**：
 - `config_name` 是同应用、同节点类型（app/file/database/redis）下的**跨环境逻辑唯一键**：步骤编辑按名称选配置，执行/调试时才由环境确定具体 host/port。
-- 四个 `/autotest/config/{app|file|database|redis}/update` 共用 `AutoTestEnvConfigCrud.update_config`；检测到 `config_name` 变化时由 `_rename_config_across_envs` 在同一事务内把同项目同 `env_type` 下所有启用绑定中的同名启用配置一起改名。缺失该配置的环境不同步也不补建，软删绑定/软删配置不参与；目标名称在任一环境被占用（含软删记录）或任一待改配置无写权限时整体拒绝，错误文案点出具体环境。
-- 改名与换环境不能同时提交（同步范围会失去唯一口径），由 `update_config` 直接拒绝；`config_name` 为空或纯空白同样在服务层兜底拒绝，不能依赖前端必填校验。
+- 四个 `/autotest/config/{app|file|database|redis}/update` 共用 `AutoTestEnvConfigCrud.update_config`；检测到 `config_name` 变化时由 `_sync_envs_config_name` 在同一事务内把**同应用 + 同节点类型**下所有启用环境中的同名启用配置一起改名（不同节点类型名称互相独立，不跨节点同步）。缺失该配置的环境不同步也不补建，软删绑定/软删配置不参与；目标名称在同一节点的任一环境被占用（含软删记录）时整体拒绝，错误文案点出具体环境；同步属于底层行为，命中配置不区分配置创建人。
+- 母子表职责：`/autotest/env/create|update` 维护母表环境绑定（所属应用 + 环境名称 + 节点类型），更新允许改 `env_name`/`env_desc`/`project_id`（前端编辑时应用可选、节点置灰；换应用校验目标应用可读并受唯一键约束），`env_type` 由创建时确定；`/autotest/config/{app|file|database|redis}/create|update` 维护子表配置，节点类型由路径固定，环境由配置关联的绑定决定，更新不再接受 `env_name`/`env_type`/`project_id` 变更；`config_name` 为空或纯空白同样在服务层兜底拒绝，不能依赖前端必填校验。
+- 改名的并发基线：预检通过后，事务内 `_lock_config_name_baseline` 按主键排序一次性 `SELECT ... FOR UPDATE` 主行与同节点各环境同名行，缺行（被并发软删）或名称已变（被并发改名）即整体回滚，避免出现部分环境新名、部分环境旧名的中间态；死锁/锁超时统一转为可重试提示。注意 Tortoise 的 `values()` 不携带 `FOR UPDATE` 标志，加锁查询必须用 `only()`。
+- host/port/database_name 只有实际变化时才重做唯一性校验（host 不是数据库唯一键）；名称未变由唯一索引兜底，不再重复查名。更新不再解析环境名或重建绑定。
 - 改名**不级联**步骤与压测引用：步骤里的旧 `config_name` 会在调试/执行按名查库时报“配置不存在”，需在步骤编辑重新选择；任务 `cases_execute_config` 是 host/port 快照，已保存的执行配置不受影响。
 
 **调试模式**（不落库，顺序严格对齐执行模式）：
@@ -273,9 +275,9 @@ views (/http_debugging, /tcp_debugging)
 - 管理员角色：`Administrators` 与超管同权，`/user/menu/list`/`/user/get_user_routers`/`PermissionControl.has_permission`/`DependSuperUser`/`DataScope` 均运行期直接全量放行，不依赖绑定记录；其角色编码不可修改、角色不可删除、绑定不可保存（`/base/role/authorized` 直接返回参数提示）。
 - 管理员入口：`GET/POST /base/role/authorized` 在原有菜单/路由之外增删 `tag_scopes`（每项 tag=资源族编码 + tag_label 展示名 + 三范围，空值=按角色默认）；菜单、接口与标签范围同属一次授权，统一由 `RoleCrud.save_authorization` 先全量校验、再单事务重建三张关联表；两个方向都叠加 `DependSuperUser`，非管理员不可读也不可写。
 - 审计：`common/permission_action.py` 的 `derive_action` + `AUDITED_ACTIONS` 为唯一分类源，`permission_rule.py` 与 `app_middleware.py` 共用；中间件对新增/更新/删除/执行/上传/下载落库，**刷新(ops)与查询直接透传**（下载响应仅记 `<FILE DOWNLOAD>` 占位符，不复制文件流）。行为由路径末段动词判定（见 4.6），新增接口必须让路径末段带已知动词，否则既不进审计也会被契约校验告警。
-- 报告/明细写接口：HTTP `create/update` 加 `DependSuperUser`，仅超管、管理员角色或执行引擎可直调；引擎内部经 service 直写不走 HTTP。环境字典 `created_user/updated_user` 取登录态，忽略请求体回传。
+- 报告/明细写接口：HTTP `create/update` 加 `DependSuperUser`，仅超管、管理员角色或执行引擎可直调；引擎内部经 service 直写不走 HTTP。
 - 内置角色接口绑定：Guests 业务域（应用/自动化/任务/工具）全部放行（含执行/调试/上传/下载），系统域只读；接口放行不代表可删他人数据，删除归属由 service 层 `can_delete` 兜底。
-- 归属字段：用例用 `owner_user`（转让后变更，转让始终仅当前所属人本人可操作）；步骤与数据源以所属用例 `owner_user` 为准；项目/标签/环境/环境配置/任务/报告/明细/执行记录用 `created_user`。
+- 归属字段：用例用 `owner_user`（转让后变更，转让始终仅当前所属人本人可操作）；步骤与数据源以所属用例 `owner_user` 为准；项目/标签/环境绑定/环境配置/任务/报告/明细/执行记录用 `created_user`；环境字典（`krun_autotest_env`）是全局共享纯词典，只存 `env_name/env_code`，无归属、软删状态、审计与预留字段，所有应用共用且无行级过滤。
 - 删除语义矩阵：
   - **全物理删除**：审计日志（单删/批量/按用户/按时间）、测试报告（单删 `/report/delete` + 批量 `/report/deletes`，两路径均同事务级联删除明细）、执行明细（单删 `/detail/delete` + 批量 `/detail/deletes`）、异步中心与执行记录（同一资源，单删 `/task/record/delete` + 批量 `/task/record/deletes`，仅允许删除终态并清理产物）。报告/明细/执行记录的批量入口均按「全有或全无」校验，按 `report_codes` 删除与按 `report_ids` 等义。
   - **单删物理 + 批量软删**：应用（`autotest/project`）、标签、环境、环境配置、用例、步骤。两条路径都拒绝存在引用关系的数据：应用→用例/标签/环境绑定/环境配置/任务；标签→用例 `case_tags`；环境→环境配置/任务环境名；环境配置→步骤的请求配置/数据库/Redis 操作；用例→公共用例被引用步骤。用例单删连带物理删除其步骤，批量删除连带软删除其步骤；步骤无独立批量删除入口。

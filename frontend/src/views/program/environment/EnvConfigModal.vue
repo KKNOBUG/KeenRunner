@@ -16,7 +16,7 @@
           <div class="config-name-field">
             <NInput v-model:value="form.config_name" maxlength="128"/>
             <NText v-if="mode === 'edit'" depth="3" class="config-name-hint">
-              修改名称将同步该应用下所有环境的同名配置
+              修改名称将同步该应用、该节点类型下所有环境的同名配置
             </NText>
           </div>
         </NFormItem>
@@ -256,8 +256,9 @@ function buildPayload() {
     config_name: form.config_name,
     env_name: form.env_name,
     config_host: form.config_host,
-    config_port: form.config_port || undefined,
-    config_desc: form.config_desc || undefined,
+    // 可空字段显式传 null，后端才能区分“未修改”与“清空”
+    config_port: form.config_port || null,
+    config_desc: form.config_desc || null,
   }
   if (isEditMode) {
     base.config_id = form.config_id
@@ -284,9 +285,9 @@ function buildPayload() {
     })
   } else if (t === ENV_TYPE.REDIS) {
     Object.assign(base, {
-      database_name: form.database_name || undefined,
-      config_username: form.config_username || undefined,
-      config_password: form.config_password || undefined,
+      database_name: form.database_name || null,
+      config_username: form.config_username || null,
+      config_password: form.config_password || null,
     })
   }
   return base
@@ -340,7 +341,9 @@ watch(
       if ((props.mode === 'edit' || props.mode === 'copy') && props.configRow) {
         fillFromRow(props.configRow, { asCopy: props.mode === 'copy' })
       }
-    }
+    },
+    // 主表入口用 v-if 挂载弹窗并同时置 show=true，首次挂载不会产生 show 变更回调，需立即执行一次初始化
+    { immediate: true }
 )
 </script>
 

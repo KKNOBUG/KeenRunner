@@ -369,7 +369,7 @@ class StepExecutionContext:
         根据作用域更新变量：variables为StepVariablesBase列表，同key覆盖，新key追加；key为空的项过滤跳过。
 
         :param variables: 待更新的变量列表
-        :param scope: 目标作用域（defined_variables 或 session_variables）
+        :param scope: 数据权限上下文
         :return: None
         :raises ValueError: 作用域非法、入参不是列表或列表项不是 StepVariablesBase
         """

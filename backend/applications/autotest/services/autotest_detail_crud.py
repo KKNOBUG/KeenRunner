@@ -32,17 +32,6 @@ from backend.services import DataScope
 
 
 class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate, AutoTestDetailUpdate]):
-    """
-    执行明细CRUD：步骤级执行快照的落库、查询与树组装。
-
-    数据形态：一行明细 = 一个步骤（或一次循环/分支）的执行结果快照，只追加不回写步骤定义；
-    通过 parent_step_id 串成树，report_code 归属报告，唯一约束为 (report_code, case_code, step_code, loop_cycles)。
-
-    写入口径：单条 create_detail 做用例/报告存在校验；批量 create_details 供执行引擎事务内使用，
-    跳过校验以省去逐条查询，由外层事务保证报告同源。
-    归属口径：明细以 created_user 为归属人。
-    """
-
     # 明细轻量列清单：分页查询与树模式全量查询共用，保证两模式返回字段结构一致
     DETAIL_LIGHT_COLUMNS: Tuple[str, ...] = (
         "id", "case_id", "case_code", "report_code", "parent_step_id",
@@ -62,7 +51,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
         :param detail_id: 明细主键ID，必填
         :param on_error: 未找到时是否抛出异常
-        :param kwargs: 额外过滤条件（如 state__not=1 排除软删）
+        :param kwargs: 额外过滤条件
         :return: 明细实例或None
         :raises ParameterException: detail_id 为空
         :raises NotFoundException: on_error=True 且记录不存在
@@ -114,7 +103,6 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         """
         case_id: int = detail_in.case_id
         case_code: str = detail_in.case_code
-
         await AutoTestCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
@@ -122,7 +110,6 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             case_code=case_code,
             state__not=1,
         )
-
         if not skip_report_check:
             report_code: str = detail_in.report_code
             await AutoTestReportCrud().get_by_conditions(
@@ -138,7 +125,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "新增明细信息失败，明细记录可能重复或关联数据无效，请检查报告、用例和步骤信息"
+            error_message: str = "新增明细信息失败，明细记录重复或关联数据无效"
             LOGGER.error(
                 f"{error_message}, 关键字段: [report_code={detail_in.report_code}, "
                 f"case_id={case_id}, case_code={case_code}, step_code={detail_in.step_code}]\n"
@@ -157,9 +144,6 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
     async def create_details(self, details_in: List[AutoTestDetailCreate]) -> List[AutoTestDetailModel]:
         """
         批量创建执行明细，仅供执行/调试落库事务内使用。
-        调用方已在同一事务内创建了report_code同源的报告，故跳过用例与报告存在性校验；
-        唯一约束(report_code+case_code+step_code+loop_cycles)冲突时整批失败，由外层事务统一回滚，
-        与逐条创建的事务语义一致。
 
         :param details_in: 明细创建schema列表
         :return: 创建后的明细实例列表(自增主键不回填)
@@ -176,16 +160,18 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             await self.model.bulk_create(instances)
             return instances
         except IntegrityError as e:
-            error_message: str = "批量新增明细信息失败，明细记录可能重复或关联数据无效，请检查报告、用例和步骤信息"
+            error_message: str = "批量新增明细信息失败，明细记录重复或关联数据无效"
             LOGGER.error(
-                f"{error_message}, 关键字段: [detail_count={len(details_in)}]\n"
+                f"{error_message}, "
+                f"关键字段: [detail_count={len(details_in)}]\n"
                 f"{traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
             error_message: str = "批量新增明细信息失败，暂时无法保存执行明细，请稍后重试"
             LOGGER.error(
-                f"{error_message}, 关键字段: [detail_count={len(details_in)}]\n"
+                f"{error_message}, "
+                f"关键字段: [detail_count={len(details_in)}]\n"
                 f"{traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
@@ -195,7 +181,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         更新明细，需提供detail_id或(report_code, step_code)定位。
 
         :param detail_in: 明细更新schema
-        :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的明细
+        :param scope: 数据权限上下文
         :return: 更新后的明细实例
         :raises ParameterException: 定位参数不足（detail_id 与 report_code+step_code 均未给全）
         :raises NotFoundException: 用例/报告/明细不存在或已软删
@@ -204,7 +190,6 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         """
         case_id: Optional[int] = detail_in.case_id
         case_code: Optional[str] = detail_in.case_code
-
         await AutoTestCaseCrud().get_by_conditions(
             only_one=True,
             on_error=True,
@@ -212,7 +197,6 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             case_code=case_code,
             state__not=1,
         )
-
         report_code = detail_in.report_code
         await AutoTestReportCrud().get_by_conditions(
             only_one=True,
@@ -222,7 +206,6 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             report_code=report_code,
             state__not=1,
         )
-
         detail_id: Optional[int] = detail_in.detail_id
         step_code: Optional[str] = detail_in.step_code
         if not detail_id and (not report_code or not step_code):
@@ -242,7 +225,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             detail_id = instance.id
         await scope.load_owners([instance.created_user])
         if not scope.can_write(instance.created_user):
-            error_message: str = f"更新明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可操作范围内, 无权操作"
+            error_message: str = f"更新明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可操作范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         try:
@@ -254,10 +237,10 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             instance = await self.update(id=detail_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "更新明细信息失败，明细记录可能重复或关联数据无效，请检查报告、用例和步骤信息"
+            error_message: str = "更新明细信息失败，明细记录重复或关联数据无效"
             LOGGER.error(
-                f"{error_message}, 关键字段: [detail_id={detail_id}, "
-                f"report_code={report_code}, step_code={step_code}]\n"
+                f"{error_message}, "
+                f"关键字段: [detail_id={detail_id}, report_code={report_code}, step_code={step_code}]\n"
                 f"{traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
@@ -272,7 +255,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         """
         物理删除明细，需提供detail_id或(report_code, step_code)。
 
-        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
+        :param scope: 数据权限上下文
         :param detail_id: 明细主键ID，与(report_code, step_code)二选一
         :param step_code: 步骤标识代码
         :param report_code: 报告标识代码
@@ -298,7 +281,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             )
         await scope.load_owners([instance.created_user])
         if not scope.can_delete(instance.created_user):
-            error_message: str = f"删除明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
+            error_message: str = f"删除明细信息失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可删除范围内"
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         await instance.delete()
@@ -308,7 +291,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         """
         批量物理删除明细；先全量校验归属，任一明细无权则整批拒绝。
 
-        :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的明细
+        :param scope: 数据权限上下文
         :param detail_in: 明细ID列表入参
         :return: 实际删除的明细数量
         :raises NotFoundException: 任一目标明细不存在或已软删
@@ -327,9 +310,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         await scope.load_owners([instance.created_user for instance in targets])
         for instance in targets:
             if not scope.can_delete(instance.created_user):
-                error_message: str = (
-                    f"批量删除明细失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可删除范围内, 无权操作"
-                )
+                error_message: str = f"批量删除明细失败, 明细[{instance.step_name}]创建人[{instance.created_user}]不在当前用户可删除范围内"
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
 

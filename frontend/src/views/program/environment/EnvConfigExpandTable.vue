@@ -205,14 +205,23 @@ function buildActionColumn(type) {
 const columns = computed(() => [...buildConfigDisplayColumns(envType), buildActionColumn(envType)])
 
 async function loadTypeRows(type) {
-  const res = await api.getEnvConfigList({
+  // 后端单页上限 100，按 total 翻页取全，避免单环境配置超过一页时静默截断
+  const query = {
     project_id: Number(props.envRow.project_id),
     env_name: props.envRow.env_name,
     env_type: type,
-    page: 1,
-    page_size: 50,
-  })
-  return res?.data || []
+    page_size: 100,
+  }
+  const collected = []
+  let page = 1
+  while (true) {
+    const res = await api.getEnvConfigList({ ...query, page })
+    const batch = res?.data || []
+    collected.push(...batch)
+    if (!batch.length || collected.length >= Number(res?.total || 0)) break
+    page += 1
+  }
+  return collected
 }
 
 async function reload() {
