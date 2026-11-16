@@ -8,7 +8,7 @@
 """
 from typing import Optional, Sequence
 
-from base_enum_cls import StringEnum
+from .base_enum_cls import StringEnum
 
 
 class ResourceDomain(StringEnum):
