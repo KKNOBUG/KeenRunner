@@ -102,6 +102,8 @@ class ProjectConfig(BaseSettings):
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 2
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥")
+    # 第三方迁移登录的用户真实性校验地址
+    THIRD_PARTY_USER_AUTH_URL: str = Field(..., description="第三方用户真实性校验地址")
 
     # 日志相关参数配置
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"
@@ -289,6 +291,7 @@ class ProjectConfig(BaseSettings):
             raise ValueError("配置[AUTH_SECRET_KEY]不允许为空或少于64位")
 
         for field_name in (
+                "THIRD_PARTY_USER_AUTH_URL",
                 "DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME", "DATABASE_USERNAME", "DATABASE_PASSWORD",
                 "DEV_DATABASE_HOST", "DEV_DATABASE_PORT", "DEV_DATABASE_NAME", "DEV_DATABASE_USERNAME", "DEV_DATABASE_PASSWORD",
                 "REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD",

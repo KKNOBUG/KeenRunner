@@ -143,8 +143,8 @@ async def base_exceptions_handler(request: Request, exc: BaseExceptions) -> Base
     """
     LOGGER.warning(
         f"{exc.message}, "
-        f"关键字段: [method={request.method}, path={request.url.path}, "
-        f"code={exc.code}, exception_type={type(exc).__name__}]"
+        f"关键字段: [method={request.method}, path={request.url.path}, code={exc.code}]\n"
+        f"异常回溯: exception_type={type(exc).__name__}"
     )
     return FailureResponse(message=exc.message)
 
@@ -163,8 +163,8 @@ async def null_point_exception_handler(request: Request, exc: DoesNotExist) -> B
     error_message: str = "查询目标数据不存在或已被删除，请刷新后重试"
     LOGGER.warning(
         f"{error_message}, "
-        f"关键字段: [method={request.method}, path={request.url.path}, "
-        f"exception_type={type(exc).__name__}]"
+        f"关键字段: [method={request.method}, path={request.url.path}]\n"
+        f"异常回溯: exception_type={type(exc).__name__}"
     )
     return NotFoundResponse(message=error_message)
 
@@ -183,6 +183,6 @@ async def app_exception_handler(request: Request, exc: Exception) -> BaseRespons
     LOGGER.error(
         f"{error_message}, "
         f"关键字段: [method={request.method}, path={request.url.path}, exception_type={type(exc).__name__}]\n"
-        f"{traceback.format_exc()}"
+        f"异常回溯: {traceback.format_exc()}"
     )
     return FailureResponse(message=error_message)

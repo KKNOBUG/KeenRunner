@@ -37,6 +37,7 @@ from backend.core.exceptions.http_exceptions import (
     null_point_exception_handler,
     app_exception_handler,
 )
+from backend.enums import ResourceTag
 from backend.core.middlewares.app_middleware import logging_middleware
 from backend.core.middlewares.auth_middleware import auth_middleware
 from backend.core.middlewares.request_context_middleware import request_context_middleware
@@ -262,15 +263,15 @@ def register_routers(app: FastAPI) -> None:
     from backend.applications.performance.views import performance
 
     # 挂在路由蓝图
-    app.include_router(router=router_secure, prefix="/base", tags=["系统管理:路由"], dependencies=[DependPermission])
-    app.include_router(router=menu_secure, prefix="/base", tags=["系统管理:菜单"], dependencies=[DependPermission])
-    app.include_router(router=role_secure, prefix="/base", tags=["系统管理:角色"], dependencies=[DependPermission])
-    app.include_router(router=audit_secure, prefix="/base", tags=["系统管理:审计"], dependencies=[DependPermission])
-    app.include_router(router=file_secure, prefix="/base", tags=["系统管理:文件"], dependencies=[DependPermission])
+    app.include_router(router=router_secure, prefix="/base", tags=[ResourceTag.ROUTER.desc], dependencies=[DependPermission])
+    app.include_router(router=menu_secure, prefix="/base", tags=[ResourceTag.MENU.desc], dependencies=[DependPermission])
+    app.include_router(router=role_secure, prefix="/base", tags=[ResourceTag.ROLE.desc], dependencies=[DependPermission])
+    app.include_router(router=audit_secure, prefix="/base", tags=[ResourceTag.AUDIT.desc], dependencies=[DependPermission])
+    app.include_router(router=file_secure, prefix="/base", tags=[ResourceTag.FILE.desc], dependencies=[DependPermission])
     app.include_router(router=user_public, prefix="/user", tags=["系统管理:用户"])
     app.include_router(router=user_self, prefix="/user", tags=["系统管理:用户"], dependencies=[DependAuth])
     app.include_router(router=user_secure, prefix="/user", tags=["系统管理:用户"], dependencies=[DependPermission])
-    app.include_router(router=dept, prefix="/dept", tags=["系统管理:部门"], dependencies=[DependPermission])
+    app.include_router(router=dept, prefix="/dept", tags=[ResourceTag.DEPT.desc], dependencies=[DependPermission])
     app.include_router(router=toolbox, prefix="/toolbox", tags=["便捷工具:工具箱"], dependencies=[DependPermission])
     app.include_router(router=autotest, prefix="/autotest", dependencies=[DependPermission])
     app.include_router(router=performance, prefix="/perf", dependencies=[DependPermission])
