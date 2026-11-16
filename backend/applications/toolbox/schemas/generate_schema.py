@@ -47,9 +47,9 @@ RANDOM_OPTION_MAP: Dict[str, str] = {
 class GenerateVirtualInfo(BaseModel):
     """工具箱：批量生成虚拟人员/时间/随机标识的请求入参。"""
 
-    number: int = Field(ge=1, description="生成条数")
-    minAge: int = Field(ge=1, description="随机年龄下限")
-    maxAge: int = Field(ge=1, description="随机年龄上限")
+    number: int = Field(ge=1, le=100, description="生成条数")
+    minAge: int = Field(ge=1, le=100, description="随机年龄下限")
+    maxAge: int = Field(ge=1, le=150, description="随机年龄上限")
     personOption: List[str] = Field(default_factory=lambda: list(PERSON_OPTION_MAP.keys()), description="人员字段选项（中文文案）")
     datetimeOption: List[str] = Field(default_factory=lambda: list(DATETIME_OPTION_MAP.keys()), description="时间类型选项（中文文案）")
     randomOption: List[str] = Field(default_factory=lambda: list(RANDOM_OPTION_MAP.keys()), description="随机标识选项（中文文案）")
