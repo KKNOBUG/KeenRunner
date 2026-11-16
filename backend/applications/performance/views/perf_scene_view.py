@@ -14,10 +14,10 @@
 import traceback
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
+from backend.applications.performance.dependencies import DependPerfServices, PerfServices
 from backend.applications.performance.schemas.perf_scene_schema import (
     PerfPresetBatchDuplicate,
     PerfSceneCreate,
@@ -64,7 +64,7 @@ SCENE_LIST_EXCLUDE_FIELDS = {"state", "reserve_1", "reserve_2", "reserve_3", "sc
 @perf_scene.post("/create", summary="新增压测场景", description="新增压测场景(接口项引用在保存期完成存在性校验)")
 async def create_perf_scene(
         scene_in: PerfSceneCreate = Body(..., description="压测场景信息"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     新增压测场景。
@@ -87,14 +87,14 @@ async def create_perf_scene(
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增压测场景失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法新增压测场景，请稍后重试")
 
 
 @perf_scene.delete("/delete", summary="删除压测场景", description="根据id或code删除压测场景信息(被负载预设引用时禁止)")
 async def delete_perf_scene(
         scene_id: Optional[int] = Query(None, description="场景ID"),
         scene_code: Optional[str] = Query(None, description="场景标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据id或code删除压测场景。
@@ -114,13 +114,13 @@ async def delete_perf_scene(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除压测场景信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法删除压测场景，请稍后重试")
 
 
 @perf_scene.post("/update", summary="更新压测场景", description="根据id或code更新压测场景信息")
 async def update_perf_scene(
         scene_in: PerfSceneUpdate = Body(..., description="压测场景信息"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据id或code更新压测场景。
@@ -143,14 +143,14 @@ async def update_perf_scene(
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code更新压测场景信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"更新失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法更新压测场景，请稍后重试")
 
 
 @perf_scene.get("/get", summary="查询压测场景", description="根据id或code查询压测场景信息(含编排与判定口径全量字段)")
 async def get_perf_scene(
         scene_id: Optional[int] = Query(None, description="场景ID"),
         scene_code: Optional[str] = Query(None, description="场景标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据id或code查询压测场景。
@@ -173,13 +173,13 @@ async def get_perf_scene(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code查询压测场景信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询压测场景，请稍后重试")
 
 
 @perf_scene.post("/search", summary="查询压测场景列表", description="根据条件分页查询压测场景列表信息(Body, 不含容器大字段)")
 async def search_perf_scenes(
         scene_in: PerfSceneSelect = Body(..., description="查询条件"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据条件查询压测场景。
@@ -226,13 +226,13 @@ async def search_perf_scenes(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件分页查询压测场景列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询压测场景列表，请稍后重试")
 
 
 @perf_scene.post("/precheck", summary="执行场景连通性预检", description="对场景内启用接口逐个发1次真实请求回显连通性与业务结论(复用调试链, 结论回写口径一致)")
 async def precheck_perf_scene(
         precheck_in: PerfScenePrecheck = Body(..., description="场景预检入参"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     场景连通性预检。
@@ -250,13 +250,13 @@ async def precheck_perf_scene(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"场景连通性预检失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"预检失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法预检压测场景，请稍后重试")
 
 
 @perf_scene.post("/pin_baseline", summary="更新场景基线报告钉选", description="将同场景的已完成报告钉为退化对比基线; report_code留空为取消钉选")
 async def pin_baseline_perf_scene(
         pin_in: PerfScenePinBaseline = Body(..., description="基线钉选入参"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     钉选/取消钉选场景基线报告。
@@ -276,13 +276,13 @@ async def pin_baseline_perf_scene(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"钉选场景基线报告失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"钉选基线失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法钉选基线报告，请稍后重试")
 
 
 @perf_scene.post("/copy", summary="新增压测场景副本", description="复制压测场景为同应用下的新场景(编排全量平移, 基线不继承)")
 async def copy_perf_scene(
         locate_in: PerfSceneLocate = Body(..., description="场景定位入参"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     复制压测场景。
@@ -307,13 +307,13 @@ async def copy_perf_scene(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"复制压测场景失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"复制失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法复制压测场景，请稍后重试")
 
 
 @perf_scene.post("/save_wizard", summary="更新场景与负载预设(一体化保存)", description="场景独立编辑页 4 Tab 唯一提交入口: upsert scene + diff upsert presets(新增/更新/软删)")
 async def save_wizard_perf_scene(
         payload: PerfSceneWizardPayload = Body(..., description="场景 + 负载预设一体化保存入参"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     场景独立编辑页一体化保存(Tab 编辑页唯一提交入口)。
@@ -328,11 +328,7 @@ async def save_wizard_perf_scene(
             exclude_fields=SCENE_EXCLUDE_FIELDS, replace_fields=SCENE_REPLACE_FIELDS,
         )
         preset_data = [
-            await p.to_dict(
-                exclude_fields={"state", "created_user", "created_time", "updated_user", "updated_time",
-                                "reserve_1", "reserve_2", "reserve_3"},
-                replace_fields={"id": "preset_id"},
-            )
+            await services.preset_curd.serialize_preset(p)
             for p in result["presets"]
         ]
         return SuccessResponse(message="保存成功", data={"scene": scene_data, "presets": preset_data}, total=1)
@@ -346,13 +342,13 @@ async def save_wizard_perf_scene(
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"一体化保存场景失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"保存失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法保存压测场景，请稍后重试")
 
 
 @perf_scene.post("/preset/batch_duplicate", summary="新增负载预设档位(批量派生)", description="拐点测试快捷操作: 基于已有预设批量派生多个并发档位")
 async def batch_duplicate_perf_presets(
         payload: PerfPresetBatchDuplicate = Body(..., description="批量派生入参(基准预设 + 并发列表)"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     批量派生负载预设档位(拐点测试快捷操作)。
@@ -364,11 +360,7 @@ async def batch_duplicate_perf_presets(
     try:
         created = await PerfSceneService.batch_duplicate_presets(payload, current_user=get_current_username())
         data = [
-            await p.to_dict(
-                exclude_fields={"state", "created_user", "created_time", "updated_user", "updated_time",
-                                "reserve_1", "reserve_2", "reserve_3"},
-                replace_fields={"id": "preset_id"},
-            )
+            await services.preset_curd.serialize_preset(p)
             for p in created
         ]
         return SuccessResponse(message=f"已派生 {len(created)} 份负载预设", data=data, total=len(created))
@@ -382,13 +374,13 @@ async def batch_duplicate_perf_presets(
         return DataAlreadyExistsResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"批量派生负载预设失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"派生失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法派生负载预设，请稍后重试")
 
 
 @perf_scene.post("/run_all_presets", summary="执行全部负载预设", description="批量下发场景下所有预设执行(锁定态跳过, 失败逐条记录不阻塞其余)")
 async def run_all_perf_scene_presets(
         locate_in: PerfSceneRunAllPresets = Body(..., description="场景定位入参"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     一键批量下发场景下所有负载预设执行。
@@ -410,4 +402,4 @@ async def run_all_perf_scene_presets(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"一键跑全部负载预设失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"批量下发失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法批量下发负载预设，请稍后重试")

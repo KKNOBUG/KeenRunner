@@ -46,9 +46,6 @@ class PerfJobService:
         """
         作业执行下发前置业务: 定位、执行中闸门、原子置排队(apply_async由视图层编排)。
 
-        执行期引用校验提前到下发时: 让用户点击时得到确定反馈, 而非排队后才发现
-        脚本用例已被删除。
-
         :param job_in: 作业定位入参(job_id/job_code二选一)
         :return: 已置排队状态的作业实例
         """
@@ -81,9 +78,6 @@ class PerfJobService:
         """
         数据作业执行链(Celery impl): 抢占置running → 顺序跑N轮功能执行 → 提取回写 → 终态。
 
-        任一轮功能执行失败或(prepare)提取失败即中止: 造数要求数据完整, 部分行产出
-        会造成场景消费期取值歧义, 已执行轮次不回写。失败原因与最近报告回填作业表。
-
         :param job_code: 数据作业标识代码
         :param celery_id: Celery任务ID
         :param created_user: 触发人账号(worker无HTTP上下文, 用于执行归因)
@@ -91,6 +85,8 @@ class PerfJobService:
             {"job_code": "xx", "job_type": "prepare", "status": "success", "skipped": False,
              "loop_times": 10, "result_rows": 10, "result_dataset_id": 1, "report_code": "xx"}
         """
+        # 任一轮功能执行失败或(prepare)提取失败即中止: 造数要求数据完整, 部分行产出
+        # 会造成场景消费期取值歧义, 已执行轮次不回写
         crud = PerfJobCrud()
         job: PerfJobModel = await crud.get_by_code(job_code=job_code, on_error=True, state__not=1)
         # 抢占闸门: 仅pending可流转, 消息重投/并发消费时直接跳过(状态已被其他消费接管)
@@ -170,8 +166,8 @@ class PerfJobService:
             }
         except Exception as e:
             # 执行链全量兜底: 任何残余异常(引用资产断链/DB异常)置failed, 不卡running
-            error_message: str = f"数据作业执行异常: {type(e).__name__}: {e}"
-            LOGGER.error(f"数据作业[{job.job_code}]执行失败: {error_message}\n{traceback.format_exc()}")
+            error_message: str = str(getattr(e, "message", None) or "数据作业执行失败, 请稍后重试")
+            LOGGER.error(f"数据作业[{job.job_code}]执行失败: {type(e).__name__}: {e}\n{traceback.format_exc()}")
             try:
                 await crud.mark_failed(job_id=job.id, error_message=error_message, report_code=last_report_code)
             except Exception as fallback_error:
@@ -207,15 +203,12 @@ async def _extract_row(*, report_code: Optional[str], fields: List[str]) -> Opti
     """
     从一轮功能执行的明细提取数据行。
 
-    提取协议: 优先取提取快照(extract_variables)中同名且成功的最后一次取值,
-    未命中时回退到最后一条明细的会话变量终态(session_variables按key兜底,
-    兜底用户脚本直接写会话变量而未声明提取器的写法); 任一列未命中返回None,
-    由调用方按轮次fail-fast(造数要求数据完整)。
-
     :param report_code: 本轮功能执行报告标识代码
     :param fields: 提取列名列表
     :return: 列名到取值的字典(全列命中)或None(存在未命中列)
     """
+    # 提取协议: 优先取提取快照(extract_variables)中同名且成功的最后一次取值,
+    # 未命中时回退到最后一条明细的会话变量终态(兼容用户脚本直接写会话变量的写法)
     # 跨模块引用走函数内导入(对齐本模块既有模式, 避免模块加载环)
     from backend.applications.autotest.models.autotest_detail_model import AutoTestDetailModel
 
@@ -249,12 +242,9 @@ def _match_path_tail(paths: List[str], field: str) -> Optional[str]:
     """
     按路径末段匹配提取列名, 命中返回完整路径。
 
-    JSONPath与XPath统一取尾段(属性路径剥离@), 与提取变量名直接对齐报文字段名;
-    大小写敏感口径与占位符渲染一致。
-
     :param paths: 报文字段路径列表(如$.Token、$.data.id、./Child/@attr)
     :param field: 提取列名
-    :return: 命中的完整路径或None
+    :return: 命中的完整路径或None; JSONPath与XPath统一取尾段(属性路径剥离@), 大小写敏感
     """
     for path in paths:
         tail: str = str(path or "").rstrip("/").split("/")[-1].split(".")[-1].lstrip("@")
@@ -267,14 +257,11 @@ def _resolve_field_paths(api: PerfApiModel, fields: List[str]) -> Dict[str, Tupl
     """
     提取列名 → 参数化字段路径的分区归属解析。
 
-    以归属接口报文现存的字段路径为准(路径规则与功能数据源同步协议一致: 请求头$.Key、
-    键值型$.Key、JSON叶子JSONPath、XML叶子XPath), 列名按路径末段匹配, 先 head 后 body;
-    未命中列由调用方 fail-fast(造数产出无处写入, 静默丢弃会造成场景消费期取值歧义)。
-
     :param api: 产出归属压测接口实例
     :param fields: 提取列名列表
     :return: {列名: (分区, 完整路径)}, 分区取值 head|body
     """
+    # 以归属接口报文现存的字段路径为准(路径规则与功能数据源同步协议一致), 列名按路径末段匹配, 先 head 后 body
     originals: Dict[str, Dict[str, str]] = DataSourceService.collect_step_report_original(api)
     section_paths: Dict[str, List[str]] = {
         "head": list(originals.get("HEAD") or {}),
@@ -295,16 +282,14 @@ def _build_job_dataframe(api: PerfApiModel, fields: List[str],
     """
     造数提取行 → 数据源垂直矩阵(每轮一个场景)。
 
-    列名经归属接口报文解析为字段路径后按分区落位(值经cell_text_value文本化,
-    与数据源dataset字符串化存储协议对齐, 类型语义由注入侧按报文原字段适配);
-    任一列未命中报文路径即中止造数。
-
     :param api: 产出归属压测接口实例
     :param fields: 提取列名列表(作业声明顺序)
     :param rows: 提取行数据(每轮一行, 列名→取值)
     :return: 垂直方向二维矩阵(首行场景名, 首列分区标记/字段路径)
     :raises ParameterException: 存在无法归属到接口报文字段的提取列
     """
+    # 列名经归属接口报文解析为字段路径后按分区落位, 值经 cell_text_value 文本化
+    # (与数据源 dataset 字符串化存储协议对齐, 类型语义由注入侧按报文原字段适配)
     resolved: Dict[str, Tuple[str, str]] = _resolve_field_paths(api, fields)
     missing_fields: List[str] = [field for field in fields if field not in resolved]
     if missing_fields:
@@ -333,17 +318,13 @@ async def _write_back_dataset(*, job: PerfJobModel, rows: List[Dict[str, Any]],
     """
     prepare作业产出回写数据集(source_type=job, 归属接口由bind_api_id派生)。
 
-    产出协议与数据集矩阵协议对齐: 每轮提取行转换为一个场景, 列名按归属接口
-    报文解析为字段路径写入 head/body 分区, 落库经数据集CRUD同一解析链路
-    (apply_dataframe_payload)派生四分区。
-    同名数据集恢复覆盖(create_perf_dataset既有语义), 重跑作业即刷新产出;
-    归属接口保证数据集挂到正确应用并随归属链被场景消费。
-
     :param job: prepare类型作业实例
     :param rows: 提取行数据(每轮一行)
     :param created_user: 触发人账号
     :return: 创建或恢复后的数据集实例
     """
+    # 产出协议与数据集矩阵协议对齐: 每轮提取行转换为一个场景, 列名按归属接口报文解析为字段路径,
+    # 落库经数据集CRUD同一解析链路派生四分区; 同名数据集恢复覆盖(create_perf_dataset既有语义), 重跑作业即刷新产出
     api = await PerfJobCrud.resolve_bind_api(bind_api_id=job.bind_api_id)
     if api is None:
         # schema已强制prepare必填归属接口, 此处防御存量脏数据

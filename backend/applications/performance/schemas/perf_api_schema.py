@@ -108,9 +108,9 @@ class PerfApiRequestBlock(BaseModel):
     request_text: Optional[str] = Field(None, description="原始请求体文本(raw/xml)")
     request_body: NON_DICT_TYPE = Field(None, description="请求体数据(json)")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
-    # 施压目标定位: 应用 + APP节点配置名, 与功能用例同一解析口径
+    # 施压目标定位: 应用 + APP节点配置逻辑标识, 与功能用例同一解析口径(名称不再入库)
     request_project_id: Optional[int] = Field(None, ge=1, description="请求目标应用ID")
-    request_config_name: Optional[str] = Field(None, max_length=128, description="请求目标环境配置名称(APP节点)")
+    request_config_mode: Optional[str] = Field(None, max_length=64, description="请求目标环境配置逻辑标识(APP节点)")
 
     @field_validator(
         "request_header", "request_params", "request_form_data",
@@ -143,9 +143,8 @@ class PerfApiBase(PerfApiRequestBlock):
     def _require_pressable_definition(self):
         """
         校验施压单元语义: 请求类型必须在可施压清单内, 且 HTTP 请求必须有方法与非相对化不了的地址。
-
-        结构性缺失若不在保存期拦截, 会在施压期以「0 请求数」的假结果骗过判定, 排查成本极高。
         """
+        # 结构性缺失若不在保存期拦截, 会在施压期以「0 请求数」的假结果骗过判定, 排查成本极高
         if self.step_type not in PERF_API_STEP_TYPES:
             raise ValueError(f"参数[step_type]不支持施压, 当前: {self.step_type}, 可选: {[t.value for t in PERF_API_STEP_TYPES]}")
         if self.step_type == AutoTestStepType.HTTP:
@@ -238,8 +237,9 @@ class PerfApiDebug(BaseModel):
     api_id: Optional[int] = Field(None, ge=1, description="接口ID")
     api_code: Optional[str] = Field(None, min_length=1, max_length=64, description="接口标识代码")
     # 施压目标环境(复用 autotest 环境三级链; 接口地址为绝对地址时可留空)
-    env_name: Optional[str] = Field(None, max_length=128, description="调试环境名称")
-    env_config_name: Optional[str] = Field(None, max_length=128, description="调试目标配置名称(APP节点)")
+    env_id: Optional[int] = Field(None, ge=1, description="调试环境绑定ID")
+    # 接口自身未配置 mode 时的调试兜底(场景预检按缺省APP配置回填)
+    env_config_mode: Optional[str] = Field(None, max_length=64, description="调试目标配置逻辑标识(APP节点)")
     session_variables: Optional[List[RequestKvItem]] = Field(None, description="临时变量池(渲染请求占位符, 不落库)")
     # 数据源取数: 对齐 autotest 设计, 一个接口绑定一个数据源, 调试时选择是否启用 + 场景名称
     enable_data_source: bool = Field(default=False, description="是否启用数据源(接口绑定的唯一数据源)")

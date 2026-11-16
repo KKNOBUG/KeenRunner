@@ -8,6 +8,7 @@
 """
 from typing import Any, Dict, List, Optional, Tuple
 
+import traceback
 from tortoise.exceptions import DoesNotExist, FieldError
 from tortoise.expressions import Q
 
@@ -109,7 +110,7 @@ class PerfReportCrud(ScaffoldCrud[PerfReportModel, Any, Any]):
         :param page: 页码
         :param page_size: 每页数量
         :param order: 排序字段列表(缺省按起始时间倒序)
-        :return: (报告总数, 当前页报告行列表)
+        :return: (报告总数, 当前页报告行列表; 主键以 report_id 下发)
         """
         total: int = await self.model.filter(search).count()
         order_fields = order or ["-started_time"]
@@ -117,17 +118,16 @@ class PerfReportCrud(ScaffoldCrud[PerfReportModel, Any, Any]):
         try:
             rows = await queryset.order_by(*order_fields).values(*REPORT_LIST_FIELDS)
         except (FieldError, DoesNotExist) as e:
-            error_message: str = f"压测报告列表排序字段非法, 异常描述: {e}"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+            error_message: str = "查询压测报告列表失败, 排序字段非法"
+            LOGGER.error(f"{error_message}, 关键字段: [order={order}]\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+        for row in rows:
+            row["report_id"] = row.pop("id")
         return total, rows
 
     async def compare_reports(self, report_code: str, baseline_code: str) -> Dict[str, Any]:
         """
         对比两份压测报告: 配置差异明细 + 双侧核心指标对照(报告对比页数据源)。
-
-        与基线退化判定(_build_baseline_diff)共用 diff_report_pair, 但本入口不限
-        同场景同指纹: 对比页要的正是「不同并发/不同编排差在哪」, 差异由明细自说明。
 
         :param report_code: 当前报告标识代码
         :param baseline_code: 基线报告标识代码
@@ -136,6 +136,7 @@ class PerfReportCrud(ScaffoldCrud[PerfReportModel, Any, Any]):
              "diff": {"same_scene": true, "fingerprint_same": false,
                       "field_diffs": [...], "item_diffs": [...]},
              "summary": ["峰值并发不一致: 基线[50] → 当前[100]"]}
+            与基线退化判定共用 diff_report_pair, 但本入口不限同场景同指纹, 差异由明细自说明
         """
         current = await self.get_by_code(report_code=report_code, on_error=True, state__not=1)
         baseline = await self.get_by_code(report_code=baseline_code, on_error=True, state__not=1)

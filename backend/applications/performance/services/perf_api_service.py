@@ -79,16 +79,14 @@ class PerfApiService:
         """
         从功能资产导入压测接口草稿(公共接口整体导入 / 用例按指定步骤导入), 只读不落库。
 
-        公共接口(case_type=公共接口)本身就等价一个请求单元, 不传 step_ids 即导入其全部
-        HTTP/TCP 步骤; 普通用例必须显式指定步骤, 避免把整条功能链路灌进压测资产。
-        导入结果为草稿: 名称可改, 由用户确认后走 create 落库。
-
         :param case_id: 来源用例ID(krun_autotest_case.id)
         :param step_ids: 来源步骤ID列表, 公共接口可省略
         :return: 接口草稿列表, 单个元素结构:
             {"api_name", "api_desc", "api_source",
              "source_case_code", "source_step_code", **请求定义字段}
         """
+        # 公共接口本身就等价一个请求单元, 不传 step_ids 即导入其全部 HTTP/TCP 步骤;
+        # 普通用例必须显式指定步骤, 避免把整条功能链路灌进压测资产; 导入结果为草稿, 由用户确认后走 create 落库
         case: Optional[AutoTestCaseModel] = await AutoTestCaseModel.filter(
             id=case_id, state__not=1
         ).first()
@@ -142,43 +140,45 @@ class PerfApiService:
         return drafts
 
     @staticmethod
-    async def _resolve_debug_url(api: PerfApiModel, *, env_name: Optional[str], env_config_name: Optional[str]) -> str:
+    async def _resolve_debug_url(api: PerfApiModel, *, env_id: Optional[int], env_config_mode: Optional[str]) -> str:
         """
         调试地址组装: 绝对地址原样返回, 相对地址按施压环境 APP 配置补齐 host/port。
 
-        口径与执行管线完全一致(同一 resolve_env_config + build_absolute_http_url), 配置名优先取
-        接口自带的目标配置, 未配置时回退调试入参选择的任务级配置。
-
         :param api: 压测接口实例
-        :param env_name: 调试环境名称
-        :param env_config_name: 调试目标配置名称(APP节点)
+        :param env_id: 调试环境绑定ID
+        :param env_config_mode: 调试兜底配置逻辑标识(APP节点, 接口未配置时生效)
         :return: 可直接发起请求的绝对地址
         """
+        # 口径与执行管线完全一致(同一 resolve_env_config_by_mode + build_absolute_http_url):
+        # 环境用 env_id 定位、配置用 config_mode 定位, 改名不影响调试;
+        # 配置 mode 优先取接口自带目标配置, 未配置时回退调试入参传入的兜底配置
         request_url: str = str(api.request_url or "").strip()
         if is_absolute_http_url(request_url):
             return request_url
 
-        config_name: str = (api.request_config_name or env_config_name or "").strip()
-        if not api.request_project_id or not (env_name or "").strip() or not config_name:
+        config_mode: str = (api.request_config_mode or env_config_mode or "").strip()
+        if not api.request_project_id or not env_id or not config_mode:
             error_message: str = (
-                "压测接口调试失败, 请求地址为相对路径时必须提供目标应用、调试环境与APP配置名称"
-                f"(当前: 应用={api.request_project_id}, 环境={env_name}, 配置={config_name or '未选择'})"
+                "压测接口调试失败, 请求地址为相对路径时必须提供目标应用、调试环境与APP配置"
+                f"(当前: 应用={api.request_project_id}, 环境绑定={env_id}, 配置标识={config_mode or '未选择'})"
             )
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
         services = await get_autotest_api_services()
-        endpoint = await StepDebugService.resolve_env_config(
+        endpoint = await StepDebugService.resolve_env_config_by_mode(
             services,
             project_id=api.request_project_id,
-            env_name=(env_name or "").strip(),
-            config_name=config_name,
+            env_id=env_id,
+            config_mode=config_mode,
             config_type=AutoTestConfigNodeType.APP,
             label="压测接口调试失败",
         )
         host: str = (endpoint.config_host or "").strip()
         if not host:
-            error_message: str = f"压测接口调试失败, 目标环境下[{config_name}]配置不完整(缺少host)"
+            error_message: str = (
+                f"压测接口调试失败, 目标环境下[{endpoint.config_name or config_mode}]配置不完整(缺少host)"
+            )
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return build_absolute_http_url(host, endpoint.config_port, request_url)
@@ -192,13 +192,10 @@ class PerfApiService:
         """
         读取调试用的单场景参数化数据(对齐 autotest 设计: 一个接口绑定一个数据源)。
 
-        施压与调试同口径: 仅消费 head/body 两分区(assert_* 分区不参与施压),
-        路径替换与占位符渲染由 RequestBuilder 按引擎同款语义完成。
-
         :param api_id: 压测接口ID(用于定位绑定的数据源)
         :param enable_data_source: 是否启用数据源
         :param scene_name: 启用数据源时选择的场景名称
-        :return: {"name", "head", "body"}单场景字典或None
+        :return: {"name", "head", "body"}单场景字典或None; 仅消费 head/body 两分区, assert_* 不参与施压
         """
         if not enable_data_source:
             return None
@@ -237,10 +234,6 @@ class PerfApiService:
         """
         单接口调试：以一次真实请求验证已保存的接口定义, 并回写调试结论(不生成报告)。
 
-        请求由施压引擎同款 RequestBuilder 构造(占位符渲染、body 装配、Cookie 拆分口径完全一致),
-        先提取后断言的顺序也与施压循环一致; 传输层异常属有效调试结果(返回原因而非抛错),
-        调试结论 success = 状态码 < 400 且全部断言通过 —— 无断言时不再默认通过, 否则 5xx 会被记成 success。
-
         :param debug_in: 调试入参(接口定位 + 环境 + 临时变量池 + 取数场景)
         :return: 调试结果字典, 结构:
             {"success": true, "request_url": "http://...", "status_code": 200,
@@ -250,6 +243,9 @@ class PerfApiService:
              "response_headers": {...}, "response_cookies": {...}, "response_size": 1024,
              "content_type": "application/json", "response_data": "完整响应体文本", "logs": []}
             """
+        # 请求由施压引擎同款 RequestBuilder 构造(占位符渲染、body 装配、Cookie 拆分口径完全一致),
+        # 先提取后断言的顺序也与施压循环一致; 传输层异常属有效调试结果(返回原因而非抛错);
+        # success = 状态码 < 400 且全部断言通过, 无断言时不再默认通过, 否则 5xx 会被记成 success
         if debug_in.api_id:
             api = await PerfApiCrud().get_by_id(api_id=debug_in.api_id, on_error=True, state__not=1)
         else:
@@ -257,7 +253,7 @@ class PerfApiService:
 
         definition: Dict[str, Any] = build_step_definition(api)
         definition["request_url"] = await cls._resolve_debug_url(
-            api, env_name=debug_in.env_name, env_config_name=debug_in.env_config_name,
+            api, env_id=debug_in.env_id, env_config_mode=debug_in.env_config_mode,
         )
         assert_validators: List[Dict[str, Any]] = definition.get("assert_validators") or []
         extract_variables: List[Dict[str, Any]] = definition.get("extract_variables") or []
@@ -339,15 +335,22 @@ class PerfApiService:
         return debug_result
 
     @staticmethod
+    async def locate_api(*, api_id: Optional[int] = None, api_code: Optional[str] = None) -> PerfApiModel:
+        """
+        按主键或业务标识定位压测接口。
+
+        :param api_id: 接口主键ID(与 api_code 二选一)
+        :param api_code: 接口业务标识(与 api_id 二选一)
+        :return: 启用态压测接口实例
+        """
+        if api_id:
+            return await PerfApiCrud().get_by_id(api_id=api_id, on_error=True, state__not=1)
+        return await PerfApiCrud().get_by_code(api_code=api_code, on_error=True, state__not=1)
+
+    @staticmethod
     async def build_matrix_template(*, api_id: Optional[int] = None, api_code: Optional[str] = None) -> Dict[str, Any]:
         """
         按接口报文推导数据源矩阵模板(只读不落库), 供 DataSource 面板预填 path key 字段行。
-
-        复用 autotest 数据源服务的构建函数: 压测接口报文字段与 HTTP/TCP 步骤模型同构
-        (request_header/request_args_type/request_body/request_text/request_params/
-        request_form_data/request_form_urlencoded), 按请求体类型自动推导字段路径:
-        请求头$.Key、JSON叶子JSONPath、XML叶子XPath、键值型$.Key(文件字段跳过);
-        ASSERT_HEAD/ASSERT_BODY 仅保留分区标记行, 与施压引擎消费口径一致。
 
         :param api_id: 接口主键ID(与 api_code 二选一)
         :param api_code: 接口业务标识(与 api_id 二选一)
@@ -357,10 +360,13 @@ class PerfApiService:
             axis 恒为 1(垂直模式), 用户可在线转置为水平后再保存; data_original 为报文原始值映射,
             供「导入正交易场景」回填字段值(与 autotest 数据源 /build 契约一致)
         """
+        # 复用 autotest 数据源服务的构建函数: 压测接口报文字段与 HTTP/TCP 步骤模型同构,
+        # 按请求体类型自动推导: 请求头$.Key、JSON叶子JSONPath、XML叶子XPath、键值型$.Key(文件字段跳过);
+        # ASSERT_HEAD/ASSERT_BODY 仅保留分区标记行, 与施压引擎消费口径一致
         if api_id:
-            api = await PerfApiCrud().get_by_id(api_id=api_id, on_error=True, state__not=1)
+            api = await PerfApiService.locate_api(api_id=api_id)
         else:
-            api = await PerfApiCrud().get_by_code(api_code=api_code, on_error=True, state__not=1)
+            api = await PerfApiService.locate_api(api_code=api_code)
         # data_original 与 autotest /build 同契约(HEAD/BODY分区->路径->原始值), 供正交易场景列回填原始值
         return {
             "dataframe": DataSourceService.build_vertical_matrix_from_step(api),

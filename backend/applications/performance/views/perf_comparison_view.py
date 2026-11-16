@@ -12,12 +12,12 @@
 @DateTime: 2026/9/17 20:30
 """
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
+from backend.applications.performance.dependencies import DependPerfServices, PerfServices
 from backend.applications.performance.schemas.perf_comparison_schema import (
     PerfComparisonCreate,
     PerfComparisonSelect,
@@ -50,7 +50,7 @@ COMPARISON_REPLACE_FIELDS = {"id": "comparison_id"}
 @perf_comparison.post("/create", summary="新增多记录对比/汇总", description="对2~20份已完成报告创建横向对比或同场景汇总(创建时一次性计算结果快照)")
 async def create_perf_comparison(
         comparison_in: PerfComparisonCreate = Body(..., description="对比记录信息"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     新建多记录对比/汇总记录。
@@ -72,7 +72,7 @@ async def create_perf_comparison(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新建多记录对比失败, 异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"创建失败, 异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法创建对比记录，请稍后重试")
 
 
 @perf_comparison.get("/detail", summary="查询对比/汇总详情", description="根据id或code查询对比记录(含结果快照与引用报告现存性复核)")
@@ -99,13 +99,13 @@ async def get_perf_comparison_detail(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询对比记录详情失败, 异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询对比记录，请稍后重试")
 
 
 @perf_comparison.post("/search", summary="查询对比/汇总列表", description="根据条件分页查询对比记录列表(Body, 不含结果快照大字段)")
 async def search_perf_comparisons(
         comparison_in: PerfComparisonSelect = Body(..., description="查询条件"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据条件分页查询对比/汇总记录列表。
@@ -133,21 +133,19 @@ async def search_perf_comparisons(
             page_size=comparison_in.page_size,
             order=comparison_in.order,
         )
-        # 列表走显式取列(字典行), 统一主键别名后直接下发
-        data: List[Dict[str, Any]] = [{**row, "comparison_id": row.pop("id", None)} for row in rows]
-        return SuccessResponse(message="查询成功", data=data, total=total)
+        return SuccessResponse(message="查询成功", data=rows, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"分页查询对比记录列表失败, 异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败, 异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询对比记录列表，请稍后重试")
 
 
 @perf_comparison.delete("/delete", summary="删除对比/汇总记录", description="根据id或code软删除对比记录(结论快照不可修改, 删除后可重新创建)")
 async def delete_perf_comparison(
         comparison_id: Optional[int] = Query(None, description="对比记录ID"),
         comparison_code: Optional[str] = Query(None, description="对比记录标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     软删除对比/汇总记录。
@@ -171,4 +169,4 @@ async def delete_perf_comparison(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"删除对比记录失败, 异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败, 异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法删除对比记录，请稍后重试")

@@ -8,13 +8,15 @@
 """
 from dataclasses import dataclass
 
+from fastapi import Depends
+
 from backend.applications.performance.services.perf_api_crud import PerfApiCrud
 from backend.applications.performance.services.perf_comparison_crud import PerfComparisonCrud
 from backend.applications.performance.services.perf_dataset_crud import PerfDatasetCrud
 from backend.applications.performance.services.perf_job_crud import PerfJobCrud
+from backend.applications.performance.services.perf_load_preset_crud import PerfLoadPresetCrud
 from backend.applications.performance.services.perf_report_crud import PerfReportCrud
 from backend.applications.performance.services.perf_scene_crud import PerfSceneCrud
-from backend.applications.performance.services.perf_load_preset_crud import PerfLoadPresetCrud
 
 
 @dataclass
@@ -44,3 +46,6 @@ async def get_perf_api_services() -> PerfServices:
         job_curd=PerfJobCrud(),
         comparison_curd=PerfComparisonCrud(),
     )
+
+
+DependPerfServices = Depends(get_perf_api_services)

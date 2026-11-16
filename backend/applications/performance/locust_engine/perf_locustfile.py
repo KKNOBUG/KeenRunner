@@ -242,13 +242,12 @@ def _build_item_index() -> List[Dict[str, Any]]:
     """
     构建接口项索引(统计行名到压测接口资产的归因关系), 随结果分片落盘。
 
-    校验项的记账键为 (stats_name, "VFY"), 管线按 role 推导, 索引内只登记真实方法。
-
     :return: 索引列表, 元素结构:
         {"seq": 1, "role": "measured", "api_code": "PERF-API-xxx", "api_name": "下单",
          "api_version": 3, "stats_name": "POST /order/create", "method": "POST",
          "transaction": "下单链路"}
     """
+    # 校验项的记账键为 (stats_name, "VFY"), 管线按 role 推导, 索引内只登记真实方法
     return [
         {
             "seq": item.get("seq"),
@@ -512,11 +511,10 @@ class ItemRunner:
 def on_locust_init(environment: Any, **kwargs) -> None:
     """
     locust初始化: 注册结果分片写入/指标上报/熔断巡检(各角色自行裁剪)。
-
-    熔断消息处理注册在非worker角色(单进程自派发, master接收worker上报);
-    巡检只装在用户进程(LocalRunner/WorkerRunner), master聚合口径不触发熔断,
-    避免master先停导致各worker分片丢失熔断标记。
     """
+    # 熔断消息处理注册在非worker角色(单进程自派发, master接收worker上报);
+    # 巡检只装在用户进程(LocalRunner/WorkerRunner), master聚合口径不触发熔断,
+    # 避免master先停导致各worker分片丢失熔断标记
     runner = environment.runner
     if not isinstance(runner, WorkerRunner):
         runner.register_message(CIRCUIT_BREAK_MESSAGE_TYPE, _on_circuit_break_message)
@@ -579,12 +577,11 @@ class PerfUser(HttpUser):
         """
         虚拟用户启动: 建立私有变量池与各项执行器, 分配unique独占行, 顺序执行准备段。
 
-        准备段用独立 requests 会话发送, 既避免把造数/登录请求计入压测指标,
-        又在结束后把 Set-Cookie 合并进施压会话与抽查会话, 保留登录态复用能力。
-        准备失败即退出该虚拟用户(准备不成立时施压只会产出噪声数据)。
-
         :return: None
         """
+        # 准备段用独立 requests 会话发送, 既避免把造数/登录请求计入压测指标, 又在结束后
+        # 把 Set-Cookie 合并进施压会话与抽查会话, 保留登录态复用能力; 准备失败即退出该
+        # 虚拟用户(准备不成立时施压只会产出噪声数据)
         self.variable_pool: Dict[str, Any] = {
             item.get("key"): item.get("value") for item in SESSION_VARIABLES if item.get("key")
         }

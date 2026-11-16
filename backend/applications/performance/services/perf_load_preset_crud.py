@@ -38,6 +38,14 @@ from backend.enums import PerfLoadMode, PerfPresetStatus
 STEPPED_REQUIRED_FIELDS = (
     "step_start_users", "step_increment", "step_duration", "step_max_users", "step_sustain_duration",
 )
+# 负载预设对外序列化口径(列表/详情共用): 排除脚手架字段, 主键对外为 preset_id
+PRESET_EXCLUDE_FIELDS = {
+    "state",
+    "created_user", "created_time",
+    "updated_user", "updated_time",
+    "reserve_1", "reserve_2", "reserve_3",
+}
+PRESET_REPLACE_FIELDS = {"id": "preset_id"}
 
 
 class PerfLoadPresetCrud(ScaffoldCrud[PerfLoadPresetModel, PerfLoadPresetCreate, PerfLoadPresetUpdate]):
@@ -88,16 +96,28 @@ class PerfLoadPresetCrud(ScaffoldCrud[PerfLoadPresetModel, PerfLoadPresetCreate,
         return instance
 
     @staticmethod
+    async def serialize_preset(instance: PerfLoadPresetModel) -> Dict[str, Any]:
+        """
+        按负载预设对外口径序列化(排除脚手架字段, 主键对外为preset_id)。
+
+        :param instance: 负载预设实例
+        :return: 响应字典
+        """
+        return await instance.to_dict(
+            exclude_fields=PRESET_EXCLUDE_FIELDS,
+            replace_fields=PRESET_REPLACE_FIELDS,
+        )
+
+    @staticmethod
     async def bind_scene(scene_code: str) -> Dict[str, Any]:
         """
         按场景标识回查启用场景, 返回三个场景归属字段的落库值。
 
-        场景是负载预设唯一的施压结构来源, 引用失效会在执行期以「空场景 0 请求」形式暴露,
-        故保存期必须实查; id/名称以库内值为准, 覆盖前端传入的展示冗余。
-
         :param scene_code: 压测场景标识代码
         :return: {"scene_id": xx, "scene_code": xx, "scene_name": xx}
         """
+        # 场景是负载预设唯一的施压结构来源, 引用失效会在执行期以「空场景0请求」形式暴露,
+        # 故保存期必须实查; id/名称以库内值为准, 覆盖前端传入的展示冗余
         scene = await PerfSceneCrud().get_by_code(scene_code=scene_code, on_error=True, state__not=1)
         return {"scene_id": scene.id, "scene_code": scene.scene_code, "scene_name": scene.scene_name}
 
@@ -169,8 +189,8 @@ class PerfLoadPresetCrud(ScaffoldCrud[PerfLoadPresetModel, PerfLoadPresetCreate,
                 instance: PerfLoadPresetModel = await self.create(obj_in=preset_dict)
                 return instance
             except IntegrityError as e:
-                error_message: str = f"新增负载预设信息失败, 违反约束规则: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                error_message: str = "新增负载预设信息失败, 数据重复或约束冲突"
+                LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
         try:
@@ -178,16 +198,13 @@ class PerfLoadPresetCrud(ScaffoldCrud[PerfLoadPresetModel, PerfLoadPresetCreate,
             instance: PerfLoadPresetModel = await self.update(id=existing_preset.id, obj_in=preset_dict)
             return instance
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)负载预设信息异常, 违反约束规则或空指针异常: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增负载预设信息失败, 同名记录恢复时数据约束冲突"
+            LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_perf_preset(self, preset_in: PerfLoadPresetUpdate) -> PerfLoadPresetModel:
         """
         更新负载预设，根据preset_id或preset_code定位；执行相关状态下禁止更新。
-
-        不做 exclude_none: 阶梯模式改回固定并发要清掉五个阶梯字段、换环境后清掉旧环境名都是
-        「提交 null 即清空」的合法意图, 保留旧值会让下一次切回 stepped 时用过时参数静默施压。
 
         :param preset_in: 负载预设更新schema
         :return: 更新后的负载预设实例
@@ -206,6 +223,8 @@ class PerfLoadPresetCrud(ScaffoldCrud[PerfLoadPresetModel, PerfLoadPresetCreate,
             exclude_unset=True,
             exclude={"preset_id", "preset_code"}
         )
+        # 不做 exclude_none: 阶梯模式改回固定并发要清掉五个阶梯字段、换环境后清掉旧环境名
+        # 都是「提交 null 即清空」的合法意图, 保留旧值会让下一次切回 stepped 时用过时参数静默施压
         # 按键存在而非值非空判定: 场景是负载预设唯一的施压结构来源, 置空必须在此拦截而不是静默保留旧场景
         if "scene_code" in update_dict:
             update_dict.update(await self.bind_scene(preset_in.scene_code))
@@ -237,12 +256,12 @@ class PerfLoadPresetCrud(ScaffoldCrud[PerfLoadPresetModel, PerfLoadPresetCreate,
             instance = await self.update(id=preset_id, obj_in=update_dict)
             return instance
         except DoesNotExist as e:
-            error_message: str = f"更新负载预设信息失败, 记录[id={preset_id}]或[code={preset_code}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = f"更新负载预设信息失败, 记录[id={preset_id}]或[code={preset_code}]不存在"
+            LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新负载预设信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新负载预设信息失败, 数据重复或约束冲突"
+            LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_perf_preset(self, preset_id: Optional[int] = None, preset_code: Optional[str] = None) -> PerfLoadPresetModel:
@@ -278,7 +297,7 @@ class PerfLoadPresetCrud(ScaffoldCrud[PerfLoadPresetModel, PerfLoadPresetCreate,
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = f"查询负载预设信息失败, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "查询负载预设信息失败, 排序字段非法"
+            LOGGER.error(f"{error_message}, 关键字段: [order={order}], 异常描述: {e}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 

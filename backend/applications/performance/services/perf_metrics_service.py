@@ -59,9 +59,6 @@ class PerfMetricsService:
         """
         查询压测报告指标曲线：代理VictoriaMetrics query_range, 单次正则选择器请求拉取全部指标序列。
 
-        VictoriaMetrics未配置或不可达时返回available=False与空序列(不抛异常),
-        由前端提示指标服务不可用, 压测报告静态数据不受影响。
-
         :param report_code: 报告业务标识
         :param metrics: 指标名列表(缺省返回全部指标)
         :param start: 窗口起始Unix秒级时间戳(缺省取报告起始时间)
@@ -69,7 +66,8 @@ class PerfMetricsService:
         :param step: 采样步长秒数(缺省按窗口长度自适应)
         :return: {"available": 是否可用, "series": {指标名: [{time, value}]},
                   "series_by_name": {指标名: {接口名: [{time, value}]}}, "reason": 不可用原因}
-                  series 为总口径(name=total 或历史无name维度), series_by_name 按被测接口分组
+                  series 为总口径(name=total 或历史无name维度), series_by_name 按被测接口分组;
+                  VictoriaMetrics未配置或不可达时 available=False 且序列为空, 压测报告静态数据不受影响
         """
         requested_metrics: List[str] = list(metrics) if metrics else list(PERF_METRIC_NAMES)
         invalid_metrics = [name for name in requested_metrics if name not in PERF_METRIC_NAMES]
@@ -163,12 +161,10 @@ class PerfMetricsService:
         """
         归一化VictoriaMetrics query_range响应为前端图表序列结构。
 
-        name label 为 total 或缺省(本轮之前的历史报告无接口维度)时归入总口径,
-        其余按接口名分组; 单点脏数据跳过, 不影响其余采样点。
-
         :param payload: VM原始响应({"status", "data": {"result": [...]}})
         :param metrics: 本次请求的指标名列表
-        :return: (总口径序列 {指标名: [{time, value}]}, 分接口序列 {指标名: {接口名: [点]}})
+        :return: (总口径序列 {指标名: [{time, value}]}, 分接口序列 {指标名: {接口名: [点]}});
+                  name label 为 total 或缺省(历史报告无接口维度)时归入总口径, 单点脏数据跳过
         """
         series: Dict[str, List[Dict[str, float]]] = {name: [] for name in metrics}
         series_by_name: Dict[str, Dict[str, List[Dict[str, float]]]] = {name: {} for name in metrics}

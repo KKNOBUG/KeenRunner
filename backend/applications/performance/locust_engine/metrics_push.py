@@ -170,12 +170,11 @@ class MetricsPusher:
         """
         构造 Prometheus 文本格式指标负载(带毫秒时间戳)。
 
-        总口径与逐接口口径共用指标名, 由 name label 区分; 活跃用户数只属于全局量。
-
         :return: 文本负载, 结构:
             krun_perf_rps{report_code="xxx",preset_code="yyy",name="total"} 12.5 1757826000000
             krun_perf_rps{report_code="xxx",preset_code="yyy",name="POST /api/users"} 8.1 1757826000000
         """
+        # 总口径与逐接口口径共用指标名, 由 name label 区分; 活跃用户数只属于全局量
         runner = self.environment.runner
         base_label = f'report_code="{self.report_code}",preset_code="{self.preset_code}"'
         timestamp_ms = int(time.time() * 1000)

@@ -343,9 +343,6 @@ def compute_report_metrics(
     """
     由合并快照计算报告全部统计字段(B吞吐延迟/C维度聚合/D判定)。
 
-    口径说明: 全局与接口维度只统计业务请求样本(事务圈与抽查不计入),
-    事务维度单独成表; 全部分位数由合并样本剔除warmup后计算(真分位)。
-
     :param merged: 合并快照(见 merge_result_shards)
     :param perf_targets: 场景SLA目标列表(空则跳过判定)
     :return: 报告统计字段字典, 键与 PerfReportModel 统计列逐字对齐:
@@ -353,6 +350,8 @@ def compute_report_metrics(
          "transaction_aggregations": [...], "prepare_metrics": {...},
          "verify_metrics": {...}, "error_breakdown": [...], "target_result": [...],
          "stat_warnings": [...]}
+        全局与接口维度只统计业务请求样本(事务圈与抽查不计入), 事务维度单独成表;
+        全部分位数由合并样本剔除warmup后计算(真分位)
     """
     request_rows, transaction_rows, duration_seconds, warmup_warning = _effective_rows(merged)
     global_view = _summarize_rows(request_rows, duration_seconds)

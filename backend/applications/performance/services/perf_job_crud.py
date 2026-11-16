@@ -103,13 +103,11 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
         """
         校验执行的脚本用例存在并返回快照落库值。
 
-        脚本用例是作业的执行主体, 引用断链只会拖到执行期才失败, 保存期一次校验早失败;
-        快照(code/name)落库使列表无需跨模块回查即可展示。跨模块引用走函数内导入
-        (与数据集校验应用同一模式, 避免模块加载环)。
-
         :param quote_case_id: 脚本用例ID
-        :return: {"quote_case_code": xx, "quote_case_name": xx}
+        :return: {"quote_case_code": xx, "quote_case_name": xx}, 快照落库使列表无需跨模块回查
         """
+        # 脚本用例是作业的执行主体, 引用断链只会拖到执行期才失败, 保存期一次校验早失败;
+        # 跨模块引用走函数内导入, 避免模块加载环
         from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
 
         case = await AutoTestCaseCrud().get_by_id(case_id=quote_case_id, on_error=True, state__not=1)
@@ -137,12 +135,11 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
         """
         校验关联压测场景存在, 返回实例。
 
-        场景联动(施压前自动触发prepare/施压后触发verify)由场景执行链反查本绑定,
-        保存期校验存在性保证绑定不悬空。
-
         :param bind_scene_id: 关联压测场景ID, 可为空
         :return: 压测场景实例或None
         """
+        # 场景联动(施压前自动触发prepare/施压后触发verify)由场景执行链反查本绑定,
+        # 保存期校验存在性保证绑定不悬空
         if not bind_scene_id:
             return None
         scene: Optional[PerfSceneModel] = await PerfSceneModel.filter(id=bind_scene_id, state__not=1).first()
@@ -182,11 +179,9 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
         """
         软删除数据作业。
 
-        作业产出数据集为独立资产(ds_source=job仅溯源标记), 删作业不影响已产出数据集。
-
         :param job_id: 数据作业主键ID, 与job_code二选一
         :param job_code: 数据作业标识代码, 与job_id二选一
-        :return: 软删除后的数据作业实例
+        :return: 软删除后的数据作业实例; 作业产出数据集为独立资产, 删作业不影响已产出数据集
         """
         if not job_id and not job_code:
             error_message: str = "删除压测数据作业信息失败, 参数[job_id]或[job_code]不允许为空"
@@ -213,7 +208,7 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
         :param page: 页码
         :param page_size: 每页条数
         :param order: 排序字段列表
-        :return: (总条数, 当前页记录字典列表)
+        :return: (总条数, 当前页记录字典列表; 主键以 job_id 下发)
         """
         try:
             queryset = self.model.filter(search)
@@ -221,9 +216,11 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
             order_fields: List[str] = self.normalize_order_fields(order) or ["-updated_time"]
             rows: List[Dict[str, Any]] = await queryset.offset((page - 1) * page_size).limit(page_size) \
                 .order_by(*order_fields).values(*JOB_LIST_FIELDS)
+            for row in rows:
+                row["job_id"] = row.pop("id")
             return total, rows
         except FieldError as e:
-            error_message: str = "查询压测数据作业信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询压测数据作业列表失败, 排序字段非法"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [page={page}, page_size={page_size}, order={order}]\n"
@@ -235,12 +232,11 @@ class PerfJobCrud(ScaffoldCrud[PerfJobModel, PerfJobCreate, Any]):
         """
         置排队(下发前): 排除 running 防并发重复下发, 并清空上一轮执行痕迹。
 
-        重跑后旧执行结果(产出数据集引用/行数/最近报告)已过期, 全部清空由新一轮
-        执行终态回填, 避免「排队中」状态下残留上轮结论造成误读。
-
         :param job_id: 数据作业主键ID
         :return: 是否更新成功(False=并发窗口内已被置为 running, 下发应被拒绝)
         """
+        # 重跑后旧执行结果已过期, 全部清空由新一轮执行终态回填,
+        # 避免「排队中」状态下残留上轮结论造成误读
         updated: int = await self.model.filter(id=job_id).exclude(
             status=PerfJobStatus.RUNNING,
         ).update(

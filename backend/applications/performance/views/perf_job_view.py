@@ -13,12 +13,12 @@
 @DateTime: 2026/9/17 18:00
 """
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
-from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
+from backend.applications.performance.dependencies import DependPerfServices, PerfServices
 from backend.applications.performance.schemas.perf_job_schema import (
     PerfJobCreate,
     PerfJobLocate,
@@ -60,7 +60,7 @@ JOB_STATUS_FIELDS = (
 @perf_job.post("/create", summary="新增压测数据作业", description="新增压测数据作业(prepare作业需声明提取列与归属接口)")
 async def create_perf_job(
         job_in: PerfJobCreate = Body(..., description="压测数据作业信息"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     新增压测数据作业。
@@ -81,13 +81,13 @@ async def create_perf_job(
         return DataBaseStorageResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"新增压测数据作业失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"新增失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法新增压测数据作业，请稍后重试")
 
 
 @perf_job.post("/search", summary="查询压测数据作业列表", description="根据条件分页查询压测数据作业列表信息(Body, 不含失败原因大字段)")
 async def search_perf_jobs(
         job_in: PerfJobSelect = Body(..., description="查询条件"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据条件查询压测数据作业。
@@ -123,20 +123,18 @@ async def search_perf_jobs(
             page_size=job_in.page_size,
             order=job_in.order
         )
-        # 列表走显式取列(字典行), 统一主键别名后直接下发
-        data: List[Dict[str, Any]] = [{**row, "job_id": row.pop("id", None)} for row in rows]
-        return SuccessResponse(message="查询成功", data=data, total=total)
+        return SuccessResponse(message="查询成功", data=rows, total=total)
     except ParameterException as e:
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件分页查询压测数据作业列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询压测数据作业列表，请稍后重试")
 
 
 @perf_job.post("/run", summary="执行压测数据作业", description="立即执行数据作业(置排队后经{port}_perf队列异步跑脚本用例N轮)")
 async def run_perf_job(
         job_in: PerfJobLocate = Body(..., description="作业执行入参"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     立即执行压测数据作业。
@@ -162,14 +160,14 @@ async def run_perf_job(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"执行压测数据作业失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"执行失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法执行压测数据作业，请稍后重试")
 
 
 @perf_job.get("/status", summary="查询作业执行状态", description="轻量轮询数据作业执行状态与执行观测字段(供前端任务态轮询)")
 async def get_perf_job_status(
         job_id: Optional[int] = Query(None, description="作业ID"),
         job_code: Optional[str] = Query(None, description="作业标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     轻量轮询数据作业执行状态。
@@ -192,14 +190,14 @@ async def get_perf_job_status(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询压测数据作业执行状态失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询压测数据作业状态，请稍后重试")
 
 
 @perf_job.delete("/delete", summary="删除压测数据作业", description="根据id或code删除压测数据作业信息(执行中禁止删除)")
 async def delete_perf_job(
         job_id: Optional[int] = Query(None, description="作业ID"),
         job_code: Optional[str] = Query(None, description="作业标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据id或code删除压测数据作业。
@@ -219,4 +217,4 @@ async def delete_perf_job(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据id或code删除压测数据作业信息失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"删除失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法删除压测数据作业，请稍后重试")

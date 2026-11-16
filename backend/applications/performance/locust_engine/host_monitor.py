@@ -95,12 +95,10 @@ class HostResourceMonitor:
         """
         从环境变量构建监控器; VM地址为空或当前为worker角色时返回None(跳过采集)。
 
-        worker 不采集的原因: 单机多进程时 master 的系统级采集已覆盖整机,
-        各 worker 重复上报会造成同一机器指标翻倍。
-
         :param environment: locust Environment实例
         :return: 监控器实例或不需采集时的None
         """
+        # worker不采集: 单机多进程时master的系统级采集已覆盖整机, 各worker重复上报会造成同一机器指标翻倍
         if isinstance(environment.runner, WorkerRunner):
             return None
         vm_url = os.environ.get(ENV_VM_URL, "").strip()

@@ -11,12 +11,16 @@
 @Module  : perf_asset_utils.py
 @DateTime: 2026/9/16 11:10
 """
+import io
 import json
 import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import pandas as pd
+
+from backend.applications.autotest.services.autotest_case_excel_service import CaseExcelService
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import NotFoundException, ParameterException
 
@@ -50,12 +54,9 @@ def build_copy_name(source_name: str, *, max_length: int = 255) -> str:
     """
     生成副本名称: 「基础名-副本_微秒时间戳」。
 
-    时间戳后缀保证同应用下唯一(免查库), 且重复复制同一副本时先剥离上一轮后缀,
-    名称恒为「源基础名-副本_最新时间戳」, 不会越复制越长。
-
     :param source_name: 源名称
     :param max_length: 名称列长度上限(用于截断基础名, 保证后缀不被截掉)
-    :return: 副本名称
+    :return: 副本名称, 同应用下唯一(免查库)且重复复制时先剥离上一轮后缀
     """
     base_name: str = COPY_NAME_SUFFIX_PATTERN.sub("", source_name or "")
     if base_name.endswith(COPY_NAME_MARKER):
@@ -102,11 +103,8 @@ def canonical_value(value: Any) -> str:
     """
     任意定义值 → 可比对的规范JSON文本。
 
-    同一份定义从前端表单、schema dump、数据库回查三个方向进来, 键序与「缺键 vs null」形态
-    会不一致; 直接比 Python 对象会把未改动的保存误判为定义变更, 白白自增版本号并作废调试结论。
-
     :param value: 待比较的定义值(标量/字典/列表)
-    :return: 键按字典序排列、无空值键的JSON文本
+    :return: 键按字典序排列、无空值键的JSON文本, 消除前端表单/schema dump/库内回查三向键序差异
     """
     return json.dumps(_strip_none_keys(value), sort_keys=True, ensure_ascii=False, default=str)
 
@@ -115,14 +113,14 @@ def ensure_no_null_for_required_fields(model_cls: Any, update_dict: Dict[str, An
     """
     拦截对非空列显式提交 null。
 
-    更新入口允许「提交 null 即清空」, 但清空只对可空列成立: 往非空列写 NULL 会一路带到 DB 层
-    炸成约束错误, 用户拿到的报错定位不到字段。这里按模型元信息(null=False)提前判定并报出字段名。
-
     :param model_cls: Tortoise 模型类
     :param update_dict: 待写入的更新字典
     :param action: 动作描述(用于错误文案, 如 "更新压测接口")
     :return: None
+    :raises ParameterException: 存在非空列提交 null, 报告字段名
     """
+    # 更新入口允许「提交 null 即清空」, 但清空只对可空列成立: 往非空列写 NULL 会一路带到 DB 层
+    # 炸成约束错误, 用户拿到的报错定位不到字段; 这里按模型元信息(null=False)提前判定
     fields_map: Dict[str, Any] = model_cls._meta.fields_map
     offenders: List[str] = sorted(
         name for name, value in update_dict.items()
@@ -186,9 +184,6 @@ def diff_report_pair(current: Any, baseline: Any) -> Dict[str, Any]:
     """
     对比两份压测报告的配置差异(纯函数: 只读模型属性, 不访问数据库)。
 
-    设计§5.7: 指纹不一致时显式提示差异项而非禁止对比, 本函数给出差异明细供
-    基线不可比原因(incomparable_reasons)与报告对比页(snapshot_diff)共用。
-
     :param current: 当前报告模型实例(PerfReportModel)
     :param baseline: 基线报告模型实例(PerfReportModel)
     :return: 差异明细字典, 形如:
@@ -198,6 +193,7 @@ def diff_report_pair(current: Any, baseline: Any) -> Dict[str, Any]:
          "item_diffs": [{"api_code": "xx", "api_name": "下单", "kind": "changed",
                          "fields": [{"field": "weight", "label": "权重",
                                      "baseline": 1, "current": 3}]}]}
+        指纹不一致时显式给出差异项而非禁止对比(设计§5.7), 供基线不可比原因与报告对比页共用
     """
     field_diffs: List[Dict[str, Any]] = []
     for field, label in REPORT_COMPARE_SCALAR_FIELDS:
@@ -530,3 +526,37 @@ def build_report_export_sheets(report: Any) -> List[Dict[str, Any]]:
     if baseline_rows:
         sheets.append({"name": "基线对比", "header": ["项目", "内容"], "rows": baseline_rows})
     return sheets
+
+
+def build_data_source_excel(matrix: List[List[Any]], sheet_name: str) -> io.BytesIO:
+    """
+    按功能数据源样式构建单 sheet xlsx 流。
+
+    :param matrix: 二维矩阵(首行为场景名行)
+    :param sheet_name: 已净化的 sheet 名
+    :return: 定位到起点的 xlsx 文件流
+    """
+    frame = pd.DataFrame(matrix or [[]])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        frame.to_excel(writer, index=False, header=False, sheet_name=sheet_name)
+        # 统一样式: 分区标记黄底、居中换行、行高/列宽自适应(与功能数据源导出风格一致)
+        CaseExcelService.style_data_source_sheet(writer.sheets[sheet_name])
+    output.seek(0)
+    return output
+
+
+def build_report_excel(report: Any) -> io.BytesIO:
+    """
+    构建压测报告多 sheet xlsx 流。
+
+    :param report: 压测报告模型实例
+    :return: 定位到起点的 xlsx 文件流
+    """
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        for sheet in build_report_export_sheets(report):
+            frame = pd.DataFrame(sheet["rows"], columns=sheet["header"])
+            frame.to_excel(writer, index=False, sheet_name=sheet["name"])
+    output.seek(0)
+    return output

@@ -193,15 +193,15 @@ class ResultWriter:
 
     def build_result(self) -> Dict[str, Any]:
         """
-        构建结果分片(统计+样本+归因索引), 结构:
+        构建结果分片(统计+样本+归因索引)。
+
+        :return: 结果分片字典, 结构:
             {"shard_version": 2, "report_code": "xxx", "preset_code": "yyy", "pid": 123,
              "status": "completed", "stopped_reason": "completed",
              "started_time": "2026-09-16T06:00:00+00:00", "finished_time": "...",
              "actual_duration": 60, "run_duration": 60, "warmup_seconds": 20,
              "item_index": [...], "prepare_metrics": [...],
              "stats": {"entries": [...]}, "errors": [...], "samples": {...}}
-
-        :return: 结果分片字典
         """
         errors: List[Dict[str, Any]] = [
             {

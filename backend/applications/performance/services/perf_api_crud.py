@@ -46,7 +46,7 @@ from backend.enums import PerfDebugState
 API_DEFINITION_FIELDS = (
     "step_type", "request_url", "request_port", "request_method", "request_header", "request_params",
     "request_form_data", "request_form_urlencoded", "request_form_file", "request_text", "request_body",
-    "request_args_type", "request_project_id", "request_config_name",
+    "request_args_type", "request_project_id", "request_config_mode",
     "defined_variables", "extract_variables", "assert_validators",
 )
 # 可从功能步骤平移至压测接口的定义字段(请求块与 autotest 步骤同形, 全量平移)
@@ -107,13 +107,12 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         """
         嵌套模型容器字段 → 纯JSON字典(仅包含本次已提交的字段)。
 
-        父层 model_dump(exclude_unset) 会递归丢弃嵌套项未显式提交的默认值键, 同一份规则在新增
-        与更新两条路径上会落成两种结构; 从解析后的模型重转一次可固定落库形态, 也使版本比较
-        不受「客户端恰好传了哪几个键」影响。
-
         :param schema_in: 接口新增或更新schema
         :return: 容器字段名到纯JSON值的字典
         """
+        # 父层 model_dump(exclude_unset) 会递归丢弃嵌套项未显式提交的默认值键, 同一份规则在新增
+        # 与更新两条路径上会落成两种结构; 从解析后的模型重转一次可固定落库形态, 也使版本比较
+        # 不受「客户端恰好传了哪几个键」影响
         dumped: Dict[str, Any] = {}
         for field in API_NESTED_CONTAINER_FIELDS:
             items = getattr(schema_in, field, None)
@@ -183,7 +182,7 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
                 LOGGER.error(
                     f"{error_message}, "
                     f"关键字段: [api_name={api_in.api_name}, request_project_id={api_in.request_project_id}, "
-                    f"request_config_name={api_in.request_config_name}]\n"
+                    f"request_config_mode={api_in.request_config_mode}]\n"
                     f"{traceback.format_exc()}"
                 )
                 raise DataBaseStorageException(message=error_message) from e
@@ -204,9 +203,6 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
         """
         更新压测接口(按 id 或 code 定位)；定义变更时自增版本号并作废调试结论。
 
-        不做 exclude_none: 改回绝对地址后要清掉目标应用/APP配置名是「提交 null 即清空」的合法意图,
-        丢掉 null 会让旧值静默残留并继续参与环境解析。
-
         :param api_in: 接口更新schema
         :return: 更新后的接口实例
         """
@@ -218,6 +214,8 @@ class PerfApiCrud(ScaffoldCrud[PerfApiModel, PerfApiCreate, PerfApiUpdate]):
             instance = await self.get_by_code(api_code=api_code, on_error=True, state__not=1)
             api_id = instance.id
 
+        # 不做 exclude_none: 改回绝对地址后要清掉目标应用/APP配置引用是「提交 null 即清空」的合法意图,
+        # 丢掉 null 会让旧值静默残留并继续参与环境解析
         update_dict: Dict[str, Any] = api_in.model_dump(
             mode="json",
             exclude_unset=True,

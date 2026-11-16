@@ -34,7 +34,7 @@ class PerfApiModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, Res
     且引擎侧 RequestBuilder 消费口径无需二次映射。
 
     与 AutoTestStepModel 对齐: 无 api_project 字段(性能测试无用例层次), 接口名称全局唯一;
-    施压目标通过 request_project_id + request_config_name 定位(与步骤请求配置一致)。
+    施压目标通过 request_project_id + request_config_mode 定位(与步骤请求配置一致)。
     """
     api_name = fields.CharField(max_length=255, unique=True, description="压测接口名称(全局唯一)")
     api_desc = fields.CharField(max_length=2048, null=True, description="接口描述")
@@ -56,10 +56,10 @@ class PerfApiModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, Res
     request_form_urlencoded = fields.JSONField(null=True, description="请求键值对数据")
     request_text = fields.TextField(null=True, description="原始请求体文本(raw/xml)")
     request_body = JSONTextField(null=True, description="请求体数据(json/表单键值)")
-    # 施压目标定位: 应用 + APP节点配置名, 与用例执行/调试同一解析口径(host/port 不落库, 执行时实时解析)
+    # 施压目标定位: 应用 + APP节点配置逻辑标识, 与用例执行/调试同一解析口径(host/port 不落库, 执行时实时解析)
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
     request_project_id = fields.BigIntField(null=True, description="请求目标应用ID")
-    request_config_name = fields.CharField(max_length=128, null=True, description="请求目标环境配置名称(APP节点)")
+    request_config_mode = fields.CharField(max_length=64, null=True, description="请求目标环境配置逻辑标识(APP节点)")
 
     # 变量与断言(元素结构与步骤容器字段一致: defined_variables含key/value/desc; extract_variables含name/scope/source/expr/index; assert_validators含name/expr/source/operation/except_value)
     defined_variables = fields.JSONField(null=True, description="定义变量(用户自定义、引用函数的结果)")
@@ -82,6 +82,7 @@ class PerfApiModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel, Res
             ("state", "created_time"),
             ("api_code", "state"),
             ("request_project_id", "state"),
+            ("request_config_mode",),
         )
         ordering = ["-updated_time"]
 

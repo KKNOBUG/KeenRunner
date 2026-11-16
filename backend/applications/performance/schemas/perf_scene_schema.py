@@ -179,10 +179,9 @@ class PerfSceneBase(BaseModel):
     def _check_scene_shape(self):
         """
         校验场景编排自洽性: 序号唯一、被测项存在、模式与结构匹配。
-
-        single 模式多于一个被测项会静默变成加权抽样, 用户看到的「单接口指标」实际是混合流量,
-        属于口径级错误, 必须在保存期拦住而不是留到报告页解释。
         """
+        # single 模式多于一个被测项会静默变成加权抽样, 用户看到的「单接口指标」实际是混合流量,
+        # 属口径级错误, 必须在保存期拦住而不是留到报告页解释
         items = [item for item in self.scene_items if item.enabled]
         seq_list = [item.seq for item in self.scene_items]
         if len(seq_list) != len(set(seq_list)):

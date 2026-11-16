@@ -91,11 +91,9 @@ class PerfComparisonService:
         """
         查询对比记录详情: 全字段快照 + 引用报告现存性复核。
 
-        报告事后被软删时结论仍可展示(报告不可变), 缺失清单由前端标注提示。
-
         :param comparison_id: 对比记录主键ID
         :param comparison_code: 对比记录业务标识
-        :return: {"detail": 对比记录全字段字典, "missing_report_codes": 已不存在的引用报告}
+        :return: {"detail": 对比记录全字段字典, "missing_report_codes": 已不存在的引用报告}, 报告事后被软删时结论仍可展示
         """
         crud = PerfComparisonCrud()
         if comparison_id:
@@ -123,14 +121,13 @@ class PerfComparisonService:
         """
         参与报告业务校验: 存在性/完成态, 汇总类模式额外校验同场景。
 
-        compare 不限同场景: 与报告对比页同一立场, 对比的意义正是看不同配置差在哪,
-        差异由 per_report_diffs 自说明。
-
         :param reports: 批量拉取的报告实例
         :param report_codes: 传入的报告标识清单
         :param mode: 对比模式
         :raises ParameterException: 缺失/未完成/跨场景(仅汇总类模式)
         """
+        # compare 不限同场景: 与报告对比页同一立场, 对比的意义正是看不同配置差在哪,
+        # 差异由 per_report_diffs 自说明
         found_codes = {report.report_code for report in reports}
         missing = [code for code in report_codes if code not in found_codes]
         if missing:

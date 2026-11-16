@@ -22,12 +22,16 @@ from typing import Optional
 import aiofiles
 import aiofiles.os as aos
 from fastapi import UploadFile
+from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
+from backend.applications.autotest.services.autotest_data_source_service import DataSourceService
 from backend.applications.performance.schemas.perf_dataset_schema import (
     PERF_DATASET_SCENES_MAX,
     PerfDatasetParsedPreview,
 )
+from backend.applications.performance.services.perf_api_crud import PerfApiCrud
+from backend.applications.performance.services.perf_dataset_crud import PerfDatasetCrud
 from backend.configure import LOGGER, PROJECT_CONFIG
 from backend.core.exceptions import ParameterException, UploadFileException
 from backend.services.file_transfer import FileTransfer
@@ -71,7 +75,29 @@ async def _calc_file_hash(file_path: str) -> Optional[str]:
 
 
 class PerfDatasetService:
-    """压测数据集业务服务：文件上传解析。"""
+    """压测数据集业务服务：文件上传解析与报文字段同步。"""
+
+    @staticmethod
+    async def sync_matrix_fields(*, api_id: int) -> int:
+        """
+        按压测接口当前报文同步绑定数据源矩阵字段(新增补空/删除剔除/保留值不动)。
+
+        :param api_id: 压测接口ID
+        :return: 数据集主键ID
+        :raises ParameterException: 接口未绑定数据源或矩阵为空
+        """
+        api = await PerfApiCrud().get_by_id(api_id=api_id, on_error=True, state__not=1)
+        dataset_crud = PerfDatasetCrud()
+        instance = await dataset_crud.get_by_bind_api(api_id=api_id, on_error=True)
+        if not isinstance(instance.dataframe, list) or not instance.dataframe:
+            error_message: str = "同步数据源字段失败, 数据源矩阵为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        updates = await DataSourceService.sync_data_source_fields(api, instance.dataframe, instance.axis)
+        async with in_transaction():
+            await dataset_crud.update(id=instance.id, obj_in=updates)
+        LOGGER.info(f"压测数据源[id={instance.id}]字段同步完成")
+        return instance.id
 
     @staticmethod
     async def _ensure_project_exists(project_id: int) -> None:
@@ -90,9 +116,6 @@ class PerfDatasetService:
         """
         上传 xlsx 并解析为数据集预览(场景数据 + 原始矩阵 + 文件溯源信息, 不落库)。
 
-        矩阵全量返回: 前端编辑器本就要承载整包矩阵供编辑, 若只回部分行列,
-        用户保存时反而拿不全数据。解析失败(空表/无分区标记/超场景上限)一律清理已落盘文件后抛错。
-
         :param upload_file: 上传文件对象(仅支持 .xlsx)
         :param ds_project: 数据集所属应用(决定存放子目录, 与将落库的 ds_project 一致)
         :return: 解析预览字典, 结构:
@@ -100,6 +123,8 @@ class PerfDatasetService:
              "dataframe": [[...]], "axis": 0,
              "file_name": "xx.xlsx", "file_path": "/abs/path/xx.xlsx", "file_hash": "sha256..."}
         """
+        # 矩阵全量返回: 前端编辑器本就要承载整包矩阵供编辑, 只回部分行列会让保存时拿不全数据;
+        # 解析失败(空表/无分区标记/超场景上限)一律清理已落盘文件后抛错
         await cls._ensure_project_exists(project_id=ds_project)
 
         file_name: str = os.path.basename(upload_file.filename or "")
@@ -121,7 +146,7 @@ class PerfDatasetService:
             upload_file_size=DATASET_UPLOAD_SIZE_TIER,
         )
         if not ok:
-            error_message: str = f"上传数据集文件失败, 错误描述: {path_or_error}"
+            error_message: str = f"上传数据集文件失败, {path_or_error}"
             LOGGER.error(error_message)
             raise UploadFileException(message=error_message)
 
@@ -133,7 +158,7 @@ class PerfDatasetService:
             await _remove_upload_file(file_path)
             if isinstance(e, ParameterException):
                 raise
-            error_message: str = f"解析数据集文件失败, 错误描述: {e}"
+            error_message: str = "解析数据集文件失败, 文件格式或内容不符合数据源要求"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 

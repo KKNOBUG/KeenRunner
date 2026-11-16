@@ -93,17 +93,31 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
             raise NotFoundException(message=error_message)
         return instance
 
+    async def get_by_bind_api(self, api_id: int, on_error: bool = False) -> Optional[PerfDatasetModel]:
+        """
+        查询压测接口绑定的数据源。
+
+        :param api_id: 压测接口ID
+        :param on_error: 未找到时是否抛出异常
+        :return: 数据集实例或None
+        """
+        instance = await self.model.filter(bind_api_id=api_id, state__not=1).first()
+        if not instance and on_error:
+            error_message: str = f"查询压测数据集信息失败, 接口[id={api_id}]尚未绑定数据源"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
+        return instance
+
     @staticmethod
     async def resolve_bind_api_id(*, bind_api_id: int) -> Dict[str, Any]:
         """
         解析归属压测接口, 返回绑定字段的落库值与自动生成的 ds_name。
 
-        bind_api_id 必填(一个接口只能有一个数据源, 对齐 autotest 设计);
-        接口名称全局唯一(无 api_project), 数据集通过 bind_api_id 直接关联接口。
-
         :param bind_api_id: 归属压测接口ID(必填)
         :return: {"bind_api_id": xx, "ds_name": "{api_name}_数据源"}
         """
+        # bind_api_id 必填(一个接口只能有一个数据源, 对齐 autotest 设计);
+        # 接口名称全局唯一(无 api_project), 数据集通过 bind_api_id 直接关联接口
         if not bind_api_id:
             error_message: str = "校验压测数据集失败, 参数[bind_api_id]不允许为空(一个接口只能有一个数据源)"
             LOGGER.error(error_message)
@@ -159,9 +173,6 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         """
         新增或更新数据集(按 bind_api_id upsert, 一个接口只能有一个数据源)。
 
-        对齐 autotest 设计: 数据源是接口的附属资产, 不存在则创建, 已存在则更新。
-        ds_name 由服务端自动生成(格式: {api_name}_数据源), 不再作为用户输入项。
-
         :param ds_in: 数据集创建schema
         :return: 创建或更新后的数据集实例
         """
@@ -184,8 +195,8 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
             try:
                 return await self.create(obj_in=ds_dict)
             except IntegrityError as e:
-                error_message: str = f"新增压测数据集信息失败, 违反约束规则: {e}"
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+                error_message: str = "新增压测数据集信息失败, 数据重复或约束冲突"
+                LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
         # 已存在则更新(保留 id, 覆盖其他字段)
@@ -193,17 +204,13 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
             ds_dict["state"] = 0
             return await self.update(id=existing.id, obj_in=ds_dict)
         except (DoesNotExist, IntegrityError) as e:
-            error_message: str = f"新增(更新)压测数据集信息异常, 违反约束规则或空指针异常: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增压测数据集信息失败, 已有数据源更新时数据约束冲突"
+            LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
     async def update_perf_dataset(self, ds_in: PerfDatasetUpdate) -> PerfDatasetModel:
         """
         更新数据集(按 bind_api_id 定位, 一个接口只能有一个数据源)。
-
-        不做 exclude_none: 改回手工录入后要清掉来源文件名/路径/哈希都是「提交 null
-        即清空」的合法意图, 丢掉 null 会让旧的溯源信息常驻, 列表上的来源标识与真实录入方式分叉。
-        dataframe 为 None 表示本次不修改矩阵数据, 已落库的场景数据保持不变。
 
         :param ds_in: 数据集更新schema
         :return: 更新后的数据集实例
@@ -220,6 +227,8 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         update_dict: Dict[str, Any] = ds_in.model_dump(
             mode="json", exclude_unset=True, exclude={"ds_id", "ds_code", "bind_api_id"}
         )
+        # 不做 exclude_none: 改回手工录入后要清掉来源文件名/路径/哈希都是「提交 null 即清空」的合法意图,
+        # 丢掉 null 会让旧的溯源信息常驻; dataframe 为 None 表示本次不修改矩阵数据
         ds_project: int = update_dict.get("ds_project", instance.ds_project)
         # 矩阵按键存在判定: 提交矩阵才重新解析派生(空场景数据拒绝落库; 非法矩阵转译为入参异常);
         # 解析结果含清洗后 dataframe/实际axis, 直接覆盖 model_dump 里的入参原值
@@ -237,25 +246,24 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         try:
             return await self.update(id=ds_id, obj_in=update_dict)
         except DoesNotExist as e:
-            error_message: str = f"更新压测数据集信息失败, 记录[id={ds_id}]不存在, 错误描述: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = f"更新压测数据集信息失败, 记录[id={ds_id}]不存在"
+            LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
             raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = f"更新压测数据集信息异常, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "更新压测数据集信息失败, 数据重复或约束冲突"
+            LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
     async def mark_job_trace(self, *, ds_id: int, job_id: int, job_code: str) -> None:
         """
         回填造数溯源列(source_type=job时由数据作业执行链调用)。
 
-        溯源列不由 create schema 承载(避免API层伪造溯源), 由产出作业在回写后窄入口回填。
-
         :param ds_id: 数据集主键ID
         :param job_id: 产出作业ID
         :param job_code: 产出作业标识代码
         :return: None
         """
+        # 溯源列不由 create schema 承载(避免API层伪造溯源), 由产出作业在回写后窄入口回填
         await self.model.filter(id=ds_id).update(job_id=job_id, job_code=job_code)
 
     async def delete_perf_dataset(self, ds_id: Optional[int] = None, ds_code: Optional[str] = None) -> PerfDatasetModel:
@@ -281,10 +289,8 @@ class PerfDatasetCrud(ScaffoldCrud[PerfDatasetModel, PerfDatasetCreate, PerfData
         """
         查询某压测接口绑定的数据源(一个接口只能有一个数据源, 对齐 autotest 设计)。
 
-        返回字典而非模型实例: 选择器只需轻量字段, 显式取列避免加载场景数据大字段。
-
         :param api_id: 压测接口主键ID
-        :return: 数据集轻量字典列表(最多一条)
+        :return: 数据集轻量字典列表(最多一条), 显式取列以避免加载场景数据大字段
         """
         api = await PerfApiModel.filter(id=api_id, state__not=1).first()
         if not api:

@@ -29,11 +29,11 @@ from backend.core.exceptions import (
     ParameterException,
 )
 
-# 列表接口返回列(排除 report_refs/result_snapshot 大字段)
+# 列表接口返回列(排除 report_refs/result_snapshot 大字段与 state)
 COMPARISON_LIST_FIELDS = (
     "id", "comparison_name", "comparison_code", "comparison_mode",
     "report_count", "comparison_desc",
-    "state", "created_user", "created_time", "updated_time", "updated_user",
+    "created_user", "created_time", "updated_time", "updated_user",
 )
 
 
@@ -100,7 +100,7 @@ class PerfComparisonCrud(ScaffoldCrud[PerfComparisonModel, PerfComparisonCreate,
         :param page: 页码
         :param page_size: 每页数量
         :param order: 排序字段列表(缺省按更新时间倒序)
-        :return: (记录总数, 当前页记录行列表)
+        :return: (记录总数, 当前页记录行列表; 主键以 comparison_id 下发)
         """
         total: int = await self.model.filter(search).count()
         order_fields = order or ["-updated_time"]
@@ -108,9 +108,11 @@ class PerfComparisonCrud(ScaffoldCrud[PerfComparisonModel, PerfComparisonCreate,
         try:
             rows = await queryset.order_by(*order_fields).values(*COMPARISON_LIST_FIELDS)
         except (FieldError, DoesNotExist) as e:
-            error_message: str = f"对比记录列表排序字段非法, 异常描述: {e}"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+            error_message: str = "查询对比记录列表失败, 排序字段非法"
+            LOGGER.error(f"{error_message}, 关键字段: [order={order}]\n{traceback.format_exc()}")
+            raise ParameterException(message=error_message) from e
+        for row in rows:
+            row["comparison_id"] = row.pop("id")
         return total, rows
 
     async def create_perf_comparison(self, comparison_dict: dict) -> PerfComparisonModel:
@@ -123,8 +125,8 @@ class PerfComparisonCrud(ScaffoldCrud[PerfComparisonModel, PerfComparisonCreate,
         try:
             return await self.create(obj_in=comparison_dict)
         except IntegrityError as e:
-            error_message: str = f"新增对比记录失败, 违反约束规则: {e}"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+            error_message: str = "新增对比记录失败, 数据重复或约束冲突"
+            LOGGER.error(f"{error_message}, 异常描述: {e}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
     async def delete_perf_comparison(

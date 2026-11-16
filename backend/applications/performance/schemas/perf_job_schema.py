@@ -33,15 +33,13 @@ def ensure_extract_fields(fields: Optional[List[str]]) -> None:
     """
     校验提取列契约: 不得重复, 去除首尾空白。
 
-    提取列是造数回写数据集的表头, 与执行明细的提取变量名/会话变量键匹配,
-    重复列会导致回写行结构歧义, 保存期一次校验早失败。
-
     :param fields: 提取列名列表; None 表示本次未提交, 跳过校验
     :return: None
     :raises ValueError: 列名为空或重复
     """
     if fields is None:
         return
+    # 提取列是造数回写数据集的表头, 重复列会导致回写行结构歧义, 保存期一次校验早失败
     cleaned: List[str] = [str(name).strip() for name in fields]
     if any(not name for name in cleaned):
         raise ValueError("参数[extract_fields]存在空列名")
@@ -79,12 +77,10 @@ class PerfJobCreate(PerfJobBase):
 
     @model_validator(mode="after")
     def _require_prepare_bindings(self):
-        """prepare作业的产出闭环双校验: 提取列与归属接口缺一不可。
-
-        空提取列意味着造数没有可回写的数据; 缺归属接口则产出的数据集无法定位
-        所属应用(job不挂应用, 数据集ds_project由归属接口派生), 场景也就无法按
-        归属链消费该数据集。
         """
+        prepare作业的产出闭环双校验: 提取列与归属接口缺一不可。
+        """
+        # 空提取列意味着造数没有可回写的数据; 缺归属接口则产出的数据集无法定位所属应用
         if self.job_type != PerfJobType.PREPARE:
             return self
         if not self.extract_fields:

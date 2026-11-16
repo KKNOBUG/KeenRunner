@@ -82,9 +82,8 @@ class DatasetValueAdapter:
     def _accept_raw(raw_value: str, target_value: Any) -> Any:
         """
         原样接受线路。
-
-        适用：str字段；null字段与查询哨兵(类型参考不可用，由用户负责)；未注册类型兜底。
         """
+        # 适用: str字段; null字段与查询哨兵(类型参考不可用, 由用户负责); 未注册类型兜底
         return raw_value
 
     @staticmethod
@@ -170,14 +169,13 @@ def jsonpath_update(json_data: Union[str, dict], json_path: str, value: Any) -> 
     """
     执行JSONPath更新并返回结果(语义对齐 JSONPathUtils.update)。
 
-    dict输入时在原对象上原地修改(调用方可忽略返回值); str输入时解析后更新并返回
-    序列化文本; 未命中匹配项时返回原数据。
-
     :param json_data: 待更新的JSON数据（可以是JSON字符串或字典）
     :param json_path: JSONPath表达式
     :param value: 新数据
     :return: 更新结果
     """
+    # dict输入时在原对象上原地修改(调用方可忽略返回值); str输入时解析后更新并返回
+    # 序列化文本; 未命中匹配项时返回原数据
     if isinstance(json_data, str):
         json_data = orjson.loads(json_data)
 
@@ -352,9 +350,8 @@ class PerfXPath:
     def element_extract_value(cls, element: ElementTree.Element) -> str:
         """
         提取单个元素的值：有子节点时返回整段序列化，否则返回叶子文本。
-
-        父节点的element.text往往是子标签前的换行/缩进，不能当作有效取值。
         """
+        # 父节点的element.text往往是子标签前的换行/缩进, 不能当作有效取值
         if len(element) > 0:
             return ElementTree.tostring(element, encoding="unicode")
         return element.text if element.text else ElementTree.tostring(element, encoding="unicode")
@@ -405,14 +402,13 @@ class PerfJsonDatagram:
         """
         查询JSONPath在报文中的当前字段值，作为dataset值类型适配参考。
 
-        未命中返回空列表、多命中或容器值返回列表本身，二者经适配器原样接受(不做类型转换，由用户负责)；
-        查询异常返回_QUERY_UNRESOLVED哨兵，适配器同样走原样接受线路（与字段值为null的语义分离，
-        为null字段类型恢复扩展保留区分）。
-
         :param datagram: 报文字典
         :param json_path: JSONPath表达式
         :return: 当前字段值；未命中返回空列表；异常返回哨兵对象
         """
+        # 未命中返回空列表、多命中或容器值返回列表本身, 二者经适配器原样接受(不做类型转换,
+        # 由用户负责); 查询异常返回_QUERY_UNRESOLVED哨兵, 适配器同样走原样接受线路
+        # (与字段值为null的语义分离, 为null字段类型恢复扩展保留区分)
         try:
             return jsonpath_query(datagram, json_path)
         except Exception:
@@ -421,8 +417,7 @@ class PerfJsonDatagram:
     @staticmethod
     def _adapt_json_value(json_value: Any, datagram: Dict[str, Any], query_path: str, type_adapted: bool) -> Any:
         """
-        解析注入值：body通道按报文原字段类型适配(可转换则转换，无法转换原样接受由用户负责)；
-        字符串通道(type_adapted=False)wire文本直写，不做贴合判断也不做类型参考查询。
+        解析注入值: body通道按报文原字段类型适配, 字符串通道(type_adapted=False)wire文本直写。
 
         :param json_value: dataset字段值(字符串通道调用前已转wire文本)
         :param datagram: 类型参考查询的数据容器(body通道为报文字典或两段式inner子文档)
@@ -430,6 +425,7 @@ class PerfJsonDatagram:
         :param type_adapted: JSON body通道True；header/form/urlencoded等字符串通道False
         :return: 适配后的注入值
         """
+        # body通道可转换则转换, 无法转换原样接受由用户负责; 字符串通道不做贴合判断也不做类型参考查询
         if not type_adapted:
             return json_value
         return DatasetValueAdapter.adapt(
@@ -451,9 +447,6 @@ class PerfJsonDatagram:
         """
         根据两段内嵌JSONPath定位并更新字段值，无@JSON@分隔符时退化为普通单段JSONPath更新。
 
-        约定第一段JSONPath定位到一个字符串JSON或dict字段，第二段JSONPath在该字段值所代表的JSON内部继续定位并更新，
-        最后把更新结果回写到第一段JSONPath对应的字段，形如：$.escape_field@JSON@$.name。
-
         :param datagram: 待更新的JSON报文字典
         :param json_path: 形如'outer@JSON@inner'的两段JSONPath，无分隔符时根据单段处理
         :param json_value: 要写入的目标值(dataset值，按报文原字段类型适配后写入)
@@ -461,6 +454,9 @@ class PerfJsonDatagram:
         :param type_adapted: 是否按报文原字段类型适配dataset值；JSON body通道为True，
                              header/form/urlencoded等字符串通道传False(wire文本直接写入不做贴合判断)
         """
+        # 约定第一段JSONPath定位到一个字符串JSON或dict字段, 第二段JSONPath在该字段值所代表的
+        # JSON内部继续定位并更新, 最后把更新结果回写到第一段JSONPath对应的字段,
+        # 形如: $.escape_field@JSON@$.name
         if not json_path or not isinstance(json_path, str):
             return
         if not split_symbol or split_symbol not in json_path:
@@ -535,9 +531,7 @@ class PerfJsonDatagram:
     @staticmethod
     def _by_jsonpath_modify_request_header(json_path: str) -> str:
         """
-        从JSONPath提取HTTP请求头字段名。
-
-        例如$.Content-Type -> Content-Type
+        从JSONPath提取HTTP请求头字段名(如 $.Content-Type 提取为 Content-Type)。
 
         :param json_path: JSONPath字符串
         :return: 头字段名；无效时返回空串
@@ -625,8 +619,7 @@ class PerfJsonDatagram:
             urlencoded: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        数据驱动报文替换：根据head_map/body_map将JSONPath应用到请求头与body/form/urlencoded；
-        路径在所有通道均未命中时汇总记日志跳过。
+        数据驱动报文替换：根据head_map/body_map将JSONPath应用到请求头与body/form/urlencoded。
 
         :param head_map: 请求头/报文侧JSONPath->值
         :param body_map: 报文体JSONPath->值
@@ -636,6 +629,7 @@ class PerfJsonDatagram:
         :param urlencoded: x-www-form-urlencoded字典；可为None
         :return: 含headers/request_body/form_data/urlencoded的字典
         """
+        # 路径在所有通道均未命中时汇总记日志跳过
         head_map = head_map or {}
         body_map = body_map or {}
         channels = (request_body, form_data, urlencoded)
@@ -713,7 +707,7 @@ class PerfXmlDatagram:
                     value=expand_dataset_general_value(value=expand_dataset_special_value(value=xpath_value))
                 )
             except ElementTree.ParseError as e:
-                raise ValueError(f"【报文替换】请求报文不是有效的XML格式, 错误描述: {e}") from e
+                raise ValueError(f"【报文替换】请求报文不是有效的XML格式, 异常原因: {e}") from e
             except ValueError:
                 raise
             except Exception as e:

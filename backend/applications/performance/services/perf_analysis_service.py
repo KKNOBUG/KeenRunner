@@ -25,14 +25,13 @@ class PerfAnalysisService:
         """
         汇聚性能域运行态诊断信息(全部只读, 不触发任何清理与写操作)。
 
-        指标探活失败与产物目录缺失均不作为接口错误(诊断的本义就是暴露异常), 仅如实回显。
-
         :return: 诊断结果字典, 结构:
             {"metrics": PerfMetricsService.probe_availability() 结果,
              "artifacts": {"root": 产物根目录, "exists": 是否存在, "report_dirs": 报告目录数,
                            "total_size": 总字节, "total_size_human": 可读体积},
              "reports": {"total": 有效报告总数, "by_status": {状态: 数量},
                          "recent": [{report_code, scene_name, status, started_time}]}}
+            指标探活失败与产物目录缺失不作为接口错误, 仅如实回显
         """
         metrics_probe: Dict[str, Any] = await PerfMetricsService.probe_availability()
         return {

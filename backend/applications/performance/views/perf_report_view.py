@@ -6,21 +6,19 @@
 @Module  : perf_report_view.py
 @DateTime: 2026/9/14 11:20
 """
-import io
 import traceback
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Optional
 from urllib.parse import quote
 
-import pandas as pd
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from starlette.responses import StreamingResponse
 from tortoise.expressions import Q
 
-from backend.applications.performance.dependencies import PerfServices, get_perf_api_services
+from backend.applications.performance.dependencies import DependPerfServices, PerfServices
 from backend.applications.performance.schemas.perf_report_schema import PerfReportSelect, PerfReportMetrics
 from backend.applications.performance.services.perf_asset_utils import (
-    build_report_export_sheets,
+    build_report_excel,
     list_report_artifacts,
     resolve_report_artifact_path,
 )
@@ -46,25 +44,11 @@ REPORT_EXCLUDE_FIELDS = {
 }
 
 
-def normalize_report_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    清洗报告行数据：剔除脚手架字段并统一主键字段名, 与详情序列化口径保持一致。
-
-    :param row: 报告原始行数据
-    :return: 清洗后的报告行数据
-    """
-    for field in REPORT_EXCLUDE_FIELDS:
-        row.pop(field, None)
-    if "id" in row:
-        row["report_id"] = row.pop("id")
-    return row
-
-
 @perf_report.get("/get", summary="查询压测报告", description="根据id或code查询压测报告详情(含locust统计快照)")
 async def get_perf_report(
         report_id: Optional[int] = Query(None, description="报告ID"),
         report_code: Optional[str] = Query(None, description="报告标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     根据id或code查询压测报告详情。
@@ -87,13 +71,13 @@ async def get_perf_report(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询压测报告详情失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询压测报告，请稍后重试")
 
 
 @perf_report.post("/search", summary="查询压测报告列表", description="根据条件分页查询压测报告列表信息")
 async def search_perf_reports(
         report_in: PerfReportSelect = Body(..., description="查询条件"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     按条件分页查询压测报告列表(不含locust_stats快照大字段, 快照经详情接口获取)。
@@ -104,13 +88,12 @@ async def search_perf_reports(
     """
     try:
         q = build_report_search_query(report_in)
-        total, rows = await services.report_curd.select_perf_reports(
+        total, data = await services.report_curd.select_perf_reports(
             search=q,
             page=report_in.page,
             page_size=report_in.page_size,
             order=report_in.order,
         )
-        data = [normalize_report_row(row) for row in rows]
         return SuccessResponse(message="报告列表查询成功", data=data, total=total)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
@@ -118,22 +101,20 @@ async def search_perf_reports(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"根据条件分页查询压测报告列表失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询压测报告列表，请稍后重试")
 
 
 @perf_report.post("/get_metrics", summary="查询压测指标曲线", description="代理VictoriaMetrics查询压测指标时序曲线")
 async def get_perf_report_metrics(
         metrics_in: PerfReportMetrics = Body(..., description="指标曲线查询条件"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     查询压测报告指标曲线：代理VictoriaMetrics query_range, 返回归一化时序序列。
 
-    指标服务未配置或不可达时返回available=False与空序列, 不作为接口错误。
-
     :param metrics_in: 指标曲线查询入参
     :param services: 性能测试CRUD依赖聚合
-    :return: 统一HTTP响应
+    :return: 统一HTTP响应, 指标服务不可达时 available=False 且序列为空
     """
     try:
         data = await PerfMetricsService.query_report_metrics(
@@ -150,14 +131,14 @@ async def get_perf_report_metrics(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询压测指标曲线失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询压测指标曲线，请稍后重试")
 
 
 @perf_report.get("/snapshot_diff", summary="查询压测报告对比", description="配置差异明细(接口项增删改/标量维度/指纹)与双侧核心指标对照(不限同场景, 差异由明细自说明)")
 async def snapshot_diff_perf_reports(
         report_code: str = Query(..., description="当前报告标识代码"),
         baseline_code: str = Query(..., description="基线报告标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     对比两份压测报告: 双侧指标对照 + 配置差异明细与可读摘要。
@@ -176,13 +157,13 @@ async def snapshot_diff_perf_reports(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"对比压测报告失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"对比失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法对比压测报告，请稍后重试")
 
 
 @perf_report.get("/artifacts", summary="查询报告产物清单", description="列出报告工作目录内的引擎产物文件(场景快照/引擎日志/结果分片)")
 async def list_perf_report_artifacts(
         report_code: str = Query(..., description="报告标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     列出报告产物清单: 白名单内的场景快照/引擎日志/结果分片及其体积与修改时间。
@@ -200,14 +181,14 @@ async def list_perf_report_artifacts(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询报告产物清单失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"查询失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法查询报告产物清单，请稍后重试")
 
 
 @perf_report.get("/artifact_download", summary="下载报告产物文件", description="按文件名下载报告产物(白名单: scene.json/locust.log/result_{pid}.json)")
 async def download_perf_report_artifact(
         report_code: str = Query(..., description="报告标识代码"),
         name: str = Query(..., description="产物文件名"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     下载报告产物文件: 文件名白名单校验 + 目录越界防护后流式回传。
@@ -232,13 +213,13 @@ async def download_perf_report_artifact(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"下载报告产物文件失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"下载失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法下载报告产物文件，请稍后重试")
 
 
 @perf_report.get("/export", summary="导出压测报告xlsx", description="导出报告概要/SLA判定/接口维度/事务维度/错误归因/基线对比多sheet报表")
 async def export_perf_report(
         report_code: str = Query(..., description="报告标识代码"),
-        services: PerfServices = Depends(get_perf_api_services),
+        services: PerfServices = DependPerfServices,
 ):
     """
     导出压测报告为 xlsx 报表: sheet 结构与报告抽屉区块一一镜像(轻量聚合数据, 同步导出)。
@@ -249,12 +230,7 @@ async def export_perf_report(
     """
     try:
         report = await services.report_curd.get_by_code(report_code=report_code, on_error=True, state__not=1)
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            for sheet in build_report_export_sheets(report):
-                frame = pd.DataFrame(sheet["rows"], columns=sheet["header"])
-                frame.to_excel(writer, index=False, sheet_name=sheet["name"])
-        output.seek(0)
+        output = build_report_excel(report)
 
         file_name = f"压测报告_{report.scene_name or report.report_code}_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
         quoted_name: str = quote(file_name)
@@ -269,7 +245,7 @@ async def export_perf_report(
         return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"导出压测报告xlsx失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"导出失败，异常描述: {str(e)}")
+        return FailureResponse(message="暂时无法导出压测报告，请稍后重试")
 
 
 def build_report_search_query(report_in: PerfReportSelect) -> Q:

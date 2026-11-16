@@ -133,12 +133,6 @@ def render_placeholders(value: Any, lookup: Dict[str, Any]) -> Tuple[Any, List[s
     """
     递归渲染 str/dict/list 中的 ${name} 占位符(大小写敏感)。
 
-    整串恰为单个占位符且变量命中时保留变量原始类型(整型ID等不被字符串化,
-    避免破坏JSON请求结构); 拼接场景以 str 替换; 未命中的占位符保留原样并
-    收集变量名, 由调用方决定是否告警。
-    "__"前缀的内置函数占位符(如 ${__uuid()})由注册表在渲染时求值,
-    同名用户变量优先于内置函数。
-
     :param value: 待渲染的任意结构
     :param lookup: 变量池字典(初始变量池合并数据集行)
     :return: (渲染后的同构结构, 未命中占位符名列表)
@@ -146,6 +140,9 @@ def render_placeholders(value: Any, lookup: Dict[str, Any]) -> Tuple[Any, List[s
         >>> render_placeholders("/api/users/${uid}", {"uid": 1001})
         ('/api/users/1001', [])
     """
+    # 整串恰为单个占位符且变量命中时保留变量原始类型(整型ID等不被字符串化, 避免破坏JSON请求结构);
+    # 拼接场景以str替换; 未命中的占位符保留原样并收集变量名, 由调用方决定是否告警;
+    # "__"前缀的内置函数占位符(如 ${__uuid()})由注册表在渲染时求值, 同名用户变量优先于内置函数
     missing: List[str] = []
 
     def render_text(content: str) -> Any:
@@ -199,12 +196,11 @@ def parse_cookie_header(headers: Optional[Dict[str, Any]]) -> Dict[str, str]:
     """
     从请求头 Cookie 字段解析 name->value 字典(键名大小写不敏感匹配)。
 
-    语义对齐 autotest_runtime/util_kv.parse_cookie_header: 值为dict时逐项转str,
-    为文本时按分号分割解析; 无Cookie或非法输入返回空字典。
-
     :param headers: 请求头映射
     :return: Cookie名到值的字典
     """
+    # 语义对齐 autotest_runtime/util_kv.parse_cookie_header: 值为dict时逐项转str,
+    # 为文本时按分号分割解析; 无Cookie或非法输入返回空字典
     if not headers or not isinstance(headers, dict):
         return {}
     cookie_raw: Any = None
@@ -235,13 +231,12 @@ def resolve_json_path(data: Any, expr: Optional[str]) -> Any:
     """
     使用 JSONPath 从 data 取值(必须$开头; 单匹配返回值, 多匹配返回列表)。
 
-    语义对齐 extractors._resolve_json_path。
-
     :param data: 待取值对象(dict/list或嵌套结构)
     :param expr: JSONPath表达式(如 $.data[0].id)
     :return: 提取到的值
     :raises ValueError: 表达式为空/非$开头/数据源为空/解析失败/未匹配
     """
+    # 语义对齐 extractors._resolve_json_path
     expr = str(expr).strip() if expr else ""
     if not expr:
         raise ValueError("【JSONPath表达式】必须是非空字符串")
@@ -262,14 +257,14 @@ def resolve_json_path(data: Any, expr: Optional[str]) -> Any:
 
 def extract_text_by_regex(text: Optional[str], expr: Optional[str]) -> str:
     """
-    从纯文本按正则提取整个匹配串(group 0), 语义对齐 extractors._extract_text_payload
-    的断言调用路径(断言定义无index字段, 固定取整个匹配)。
+    从纯文本按正则提取整个匹配串(group 0), 语义对齐 extractors 的断言调用路径(固定取整个匹配)。
 
     :param text: 响应或请求正文
     :param expr: 正则表达式
     :return: 匹配到的字符串
     :raises ValueError: 正文为空/表达式为空/正则非法/未匹配
     """
+    # 断言定义无index字段, 固定取整个匹配
     if not text:
         raise ValueError("【断言提取】内容为空")
     if not expr:
@@ -277,7 +272,7 @@ def extract_text_by_regex(text: Optional[str], expr: Optional[str]) -> str:
     try:
         match = re.search(expr, text, re.S)
     except re.error as e:
-        raise ValueError(f"【断言提取】正则表达式执行失败, 错误描述: {e}") from e
+        raise ValueError(f"【断言提取】正则表达式执行失败, 异常原因: {e}") from e
     if not match:
         raise ValueError(f"【断言提取】正则表达式[{expr}]未匹配到内容")
     return match.group(0)
@@ -287,10 +282,6 @@ def extract_by_source(source: str, expr: Optional[str], response_context: Dict[s
     """
     从 source 指定来源提取断言取值(固定SOME模式, 与断言元素五字段结构一致)。
 
-    键名与 extractors 注册表一致; XML两类来源不在 PERF_ASSERT_SOURCES 校验范围,
-    引擎同样不支持, 未命中注册表时直接拒绝(无 autotest 的DB/Redis回退分支——
-    压测为纯HTTP单请求语义)。
-
     :param source: 来源键(如 response json)
     :param expr: 提取表达式(JSONPath或正则)
     :param response_context: 断言上下文(response_text/response_json/response_headers/
@@ -298,6 +289,8 @@ def extract_by_source(source: str, expr: Optional[str], response_context: Dict[s
     :return: 提取到的值
     :raises ValueError: 来源不支持或提取失败
     """
+    # 键名与 extractors 注册表一致; XML两类来源不在 PERF_ASSERT_SOURCES 校验范围, 引擎同样不支持,
+    # 未命中注册表时直接拒绝(无 autotest 的DB/Redis回退分支——压测为纯HTTP单请求语义)
     source_key = (source or "").strip().lower()
     mapping_sources: Dict[str, str] = {
         "response headers": "response_headers",
@@ -358,9 +351,8 @@ class PerfAssertionComparator:
     def _normalize_value(cls, value: Any) -> Any:
         """
         标准化比较类型: 数字字符串转int/float, true/false/null文本转bool/None, 前导零串保留原串。
-
-        null文本归一用于数据集字符串化存储后的兼容: 期望值"null"与响应null字段可判定相等。
         """
+        # null文本归一用于数据集字符串化存储后的兼容: 期望值"null"与响应null字段可判定相等
         if value is None:
             return None
         if isinstance(value, bool):
@@ -598,9 +590,6 @@ def execute_assertions(
     """
     执行业务断言列表, 返回逐项快照(快照字段与 autotest details 断言追加字段对齐)。
 
-    单项提取或比较异常不中断整体执行: 异常写入error且success为False,
-    避免单条配置错误导致整轮压测断言静默丢失。
-
     :param assert_validators: 断言定义列表(name/expr/source/operation/except_value)
     :param response_context: 断言提取上下文(见 extract_by_source)
     :return: 快照列表, 元素结构:
@@ -608,6 +597,8 @@ def execute_assertions(
          "operation": "等于", "except_value": 0, "actual_value": 0,
          "success": True, "error": None}
     """
+    # 单项提取或比较异常不中断整体执行: 异常写入error且success为False,
+    # 避免单条配置错误导致整轮压测断言静默丢失
     snapshots: List[Dict[str, Any]] = []
     for validator in assert_validators or []:
         snapshot: Dict[str, Any] = {
@@ -666,10 +657,6 @@ def extract_value_by_source(
     """
     变量提取口径的取值入口: ALL 返回整段数据源, SOME 按表达式取值并按 index 取多匹配项。
 
-    语义对齐 autotest Extractors._extract_json_payload 的三字段组合(scope/index/expr):
-    ALL 不参与表达式解析; SOME 复用 extract_by_source; index 仅在结果为列表时生效
-    (与 autotest 一致, 单匹配结果不按下标取位)。
-
     :param source: 来源键(如 response json)
     :param expr: 提取表达式(JSONPath或正则); ALL 模式可空
     :param response_context: 提取上下文(见 build_response_context)
@@ -678,6 +665,9 @@ def extract_value_by_source(
     :return: 提取到的值
     :raises ValueError: 来源不支持、提取失败或索引越界
     """
+    # 语义对齐 autotest Extractors._extract_json_payload 的三字段组合(scope/index/expr):
+    # ALL 不参与表达式解析; SOME 复用 extract_by_source; index 仅在结果为列表时生效
+    # (与 autotest 一致, 单匹配结果不按下标取位)
     source_key = (source or "").strip().lower()
     if (range_type or "SOME").strip().lower() == "all":
         context_key = SOURCE_CONTEXT_KEYS.get(source_key)
@@ -692,7 +682,7 @@ def extract_value_by_source(
         try:
             index_int = int(index)
         except (ValueError, TypeError) as e:
-            raise ValueError(f"【变量提取】参数[index]必须是整数类型, 错误描述: {e}") from e
+            raise ValueError(f"【变量提取】参数[index]必须是整数类型, 异常原因: {e}") from e
         if index_int >= len(value):
             raise ValueError(f"【变量提取】数组越界, 索引[{index_int}]不可大于数组长度[{len(value)}]")
         return value[index_int]
@@ -706,15 +696,14 @@ def apply_extract_variables(
     """
     执行变量提取列表, 返回逐项快照(字段与 autotest details 提取追加字段对齐)。
 
-    单项提取失败不中断整体: 失败项写入error且extract_value为None(不入变量池),
-    避免一处配置错误把后续步骤的变量全部拖没。
-
     :param extract_variables: 提取定义列表(name/expr/source/scope/index)
     :param response_context: 提取上下文(见 build_response_context)
     :return: 快照列表, 元素结构:
         {"name": "token", "expr": "$.data.token", "source": "response json",
          "extract_value": "xxx", "success": True, "error": None}
     """
+    # 单项提取失败不中断整体: 失败项写入error且extract_value为None(不入变量池),
+    # 避免一处配置错误把后续步骤的变量全部拖没
     snapshots: List[Dict[str, Any]] = []
     for item in extract_variables or []:
         definition = item or {}
@@ -747,9 +736,7 @@ def apply_extract_variables(
 
 def build_request_url(request_url: str, request_port: Optional[str]) -> str:
     """
-    组装压测请求URL, 拼接语义对齐 protocol_http.build_absolute_http_url:
-    无协议时补http://; request_port有值且host段未含端口时追加端口;
-    已是绝对地址时端口由URL自身表达, 不重复拼接。
+    组装压测请求URL, 拼接语义对齐 protocol_http.build_absolute_http_url。
 
     :param request_url: 请求地址(含host与路径)
     :param request_port: 请求端口(可空)
@@ -758,6 +745,8 @@ def build_request_url(request_url: str, request_port: Optional[str]) -> str:
         >>> build_request_url("127.0.0.1/api/users", "8000")
         'http://127.0.0.1:8000/api/users'
     """
+    # 无协议时补http://; request_port有值且host段未含端口时追加端口;
+    # 已是绝对地址时端口由URL自身表达, 不重复拼接
     url = (request_url or "").strip()
     if not url:
         return url
@@ -868,14 +857,13 @@ class RequestBuilder:
         """
         构造请求模板: 渲染定义级键值容器后应用场景路径映射(scene为None即基础模板)。
 
-        装配与路径替换语义对齐 autotest HTTP步骤执行链(先按参数类型组装报文容器,
-        再数据驱动替换: XML走XPath、其余走JSONPath), 占位符留给运行期渲染;
-        路径未命中由 datagram_replace 记日志跳过, 不影响模板可用性。
-
         :param scene: 数据集场景字典(None表示不应用路径映射)
         :return: 模板字典(headers/params/form_data/form_files/urlencoded/
             args_type/body_kwargs/xml_default_headers)
         """
+        # 装配与路径替换语义对齐 autotest HTTP步骤执行链(先按参数类型组装报文容器,
+        # 再数据驱动替换: XML走XPath、其余走JSONPath), 占位符留给运行期渲染;
+        # 路径未命中由 datagram_replace 记日志跳过, 不影响模板可用性
         definition = self.request_definition
         template: Dict[str, Any] = {
             "headers": self._render_kv_list(definition.get("request_header"), {}),
@@ -978,11 +966,11 @@ class RequestBuilder:
 
     def _render_body_kwargs(self, *, template: Dict[str, Any], lookup: Dict[str, Any]) -> Dict[str, Any]:
         """
-        渲染模板报文段为 locust client kwargs(json/data/files), 装配语义对齐
-        autotest protocol_http.assemble_http_body_payloads: 表单承载独立容器
-        (文件项以内容直传, 不读施压机本地磁盘); 模板段已在装载期完成数据驱动
-        替换, 此处仅渲染占位符并按参数类型打包。
+        渲染模板报文段为 locust client kwargs(json/data/files)。
         """
+        # 装配语义对齐 autotest protocol_http.assemble_http_body_payloads: 表单承载独立容器
+        # (文件项以内容直传, 不读施压机本地磁盘); 模板段已在装载期完成数据驱动替换,
+        # 此处仅渲染占位符并按参数类型打包
         args_type = template["args_type"]
         if not args_type:
             return {}
@@ -1019,15 +1007,14 @@ def build_response_context(
     """
     从 requests 响应与请求参数构造断言提取上下文。
 
-    响应JSON解析失败时response_json置None(来源为response json的断言将得到明确错误);
-    request_cookies从请求头解析(与 extractors.extract_from_source 的解析时机一致);
-    form_data由data字典与files键值合并(mapping类来源统一按JSONPath提取)。
-
     :param response: requests响应对象(locust catch_response上下文中的response)
     :param request_kwargs: 本次请求参数(RequestBuilder.build_request产物)
     :param session_lookup: 本次请求合并后的变量池
     :return: 断言提取上下文字典(见 extract_by_source)
     """
+    # 响应JSON解析失败时response_json置None(来源为response json的断言将得到明确错误);
+    # request_cookies从请求头解析(与 extractors.extract_from_source 的解析时机一致);
+    # form_data由data字典与files键值合并(mapping类来源统一按JSONPath提取)
     try:
         response_json = orjson.loads(response.content or b"") if response.content else None
     except orjson.JSONDecodeError:
