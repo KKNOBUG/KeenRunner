@@ -7,7 +7,8 @@
 @DateTime: 2026/4/20 16:53
 """
 import asyncio
-from typing import List, Optional, Any, Tuple, Dict
+from datetime import datetime, timedelta
+from typing import Any, List, Optional, Tuple, Dict
 
 from tortoise.expressions import Q
 from tortoise.functions import Count
@@ -16,7 +17,9 @@ from backend.applications.base.models.audit_model import Audit
 from backend.applications.base.schemas.audit_schema import AuditCreate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
+from backend.configure.global_config import GlobalConfig
 from backend.core.exceptions import ParameterException, NotFoundException
+from backend.enums import ResourceTag
 
 # 列表/最近日志查询不拉取大字段，完整报文仍由GET返回
 AUDIT_LIST_ONLY_FIELDS: Tuple[str, ...] = (
@@ -36,12 +39,107 @@ AUDIT_LIST_ONLY_FIELDS: Tuple[str, ...] = (
     "created_time",
     "updated_time",
 )
+# 列表序列化排除请求/响应头与参数等大字段，避免列表响应体膨胀
+AUDIT_LIST_EXCLUDE_FIELDS: Tuple[str, ...] = (
+    "request_header",
+    "request_params",
+    "response_header",
+    "response_params",
+)
 
 
 class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
     def __init__(self):
         super().__init__(model=Audit)
+
+    @staticmethod
+    def build_search_q(
+            *,
+            username: Optional[str] = None,
+            request_tags: Optional[str] = None,
+            request_summary: Optional[str] = None,
+            request_method: Optional[str] = None,
+            request_router: Optional[str] = None,
+            response_code: Optional[str] = None,
+            start_time: Optional[str] = None,
+            end_time: Optional[str] = None,
+            apply_default_time_window: bool = True,
+    ) -> Q:
+        """
+        组装审计列表查询条件。
+
+        :param username: 用户账号，前缀匹配
+        :param request_tags: 请求模块，资源族 code 或中文标签的包含匹配
+        :param request_summary: 请求接口，包含匹配
+        :param request_method: 请求方式，等值匹配（大小写不敏感）
+        :param request_router: 请求路由，前缀匹配
+        :param response_code: 响应代码，等值匹配
+        :param start_time: 起始时间，格式与GLOBAL_CONFIG.DATETIME_FORMAT2一致
+        :param end_time: 结束时间，格式同上
+        :param apply_default_time_window: 未传时间范围时是否默认只查最近7天
+        :return: Tortoise Q 查询条件
+        """
+        q = Q()
+
+        username = (username or "").strip()
+        request_tags = (request_tags or "").strip()
+        request_summary = (request_summary or "").strip()
+        request_method = (request_method or "").strip().upper()
+        request_router = (request_router or "").strip()
+        response_code = (response_code or "").strip()
+        start_time = (start_time or "").strip() or None
+        end_time = (end_time or "").strip() or None
+
+        if username:
+            # 账号使用前缀匹配以命中 username 索引，不做全模糊查询
+            q &= Q(username__startswith=username)
+        if request_tags:
+            # 新数据存资源族 code，历史数据存中文标签；两种口径同时匹配
+            matched_tags = {request_tags, ResourceTag.label_of(request_tags)}
+            tag_q = Q()
+            for value in matched_tags:
+                if value:
+                    tag_q |= Q(request_tags__contains=value)
+            q &= tag_q
+        if request_summary:
+            q &= Q(request_summary__contains=request_summary)
+        if request_method:
+            q &= Q(request_method=request_method)
+        if request_router:
+            q &= Q(request_router__startswith=request_router)
+        if response_code:
+            q &= Q(response_code=response_code)
+        if start_time and end_time:
+            q &= Q(created_time__range=[start_time, end_time])
+        elif start_time:
+            q &= Q(created_time__gte=start_time)
+        elif end_time:
+            q &= Q(created_time__lte=end_time)
+        elif apply_default_time_window:
+            # 未传时间范围时默认只查最近N天，缩小扫描范围以命中created_time索引；需要全量历史时显式传入时间范围
+            default_start = (datetime.now() - timedelta(days=7)).strftime(GlobalConfig.DATETIME_FORMAT2)
+            q &= Q(created_time__gte=default_start)
+
+        return q
+
+    @staticmethod
+    async def serialize_audit_list(audit_log_objs) -> list:
+        """
+        将审计日志模型批量序列化为列表字典。
+
+        :param audit_log_objs: 审计日志模型列表
+        :return: 字典列表，主键字段为audit_id，并补充request_tags_label
+        """
+        result = []
+        for audit_log in audit_log_objs:
+            data = await audit_log.to_dict(
+                exclude_fields=AUDIT_LIST_EXCLUDE_FIELDS,
+                replace_fields={"id": "audit_id"}
+            )
+            data["request_tags_label"] = ResourceTag.label_of(data.get("request_tags"))
+            result.append(data)
+        return result
 
     async def get_by_id(self, audit_id: int, on_error: bool = True) -> Optional[Audit]:
         """
@@ -80,15 +178,6 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instances
-
-    async def create_audit(self, audit_in: AuditCreate) -> Audit:
-        """
-        创建审计日志记录。
-
-        :param audit_in: 新增审计日志入参
-        :return: 新建的审计日志实例
-        """
-        return await self.create(audit_in)
 
     async def list_audit(
             self,
@@ -223,7 +312,7 @@ class AuditCrud(ScaffoldCrud[Audit, AuditCreate, Any]):
 
     async def clear_all(self) -> int:
         """
-        清空全部审计日志(危险操作，物理删除)。
+        清空全部审计日志，物理删除且不可恢复。
 
         :return: 清空前的记录总数(即删除数量)
         """

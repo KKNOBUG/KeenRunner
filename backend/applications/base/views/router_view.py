@@ -8,21 +8,21 @@
 """
 import traceback
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from starlette.requests import Request
-from tortoise.expressions import Q
 
-from backend.applications.base.dependencies import get_router_crud
+from backend.applications.base.dependencies import DependRouterServices
 from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate, RouterSelect
 from backend.applications.base.services.router_crud import RouterCrud
 from backend.configure import LOGGER
-from backend.core.exceptions import DataAlreadyExistsException, DataBaseStorageException, NotFoundException
+from backend.core.exceptions import DataAlreadyExistsException, DataBaseStorageException, NotFoundException, ParameterException
 from backend.core.responses import (
     SuccessResponse,
     FailureResponse,
     DataAlreadyExistsResponse,
     DataBaseStorageResponse,
     NotFoundResponse,
+    ParameterResponse,
 )
 from backend.services import DependSuperUser
 
@@ -32,27 +32,29 @@ router = APIRouter()
 @router.post("/create", summary="新增路由", description="新增路由信息")
 async def create_router(
         router_in: RouterCreate = Body(..., description="路由信息"),
-        router_crud: RouterCrud = Depends(get_router_crud),
+        router_crud: RouterCrud = DependRouterServices,
 ):
     """
     新增路由。
 
-    :param router_in: 路由入参（路径、方法、摘要、标签）
+    :param router_in: 路由入参
     :param router_crud: 路由 CRUD 服务
     :return: 统一响应，成功时 data 为新增后的路由信息，主键字段为 router_id，total 为 1
     """
     try:
         instance = await router_crud.create_router(router_in=router_in)
-        data = await instance.to_dict(replace_fields={"id": "router_id"})
+        data = await router_crud.serialize_router(instance)
         return SuccessResponse(message="新增成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
+    except DataBaseStorageException as e:
+        return DataBaseStorageResponse(message=str(e.message))
     except Exception:
-        error_message: str = "新增路由失败，暂时无法完成创建，请稍后重试"
+        error_message: str = "暂时无法新增路由，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [path={router_in.path}, method={router_in.method}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -60,7 +62,7 @@ async def create_router(
 @router.delete("/delete", summary="删除路由", description="根据id删除路由信息")
 async def delete_router(
         router_id: int = Query(..., description="路由ID"),
-        router_crud: RouterCrud = Depends(get_router_crud),
+        router_crud: RouterCrud = DependRouterServices,
 ):
     """
     根据 ID 删除路由。
@@ -71,16 +73,18 @@ async def delete_router(
     """
     try:
         instance = await router_crud.delete_router(router_id)
-        data = await instance.to_dict(replace_fields={"id": "router_id"})
+        data = await router_crud.serialize_router(instance)
         return SuccessResponse(message="删除成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception:
-        error_message: str = "删除路由失败，暂时无法完成删除，请稍后重试"
+        error_message: str = "暂时无法删除路由，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [router_id={router_id}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -88,7 +92,7 @@ async def delete_router(
 @router.post("/update", summary="更新路由", description="根据id更新路由信息")
 async def update_router(
         router_in: RouterUpdate = Body(..., description="路由信息"),
-        router_crud: RouterCrud = Depends(get_router_crud),
+        router_crud: RouterCrud = DependRouterServices,
 ):
     """
     根据 ID 更新路由。
@@ -99,7 +103,7 @@ async def update_router(
     """
     try:
         instance = await router_crud.update_router(router_in)
-        data = await instance.to_dict(replace_fields={"id": "router_id"})
+        data = await router_crud.serialize_router(instance)
         return SuccessResponse(message="更新成功", data=data, total=1)
     except DataAlreadyExistsException as e:
         return DataAlreadyExistsResponse(message=str(e.message))
@@ -108,11 +112,11 @@ async def update_router(
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except Exception:
-        error_message: str = "更新路由失败，暂时无法完成更新，请稍后重试"
+        error_message: str = "暂时无法更新路由，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [router_id={router_in.id}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -120,28 +124,29 @@ async def update_router(
 @router.get("/get", summary="查询路由", description="根据id查询路由信息")
 async def get_router(
         router_id: int = Query(None, description="路由ID"),
-        router_crud: RouterCrud = Depends(get_router_crud),
+        router_crud: RouterCrud = DependRouterServices,
 ):
     """
     根据 ID 查询单条路由。
 
-    :param router_id: 路由 ID，未传时按空 ID 查询，由查询结果决定是否返回 404
+    :param router_id: 路由 ID
     :param router_crud: 路由 CRUD 服务
     :return: 统一响应，成功时 data 为路由信息，主键字段为 router_id，total 为 1
     """
     try:
-        instance = await router_crud.get_or_none(id=router_id)
-        if not instance:
-            return NotFoundResponse(message=f"未找到 id 为 {router_id} 的路由，请刷新后重试")
-
-        data: dict = await instance.to_dict(replace_fields={"id": "router_id"})
+        instance = await router_crud.get_by_id(router_id=router_id, on_error=True)
+        data = await router_crud.serialize_router(instance)
         return SuccessResponse(message="查询成功", data=data, total=1)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
+    except NotFoundException as e:
+        return NotFoundResponse(message=str(e.message))
     except Exception:
-        error_message: str = "查询路由信息失败，暂时无法获取路由数据，请稍后重试"
+        error_message: str = "暂时无法查询路由，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [router_id={router_id}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -149,48 +154,25 @@ async def get_router(
 @router.post("/search", summary="查询路由列表(Body)", description="根据条件分页查询路由列表信息(Body)")
 async def get_routers(
         router_in: RouterSelect = Body(..., description="查询条件"),
-        router_crud: RouterCrud = Depends(get_router_crud),
+        router_crud: RouterCrud = DependRouterServices,
 ):
     """
     按条件分页查询路由列表（Body 入参）。
 
-    path、summary 与 tags 为包含匹配；method 为枚举字段，仅支持等值匹配。
-
-    :param router_in: 路由查询入参，含分页、排序与筛选条件
+    :param router_in: 路由查询入参，method 为枚举字段仅支持等值匹配
     :param router_crud: 路由 CRUD 服务
     :return: 统一响应，成功时 data 为路由列表，主键字段为 router_id，total 为总条数
     """
     try:
-        page = router_in.page
-        page_size = router_in.page_size
-        order = router_in.order
-        path = router_in.path
-        method = router_in.method
-        summary = router_in.summary
-        tags = router_in.tags
-
-        q = Q()
-        if path:
-            q &= Q(path__contains=path)
-        # method 为 CharEnumField(HTTPMethod)，仅支持等值匹配，不支持 contains
-        if method:
-            method_value = method.value if hasattr(method, "value") else method
-            q &= Q(method=method_value)
-        if summary:
-            q &= Q(summary__contains=summary)
-        if tags:
-            q &= Q(tags__contains=tags)
-
-        total, instances = await router_crud.list(page=page, page_size=page_size, search=q, order=order)
-        data = [await obj.to_dict(replace_fields={"id": "router_id"}) for obj in instances]
+        total, instances = await router_crud.select_routers(router_in=router_in)
+        data = [await router_crud.serialize_router(obj) for obj in instances]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception:
-        error_message: str = "查询路由列表失败，暂时无法获取路由数据，请稍后重试"
+        error_message: str = "暂时无法查询路由列表，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
-            f"关键字段: [page={router_in.page}, page_size={router_in.page_size}, "
-            f"path={router_in.path}, tags={router_in.tags}]\n"
-            f"{traceback.format_exc()}"
+            f"关键字段: [page={router_in.page}, page_size={router_in.page_size}, path={router_in.path}, tags={router_in.tags}]\n"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -203,12 +185,10 @@ async def list_router(
         path: str = Query(None, description="路由请求路径"),
         summary: str = Query(None, description="路由作用简介"),
         tags: str = Query(None, description="路由所属标签"),
-        router_crud: RouterCrud = Depends(get_router_crud),
+        router_crud: RouterCrud = DependRouterServices,
 ):
     """
     按条件分页查询路由列表（Query 入参）。
-
-    path、summary 与 tags 为包含匹配，不提供方法筛选。
 
     :param page: 页码
     :param page_size: 每页条数
@@ -220,24 +200,18 @@ async def list_router(
     :return: 统一响应，成功时 data 为路由列表，主键字段为 router_id，total 为总条数
     """
     try:
-        q = Q()
-        if path:
-            q &= Q(path__contains=path)
-        if summary:
-            q &= Q(summary__contains=summary)
-        if tags:
-            q &= Q(tags__contains=tags)
-        total, router_objs = await router_crud.list(
-            page=page, page_size=page_size, search=q, order=order
+        router_in = RouterSelect(
+            page=page, page_size=page_size, order=order, path=path, summary=summary, tags=tags
         )
-        data = [await obj.to_dict(replace_fields={"id": "router_id"}) for obj in router_objs]
+        total, router_objs = await router_crud.select_routers(router_in=router_in)
+        data = [await router_crud.serialize_router(obj) for obj in router_objs]
         return SuccessResponse(message="查询成功", data=data, total=total)
     except Exception:
-        error_message: str = "查询路由列表失败，暂时无法获取路由数据，请稍后重试"
+        error_message: str = "暂时无法查询路由列表，请稍后重试"
         LOGGER.error(
             f"{error_message}, "
             f"关键字段: [page={page}, page_size={page_size}, path={path}, tags={tags}]\n"
-            f"{traceback.format_exc()}"
+            f"异常回溯: {traceback.format_exc()}"
         )
         return FailureResponse(message=error_message)
 
@@ -250,23 +224,20 @@ async def list_router(
 )
 async def refresh_router(
         request: Request,
-        router_crud: RouterCrud = Depends(get_router_crud),
+        router_crud: RouterCrud = DependRouterServices,
 ):
     """
-    刷新路由列表（仅管理员可调用）。
-
-    重新扫描 FastAPI 应用路由，只收录需要 RBAC 的接口：删除废弃项并清理角色绑定，
-    新增或更新现有项，最后按权限规则为内置角色补绑路由。
+    刷新路由列表（仅管理员可调用），按当前应用路由同步数据库并补绑内置角色权限。
 
     :param request: HTTP 请求对象，用于获取 FastAPI 应用实例
     :param router_crud: 路由 CRUD 服务
-    :return: 统一响应，成功时 data 为同步后的全部路由列表，total 为其条数
+    :return: 统一响应，成功时 data 为同步后的全部路由列表，主键字段为 router_id，total 为其条数
     """
     try:
-        app = request.app
-        data = await router_crud.refresh_router(app=app)
+        routers = await router_crud.refresh_router(app=request.app)
+        data = [await router_crud.serialize_router(obj) for obj in routers]
         return SuccessResponse(message="刷新成功", data=data, total=len(data))
     except Exception:
-        error_message: str = "刷新路由列表失败，暂时无法同步接口数据，请稍后重试"
+        error_message: str = "暂时无法刷新路由列表，请稍后重试"
         LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
         return FailureResponse(message=error_message)

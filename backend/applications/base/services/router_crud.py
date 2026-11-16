@@ -6,18 +6,23 @@
 @Module  : router_crud.py
 @DateTime: 2025/1/31 17:36
 """
-from typing import Optional, List
 import traceback
+from typing import Any, Dict, Optional, List, Tuple
 
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
-from tortoise.exceptions import DoesNotExist, IntegrityError
+from tortoise.exceptions import IntegrityError
+from tortoise.expressions import Q
+from tortoise.transactions import in_transaction
 
 from backend.applications.base.models.router_model import Router
-from backend.applications.base.schemas.router_schema import RouterCreate, RouterUpdate
+from backend.applications.base.schemas.router_schema import RouterCreate, RouterSelect, RouterUpdate
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+
+# 路由对外序列化口径: 主键统一为 router_id(前端列表/表单均按该字段取值)
+ROUTER_REPLACE_FIELDS: Dict[str, str] = {"id": "router_id"}
 
 
 class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
@@ -44,6 +49,62 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
             LOGGER.error(error_message)
             raise NotFoundException(message=error_message)
         return instance
+
+    @staticmethod
+    async def serialize_router(instance: Router) -> Dict[str, Any]:
+        """
+        按路由对外口径序列化，主键对外为router_id。
+
+        :param instance: 路由实例
+        :return: 响应字典
+        """
+        return await instance.to_dict(replace_fields=ROUTER_REPLACE_FIELDS)
+
+    async def select_routers(self, router_in: RouterSelect) -> Tuple[int, List[Router]]:
+        """
+        按条件分页查询路由列表。
+
+        :param router_in: 路由查询入参
+        :return: 记录总数与当前页路由列表
+        """
+        # path/summary/tags 为包含匹配，method 为枚举等值匹配，created_user/updated_user 为等值匹配
+        search = Q()
+        if router_in.path:
+            search &= Q(path__contains=router_in.path)
+        if router_in.method:
+            method_value = router_in.method.value if hasattr(router_in.method, "value") else router_in.method
+            search &= Q(method=method_value)
+        if router_in.summary:
+            search &= Q(summary__contains=router_in.summary)
+        if router_in.tags:
+            search &= Q(tags__contains=router_in.tags)
+        if router_in.created_user:
+            search &= Q(created_user=router_in.created_user)
+        if router_in.updated_user:
+            search &= Q(updated_user=router_in.updated_user)
+        return await self.list(
+            page=router_in.page,
+            page_size=router_in.page_size,
+            search=search,
+            order=router_in.order,
+        )
+
+    async def list_permission_keys(self, is_admin: bool, role_ids: List[int]) -> List[str]:
+        """
+        查询用户可访问的接口权限键。
+
+        :param is_admin: 是否为超管或管理员角色
+        :param role_ids: 用户角色ID列表
+        :return: 排序后的权限键列表，权限键为方法小写加路由路径
+        """
+        if is_admin:
+            routers: List[Router] = await self.model.all()
+        elif role_ids:
+            # 多角色接口一次查出并去重，避免按角色逐条查询造成 N+1
+            routers = await self.model.filter(role_routers__id__in=role_ids).distinct()
+        else:
+            routers = []
+        return sorted({router.method.lower() + router.path for router in routers})
 
     async def create_router(self, router_in: RouterCreate) -> Router:
         """
@@ -92,10 +153,6 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
         router_if: dict = router_in.model_dump(exclude_none=True)
         try:
             instance = await self.update(id=router_id, obj_in=router_if)
-        except DoesNotExist as e:
-            error_message: str = f"更新路由信息失败, 记录[id={router_id}]不存在"
-            LOGGER.error(error_message)
-            raise NotFoundException(message=error_message)
         except IntegrityError as e:
             # 并发改名/改路径撞唯一索引与创建同口径，返回已存在而非服务异常
             error_message: str = f"更新路由信息失败, 记录[id={router_id}]与已有[path+method]冲突"
@@ -129,15 +186,16 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
 
         valid_keys = {(method, path) for method, path, _ in contracts}
 
-        # 删除废弃路由及其角色绑定（含路径改名后的旧记录）
-        for router in await self.model.all():
-            if (router.method.value, router.path) in valid_keys:
-                continue
-            await router.role_routers.clear()
-            await router.delete()
-            LOGGER.info(f"[路由刷新]删除废弃路由 method={router.method.value}, path={router.path}")
+        # 一次查回全量路由并按method+path建索引，废弃项与更新项批量处理，避免循环内查库
+        existing_map: Dict[Tuple[str, str], Router] = {
+            (router.method.value, router.path): router for router in await self.model.all()
+        }
+        obsolete_ids: List[int] = [
+            router.id for key, router in existing_map.items() if key not in valid_keys
+        ]
 
-        # 更新或新增路由
+        updated_rows: List[Router] = []
+        created_rows: List[Router] = []
         for method, path, route in contracts:
             data = {
                 'path': path,
@@ -147,11 +205,24 @@ class RouterCrud(ScaffoldCrud[Router, RouterCreate, RouterUpdate]):
                 'description': route.description,
                 'available_only_admin': bool(getattr(route, "available_only_admin", False))
             }
-            instance = await self.model.filter(method=method, path=path).first()
-            if instance:
-                await self.update(id=instance.id, obj_in=data)
+            target = existing_map.get((method, path))
+            if target:
+                for field, value in data.items():
+                    setattr(target, field, value)
+                updated_rows.append(target)
             else:
-                await self.create(data)
+                created_rows.append(self.model(**data))
+
+        # 同事务提交删除与写入：krun_role_routers 外键为级联删除，废弃路由的绑定行由数据库自动清理
+        async with in_transaction() as conn:
+            if obsolete_ids:
+                await self.model.filter(id__in=obsolete_ids).using_db(conn).delete()
+                for router_id in obsolete_ids:
+                    LOGGER.info(f"[路由刷新]删除废弃路由[id={router_id}]")
+            for target in updated_rows:
+                await target.save(using_db=conn)
+            for new_router in created_rows:
+                await new_router.save(using_db=conn)
 
         routers = await self.model.all()
         if sync_role_bindings:

@@ -630,7 +630,7 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         try:
             return await self.model.get(id=id, **kwargs)
         except DoesNotExist as e:
-            error_message: str = "查询目标数据不存在或已被删除，请刷新后重试"
+            error_message: str = f"查询失败, 记录[id={id}]不存在"
             LOGGER.warning(
                 f"{error_message}, "
                 f"关键字段: [model={self.model.__name__}, id={id}, conditions={kwargs}]"
@@ -665,16 +665,16 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             stmt: QuerySet = self.model.filter(**kwargs)
             instances = await (stmt.first() if only_one else stmt.all())
         except Exception as e:
-            error_message: str = "查询数据失败，请检查查询条件后重试"
+            error_message: str = "查询失败, 查询条件不合法"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [model={self.model.__name__}, only_one={only_one}, conditions={kwargs}]\n"
-                f"{traceback.format_exc()}"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise ParameterException(message=error_message) from e
 
         if not instances and on_error:
-            error_message: str = "查询目标数据不存在或已被删除，请刷新后重试"
+            error_message: str = "查询失败, 未找到符合条件的记录"
             LOGGER.warning(
                 f"{error_message}, "
                 f"关键字段: [model={self.model.__name__}, only_one={only_one}, conditions={kwargs}]"
@@ -750,7 +750,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             instances.append(self.model(**obj_dict))
 
         await self.model.bulk_create(instances)
-        LOGGER.info(f"批量创建成功, 关键字段: [model={self.model.__name__}, count={len(instances)}]")
+        LOGGER.info(
+            f"批量创建成功, "
+            f"关键字段: [model={self.model.__name__}, count={len(instances)}]"
+        )
         return instances
 
     async def update(self, id: int, obj_in: Union[UpdateSchemaType, Dict[str, Any]]) -> ModelType:
@@ -781,11 +784,14 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                 LOGGER.error(
                     f"{error_message}, "
                     f"关键字段: [model={self.model.__name__}, id={id}, errno={errno}]\n"
-                    f"{traceback.format_exc()}"
+                    f"异常回溯: {traceback.format_exc()}"
                 )
                 raise DataBaseStorageException(message=error_message) from e
             raise
-        LOGGER.info(f"更新成功, 关键字段: [model={self.model.__name__}, id={id}, fields={list(obj_dict.keys())}]")
+        LOGGER.info(
+            f"更新成功, "
+            f"关键字段: [model={self.model.__name__}, id={id}, fields={list(obj_dict.keys())}]"
+        )
         return obj
 
     async def batch_update(self, updates: List[Dict[str, Any]], key_field: str = "id", strict: bool = True) -> int:
@@ -846,7 +852,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             count = await self.model.filter(**{key_field: key_value}).update(**update_dict)
             total_updated += count
 
-        LOGGER.info(f"批量更新成功, 关键字段: [model={self.model.__name__}, count={total_updated}]")
+        LOGGER.info(
+            f"批量更新成功, "
+            f"关键字段: [model={self.model.__name__}, count={total_updated}]"
+        )
         return total_updated
 
     async def remove_or_error(self, id: int, **kwargs) -> ModelType:
@@ -861,7 +870,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         obj = await self.get_or_error(id=id, **kwargs)
         await obj.delete()
-        LOGGER.info(f"删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
+        LOGGER.info(
+            f"删除成功, "
+            f"关键字段: [model={self.model.__name__}, id={id}]"
+        )
         return obj
 
     async def hard_delete(self, id: int) -> ModelType:
@@ -875,7 +887,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         """
         obj = await self.get_or_error(id=id)
         await obj.delete()
-        LOGGER.info(f"硬删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
+        LOGGER.info(
+            f"硬删除成功, "
+            f"关键字段: [model={self.model.__name__}, id={id}]"
+        )
         return obj
 
     async def hard_batch_delete(self, ids: List[int]) -> int:
@@ -891,7 +906,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return 0
 
         count = await self.model.filter(id__in=ids).delete()
-        LOGGER.info(f"批量硬删除成功, 关键字段: [model={self.model.__name__}, count={count}, ids={ids}]")
+        LOGGER.info(
+            f"批量硬删除成功, "
+            f"关键字段: [model={self.model.__name__}, count={count}, ids={ids}]"
+        )
         return count
 
     def query(self) -> 'QueryBuilder[ModelType]':
@@ -1030,7 +1048,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                             self.fill_created_user(item_dict, model=related_model)
                         await related_manager.create(**item_dict, using_db=connection)
 
-            LOGGER.info(f"事务创建成功, 关键字段: [model={self.model.__name__}, id={obj.id}]")
+            LOGGER.info(
+                f"事务创建成功, "
+                f"关键字段: [model={self.model.__name__}, id={obj.id}]"
+            )
             return obj
 
     async def update_with_related(
@@ -1076,7 +1097,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
                                 self.fill_updated_user(item_data, model=related_model)
                             await related_manager.filter(id=item_id).update(**item_data, using_db=connection)
 
-            LOGGER.info(f"事务更新成功, 关键字段: [model={self.model.__name__}, id={id}]")
+            LOGGER.info(
+                f"事务更新成功, "
+                f"关键字段: [model={self.model.__name__}, id={id}]"
+            )
             return obj
 
     async def soft_delete(self, id: int, updated_user: Optional[str] = None) -> ModelType:
@@ -1102,7 +1126,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         for key, value in values.items():
             setattr(obj, key, value)
         await obj.save(update_fields=list(values.keys()))
-        LOGGER.info(f"软删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
+        LOGGER.info(
+            f"软删除成功, "
+            f"关键字段: [model={self.model.__name__}, id={id}]"
+        )
         return obj
 
     async def soft_delete_restore(self, id: int, updated_user: Optional[str] = None) -> ModelType:
@@ -1129,7 +1156,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         for key, value in values.items():
             setattr(obj, key, value)
         await obj.save(update_fields=list(values.keys()))
-        LOGGER.info(f"恢复软删除成功, 关键字段: [model={self.model.__name__}, id={id}]")
+        LOGGER.info(
+            f"恢复软删除成功, "
+            f"关键字段: [model={self.model.__name__}, id={id}]"
+        )
         return obj
 
     async def soft_deleted_list(
@@ -1185,7 +1215,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         update_fields = self.soft_delete_values(updated_user=updated_user)
         count = await self.model.filter(id__in=ids, state__not=1).update(**update_fields)
-        LOGGER.info(f"批量软删除成功, 关键字段: [model={self.model.__name__}, count={count}, ids={ids}]")
+        LOGGER.info(
+            f"批量软删除成功, "
+            f"关键字段: [model={self.model.__name__}, count={count}, ids={ids}]"
+        )
         return count
 
     async def soft_delete_restore_batch(self, ids: List[int], updated_user: Optional[str] = None) -> int:
@@ -1211,7 +1244,10 @@ class ScaffoldCrud(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
         update_fields = self.soft_restore_values(updated_user=updated_user)
         count = await self.model.filter(id__in=ids, state=1).update(**update_fields)
-        LOGGER.info(f"批量恢复成功, 关键字段: [model={self.model.__name__}, count={count}, ids={ids}]")
+        LOGGER.info(
+            f"批量恢复成功, "
+            f"关键字段: [model={self.model.__name__}, count={count}, ids={ids}]"
+        )
         return count
 
 

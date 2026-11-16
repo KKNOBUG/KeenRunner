@@ -22,18 +22,16 @@ from backend.enums import BuiltinRoleCode, ResourceTag
 
 
 class PermissionRule:
-    """
-    内置角色路由权限规则引擎。
+    """内置角色路由权限规则引擎。"""
 
-    职责与约束：
-    - 行为类型由路径末段动词判定，资源域由路由标签对应的资源族判定；
-      两者均来自启动时绑定的契约，summary 不再参与权限判定
-    - 内置三角色(Administrators/Users/Guests)的路由放行规则与补绑(只追加，不回收)；
-      管理员角色运行期本就全量放行，补绑仅让其菜单/路由可见，不参与鉴权判定；
-      例外：依赖 get_superuser 的管理员专属路由会从非管理员角色上回收；
-    - 角色菜单是管理员的人工配置，只在显式传入 menus 时补绑，路由刷新不得覆盖
-    - 无实例状态，常量与规则集中为类属性，调用方统一经 PermissionRule 入口访问
-    """
+    # 职责与约束：
+    # - 行为类型由路径末段动词判定，资源域由路由标签对应的资源族判定；
+    #   两者均来自启动时绑定的契约，summary 不参与权限判定
+    # - 内置三角色(Administrators/Users/Guests)的路由放行规则与补绑(只追加，不回收)；
+    #   管理员角色运行期本就全量放行，补绑仅让其菜单/路由可见，不参与鉴权判定；
+    #   例外：依赖 get_superuser 的管理员专属路由会从非管理员角色上回收
+    # - 角色菜单是管理员的人工配置，只在显式传入 menus 时补绑，路由刷新不得覆盖
+    # - 无实例状态，常量与规则集中为类属性，调用方统一经 PermissionRule 入口访问
 
     # ==================== 常量：内置角色码 ====================
     ROLE_CODE_ADMIN: str = BuiltinRoleCode.ADMIN.value
@@ -44,10 +42,12 @@ class PermissionRule:
     # ==================== 内部工具(不对外暴露) ====================
     @staticmethod
     def _norm_text(value: Optional[str]) -> str:
+        """空值归一为空串并去除首尾空白。"""
         return (value or "").strip()
 
     @staticmethod
     def _method_value(router: Router) -> str:
+        """取路由方法的大写字符串，兼容枚举与字符串存储。"""
         method = getattr(router, "method", None)
         if method is None:
             return ""
@@ -57,6 +57,7 @@ class PermissionRule:
 
     @classmethod
     def _tag_parts(cls, router: Router) -> List[str]:
+        """将路由标签拆为去空白的单标签列表。"""
         return [part.strip() for part in cls._norm_text(router.tags).split(",") if part.strip()]
 
     @classmethod
@@ -70,10 +71,8 @@ class PermissionRule:
         """
         按 HTTP 方法与路径末段动词识别行为。
 
-        DELETE 一律删除；GET 无动词回落查询；其余无动词为 unknown。
-
         :param router: 路由记录
-        :return: 动作类型(ACTION_* 常量之一)
+        :return: ACTION_* 常量之一，DELETE 一律为删除，GET 无动词回落查询，其余无动词为 unknown
         """
         return derive_action(cls._method_value(router), router.path)
 
@@ -171,35 +170,27 @@ class PermissionRule:
         """
         回收所有非管理员角色上的管理员专属路由绑定。
 
-        这类接口由 get_superuser 硬校验，非管理员角色即使绑定也必然 403，
-        留着只会让前端错误地展示可用入口。
-
         :param routers: 路由记录集合
         :return: None
         """
         available_only_admin_ids = {router.id for router in routers if getattr(router, "available_only_admin", False)}
         if not available_only_admin_ids:
             return
-        roles = await Role.exclude(code=cls.ROLE_CODE_ADMIN).all()
+        # 管理员专属接口由 get_superuser 硬校验，非管理员角色即使绑定也必然403，留着只会让前端错误展示入口
+        # prefetch_related 一次取回各角色已绑路由，避免逐角色查询造成N+1
+        roles = await Role.exclude(code=cls.ROLE_CODE_ADMIN).prefetch_related("routers")
         for role in roles:
-            relation = getattr(role, "routers")
-            to_remove = [item for item in await relation.all() if item.id in available_only_admin_ids]
+            to_remove = [item for item in role.routers if item.id in available_only_admin_ids]
             if not to_remove:
                 continue
-            await relation.remove(*to_remove)
+            await role.routers.remove(*to_remove)
             removed = ",".join(f"{item.method.value} {item.path}" for item in to_remove)
             LOGGER.info(f"[权限规则]角色[{role.name}]回收管理员专属路由{len(to_remove)}个: {removed}")
 
     @classmethod
     async def sync_role_permission_bindings(cls, routers: Optional[Sequence[Router]] = None, menus: Optional[Sequence[Menu]] = None) -> None:
         """
-        刷新/同步统一入口：告警未分类 summary，并为内置三角色补绑路由（只追加，
-        管理员专属路由例外地会从非管理员角色上回收）。
-
-        菜单属于管理员在「权限」抽屉中的人工配置：只有显式传入 menus 时才补绑，
-        路由刷新传 None 时不得读取全表回填，否则被回收的菜单会在 refresh 后复活。
-
-        角色不存在时跳过（首次初始化路由早于角色时安全）。
+        刷新内置三角色的菜单/路由补绑，管理员专属路由例外回收。
 
         :param routers: 待补绑的路由集合；None 时查询全表
         :param menus: 待补绑的菜单集合；None 时不处理菜单
@@ -215,6 +206,7 @@ class PermissionRule:
 
         for role_code in cls.BUILTIN_ROLE_CODES:
             role = await Role.get_or_none(code=role_code)
+            # 首次初始化时路由早于角色会出现缺失，跳过即可保证启动安全
             if not role:
                 LOGGER.info(f"[权限规则]角色[{role_code}]不存在，跳过补绑")
                 continue
@@ -222,6 +214,7 @@ class PermissionRule:
                 allowed = cls.filter_routers_for_role(role_code, all_routers)
                 await cls._append_missing_relations(role, "routers", allowed, "路由")
             if all_menus:
+                # 菜单是管理员人工配置：只有显式传入 menus 才补绑，避免路由刷新复活被回收的菜单
                 await cls._append_missing_relations(role, "menus", all_menus, "菜单")
 
         if all_routers:

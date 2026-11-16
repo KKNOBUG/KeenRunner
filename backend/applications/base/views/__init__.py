@@ -20,7 +20,7 @@ role_secure = APIRouter()
 audit_secure = APIRouter()
 file_secure = APIRouter()
 
-# 安全端点(要求认证+ RBAC依赖)
+# 安全端点：要求认证与 RBAC 权限依赖
 router_secure.include_router(router, prefix="/router")
 menu_secure.include_router(menu, prefix="/menu")
 role_secure.include_router(role, prefix="/role")
