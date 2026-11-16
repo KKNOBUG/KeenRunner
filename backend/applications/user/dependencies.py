@@ -6,9 +6,18 @@
 @Module  : dependencies.py
 @DateTime: 2026/6/8 09:47
 """
+from fastapi import Depends
+
 from backend.applications.user.services.user_crud import UserCrud
 
 
 async def get_user_crud() -> UserCrud:
-    """获取用户CRUD服务实例"""
+    """
+    获取用户CRUD服务实例。
+
+    :return: UserCrud 实例
+    """
     return UserCrud()
+
+
+DependUserServices = Depends(get_user_crud)
