@@ -17,11 +17,11 @@ from backend.applications.base.services.scaffold import UpperStr
 class DepartmentCreate(BaseModel):
     """新增部门入参。"""
 
-    code: str = Field(..., description="部门代码")
-    name: str = Field(..., description="部门名称")
-    description: Optional[str] = Field(default=None, description="部门描述")
-    order: int = Field(default=0, description="排序")
-    parent_id: int = Field(default=0, description="父部门ID")
+    code: str = Field(..., max_length=16, description="部门代码")
+    name: str = Field(..., max_length=64, description="部门名称")
+    description: Optional[str] = Field(default=None, max_length=255, description="部门描述")
+    order: int = Field(default=0, ge=0, description="排序")
+    parent_id: int = Field(default=0, ge=0, description="父部门ID")
     created_user: Optional[UpperStr] = Field(default=None, max_length=16, description="创建人员")
 
     def create_dict(self):

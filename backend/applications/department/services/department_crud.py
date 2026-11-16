@@ -6,9 +6,9 @@
 @Module  : department_crud.py
 @DateTime: 2025/2/3 16:31
 """
-import datetime
 import traceback
-from typing import Any, Dict, Optional, List
+from collections import Counter
+from typing import Any, Dict, List, Optional, Tuple
 
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
@@ -16,10 +16,19 @@ from tortoise.transactions import in_transaction
 
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.applications.department.models.dept_model import Department, DeptStruct
-from backend.applications.department.schemas.department_schema import DepartmentCreate, DepartmentUpdate, DepartmentBatchDelete
+from backend.applications.department.schemas.department_schema import (
+    DepartmentBatchDelete,
+    DepartmentCreate,
+    DepartmentSelect,
+    DepartmentUpdate,
+)
 from backend.applications.user.models.user_model import User
 from backend.configure import LOGGER
+from backend.configure.global_config import GlobalConfig
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
+
+# 部门对外序列化口径: 主键统一为 dept_id(前端树/下拉/表单均按该字段取值)
+DEPARTMENT_REPLACE_FIELDS: Dict[str, str] = {"id": "dept_id"}
 
 
 class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate]):
@@ -67,6 +76,16 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise NotFoundException(message=error_message)
         return instance
 
+    @staticmethod
+    async def serialize_department(instance: Department) -> Dict[str, Any]:
+        """
+        按部门对外口径序列化，主键对外为dept_id。
+
+        :param instance: 部门实例
+        :return: 响应字典
+        """
+        return await instance.to_dict(replace_fields=DEPARTMENT_REPLACE_FIELDS)
+
     async def get_by_name(self, name: str) -> List[Department]:
         """
         根据部门名称精确查询，可能返回多条。
@@ -79,7 +98,12 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def _validate_parent_id(self, parent_id: int, *, department_id: Optional[int] = None) -> None:
         """
-        部门最多两级：parent_id只能为0或顶级部门id。
+        校验父级部门，部门最多两级。
+
+        :param parent_id: 父部门ID，0 表示顶级
+        :param department_id: 当前部门ID，更新时用于拦截父级设为自身
+        :raises ParameterException: 父级为自身或父级不是顶级部门
+        :raises NotFoundException: 父级部门不存在或已软删除
         """
         if parent_id == 0:
             return
@@ -99,13 +123,20 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
         :param department_in: 新增部门入参
         :return: 新建的部门实例
+        :raises ParameterException: 父级部门不合法
+        :raises DataAlreadyExistsException: 部门代码或名称已存在
         """
         await self._validate_parent_id(department_in.parent_id)
         code = department_in.code
         name = department_in.name
-        instances = await self.get_by_conditions(only_one=True, on_error=False, code=code, name=name)
-        if instances:
-            error_message: str = f"创建部门信息失败, 记录[code={code},name={name}]信息已存在"
+        # code 与 name 各自唯一，合取查询会漏掉单字段冲突，必须按并集取回后分别判定
+        conflicts = await self.model.filter(Q(code=code) | Q(name=name)).only("code", "name").limit(2)
+        if any(item.code == code for item in conflicts):
+            error_message: str = f"创建部门信息失败, 部门代码[code={code}]已存在"
+            LOGGER.error(error_message)
+            raise DataAlreadyExistsException(message=error_message)
+        if any(item.name == name for item in conflicts):
+            error_message: str = f"创建部门信息失败, 部门名称[name={name}]已存在"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
@@ -121,27 +152,35 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             raise DataAlreadyExistsException(message=error_message) from e
         return instance
 
-    async def _assert_department_not_referenced(self, instance: Department) -> None:
+    async def _assert_departments_not_referenced(self, targets: List[Department]) -> None:
         """
-        校验部门不存在引用关系：启用的子部门、未删除的用户。
+        批量校验部门不存在引用关系：启用的子部门、未删除的用户。
 
-        parent_id 与 krun_user.dept_id 均无外键约束，物理删除后引用方会指向不存在的部门，
-        只能在应用层前置拦截。
-
-        :param instance: 待删除部门实例
+        :param targets: 待删除部门实例列表，按入参顺序逐条校验
         :raises ParameterException: 存在启用子部门或在用用户
         """
-        child_count: int = await self.model.filter(parent_id=instance.id, state=0).count()
-        if child_count > 0:
-            error_message: str = f"删除部门信息失败, 部门[name={instance.name}]存在{child_count}个子部门, 无法直接删除"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+        if not targets:
+            return
 
-        user_count: int = await User.filter(dept_id=instance.id, state=0).count()
-        if user_count > 0:
-            error_message: str = f"删除部门信息失败, 部门[name={instance.name}]存在{user_count}个用户, 无法直接删除"
-            LOGGER.error(error_message)
-            raise ParameterException(message=error_message)
+        # parent_id 与 krun_user.dept_id 均无外键约束，物理删除后引用方会指向不存在的部门，只能应用层前置拦截
+        target_ids: List[int] = [instance.id for instance in targets]
+        child_rows = await self.model.filter(parent_id__in=target_ids, state=0).values("parent_id")
+        user_rows = await User.filter(dept_id__in=target_ids, state=0).values("dept_id")
+        child_counter: Counter = Counter(row["parent_id"] for row in child_rows)
+        user_counter: Counter = Counter(row["dept_id"] for row in user_rows)
+
+        for instance in targets:
+            child_count: int = child_counter[instance.id]
+            if child_count > 0:
+                error_message: str = f"删除部门信息失败, 部门[name={instance.name}]存在{child_count}个子部门, 无法直接删除"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+
+            user_count: int = user_counter[instance.id]
+            if user_count > 0:
+                error_message: str = f"删除部门信息失败, 部门[name={instance.name}]存在{user_count}个用户, 无法直接删除"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
 
     async def delete_department(self, department_id: int) -> Optional[Department]:
         """
@@ -153,7 +192,7 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         :raises NotFoundException: 部门不存在或已软删除
         """
         instance = await self.get_by_id(department_id=department_id, on_error=True, state=0)
-        await self._assert_department_not_referenced(instance)
+        await self._assert_departments_not_referenced([instance])
         async with in_transaction() as conn:
             # 闭包表无外键约束，与部门删除同事务清理，避免残留关系使部门树层级错乱
             await DeptStruct.filter(Q(ancestor=instance.id) | Q(descendant=instance.id)).using_db(conn).delete()
@@ -162,10 +201,14 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
 
     async def update_department(self, department_in: DepartmentUpdate) -> Department:
         """
-        更新部门：可变更父级(重建闭包表)及基础字段。
+        更新部门：可变更父级与基础字段，父级变更时重建闭包表。
 
         :param department_in: 更新部门入参
         :return: 更新后的部门实例
+        :raises ParameterException: 父级部门不合法或含子部门的顶级部门被设为子部门
+        :raises DataAlreadyExistsException: 部门代码或名称已存在
+        :raises NotFoundException: 部门不存在或已软删除
+        :raises DataBaseStorageException: 并发修改存在冲突
         """
         department_id: int = department_in.id
         instance = await self.get_by_id(department_id=department_id)
@@ -195,18 +238,22 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
                 if parent_changed:
                     await self.update_dept_closure(instance)
         except IntegrityError as e:
-            error_message: str = (
-                f"更新部门信息失败, 记录[code={department_in.code}, name={department_in.name}]信息已存在"
+            # 并发改同 code/name：靠唯一索引收敛为业务已存在；局部更新时入参字段为空，用实例当前值兜底
+            conflict_code: Optional[str] = department_in.code or instance.code
+            conflict_name: Optional[str] = department_in.name or instance.name
+            error_message: str = f"更新部门信息失败, 记录[code={conflict_code}, name={conflict_name}]信息已存在"
+            LOGGER.error(
+                f"{error_message}\n"
+                f"异常回溯: {traceback.format_exc()}"
             )
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataAlreadyExistsException(message=error_message) from e
         return instance
 
     async def get_dept_tree(self, name: Optional[str] = None) -> List[dict]:
         """
-        构建未删除部门的树形结构(从parent_id=0递归)。
+        构建未删除部门的树形结构，从顶级部门递归展开。
 
-        :param name: 可选，根据名称模糊过滤后再建树
+        :param name: 名称包含匹配的过滤条件，不传则返回全量
         :return: 顶级部门节点列表，每节点含children
         """
         # 获取所有未被软删除的部门
@@ -223,7 +270,6 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
             :param parent_id: 父部门ID，0表示顶级
             :return: 子节点字典列表
             """
-            fmt = lambda x: datetime.datetime.strftime(x, "%Y-%m-%d %H:%M:%S") if isinstance(x, datetime.datetime) else x
             return [
                 {
                     # 与部门其它接口一致统一返回dept_id，前端树/下拉均按该字段取值
@@ -234,8 +280,8 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
                     "order": dept.order,
                     "parent_id": dept.parent_id,
                     "state": dept.state,
-                    "created_time": fmt(dept.created_time),
-                    "updated_time": fmt(dept.updated_time),
+                    "created_time": GlobalConfig.format_datetime(dept.created_time, formatter=GlobalConfig.DATETIME_FORMAT2),
+                    "updated_time": GlobalConfig.format_datetime(dept.updated_time, formatter=GlobalConfig.DATETIME_FORMAT2),
                     "created_user": dept.created_user,
                     "updated_user": dept.updated_user,
                     "children": build_tree(dept.id),  # 递归构建子部门
@@ -266,32 +312,57 @@ class DepartmentCrud(ScaffoldCrud[Department, DepartmentCreate, DepartmentUpdate
         # 创建关系
         await DeptStruct.bulk_create(dept_struct_objs)
 
+    async def select_departments(self, department_in: DepartmentSelect) -> Tuple[int, List[Department]]:
+        """
+        按条件分页查询部门列表，固定只查未删除部门。
+
+        :param department_in: 部门查询入参
+        :return: 记录总数与当前页部门列表
+        """
+        # code/name/description 为包含匹配，created_user/updated_user 为等值匹配，state 入参不参与过滤
+        search = Q(state=0)
+        if department_in.code:
+            search &= Q(code__contains=department_in.code)
+        if department_in.name:
+            search &= Q(name__contains=department_in.name)
+        if department_in.description:
+            search &= Q(description__contains=department_in.description)
+        if department_in.created_user:
+            search &= Q(created_user=department_in.created_user)
+        if department_in.updated_user:
+            search &= Q(updated_user=department_in.updated_user)
+        return await self.list(
+            page=department_in.page,
+            page_size=department_in.page_size,
+            search=search,
+            order=department_in.order,
+        )
+
     async def delete_departments(self, department_in: DepartmentBatchDelete) -> List[int]:
         """
         根据ID列表软删除部门；软删与物理删同样拒绝存在子部门或在用用户的部门。
 
         :param department_in: 含department_ids的批量删除入参
         :return: 实际删除成功的部门ID列表
+        :raises ParameterException: 存在启用子部门或在用用户
         """
         department_ids: Optional[List[int]] = department_in.department_ids
         if not department_ids:
             return []
 
-        # 先全量校验引用关系，避免前序节点已软删、后续节点被拦截时留下部分成功
-        targets: List[Department] = []
-        for did in dict.fromkeys(int(did) for did in department_ids):
-            instance = await self.model.filter(id=did, state=0).first()
-            if not instance:
-                continue
-            await self._assert_department_not_referenced(instance)
-            targets.append(instance)
+        # 去重后一次查出目标部门，先全量校验引用关系，避免前序节点已软删、后续节点被拦截时留下部分成功
+        target_ids: List[int] = list(dict.fromkeys(int(department_id) for department_id in department_ids))
+        instances = await self.model.filter(id__in=target_ids, state=0)
+        instance_index: Dict[int, Department] = {instance.id: instance for instance in instances}
+        targets: List[Department] = [instance_index[did] for did in target_ids if did in instance_index]
         if not targets:
             return []
 
-        target_ids: List[int] = [instance.id for instance in targets]
+        await self._assert_departments_not_referenced(targets)
+        deleted_ids: List[int] = [instance.id for instance in targets]
         update_fields: Dict[str, Any] = self.soft_delete_values()
         async with in_transaction() as conn:
             # 闭包表无外键约束，与软删同事务清理，避免残留关系使部门树层级错乱
-            await self.model.filter(id__in=target_ids, state=0).using_db(conn).update(**update_fields)
-            await DeptStruct.filter(descendant__in=target_ids).using_db(conn).delete()
-        return target_ids
+            await self.model.filter(id__in=deleted_ids, state=0).using_db(conn).update(**update_fields)
+            await DeptStruct.filter(descendant__in=deleted_ids).using_db(conn).delete()
+        return deleted_ids
