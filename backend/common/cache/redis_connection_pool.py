@@ -74,6 +74,47 @@ class RedisConnPoolFromConfig:
             raise ValueError("应用ID、环境名称、配置名称、Redis库编号均不能为空")
         return project_id, env_name, config_name, database_name
 
+    @staticmethod
+    def _normalize_mode_cache_key(
+            project_id: Union[int, str],
+            env_id: int,
+            config_mode: str,
+            database_name: str,
+            config_host: Union[int, str],
+            config_port: Union[int, str],
+    ) -> Tuple[int, str, str, str]:
+        """
+        规范化按逻辑标识建连的四层缓存坐标。
+
+        第二层用 env{env_id}@{host}:{port} 替代环境名称：主机/端口参与缓存键，
+        配置改地址后命中新键立即生效，旧客户端由 close 回收；主机/端口为空时交由建连校验拦截。
+
+        :param project_id: 应用主键ID
+        :param env_id: 环境绑定ID
+        :param config_mode: 配置逻辑标识
+        :param database_name: Redis库编号
+        :param config_host: 配置主机（执行解析快照）
+        :param config_port: 配置端口（执行解析快照）
+        :return: (project_id, env{env_id}@{host}:{port}, config_mode, database_name)
+        """
+        try:
+            cache_project_id = int(str(project_id).strip())
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"应用ID不合法: {project_id!r}") from e
+        try:
+            cache_env_id = int(str(env_id).strip())
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"环境绑定ID不合法: {env_id!r}") from e
+        # host/port 来源可能是配置表原始值（int 端口）或解析快照（str），统一先转字符串再归一
+        env_host: str = str(config_host).strip().lower() if config_host not in (None, "") else ""
+        env_port: str = str(config_port).strip() if config_port not in (None, "") else ""
+        env_key: str = f"env{cache_env_id}@{env_host}:{env_port}"
+        config_mode = (config_mode or "").strip()
+        database_name = (database_name or "").strip().lower()
+        if cache_project_id <= 0 or cache_env_id <= 0 or not config_mode or not database_name:
+            raise ValueError("应用ID、环境绑定ID、配置逻辑标识、Redis库编号均不能为空")
+        return cache_project_id, env_key, config_mode, database_name
+
     async def _load_env_config(
             self,
             project_id: int,
@@ -130,6 +171,58 @@ class RedisConnPoolFromConfig:
             state__not=1,
             config_name__iexact=config_name,
         ).first()
+
+    async def _load_env_config_by_mode(
+            self,
+            project_id: int,
+            env_id: int,
+            config_mode: str,
+    ) -> Optional[Any]:
+        """
+        按逻辑标识加载Redis配置行。
+
+        解析路径：环境绑定(env_id + project_id + env_type=redis) -> 配置行(config_mode)。
+        config_mode 在同应用同节点内唯一，可精确命中；库编号由调用方提供，不从配置行二次推断。
+
+        :param project_id: 应用主键ID
+        :param env_id: 环境绑定ID
+        :param config_mode: 配置逻辑标识
+        :return: 配置表ORM对象；未找到为None
+        """
+        if not self.config_model:
+            raise ValueError("未提供ORM模型，请通过config_model参数传入")
+
+        try:
+            # 必须与Tortoise初始化时注册的模块路径一致，否则模型无default_connection
+            from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel
+            from backend.enums import AutoTestConfigNodeType
+        except ImportError as e:
+            error_message = f"无法导入自动化测试环境模型或枚举: {e}"
+            self.logger.error(error_message)
+            raise RuntimeError(error_message) from e
+
+        env_bind = await AutoTestEnvBindModel.filter(
+            id=env_id,
+            project_id=project_id,
+            env_type=AutoTestConfigNodeType.REDIS,
+            state__not=1,
+        ).first()
+        if not env_bind:
+            self.logger.warning(
+                f"未找到环境绑定 project_id={project_id}, env_id={env_id}, "
+                f"env_type={AutoTestConfigNodeType.REDIS.value}"
+            )
+            return None
+
+        config_row = await self.config_model.filter(
+            env_bind_id=env_bind.id,
+            state__not=1,
+            config_mode=config_mode,
+        ).first()
+        if not config_row:
+            self.logger.warning(f"未找到Redis配置 env_id={env_id}, config_mode={config_mode!r}")
+            return None
+        return config_row
 
     def _set_client(
             self,
@@ -201,55 +294,65 @@ class RedisConnPoolFromConfig:
         :param max_retries: 建连失败重试次数
         :return: 新建成功为True；客户端已存在为False
         """
-        cache_project_id, cache_env_name, cache_config_name, cache_database_name = (
-            self._normalize_cache_key(project_id, env_name, config_name, database_name)
+        cache_key: Tuple[int, str, str, str] = self._normalize_cache_key(
+            project_id, env_name, config_name, database_name
         )
-        if self._get_client(cache_project_id, cache_env_name, cache_config_name, cache_database_name):
+        if self._get_client(*cache_key):
             return False
 
         if max_retries <= 0:
             raise ValueError(f"建连重试次数非法: max_retries={max_retries}")
 
         try:
-            redis_db = int(cache_database_name)
+            redis_db = int(cache_key[3])
         except (TypeError, ValueError) as e:
-            error_message = f"Redis库编号非法: {cache_database_name!r}"
+            error_message = f"Redis库编号非法: {cache_key[3]!r}"
             self.logger.error(error_message)
-            self._set_error(
-                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
-            )
+            self._set_error(*cache_key, error_message)
             raise ValueError(error_message) from e
         if redis_db < 0:
             error_message = f"Redis库编号不能为负数: {redis_db}"
             self.logger.error(error_message)
-            self._set_error(
-                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
-            )
+            self._set_error(*cache_key, error_message)
             raise ValueError(error_message)
 
         try:
-            config_row = await self._load_env_config(
-                cache_project_id, cache_env_name, cache_config_name
-            )
+            config_row = await self._load_env_config(cache_key[0], cache_key[1], cache_key[2])
             if not config_row:
                 error_message = (
-                    f"配置表未找到Redis记录 [project_id={cache_project_id}, "
-                    f"env_name={cache_env_name!r}, config_name={cache_config_name!r}]"
+                    f"配置表未找到Redis记录 [project_id={cache_key[0]}, "
+                    f"env_name={cache_key[1]!r}, config_name={cache_key[2]!r}]"
                 )
                 self.logger.error(error_message)
-                self._set_error(
-                    cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
-                )
+                self._set_error(*cache_key, error_message)
                 raise ValueError(error_message)
         except (ValueError, RuntimeError):
             raise
         except Exception as e:
             error_message = f"查询Redis配置失败：{e}"
             self.logger.error(f"{error_message}\n{traceback.format_exc()}")
-            self._set_error(
-                cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
-            )
+            self._set_error(*cache_key, error_message)
             raise RuntimeError(error_message) from e
+
+        return await self._build_client_from_config_row(cache_key, redis_db, config_row, max_retries)
+
+    async def _build_client_from_config_row(
+            self,
+            cache_key: Tuple[int, str, str, str],
+            redis_db: int,
+            config_row: Any,
+            max_retries: int,
+    ) -> bool:
+        """
+        按已加载的配置行建连并写入缓存（名称版与逻辑标识版共用）。
+
+        :param cache_key: 规范化四层缓存坐标
+        :param redis_db: Redis库编号
+        :param config_row: 环境配置表ORM对象
+        :param max_retries: 建连失败重试次数
+        :return: 新建成功为True
+        """
+        cache_project_id, cache_env_name, cache_config_name, cache_database_name = cache_key
 
         # 直接读取配置表字段；库编号使用调用方database_name，不做host/port二次映射
         config_host: str = (config_row.config_host or "").strip()
@@ -322,6 +425,70 @@ class RedisConnPoolFromConfig:
         )
         raise ConnectionError(error_message)
 
+    async def create_client_by_mode(
+            self,
+            project_id: Union[int, str],
+            env_id: int,
+            config_mode: str,
+            database_name: str,
+            config_host: str,
+            config_port: str,
+            max_retries: int = 3,
+    ) -> bool:
+        """
+        按配置逻辑标识创建Redis客户端；已存在则不重复创建。
+
+        :param project_id: 应用主键ID
+        :param env_id: 环境绑定ID
+        :param config_mode: 配置逻辑标识
+        :param database_name: Redis库编号
+        :param config_host: 配置主机（执行解析快照，参与缓存键）
+        :param config_port: 配置端口（执行解析快照，参与缓存键）
+        :param max_retries: 建连失败重试次数
+        :return: 新建成功为True；客户端已存在为False
+        """
+        cache_key: Tuple[int, str, str, str] = self._normalize_mode_cache_key(
+            project_id, env_id, config_mode, database_name, config_host, config_port
+        )
+        if self._get_client(*cache_key):
+            return False
+
+        if max_retries <= 0:
+            raise ValueError(f"建连重试次数非法: max_retries={max_retries}")
+
+        try:
+            redis_db = int(cache_key[3])
+        except (TypeError, ValueError) as e:
+            error_message = f"Redis库编号非法: {cache_key[3]!r}"
+            self.logger.error(error_message)
+            self._set_error(*cache_key, error_message)
+            raise ValueError(error_message) from e
+        if redis_db < 0:
+            error_message = f"Redis库编号不能为负数: {redis_db}"
+            self.logger.error(error_message)
+            self._set_error(*cache_key, error_message)
+            raise ValueError(error_message)
+
+        try:
+            config_row = await self._load_env_config_by_mode(cache_key[0], env_id, config_mode)
+            if not config_row:
+                error_message = (
+                    f"配置表未找到Redis记录 [project_id={cache_key[0]}, env_id={env_id}, "
+                    f"config_mode={config_mode!r}]"
+                )
+                self.logger.error(error_message)
+                self._set_error(*cache_key, error_message)
+                raise ValueError(error_message)
+        except (ValueError, RuntimeError):
+            raise
+        except Exception as e:
+            error_message = f"查询Redis配置失败：{e}"
+            self.logger.error(f"{error_message}\n{traceback.format_exc()}")
+            self._set_error(*cache_key, error_message)
+            raise RuntimeError(error_message) from e
+
+        return await self._build_client_from_config_row(cache_key, redis_db, config_row, max_retries)
+
     async def get_or_create_client(
             self,
             project_id: Union[int, str],
@@ -361,6 +528,49 @@ class RedisConnPoolFromConfig:
                 .get(cache_env_name, {})
                 .get(cache_config_name, {})
                 .get(cache_database_name)
+                or "未知错误"
+        )
+        raise ConnectionError(f"Redis连接创建失败：{error_message}")
+
+    async def get_or_create_client_by_mode(
+            self,
+            project_id: Union[int, str],
+            env_id: int,
+            config_mode: str,
+            database_name: str,
+            config_host: str,
+            config_port: str,
+    ) -> Any:
+        """
+        获取已有Redis客户端；不存在则按配置逻辑标识创建后返回。
+
+        :param project_id: 应用主键ID
+        :param env_id: 环境绑定ID
+        :param config_mode: 配置逻辑标识
+        :param database_name: Redis库编号
+        :param config_host: 配置主机（执行解析快照，参与缓存键）
+        :param config_port: 配置端口（执行解析快照，参与缓存键）
+        :return: redis.asyncio客户端实例
+        """
+        cache_key: Tuple[int, str, str, str] = self._normalize_mode_cache_key(
+            project_id, env_id, config_mode, database_name, config_host, config_port
+        )
+        client: Any = self._get_client(*cache_key)
+        if client:
+            return client
+
+        await self.create_client_by_mode(
+            project_id, env_id, config_mode, database_name, config_host, config_port
+        )
+        client = self._get_client(*cache_key)
+        if client:
+            return client
+
+        error_message = (
+                self.errors.get(cache_key[0], {})
+                .get(cache_key[1], {})
+                .get(cache_key[2], {})
+                .get(cache_key[3])
                 or "未知错误"
         )
         raise ConnectionError(f"Redis连接创建失败：{error_message}")
