@@ -216,7 +216,7 @@ views (/http_debugging, /tcp_debugging, /redis_debugging)
 停止：/perf/load_preset/stop → stopping → 管线数秒内杀进程组
 ```
 - 状态机：`queued → running → completed/failed/stopped`；停止过渡态为 `stopping`，消息重投靠 queued 消费闸门防重复施压。
-- 场景独立编辑页唯一保存入口 `save_wizard`：事务内 upsert scene + diff upsert presets（新增/更新/软删）。
+- 场景独立编辑页唯一保存入口 `save_wizard`：事务内 upsert scene + diff upsert presets（新增/更新/软删）；`batch_duplicate_presets` 同样同事务批量派生，任一项失败整体回滚。负载预设对外序列化口径（排除脚手架字段、主键对外为 `preset_id`）统一走 `PerfLoadPresetCrud.serialize_preset`，列表/详情/向导回包共用。
 
 **环境配置引用（与 autotest 同口径）**：
 - `perf_api.request_config_mode` 定位 APP 配置（编辑页下拉 value=mode，旧名称列已删除）；调试入参 `env_id + env_config_mode`，接口自身 mode 优先、调试入参兜底，HTTP 绝对地址不依赖配置。
