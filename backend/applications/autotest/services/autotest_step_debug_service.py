@@ -59,12 +59,9 @@ from backend.services.data_scope import DataScope
 
 
 class StepDebugException(Exception):
-    """
-    调试业务失败异常（视图层映射为FailureResponse）。
+    """调试业务失败异常：视图层映射为FailureResponse。"""
 
-    message为面向用户的主提示；data可携带logs、响应片段等附加数据，便于前端展开排查。
-    """
-
+    # message为面向用户的主提示；data可携带logs、响应片段等附加数据，便于前端展开排查
     def __init__(self, message: str, data: Any = None) -> None:
         """
         构造调试失败异常。
@@ -79,7 +76,7 @@ class StepDebugException(Exception):
 
 @dataclass
 class EnvEndpoint:
-    """环境配置解析结果（APP/REDIS等节点类型共用）。"""
+    """环境配置解析结果：APP与REDIS等节点类型共用。"""
 
     env_id: int                          # 环境绑定记录ID
     env_name: str                        # 环境名称
@@ -88,7 +85,8 @@ class EnvEndpoint:
     config_type: AutoTestConfigNodeType  # 节点类型，与绑定表/配置表的env_type一致
     config_host: Optional[str]           # 主机地址；调用方需自行判空
     config_port: Optional[str]           # 端口（统一转为字符串）
-    database_name: Optional[str] = None  # 数据库名，仅REDIS等节点使用
+    database_name: Optional[str] = None  # 数据库名/Redis库编号，仅DB/REDIS等节点使用
+    config_mode: Optional[str] = None    # 配置逻辑标识（mode链路回显使用）
 
 
 @dataclass
@@ -110,12 +108,10 @@ class DebugLogger:
 
 
 class StepDebugService:
-    """
-    步骤调试服务：HTTP/TCP/Python/Redis四类步骤的同步调试入口。
+    """步骤调试服务：HTTP/TCP/Python/Redis四类步骤的同步调试入口。"""
 
-    与执行引擎共用autotest_runtime实现（占位符、协议、提取/断言、内置变量），
-    差异仅在于变量池来源、is_core_engine=False与返回日志/请求回显，保证调试结果与执行口径一致。
-    """
+    # 与执行引擎共用autotest_runtime实现（占位符、协议、提取/断言、内置变量），差异仅在于
+    # 变量池来源、is_core_engine=False与返回日志/请求回显，保证调试结果与执行口径一致
 
     @staticmethod
     def make_debug_logger(step_name: str) -> DebugLogger:
@@ -184,8 +180,7 @@ class StepDebugService:
             log: Callable[[str], None],
     ) -> None:
         """
-        向调试变量池追加内置环境变量（SERVER_*/TARGET_*），与执行模式保持一致。
-        同名时跳过：内置变量不覆盖用户主动定义的变量；获取失败项记录日志由前端反馈。
+        向调试变量池追加SERVER与TARGET前缀系列内置环境变量，与执行模式保持一致。
 
         :param initial_models: 占位符解析用初始变量列表（就地追加）
         :param merged_lookup: 提取/断言用查找字典（就地补充）
@@ -195,6 +190,8 @@ class StepDebugService:
         :param log: 日志回调
         :return: None
         """
+        # 内置变量不覆盖用户主动定义的变量（collect_builtin_step_variables 按 existing_keys 跳过）；
+        # 获取失败项由 collect_builtin_step_variables 记录日志，供前端反馈
         builtin_variables = collect_builtin_step_variables(
             target_host=target_host,
             target_port=target_port,
@@ -207,64 +204,82 @@ class StepDebugService:
             merged_lookup.setdefault(item.key, item.value)
 
     @classmethod
-    async def resolve_env_config(
+    async def resolve_env_config_by_mode(
             cls,
             services: AutoTestServices,
             *,
             project_id: int,
-            env_name: str,
-            config_name: str,
+            env_id: Optional[int],
+            config_mode: Optional[str],
             config_type: AutoTestConfigNodeType,
             label: str,
+            empty_mode_template: Optional[str] = None,
             env_not_found_template: Optional[str] = None,
             config_not_found_template: Optional[str] = None,
-            empty_env_message: Optional[str] = None,
             scope: Optional[DataScope] = None,
     ) -> EnvEndpoint:
         """
-        按应用+环境名+配置名+节点类型解析环境配置（绑定与配置的 env_type 对齐）。
+        按应用+环境绑定ID+配置逻辑标识+节点类型解析环境配置。
 
         :param services: CRUD依赖聚合
         :param project_id: 应用ID
-        :param env_name: 环境名称
-        :param config_name: 配置名称
+        :param env_id: 环境绑定ID
+        :param config_mode: 配置逻辑标识
         :param config_type: 节点类型(与绑定表 env_type / 配置表 env_type 一致)
         :param label: 错误信息前缀（如HTTP请求调试失败）
-        :param env_not_found_template: 环境不存在文案模板，可用{label}/{project_id}/{env_name}
-        :param config_not_found_template: 配置不存在文案模板，可用{label}/{config_name}
-        :param empty_env_message: env_name为空时的完整错误文案
+        :param empty_mode_template: config_mode为空时的完整错误文案
+        :param env_not_found_template: 环境绑定不存在文案模板，可用{label}/{project_id}/{env_id}
+        :param config_not_found_template: 配置不存在文案模板，可用{label}/{config_mode}/{env_name}/{env_id}
         :param scope: 数据权限上下文；外部调试传入时要求应用与配置创建人均在可见范围
         :return: EnvEndpoint
-        :raises ParameterException: env_name为空
+        :raises ParameterException: env_id/config_mode为空或非法
         :raises NotFoundException: 环境绑定或环境配置不存在
         :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
-        env_name = (env_name or "").strip()
-        if not env_name:
-            raise ParameterException(message=empty_env_message or f"{label}, 参数[env_name]不允许为空")
+        # 环境用 env_id 定位（不受改名影响），配置用 config_mode 定位，与名称版解析口径一致
+        config_mode = (config_mode or "").strip()
+        if not config_mode:
+            raise ParameterException(
+                message=empty_mode_template or f"{label}, 参数[config_mode]不允许为空"
+            )
+        try:
+            env_id = int(env_id)
+        except (TypeError, ValueError) as e:
+            raise ParameterException(message=f"{label}, 参数[env_id]不合法: {env_id!r}") from e
 
-        env_row = await services.env_curd.get_bind_by_env_name(
-            project_id=project_id,
-            env_name=env_name,
+        # 绑定必须同时命中应用与节点类型：env_id 全局唯一，但跨应用/跨类型传入属于非法引用
+        env_row = await services.env_curd.get_by_id(
+            env_id,
+            on_error=False,
+            state__not=1,
+            project_id=int(project_id),
             env_type=config_type,
         )
         if not env_row:
-            tmpl = env_not_found_template or "{label}, 应用[{project_id}]下环境[{env_name}]不存在"
+            tmpl = env_not_found_template or "{label}, 应用[{project_id}]下环境绑定[{env_id}]不存在"
             raise NotFoundException(
-                message=tmpl.format(label=label, project_id=project_id, env_name=env_name)
+                message=tmpl.format(label=label, project_id=project_id, env_id=env_id)
             )
+
+        env_name_map = await services.env_curd.get_env_name_map([env_id])
+        env_name = env_name_map.get(env_id) or ""
 
         env_config_instance = await services.env_config_curd.get_by_conditions(
             only_one=True,
             on_error=False,
             state__not=1,
-            env_bind_id=env_row.id,
-            config_name=config_name,
+            env_bind_id=env_id,
+            config_mode=config_mode,
         )
         if not env_config_instance:
-            tmpl = config_not_found_template or "{label}, 目标环境下[{config_name}]配置不存在"
+            tmpl = config_not_found_template or "{label}, 目标环境[{env_name}]下[{config_mode}]配置不存在"
             raise NotFoundException(
-                message=tmpl.format(label=label, config_name=config_name)
+                message=tmpl.format(
+                    label=label,
+                    config_mode=config_mode,
+                    env_name=env_name,
+                    env_id=env_id,
+                )
             )
 
         # 解析结果暴露 host/port，外部调试必须与列表口径一致：应用可读且配置创建人可读
@@ -274,17 +289,17 @@ class StepDebugService:
             await config_scope.load_owners([env_config_instance.created_user])
             if not config_scope.can_read(env_config_instance.created_user):
                 error_message = (
-                    f"{label}, 环境配置[{config_name}]创建人[{env_config_instance.created_user}]"
+                    f"{label}, 环境配置[{env_config_instance.config_name}]创建人[{env_config_instance.created_user}]"
                     f"不在当前用户可见范围"
                 )
                 LOGGER.error(error_message)
                 raise NoPermissionException(message=error_message)
 
         return EnvEndpoint(
-            env_id=env_row.id,
+            env_id=env_id,
             env_name=env_name,
-            project_id=project_id,
-            config_name=config_name,
+            project_id=int(project_id),
+            config_name=env_config_instance.config_name,
             config_type=config_type,
             config_host=env_config_instance.config_host,
             config_port=(
@@ -297,6 +312,7 @@ class StepDebugService:
                 if getattr(env_config_instance, "database_name", None)
                 else None
             ),
+            config_mode=config_mode,
         )
 
     @staticmethod
@@ -320,10 +336,7 @@ class StepDebugService:
             sync_extract_into_lookup: bool = True,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
-        调试路径提取+断言（is_core_engine=False），并将提取值写回变量池。
-
-        本方法不复用ExtractAssertPipeline，因此提取失败不会因raise_on_failure中止，
-        失败项仅体现在extract_results；断言失败同样只记结果，由调用方根据success汇总。
+        调试路径提取与断言，并将提取值写回变量池。
 
         :param extract_variables: 提取规则
         :param assert_validators: 断言规则
@@ -340,11 +353,12 @@ class StepDebugService:
         :param request_cookies: 请求Cookie
         :param request_form_data: 请求 Form-Data / X-WWW-Form-Urlencoded 合并映射
         :param prepend_extract_results: 需前置合并的提取结果（如Redis自动写入）
-        :param sync_extract_into_lookup: 是否将提取结果同步写入session_variables_lookup；
-            Redis调试接口仅写入finished_variables，需传False以保持契约
+        :param sync_extract_into_lookup: 是否将提取结果同步写入session_variables_lookup；Redis调试接口仅写入finished_variables，需传False以保持契约
         :return: (extract_results, validator_results)
         :raises TypeError: 规则列表类型不合法
         """
+        # 不复用ExtractAssertPipeline：提取失败不会因raise_on_failure中止，失败项仅体现在extract_results；
+        # 断言失败同样只记结果（is_core_engine=False），由调用方根据success汇总
         extract_data, extract_results = AutoTestToolService.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,
@@ -437,22 +451,21 @@ class StepDebugService:
         """
         调试HTTP请求步骤。
 
-        流程：合并变量池→相对URL解析环境配置并注入内置变量→解析占位符→组装报文→
-        httpx请求（10秒超时、不读系统代理）→回显响应并按执行口径提取/断言。
-
         :param debug_in: HTTP调试入参
         :param services: CRUD依赖聚合
         :param scope: 数据权限上下文，相对地址解析环境配置时校验应用与配置可见性
         :return: 调试结果字典
         :raises StepDebugException: 超时、连接失败或请求异常
         :raises NotFoundException: 相对URL缺少环境配置或配置不完整
-        :raises ParameterException: 环境名称缺失
+        :raises ParameterException: env_id/config_mode 缺失或非法
         :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
-        env_name = (debug_in.env_name or "").strip()
+        # 流程：合并变量池 → 相对URL按env_id+config_mode解析环境配置并注入内置变量 → 解析占位符 →
+        # 组装报文 → httpx请求（10秒超时、不读系统代理）→ 回显响应并按执行口径提取/断言
         step_name = debug_in.step_name
         request_project_id = debug_in.request_project_id
-        request_config_name = debug_in.request_config_name
+        request_env_id: Optional[int] = debug_in.env_id
+        request_config_mode: Optional[str] = (debug_in.request_config_mode or "").strip()
         request_args_type: Optional[AutoTestReqArgsType] = debug_in.request_args_type
         request_url = (debug_in.request_url or "").strip()
         request_method = (debug_in.request_method or "GET")
@@ -481,21 +494,23 @@ class StepDebugService:
         target_path_raw: str = request_url
         builtin_target_host: Optional[str] = None
         builtin_target_port: Optional[str] = None
-        # 绝对URL不走环境配置；相对URL必须解析出host后才能拼装目标地址
+        # 绝对URL不走环境配置；相对URL必须按env_id+config_mode解析出host后才能拼装目标地址
+        endpoint: Optional[EnvEndpoint] = None
         if not is_absolute_http_url(request_url):
-            endpoint = await cls.resolve_env_config(
+            endpoint = await cls.resolve_env_config_by_mode(
                 services,
                 project_id=request_project_id,
-                env_name=env_name,
-                config_name=request_config_name,
+                env_id=request_env_id,
+                config_mode=request_config_mode,
                 config_type=AutoTestConfigNodeType.APP,
                 label="HTTP请求调试失败",
+                empty_mode_template="HTTP请求调试失败, 参数[request_config_mode]不允许为空",
                 scope=scope,
             )
             host = (endpoint.config_host or "").strip()
             if not host:
                 raise NotFoundException(
-                    message=f"HTTP请求调试失败, 目标环境下[{request_config_name}]配置不完整"
+                    message=f"HTTP请求调试失败, 目标环境下[{endpoint.config_name}]配置不完整"
                 )
             builtin_target_host = host
             builtin_target_port = endpoint.config_port
@@ -503,9 +518,10 @@ class StepDebugService:
 
         log(
             f"【HTTP请求】调试开始: \n\t"
-            f"环境名称: {env_name}\n\t"
+            f"环境名称: {endpoint.env_name if endpoint else '不适用(绝对地址)'}\n\t"
             f"应用ID: {request_project_id}\n\t"
-            f"配置名称: {request_config_name}\n\t"
+            f"配置名称: {endpoint.config_name if endpoint else '不适用(绝对地址)'}\n\t"
+            f"配置标识: {endpoint.config_mode if endpoint else '不适用(绝对地址)'}\n\t"
             f"请求方法: {request_method}\n\t"
             f"请求地址: {request_url}"
         )
@@ -582,7 +598,7 @@ class StepDebugService:
             try:
                 response = await client.request(method=request_method, url=request_url, **request_kwargs)
             except httpx.TimeoutException as e:
-                raise StepDebugException(message="请求超时，请检查URL是否可访问或网络连接是否正常") from e
+                raise StepDebugException(message="请求超时, URL不可访问或网络连接异常") from e
             except httpx.ConnectError as e:
                 raise StepDebugException(message=f"连接失败: {str(e)}") from e
             except httpx.RequestError as e:
@@ -693,25 +709,24 @@ class StepDebugService:
         """
         调试TCP请求步骤。
 
-        流程：解析环境配置→注入内置变量→解析占位符→按帧配置组包→单次收发→
-        解析响应并按执行口径提取/断言。长连接暂未实现，按短连接降级。
-
         :param debug_in: TCP调试入参
         :param services: CRUD依赖聚合
         :param scope: 数据权限上下文，解析环境配置时校验应用与配置可见性
         :return: 调试结果字典
         :raises StepDebugException: 环境配置缺失、地址/端口不完整或收发出错
-        :raises ParameterException: 环境名称缺失
+        :raises ParameterException: env_id/config_mode 缺失或非法
         :raises NotFoundException: 环境或配置不存在
         :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
         # 局部导入：仅TCP调试需要，避免模块导入期加载网络工具
         from backend.common import AsyncTcpUtils
 
-        env_name = (debug_in.env_name or "").strip()
+        # 流程：按env_id+config_mode解析环境配置 → 注入内置变量 → 解析占位符 → 按帧配置组包 →
+        # 单次收发 → 解析响应并按执行口径提取/断言。长连接暂未实现，按短连接降级
         step_name = debug_in.step_name
         request_project_id = debug_in.request_project_id
-        request_config_name = debug_in.request_config_name
+        request_env_id: Optional[int] = debug_in.env_id
+        request_config_mode: Optional[str] = (debug_in.request_config_mode or "").strip()
         request_args_type: Optional[AutoTestReqArgsType] = debug_in.request_args_type
         request_text = debug_in.request_text
         request_body: Any = debug_in.request_body
@@ -726,23 +741,22 @@ class StepDebugService:
 
         log(
             f"TCP请求调试开始: \n\t"
-            f"环境名称: {env_name}\n\t"
             f"应用ID: {request_project_id}\n\t"
-            f"配置名称: {request_config_name}\n\t"
+            f"环境绑定ID: {request_env_id}\n\t"
+            f"配置标识: {request_config_mode or '未指定'}\n\t"
             f"请求体类型: {request_args_type}\n\t"
             f"目标地址: 由环境配置解析(config_host/config_port)"
         )
 
         # 严格对齐执行模式：先解析环境配置，再进行参数占位符替换（内置变量TARGET_*依赖配置解析结果）
         try:
-            endpoint = await cls.resolve_env_config(
+            endpoint = await cls.resolve_env_config_by_mode(
                 services,
                 project_id=request_project_id,
-                env_name=env_name,
-                config_name=request_config_name,
+                env_id=request_env_id,
+                config_mode=request_config_mode,
                 config_type=AutoTestConfigNodeType.APP,
                 label="TCP请求调试失败",
-                config_not_found_template="{label}, 环境配置[{config_name}]不存在",
                 scope=scope,
             )
         except (ParameterException, NotFoundException, NoPermissionException) as e:
@@ -756,12 +770,14 @@ class StepDebugService:
 
         host = strip_host_scheme(endpoint.config_host) or ""
         port = (endpoint.config_port or "").strip()
-        log(f"解析请求信息(host={host}, port={port})成功")
+        log(
+            f"解析请求信息(环境名称={endpoint.env_name}, 配置名称={endpoint.config_name}, "
+            f"配置标识={endpoint.config_mode}, host={host}, port={port})成功"
+        )
         if not host or not port:
             raise StepDebugException(
                 message=(
-                    "TCP请求调试失败, 目标服务器地址或端口未配置"
-                    "(请检查该环境下的API环境配置中的config_host/config_port)"
+                    f"TCP请求调试失败, 执行配置[{endpoint.config_name}]的服务器地址或端口未配置"
                 )
             )
 
@@ -897,10 +913,7 @@ class StepDebugService:
     @classmethod
     async def debug_python(cls, debug_in: AutoTestPythonCodeDebugRequest) -> Dict[str, Any]:
         """
-        调试Python代码步骤；断言规则与PythonStepExecutor对齐（仅允许变量池来源）。
-
-        流程：在StepExecutionContext中执行代码→将返回dict合并进变量池→仅执行断言管线（不做提取）；
-        断言未通过时以StepDebugException携带已产出结果返回。
+        调试Python代码步骤；断言规则与PythonStepExecutor对齐。
 
         :param debug_in: Python调试入参
         :return: 调试结果字典（含result/assert_validators）
@@ -912,6 +925,8 @@ class StepDebugService:
             StepExecutionResult,
         )
 
+        # 流程：在StepExecutionContext中执行代码 → 将返回dict合并进变量池 → 仅执行断言管线（不做提取）；
+        # 断言未通过时以StepDebugException携带已产出结果返回；断言规则仅允许变量池来源
         code = debug_in.code
         step_name = debug_in.step_name or "代码请求(Python)调试"
         defined_variables = debug_in.defined_variables or []
@@ -1003,23 +1018,22 @@ class StepDebugService:
         """
         调试Redis请求步骤；查到即止语义与RedisStepExecutor对齐。
 
-        流程：逐条解析配置（project/config/database/expr/variable_name均支持占位符）→
-        执行命令→自动写入variable_name及variable_name_count→可选查到即止→统一提取/断言。
-        单条失败会终止后续操作并抛出StepDebugException。
-
         :param debug_in: Redis调试入参
         :param services: CRUD依赖聚合
         :param scope: 数据权限上下文，解析每条操作的环境配置时校验应用与配置可见性
         :return: 调试结果字典
-        :raises ParameterException: env_name缺失
-        :raises NotFoundException: 应用/环境/配置不存在
+        :raises ParameterException: env_id/config_mode 缺失或非法
+        :raises NotFoundException: 环境绑定/应用/配置不存在
         :raises NoPermissionException: 应用或配置创建人不在可见范围
         :raises StepDebugException: 单条操作参数缺失或执行失败
         """
         from backend.applications.autotest.services.autotest_step_engine import RedisStepExecutor
 
-        env_name = (debug_in.env_name or "").strip()
+        # 流程：顶层env_id反查逻辑环境名称 → 逐条按操作config_mode解析配置
+        # （project/database/expr/variable_name均支持占位符）→ 执行命令 → 自动写入variable_name及
+        # variable_name_count → 可选查到即止 → 统一提取/断言。单条失败会终止后续操作并抛出StepDebugException
         step_name = debug_in.step_name
+        redis_env_id: int = debug_in.env_id
         redis_operates: List[RedisOperates] = debug_in.redis_operates or []
         redis_searched = bool(debug_in.redis_searched)
         extract_variables = debug_in.extract_variables or []
@@ -1031,12 +1045,27 @@ class StepDebugService:
         logger = cls.make_debug_logger(step_name)
         log = logger.append
 
+        # 顶层env_id必须是REDIS节点绑定：用其反查逻辑环境名称，跨应用操作按同名环境反查各自绑定
+        env_bind_row = await services.env_curd.get_by_id(
+            redis_env_id, on_error=False, state__not=1, env_type=AutoTestConfigNodeType.REDIS
+        )
+        if not env_bind_row:
+            error_message = (
+                f"Redis请求调试失败, 环境绑定[{redis_env_id}]不存在或不是Redis节点环境"
+            )
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        env_name = (await services.env_curd.get_env_name_map([redis_env_id])).get(redis_env_id) or ""
         if not env_name:
-            raise ParameterException(message="Redis请求调试失败, 参数[env_name]不允许为空")
+            error_message = f"Redis请求调试失败, 环境绑定[{redis_env_id}]关联的环境名称不存在"
+            LOGGER.error(error_message)
+            raise NotFoundException(message=error_message)
+        default_project_id: int = int(env_bind_row.project_id)
 
         log(
             f"Redis请求调试开始: \n\t"
             f"环境名称: {env_name}\n\t"
+            f"环境绑定ID: {redis_env_id}\n\t"
             f"操作条数: {len(redis_operates)}\n\t"
             f"查到即止: {redis_searched}"
         )
@@ -1054,12 +1083,14 @@ class StepDebugService:
             operate_no = f"第{redis_idx + 1}条Redis配置"
             config_host: Optional[str] = None
             config_port: Optional[str] = None
+            operate_env_id: int = redis_env_id
             operate_name = redis_operate.name
             operate_expr = redis_operate.expr
             operate_project_id: Optional[int] = redis_operate.project_id
             operate_project_name = redis_operate.project_name
             operate_variable_name = redis_operate.variable_name
-            operate_config_name = redis_operate.config_name
+            operate_config_mode = redis_operate.config_mode
+            operate_config_name: str = ""
             operate_database_name = redis_operate.database_name
             operate_desc = redis_operate.desc
             operate_result_count = f"{operate_variable_name}_count"
@@ -1067,9 +1098,6 @@ class StepDebugService:
             try:
                 operate_expr = AutoTestToolService.resolve_placeholders(
                     value=operate_expr, logger_object=log, finished_variables=finished_variables
-                )
-                operate_config_name = AutoTestToolService.resolve_placeholders(
-                    value=operate_config_name, logger_object=log, finished_variables=finished_variables
                 )
                 operate_project_name = AutoTestToolService.resolve_placeholders(
                     value=operate_project_name, logger_object=log, finished_variables=finished_variables
@@ -1093,8 +1121,8 @@ class StepDebugService:
                     operate_project_id = project_instance.id
                 if not operate_project_id:
                     raise StepDebugException(message=f"{operate_no}：参数[project_id]不允许为空")
-                if not operate_config_name:
-                    raise StepDebugException(message=f"{operate_no}：参数[config_name]不允许为空")
+                if not operate_config_mode:
+                    raise StepDebugException(message=f"{operate_no}：参数[config_mode]不允许为空")
                 if not operate_database_name:
                     raise StepDebugException(message=f"{operate_no}：参数[database_name]不允许为空")
                 if not operate_expr:
@@ -1102,32 +1130,55 @@ class StepDebugService:
                 if not operate_variable_name:
                     raise StepDebugException(message=f"{operate_no}：参数[variable_name]不允许为空")
 
-                endpoint = await cls.resolve_env_config(
+                # 跨应用操作：按顶层环境名称反查该应用下的Redis绑定；同应用直接复用顶层绑定
+                if int(operate_project_id) != default_project_id:
+                    operate_env_row = await services.env_curd.get_bind_by_env_name(
+                        project_id=int(operate_project_id),
+                        env_name=env_name,
+                        env_type=AutoTestConfigNodeType.REDIS,
+                    )
+                    if not operate_env_row:
+                        msg = f"{operate_no}：应用[{operate_project_id}]下环境[{env_name}]不存在"
+                        log(msg)
+                        raise NotFoundException(message=msg)
+                    operate_env_id = operate_env_row.id
+
+                endpoint = await cls.resolve_env_config_by_mode(
                     services,
                     project_id=operate_project_id,
-                    env_name=env_name,
-                    config_name=operate_config_name,
+                    env_id=operate_env_id,
+                    config_mode=operate_config_mode,
                     config_type=AutoTestConfigNodeType.REDIS,
                     label=operate_no,
-                    env_not_found_template="{label}：应用[{project_id}]下环境[{env_name}]不存在",
-                    config_not_found_template="{label}：环境配置[{config_name}]不存在",
+                    env_not_found_template="{label}：应用[{project_id}]下环境绑定[{env_id}]不存在",
+                    config_not_found_template="{label}：环境配置[{config_mode}]不存在",
                     scope=scope,
                 )
-                config_host = endpoint.config_host
-                config_port = endpoint.config_port
+                operate_config_name = endpoint.config_name
+                config_host = (endpoint.config_host or "").strip()
+                config_port = (endpoint.config_port or "").strip()
                 if endpoint.database_name:
                     operate_database_name = endpoint.database_name
+                if not config_host or not config_port:
+                    raise StepDebugException(
+                        message=(
+                            f"{operate_no}：执行配置[{operate_config_name}]的"
+                            f"主机[{config_host!r}]或端口[{config_port!r}]为空"
+                        )
+                    )
 
                 log(
                     f"{operate_no}：解析配置成功"
                     f"(host={config_host}, port={config_port}, db={operate_database_name})"
                 )
 
-                redis_client = await pool_manager.get_or_create_client(
+                redis_client = await pool_manager.get_or_create_client_by_mode(
                     project_id=operate_project_id,
-                    env_name=env_name,
-                    config_name=operate_config_name,
+                    env_id=operate_env_id,
+                    config_mode=operate_config_mode,
                     database_name=operate_database_name,
+                    config_host=config_host,
+                    config_port=config_port,
                 )
                 expr_executive_result = await pool_manager.execute_commands(
                     client=redis_client, expr=operate_expr
@@ -1169,6 +1220,7 @@ class StepDebugService:
                     "project_name": operate_project_name,
                     "variable_name": [operate_variable_name, operate_result_count],
                     "config_name": operate_config_name,
+                    "config_mode": operate_config_mode,
                     "database_name": operate_database_name,
                     "desc": operate_desc,
                 })
@@ -1181,6 +1233,7 @@ class StepDebugService:
                         "project_id": operate_project_id,
                         "project_name": operate_project_name,
                         "config_name": operate_config_name,
+                        "config_mode": operate_config_mode,
                         "database_name": operate_database_name,
                         "config_host": config_host,
                         "config_port": config_port,
@@ -1212,6 +1265,7 @@ class StepDebugService:
                     "project_name": operate_project_name,
                     "variable_name": [operate_variable_name, operate_result_count],
                     "config_name": operate_config_name,
+                    "config_mode": operate_config_mode,
                     "database_name": operate_database_name,
                     "desc": operate_desc,
                 })
@@ -1224,6 +1278,7 @@ class StepDebugService:
                         "project_id": operate_project_id,
                         "project_name": operate_project_name,
                         "config_name": operate_config_name,
+                        "config_mode": operate_config_mode,
                         "database_name": operate_database_name,
                         "config_host": config_host,
                         "config_port": config_port,
@@ -1271,6 +1326,7 @@ class StepDebugService:
             validator_results=validator_results,
             logs=logger.logs,
             request_info={
+                "request_env_id": redis_env_id,
                 "request_env_name": env_name,
                 "redis_operates": redis_operates_request,
                 "redis_searched": redis_searched,

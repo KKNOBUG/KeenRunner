@@ -18,18 +18,15 @@ __all__ = ["CaseScriptCodec"]
 
 
 class CaseScriptCodec:
-    """
-    公共接口脚本模板文本协议编解码器：请求头/变量/请求体/提取/断言五类多行文本列的对称实现。
+    """公共接口脚本模板文本协议编解码器：请求头/变量/请求体/提取/断言五类多行文本列的对称实现。"""
 
-    协议约定（导出编码与导入解码必须成对维护，任一侧变更即破坏往返契约）：
-    - 键值列(请求头/变量/表单类请求体)：每行 key:value:描述;，描述段恒输出；
-    - 提取列：变量名:提取来源:提取范围[:提取表达式[:索引]];
-    - 断言列：断言名称:断言对象:断言表达式:匹配规则[:预期值];，为空/不为空规则不输出预期值；
-    - 行尾分号为英文分号，空行忽略，非法行按列名收集可读错误。
-
-    本类只做结构化字段与多行文本的对称转换，不校验业务数据、不落库；
-    导出前须先过 check_extract_roundtrip / check_assert_roundtrip，把不可逆项拦在写文件之前。
-    """
+    # 协议约定（导出编码与导入解码必须成对维护，任一侧变更即破坏往返契约）：
+    # - 键值列(请求头/变量/表单类请求体)：每行 key:value:描述;，描述段恒输出；
+    # - 提取列：变量名:提取来源:提取范围[:提取表达式[:索引]];
+    # - 断言列：断言名称:断言对象:断言表达式:匹配规则[:预期值];，为空/不为空规则不输出预期值；
+    # - 行尾分号为英文分号，空行忽略，非法行按列名收集可读错误。
+    # 本类只做结构化字段与多行文本的对称转换，不校验业务数据、不落库；
+    # 导出前须先过 check_extract_roundtrip / check_assert_roundtrip，把不可逆项拦在写文件之前。
 
     # ==================== 常量：文本协议字段与取值集合 ====================
     # 提取范围的中文写法：与模板填写指引、历史导出数据保持一致，导入时按原文匹配
@@ -104,7 +101,7 @@ class CaseScriptCodec:
 
     @staticmethod
     def _iter_lines(text: str) -> Iterator[Tuple[str, str]]:
-        """逐行产出(去空白原文, 去尾分号片段)；空行剔除，原文用于错误定位保持导入侧提示一致。"""
+        """逐行产出去空白原文与去尾分号片段：空行剔除，原文用于错误定位保持导入侧提示一致。"""
         for raw in str(text or "").splitlines():
             trimmed = raw.strip()
             if not trimmed:
@@ -118,15 +115,14 @@ class CaseScriptCodec:
         """
         将[{key,value,desc}]转为多行key:value:desc;文本，并向problems追加往返不安全项。
 
-        描述段恒输出保证"最后一个冒号后是描述"恒成立，值内冒号即可安全往返；
-        key含冒号/换行、值或描述含换行、描述含冒号仍无法安全往返，予以拦截。
-
         :param kv_list: 键值列表
         :param column: 列名，仅用于错误定位
         :param problems: 往返安全检测问题收集列表
         :return: 多行文本
         """
         lines: List[str] = []
+        # 描述段恒输出保证"最后一个冒号后是描述"恒成立，值内冒号即可安全往返；
+        # key/值/描述含冒号或换行会破坏往返，逐项收集问题
         for item in kv_list or []:
             key = str(cls._get(item, "key") or "").strip()
             if not key:
@@ -150,7 +146,7 @@ class CaseScriptCodec:
     @classmethod
     def encode_extract_lines(cls, extract_list: Optional[List[Any]]) -> str:
         """
-        将提取配置转为多行文本；名称为空或来源缺失的项跳过（与导入校验口径一致）。
+        将提取配置转为多行文本：名称为空或来源缺失的项跳过，与导入校验口径一致。
 
         :param extract_list: 提取配置列表
         :return: 多行文本
@@ -220,9 +216,6 @@ class CaseScriptCodec:
         """
         解析多行key:value:desc;文本；描述非必填，值内允许冒号。
 
-        描述取最后一个冒号后的片段：导出侧恒输出描述段，因此值内冒号可安全还原；
-        描述本身含冒号无法区分，导出侧已拦截。
-
         :param text: 多行文本
         :param column: 列名，仅用于错误定位
         :return: (键值列表或空列表, 错误列表)
@@ -240,6 +233,7 @@ class CaseScriptCodec:
             elif len(parts) == 2:
                 value, desc = parts[1], ""
             else:
+                # 描述取最后一个冒号后片段：导出侧恒输出描述段，值内冒号可安全还原，描述含冒号已由导出侧拦截
                 value, desc = ":".join(parts[1:-1]), parts[-1].strip()
             items.append({"key": key, "value": value, "desc": desc})
         return items, errors
@@ -249,12 +243,10 @@ class CaseScriptCodec:
         """
         解析多行提取配置文本。
 
-        "提取部分"允许表达式内含冒号，末尾纯整数段视为索引（与导出侧追加索引的写法对称）。
-
         :param text: 多行文本
-        :return: (提取配置列表, 错误列表)；每项含 name/source/expr/scope/index，
-            scope 内部值为 ALL/SOME，ALL 时 expr 恒为空串、index 恒为 None
+        :return: (提取配置列表, 错误列表)；每项含 name/source/expr/scope/index
         """
+        # scope 内部值为 ALL/SOME：ALL 时 expr 恒为空串、index 恒为 None
         items: List[Dict[str, Any]] = []
         errors: List[str] = []
         for raw, segment in cls._iter_lines(text):
@@ -280,6 +272,7 @@ class CaseScriptCodec:
                 continue
             tail = parts[3:]
             index_val: Optional[int] = None
+            # "提取部分"允许表达式内含冒号；末尾纯整数段视为索引，与导出侧追加索引的写法对称
             if len(tail) >= 2 and re.fullmatch(r"-?\d+", tail[-1].strip()):
                 index_val = int(tail[-1].strip())
                 tail = tail[:-1]
@@ -295,11 +288,8 @@ class CaseScriptCodec:
         """
         解析多行断言配置文本。
 
-        预期值允许含冒号（取第5段起拼接）；为空/不为空忽略预期值并归一为空字符串。
-
         :param text: 多行文本
-        :return: (断言配置列表, 错误列表)；每项含 name/source/expr/operation/except_value，
-            为空/不为空规则的 except_value 恒为空串
+        :return: (断言配置列表, 错误列表)；每项含 name/source/expr/operation/except_value
         """
         items: List[Dict[str, Any]] = []
         errors: List[str] = []
@@ -327,7 +317,7 @@ class CaseScriptCodec:
             if operation in cls.ASSERT_NO_EXPECTED_OPERATIONS:
                 except_value = ""
             else:
-                except_value = ":".join(parts[4:])
+                except_value = ":".join(parts[4:])  # 预期值允许含冒号，取第5段起拼接
                 if not except_value.strip():
                     errors.append(f"[断言] 匹配规则为[{operation}]时, 必须填写预期值")
                     continue
@@ -342,14 +332,11 @@ class CaseScriptCodec:
         """
         按请求体类型解析请求体列，产出步骤落库字段；未命中字段一律为None。
 
-        JSON必须是对象结构（列表/标量拒绝），XML/RAW原样写入request_text，
-        表单类按键值文本解析；none类型要求请求体列为空。
-
         :param args_type: 请求体类型
         :param body_text: 请求体单元格文本
-        :return: (请求体字段字典, 错误列表)；字典恒包含 BODY_STEP_FIELDS 全部键，未命中字段为 None，
-            供导入更新时直接覆盖旧值（避免残留上一次请求体）
+        :return: (请求体字段字典, 错误列表)；字典恒包含 BODY_STEP_FIELDS 全部键，未命中字段为 None
         """
+        # 字段字典供导入更新时直接覆盖旧值，避免残留上一次请求体
         result: Dict[str, Any] = {field: None for field in cls.BODY_STEP_FIELDS}
         errors: List[str] = []
         if args_type == AutoTestReqArgsType.NONE.value:

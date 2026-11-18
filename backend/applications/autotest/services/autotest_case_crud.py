@@ -9,13 +9,14 @@
 import traceback
 from typing import Optional, Dict, Any, List, Set, Tuple
 
-from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
+from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseCreate, AutoTestCaseUpdate
+from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
 from backend.applications.autotest.services.autotest_scope_guard import load_readable_project
 from backend.applications.autotest.services.autotest_tag_crud import AutoTestTagCrud
 from backend.applications.base.services.scaffold import ScaffoldCrud
@@ -38,6 +39,11 @@ from backend.services import DataScope, get_current_username, normalize_username
 
 
 class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoTestCaseUpdate]):
+    """用例CRUD：用例表krun_autotest_case的创建、恢复、更新、删除与批量导入导出归属校验。"""
+
+    # 核心口径：业务唯一键为同应用+同所属人+同名+同类型，命中间名软删行时复用恢复并覆盖表头；
+    # 单删为物理删除（连同步骤硬删与数据源清理），批量删除为软删除（连同步骤）；
+    # 公共接口/公共脚本仍被引用时拒绝删除；切换公共类型前校验数据源未挂载与公共接口根步骤形态。
 
     def __init__(self):
         """绑定用例模型，供基类通用CRUD复用。"""
@@ -110,7 +116,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
     @staticmethod
     async def get_by_step(step_type: Optional[AutoTestStepType] = None, args_type: Optional[AutoTestReqArgsType] = None) -> Optional[List[int]]:
         """
-        按请求步骤类型与参数类型筛选关联用例ID（distinct去重）。
+        按请求步骤类型与参数类型筛选关联用例ID，结果去重。
 
         :param step_type: 请求步骤类型；可选
         :param args_type: 请求参数类型；可选
@@ -214,7 +220,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
 
     async def create_case(self, case_in: AutoTestCaseCreate, scope: DataScope) -> AutoTestCaseModel:
         """
-        创建用例。同应用同所属人同名且同类型：启用则拒绝，软删则恢复并覆盖表头，跨类型同名允许。
+        创建用例；同应用同所属人同名且同类型时启用则拒绝，软删同名记录则恢复并覆盖表头，跨类型同名允许。
 
         :param case_in: 用例创建schema
         :param scope: 数据权限上下文
@@ -274,7 +280,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             instance = await self.create(case_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "新增用例信息失败，用例名称重复或关联数据无效"
+            error_message: str = "新增用例信息失败, 用例名称重复或关联数据无效"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -301,9 +307,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
     async def update_case(self, case_in: AutoTestCaseUpdate, scope: DataScope) -> AutoTestCaseModel:
         """
         更新用例：按 case_id 优先/case_code 兜底定位，校验写权限后递增 case_version。
-
-        涉及名称/应用/类型变更时重做唯一性校验；切换为公共接口/公共脚本前额外校验
-        数据源未挂载（公共接口还需根步骤形态合规），应用变更时级联对齐公共接口步骤应用。
 
         :param case_in: 用例更新schema，需含case_id或case_code
         :param scope: 数据权限上下文
@@ -364,6 +367,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             if normalized_tags:
                 await AutoTestTagCrud().get_by_ids(tag_ids=normalized_tags, on_error=True, state__not=1)
 
+        # 名称/应用/类型任一变更需要重做唯一性校验
         if "case_name" in update_dict or "case_project" in update_dict or "case_type" in update_dict:
             case_name = update_dict.get("case_name", instance.case_name)
             case_project = update_dict.get("case_project", instance.case_project)
@@ -394,17 +398,14 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         try:
             update_dict["case_version"] = instance.case_version + 1
             instance = await self.update(id=case_id, obj_in=update_dict)
+            # 应用变更或首次切为公共接口时，级联对齐公共接口步骤的应用归属
             if "case_project" in update_dict or (
                     case_type == AutoTestCaseType.PUBLIC_API and original_case_type != AutoTestCaseType.PUBLIC_API
             ):
                 await self._cascade_public_api_step_project(instance)
             return instance
-        except DoesNotExist as e:
-            error_message: str = "更新用例信息失败，目标用例不存在或已被删除，请刷新后重试"
-            LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-            raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = "更新用例信息失败，用例名称重复或关联数据无效"
+            error_message: str = "更新用例信息失败, 用例名称重复或关联数据无效"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -436,8 +437,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         物理删除用例及其全部步骤，同步清理步骤关联的数据源记录与上传文件。
 
-        公共接口/公共脚本仍被引用时拒绝删除；步骤与数据源均为硬删，不保留痕迹。
-
         :param scope: 数据权限上下文
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
@@ -464,6 +463,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             raise NoPermissionException(message=error_message)
 
         case_type: AutoTestCaseType = instance.case_type
+        # 公共用例仍被引用步骤引用时拒绝删除，避免引用方执行期找不到用例
         if case_type in PUBLIC_CASE_TYPES:
             quote_steps_count = await AutoTestStepModel.filter(quote_case_id=case_id, state__not=1).count()
             if quote_steps_count > 0:
@@ -472,7 +472,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 raise DataAlreadyExistsException(message=error_message)
 
         # 硬删用例时步骤不再保留任何痕迹：先取步骤标识，再删步骤，最后按 step_code 清数据源及其上传文件
-        from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+        # 函数内导入：step_crud 顶层依赖本类，提升会形成循环
         from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 
         step_crud = AutoTestStepCrud()
@@ -490,7 +490,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             case_codes: Optional[List[str]] = None,
     ) -> int:
         """
-        批量软删除用例及其步骤（批量入口保持软删除，与单条硬删除区分）。
+        批量软删除用例及其步骤，与单条硬删除语义区分。
 
         :param scope: 数据权限上下文，逐条校验用例所属人是否允许当前用户删除
         :param case_ids: 用例主键列表，与case_codes二选一
@@ -530,6 +530,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                     raise NotFoundException(message=error_message)
                 targets.append(instance)
 
+        # 函数内导入：step_crud 顶层依赖本类，提升会形成循环
         from backend.applications.autotest.services.autotest_step_crud import AutoTestStepCrud
 
         step_crud = AutoTestStepCrud()
@@ -574,7 +575,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询用例信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询用例信息失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -583,12 +584,11 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         校验切换为公共接口前存量步骤树形态是否合规。
 
-        公共接口有且仅需1个根步骤，且必须为 HTTP/TCP 请求步骤（被引用时直接作为报文来源）。
-
         :param case_instance: 待切换的用例实例
         :return: None
         :raises ParameterException: 根步骤数量不为1或根步骤类型非HTTP/TCP
         """
+        # 公共接口有且仅需1个根HTTP/TCP请求步骤，被引用时直接作为报文来源
         root_steps: List[AutoTestStepModel] = await AutoTestStepModel.filter(
             case_id=case_instance.id, parent_step_id=None, state__not=1
         )
@@ -616,9 +616,6 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
         """
         批量新增或更新用例：无case_id/case_code则新增，有则更新。
 
-        处理非原子：按入参顺序逐条落库，中途抛错时此前已提交的记录不回滚，
-        因此调用方应将报错信息直接回显给用户逐条修正，而不是整批重试。
-
         :param cases_data: 用例更新schema列表
         :param scope: 数据权限上下文，校验待更新用例所属人是否允许当前用户写入
         :return: 含created_count、updated_count、success_detail的字典
@@ -643,6 +640,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
             batch_owners = await self.model.filter(owner_lookup, state__not=1).values_list("owner_user", flat=True)
             await scope.load_owners(batch_owners)
 
+        # 处理非原子：按入参顺序逐条落库，中途抛错不回滚，报错应逐条回显给用户修正而非整批重试
         for cid, case_data in enumerate(cases_data, start=1):
             case_id: Optional[int] = case_data.case_id
             case_code: Optional[str] = case_data.case_code
@@ -698,7 +696,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                 )
                 create_case_dict["case_tags"] = case_tags
                 if existing_case_instance and existing_case_instance.state != 1:
-                    message_error: str = f"第{cid}条用例新增失败，相同应用下用例名称不允许重复"
+                    message_error: str = f"第{cid}条用例新增失败, 相同应用下用例名称不允许重复"
                     LOGGER.error(
                         f"{message_error}, "
                         f"查询条件: [case_project={case_project}, case_name={case_name}, "
@@ -715,7 +713,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         create_case_dict["owner_user"] = owner_user
                         new_case_instance: AutoTestCaseModel = await self.create(obj_in=create_case_dict)
                 except Exception as e:
-                    error_message: str = f"第{cid}条用例新增失败，暂时无法保存用例，请稍后重试"
+                    error_message: str = f"第{cid}条用例新增失败, 请稍后重试"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
 
@@ -794,7 +792,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                         exclude_id=case_id,
                     )
                     if existing_case_instance:
-                        message_error: str = f"第{cid}条用例更新失败，相同应用下用例名称不允许重复"
+                        message_error: str = f"第{cid}条用例更新失败, 相同应用下用例名称不允许重复"
                         LOGGER.error(
                             f"{message_error}, "
                             f"查询条件: [case_project={unique_project}, case_name={unique_case_name}, "
@@ -806,7 +804,7 @@ class AutoTestCaseCrud(ScaffoldCrud[AutoTestCaseModel, AutoTestCaseCreate, AutoT
                     update_case_dict["case_version"] = case_instance.case_version + 1
                     updated_instance: AutoTestCaseModel = await self.update(id=case_id, obj_in=update_case_dict)
                 except Exception as e:
-                    error_message: str = f"第{cid}条用例更新失败，暂时无法保存用例，请稍后重试"
+                    error_message: str = f"第{cid}条用例更新失败, 请稍后重试"
                     LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                     raise DataBaseStorageException(message=error_message) from e
 

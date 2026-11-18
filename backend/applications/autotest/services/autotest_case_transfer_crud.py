@@ -28,6 +28,7 @@ from backend.services import get_current_username, normalize_username
 
 
 class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestCaseTransferCreate, AutoTestCaseTransferCreate]):
+    """用例转让CRUD：记录转让流水并在事务内改写用例归属，不改 created_user。"""
 
     def __init__(self):
         """绑定转让记录模型，供基类通用CRUD复用。"""
@@ -103,7 +104,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
             owner_user=next_owner_user,
         )
         if existing_case:
-            message_error: str = "转让用例失败，转入人名下已存在同应用、同类型、同名称的用例"
+            message_error: str = "转让用例失败, 转入人名下已存在同应用同类型同名称的用例"
             LOGGER.error(
                 f"{message_error}, "
                 f"查询条件: ["
@@ -137,7 +138,7 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
                 )
                 return instance
         except IntegrityError as e:
-            error_message: str = "转让用例失败，转入人名下可能已存在同名用例"
+            error_message: str = "转让用例失败, 转入人名下已存在同应用同类型同名称用例"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
 
@@ -155,6 +156,6 @@ class AutoTestCaseTransferCrud(ScaffoldCrud[AutoTestCaseTransferModel, AutoTestC
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询用例转让记录失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询用例转让记录失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e

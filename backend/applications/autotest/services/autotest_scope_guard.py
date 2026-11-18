@@ -42,10 +42,7 @@ async def load_readable_project(scope: Optional[DataScope], project_id: int) -> 
 
 async def assert_parent_readable(scope: Optional[DataScope], tag: str, parent: Any, label: str) -> None:
     """
-    校验父资源对当前用户可见（B级防护：父资源可读才允许挂载子资源）。
-
-    公共脚本/公共接口（case_type在PUBLIC_CASE_TYPES中）直接放行；归属优先owner_user，
-    回落created_user（兼容无归属人字段的应用/环境等父资源）。
+    校验父资源对当前用户可见：B级防护，父资源可读才允许挂载子资源。
 
     :param scope: 当前请求数据权限上下文；None表示调用方未启用校验
     :param tag: 父资源所属资源族标签
@@ -60,7 +57,7 @@ async def assert_parent_readable(scope: Optional[DataScope], tag: str, parent: A
     if getattr(parent, "case_type", None) in PUBLIC_CASE_TYPES:
         return
     parent_scope = await scope.for_tag(tag)
-    # 有归属人字段的父资源（用例）以归属人为准，转让后创建人不再代表数据归属
+    # 有归属人字段的父资源（用例）以归属人为准；归属优先owner_user，回落created_user（兼容无归属人字段的应用/环境等父资源）
     owner = getattr(parent, "owner_user", None) or getattr(parent, "created_user", None)
     await parent_scope.load_owners([owner])
     if not parent_scope.can_read(owner):
@@ -73,10 +70,6 @@ async def assert_case_writable(scope: Optional[DataScope], case: AutoTestCaseMod
     """
     校验用例既可读又可写。
 
-    步骤、数据源等子资源没有独立归属，读写范围必须按父用例资源族解析；
-    用子资源自身标签判定会让角色对autotest.case的覆盖配置对子资源失效。
-    公共用例类型读取放行，但写入仍按归属人收敛。
-
     :param scope: 当前请求数据权限上下文；None表示调用方为内部可信路径
     :param case: 归属用例
     :param action: 操作名，用于错误提示
@@ -85,6 +78,7 @@ async def assert_case_writable(scope: Optional[DataScope], case: AutoTestCaseMod
     """
     if scope is None:
         return
+    # 步骤、数据源等子资源没有独立归属，读写范围必须按父用例资源族解析；用子资源自身标签判定会让角色对autotest.case的覆盖配置对子资源失效
     case_scope = await scope.for_tag(CASE_TAG)
     await case_scope.load_owners([case.owner_user])
     # 公共脚本/公共接口对所有用户可见，读取不随数据范围收窄，但写入仍按归属收敛
@@ -102,9 +96,6 @@ async def assert_cases_readable(scope: Optional[DataScope], case_ids: Iterable[O
     """
     批量校验用例对当前用户可见，供任务挂载/执行等多用例入口统一做父资源校验。
 
-    只校验实际查到的用例；read_depts为None（不限部门范围）时直接放行，不查库；
-    公共用例类型逐条跳过。
-
     :param scope: 当前请求数据权限上下文；None表示调用方未启用校验
     :param case_ids: 待校验的用例ID集合
     :return: None
@@ -114,6 +105,7 @@ async def assert_cases_readable(scope: Optional[DataScope], case_ids: Iterable[O
     if scope is None or not ids:
         return
     case_scope = await scope.for_tag(CASE_TAG)
+    # read_depts为None（不限部门范围）时直接放行，不查库
     if case_scope.read_depts is None:
         return
     rows = await AutoTestCaseModel.filter(id__in=ids, state__not=1).values_list(
@@ -121,6 +113,7 @@ async def assert_cases_readable(scope: Optional[DataScope], case_ids: Iterable[O
     )
     await case_scope.load_owners([owner_user for _, _, _, owner_user in rows])
     for case_id, case_name, case_type, owner_user in rows:
+        # 只校验实际查到的用例；公共用例类型逐条跳过
         if case_type in PUBLIC_CASE_TYPES:
             continue
         if not case_scope.can_read(owner_user):

@@ -10,14 +10,16 @@ import asyncio
 import datetime
 import traceback
 import uuid
+from collections import defaultdict
 from typing import Optional, List, Dict, Any, Set, Tuple
 
-from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
+from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
+from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvConfigModel
 from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.autotest.schemas.autotest_case_schema import AutoTestCaseUpdate
 from backend.applications.autotest.schemas.autotest_step_schema import (
@@ -32,6 +34,7 @@ from backend.applications.autotest.schemas.autotest_step_schema import (
     step_variables_list_from_storage,
 )
 from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
 from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
 from backend.applications.autotest.services.autotest_report_crud import AutoTestReportCrud
 from backend.applications.autotest.services.autotest_scope_guard import (
@@ -51,6 +54,7 @@ from backend.core.exceptions import (
 )
 from backend.enums import (
     AutoTestCaseType,
+    AutoTestConfigNodeType,
     AutoTestStepType,
     AutoTestReportType,
     AutoTestTaskExecuteMode,
@@ -71,14 +75,12 @@ STEP_CLEARABLE_JSON_FIELDS: Tuple[str, ...] = (
 
 async def _load_case_dataset_names(case_id: int) -> List[str]:
     """
-    加载用例下所有数据源登记的数据场景名称（去重并保持首次出现顺序）。
-
-    仅统计未软删（state≠1）的数据源，按创建时间升序逐条读取 dataset_names；
-    每个名称经 str().strip() 后过滤空值，同名场景只保留第一次出现。
+    加载用例下所有数据源登记的数据场景名称，去重并保持首次出现顺序。
 
     :param case_id: 用例主键ID
     :return: 数据场景名称列表；无数据源时返回空列表
     """
+    # 仅统计未软删（state≠1）的数据源，按创建时间升序读取；名称 strip 后过滤空值，同名只保留首次出现
     rows = await AutoTestDataSourceModel.filter(case_id=case_id, state__not=1).order_by("created_time").all()
     merged: List[str] = []
     seen: Set[str] = set()
@@ -116,17 +118,170 @@ async def _get_case_cached(
     return instance
 
 
-class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoTestStepUpdate]):
-    """
-    自动化测试步骤的读写入口：单条增删改查、整树保存、引用链展开与用例执行编排。
+def _enum_value(value: Any) -> Any:
+    """取枚举成员的原始值，非枚举入参原样返回。"""
+    return getattr(value, "value", value)
 
-    职责边界：
-    - 步骤无独立归属，读写范围一律跟随父用例（父资源族）收敛，权限判定经 autotest_scope_guard；
-    - 整树读取递归展开引用用例（quote_steps），并按 branch_index 还原条件分支的 branch_items 结构；
-    - 整树保存负责结构约束校验、数据源复制与分支差量淘汰；step_no 唯一性留给调用方（步骤树保存视图）
-      在整树写完后调 assert_step_no_unique 做终态校验；
-    - 用例执行负责“执行阶段不持事务、报告与明细单事务落库”的编排，执行细节由步骤引擎承担。
+
+def _normalize_config_mode(value: Any) -> str:
+    """将环境配置逻辑标识归一为去空白字符串。"""
+    return str(value).strip() if value is not None else ""
+
+
+def _get_operate_field(operate: Any, field: str) -> Any:
+    """读取 DB/Redis 操作字段：兼容 schema 模型与已落库 dict 两种形态。"""
+    if isinstance(operate, dict):
+        return operate.get(field)
+    return getattr(operate, field, None)
+
+
+def _step_config_reference_requirements(
+        *,
+        step_type: Optional[AutoTestStepType],
+        request_config_mode: Optional[str],
+        request_project_id: Optional[int],
+        database_operates: Optional[List[Any]],
+        redis_operates: Optional[List[Any]],
+        step_label: str,
+        require_request_mode: bool = True,
+) -> List[Tuple[str, Optional[int], str]]:
     """
+    按步骤类型收集保存期需校验的环境配置引用：标识、期望所属应用与报错定位。
+
+    :param step_type: 步骤类型
+    :param request_config_mode: 请求环境配置逻辑标识
+    :param request_project_id: 请求应用ID（非空时校验 APP 节点配置归属）
+    :param database_operates: 数据库操作列表
+    :param redis_operates: Redis操作列表
+    :param step_label: 报错定位用的步骤名称/代码
+    :param require_request_mode: 是否要求请求型步骤必须携带标识
+    :return: [(config_mode, request_project_id, 报错定位)]
+    """
+    # HTTP/TCP 引用单个请求配置：require_request_mode=True 时必填并校验项目归属；
+    # DB/Redis 逐条操作校验 config_mode（operates 未提交时列表为空，自然跳过）
+    requirements: List[Tuple[str, Optional[int], str]] = []
+    if require_request_mode and step_type in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
+        requirements.append((
+            _normalize_config_mode(request_config_mode),
+            request_project_id,
+            f"步骤[{step_label}]的请求环境配置",
+        ))
+    if step_type == AutoTestStepType.DATABASE:
+        for operate in database_operates or []:
+            operate_name: Any = _get_operate_field(operate, "name") or "未命名"
+            requirements.append((
+                _normalize_config_mode(_get_operate_field(operate, "config_mode")),
+                None,
+                f"步骤[{step_label}]的数据库操作[{operate_name}]环境配置",
+            ))
+    if step_type == AutoTestStepType.REDIS:
+        for operate in redis_operates or []:
+            operate_name: Any = _get_operate_field(operate, "name") or "未命名"
+            requirements.append((
+                _normalize_config_mode(_get_operate_field(operate, "config_mode")),
+                None,
+                f"步骤[{step_label}]的Redis操作[{operate_name}]环境配置",
+            ))
+    return requirements
+
+
+async def _assert_config_mode_references(requirements: List[Tuple[str, Optional[int], str]]) -> None:
+    """
+    保存前对本次全部环境配置引用做一次 IN 查询批量校验。
+
+    :param requirements: [(config_mode, request_project_id, 报错定位)]
+    :return: None
+    :raises ParameterException: 存在空标识、失效标识或跨应用引用
+    """
+    if not requirements:
+        return
+    # 校验口径：标识须命中 state=0 的配置行；含 APP 节点配置时其所属应用必须与步骤请求应用一致
+    # （request_project_id 为空仅校验存在）；同一标识+同一应用只判定一次，失败汇总一次抛出
+    mode_set: List[str] = sorted({mode for mode, _, _ in requirements if mode})
+    config_rows: List[Dict[str, Any]] = []
+    if mode_set:
+        config_rows = await AutoTestEnvConfigModel.filter(
+            config_mode__in=mode_set, state=0
+        ).values("config_mode", "config_name", "env_type", "project_id")
+    configs_by_mode: Dict[str, List[Dict[str, Any]]] = {}
+    for row in config_rows:
+        configs_by_mode.setdefault(str(row["config_mode"]), []).append(row)
+
+    problems: List[str] = []
+    checked: Set[Tuple[str, Optional[int]]] = set()
+    for mode, project_id, label in requirements:
+        if not mode:
+            problems.append(f"{label}不允许为空")
+            continue
+        check_key: Tuple[str, Optional[int]] = (mode, project_id)
+        if check_key in checked:
+            continue
+        checked.add(check_key)
+        configs = configs_by_mode.get(mode)
+        if not configs:
+            problems.append(f"{label}引用的环境配置不存在或已删除(标识={mode})")
+            continue
+        if project_id is not None:
+            app_configs: List[Dict[str, Any]] = [
+                row for row in configs
+                if _enum_value(row["env_type"]) == AutoTestConfigNodeType.APP.value
+            ]
+            if app_configs and all(int(row["project_id"] or 0) != int(project_id) for row in app_configs):
+                problems.append(
+                    f"{label}引用的环境配置[{app_configs[0]['config_name']}]不属于应用[project_id={project_id}]"
+                )
+    if problems:
+        error_message: str = "步骤环境配置校验失败: " + "；".join(problems[:5])
+        if len(problems) > 5:
+            error_message += f"；等共{len(problems)}项"
+        LOGGER.error(error_message)
+        raise ParameterException(message=error_message)
+
+
+def _collect_tree_config_mode_requirements(
+        steps: List[AutoTestStepTreeUpdateItem],
+) -> List[Tuple[str, Optional[int], str]]:
+    """
+    递归收集整棵待保存步骤树的环境配置引用，含children与条件分支子步骤。
+
+    :param steps: 当前层级的步骤节点列表
+    :return: [(config_mode, request_project_id, 报错定位)]
+    """
+    # quote_steps 为引用树展示节点、不参与落库，跳过校验；请求型步骤未显式提交引用键时
+    # 沿用库内值，不做校验以避免阻断历史数据的局部更新（前端保存始终回传该字段）
+    requirements: List[Tuple[str, Optional[int], str]] = []
+    for step in steps or []:
+        step_type: Optional[AutoTestStepType] = step.step_type
+        label: str = step.step_name or step.step_code or (
+            f"步骤ID:{step.step_id}" if step.step_id else "新增步骤"
+        )
+        request_mode_submitted: bool = "request_config_mode" in step.model_fields_set
+        requirements.extend(_step_config_reference_requirements(
+            step_type=step_type,
+            request_config_mode=step.request_config_mode,
+            request_project_id=step.request_project_id,
+            database_operates=step.database_operates,
+            redis_operates=step.redis_operates,
+            step_label=label,
+            require_request_mode=request_mode_submitted,
+        ))
+        if step.children:
+            requirements.extend(_collect_tree_config_mode_requirements(step.children))
+        for branch in step.branch_items or []:
+            if branch.branch_children:
+                requirements.extend(_collect_tree_config_mode_requirements(branch.branch_children))
+    return requirements
+
+
+class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoTestStepUpdate]):
+    """自动化测试步骤的读写入口：单条增删改查、整树保存、引用链展开与用例执行编排。"""
+
+    # 职责边界：
+    # - 步骤无独立归属，读写范围一律跟随父用例（父资源族）收敛，权限判定经 autotest_scope_guard；
+    # - 整树读取递归展开引用用例（quote_steps），并按 branch_index 还原条件分支的 branch_items 结构；
+    # - 整树保存负责结构约束校验、数据源复制与分支差量淘汰；step_no 唯一性留给调用方（步骤树保存视图）
+    #   在整树写完后调 assert_step_no_unique 做终态校验；
+    # - 用例执行负责“执行阶段不持事务、报告与明细单事务落库”的编排，执行细节由步骤引擎承担。
 
     def __init__(self):
         """
@@ -177,11 +332,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
     async def get_by_unique(self, step_id: int, step_code: str, **kwargs) -> Optional[AutoTestStepModel]:
         """
-        按 step_id 优先、否则 step_code 定位步骤（两者同时传入时只按 step_id 查）。
-
-        定位失败一律抛异常（内部固定 on_error=True）：step_id 与 step_code 均未提供时抛 ParameterException，
-        记录不存在时由 get_by_id/get_by_code 抛 NotFoundException。
-        是否过滤软删记录由调用方通过 kwargs（如 state__not=1）传入，本方法不隐含该条件。
+        按step_id优先、否则step_code定位步骤，两者同时传入时只按step_id查。
 
         :param step_id: 步骤主键ID
         :param step_code: 步骤标识代码（首尾空白会被去除）
@@ -190,6 +341,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :raises ParameterException: step_id 与 step_code 同时为空
         :raises NotFoundException: 指定记录不存在
         """
+        # 定位失败一律抛异常（内部固定 on_error=True）；是否过滤软删记录由调用方通过 kwargs 传入
         if step_id:
             return await self.get_by_id(step_id=step_id, on_error=True, **kwargs)
         step_code = (step_code or "").strip()
@@ -204,15 +356,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             scope: Optional[DataScope] = None,
     ) -> AutoTestCaseStepTreeLoadResult:
         """
-        读取单个用例的步骤树（根步骤按 step_no 升序），包含引用链展开与步骤统计。
-
-        结构约定：
-        - 条件分支（IF）步骤的 branch_items 按 branch_index 分组挂 branch_children，children 恒为空列表；
-        - 引用壳步骤（quote_case_id 非空）额外挂 quote_steps（被引用用例的根步骤树）与 quote_case（引用用例信息）；
-        - 用例下无任何启用步骤时返回单节点 {"case": ...}，由 case_only_when_no_steps 承载，供前端空树编辑。
-
-        统计口径（step_counter）：引用壳步骤不计数，实际计入的是被引用用例的内部步骤（quote_steps），
-        即 total_steps = direct_steps + child_steps + quote_steps。
+        读取单个用例的步骤树，根步骤按step_no升序，包含引用链展开与步骤统计。
 
         :param case_id: 用例主键ID，与case_code二选一（同时传入时以case_id为准）
         :param case_code: 用例标识代码，与case_id二选一
@@ -221,6 +365,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :raises ParameterException: case_id 与 case_code 同时为空
         :raises NotFoundException: 所属用例不存在；引用用例缺失不抛错，仅置空 quote_case/quote_steps
         """
+        # 结构约定：IF 步骤 branch_items 按 branch_index 分组挂 branch_children（children 恒空）；
+        # 引用壳步骤额外挂 quote_steps/quote_case；无启用步骤时返回单节点 {"case": ...} 供前端空树编辑
         case_crud = AutoTestCaseCrud()
         if case_id:
             case_instance: Optional[AutoTestCaseModel] = await case_crud.get_by_id(case_id=case_id, on_error=True, state__not=1)
@@ -231,7 +377,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         # 公共脚本/公共接口对所有用户可见，不随数据范围收窄；步骤权限跟随所属用例（父资源族）
         await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
 
-        from collections import defaultdict
         roots_by_case: Dict[int, List[AutoTestStepModel]] = defaultdict(list)
         children_by_parent: Dict[int, List[AutoTestStepModel]] = defaultdict(list)
         loaded_case_ids: Set[int] = set()
@@ -267,7 +412,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         }
 
         async def get_case_dict(target_case_id: int, on_error: bool) -> Optional[Dict[str, Any]]:
-            """按case_id获取用例字典(缓存优先)，未命中时查库并回填缓存；出口返回副本避免多步骤共享同一字典对象。"""
+            """按case_id获取用例字典且缓存优先，未命中时查库并回填缓存；出口返回副本避免多步骤共享同一字典对象。"""
             if target_case_id in case_dict_cache:
                 return dict(case_dict_cache[target_case_id])
             case: Optional[AutoTestCaseModel] = await case_crud.get_by_id(case_id=target_case_id, on_error=on_error, state__not=1)
@@ -407,25 +552,22 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             scope: Optional[DataScope] = None,
     ) -> Dict[str, Any]:
         """
-        读取用例步骤树并剔除标识字段，生成“复制后尚未落库”的编辑副本。
-
-        返回结构与步骤树接口一致，但所有节点的 step_id/step_code/parent_step_id/step_no 以及
-        data_source_id/data_source_name/data_source_desc 均置空，case 块中的 case_id/case_code 也置空；
-        复制得到的树首次保存时全部按新增处理。
+        读取用例步骤树并剔除标识字段，生成复制后尚未落库的编辑副本。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
         :param scope: 数据权限上下文，传入时校验用例所属人的读范围
         :return: {"case": {...}, "steps": [...]}；用例无步骤时为 {"case": {...}, "steps": []}
         """
+        # 标识字段全部置空（含 case 块的 case_id/case_code），复制得到的树首次保存时由保存链路按新增处理
         load = await self.get_case_tree(case_id=case_id, case_code=case_code, scope=scope)
 
         def strip_step_for_copy_model(step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
             """
-            递归返回脱敏后的节点副本（不修改入参）：清空 step_id/step_code/parent_step_id/step_no、
-            data_source_id/data_source_name/data_source_desc，case 块清空 case_id/case_code；
-            children/branch_children/quote_steps 一并递归处理。
+            递归返回脱敏后的节点副本且不修改入参。
             """
+            # 清空字段：step_id/step_code/parent_step_id/step_no、data_source_id/data_source_name/data_source_desc；
+            # case 块清空 case_id/case_code；children/branch_children/quote_steps 一并递归处理
             case_block = step.case
             if isinstance(case_block, dict):
                 case_block = {**case_block, "case_id": None, "case_code": None}
@@ -476,10 +618,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         批量读取多个用例的步骤树，并按入参顺序拼接为单一节点列表。
 
-        同一用例的多棵根步骤节点在 details 中连续排列；indexes 记录 case_id（字符串形式）
-        -> 该用例节点在 details 中的下标区间，供前端按用例定位/裁剪节点；
-        total_steps 取各用例 step_counter.total_steps 之和（引用壳不计数）。
-
         :param case_ids: 用例主键ID列表，与case_codes二选一（同时传递时以case_ids为准，重复ID去重保序）
         :param case_codes: 用例标识代码列表，与case_ids二选一（重复编码去重保序）
         :param scope: 数据权限上下文，传入时逐个校验用例所属人的读范围
@@ -487,6 +625,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :raises ParameterException: case_ids 与 case_codes 同时为空
         :raises NotFoundException: 任一所选用例不存在（首个异常立即上抛，其余并发任务继续执行但结果被丢弃）
         """
+        # 同一用例节点在 details 中连续排列；indexes 记录 case_id→下标区间供前端定位/裁剪；
+        # total_steps 取各用例 step_counter.total_steps 之和（引用壳不计数）
         if not case_ids and not case_codes:
             error_message: str = "参数[case_ids, case_codes]不允许同时为空"
             LOGGER.error(error_message)
@@ -533,10 +673,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             scope: Optional[DataScope] = None,
     ) -> List[int]:
         """
-        从用例步骤树中提取请求类步骤所选用的应用ID集合（升序去重）。
-
-        覆盖范围：HTTP/TCP 步骤的 request_project_id；数据库/Redis 步骤每个操作的 project_id。
-        非法（非整数）应用ID直接报错，避免静默跳过后削弱父应用可读校验。
+        从用例步骤树中提取请求类步骤所选用的应用ID集合，升序去重。
 
         :param case_id: 用例主键ID，与case_code二选一
         :param case_code: 用例标识代码，与case_id二选一
@@ -544,6 +681,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :return: 去重后的project_id列表（升序）
         :raises ParameterException: 步骤中的应用ID不是有效整数
         """
+        # 覆盖 HTTP/TCP 步骤的 request_project_id 与 DB/Redis 操作的 project_id；非法ID显式报错不静默跳过
         load = await self.get_case_tree(case_id=case_id, case_code=case_code, scope=scope)
         project_ids: Set[int] = set()
 
@@ -596,10 +734,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         创建单条步骤。
 
-        校验顺序：用例存在且当前用户可写（步骤归属跟随用例）→ 父步骤存在且同用例
-        → 引用用例存在（仅校验存在性，不限制用例类型，与 update_step 不同）
-        → 同用例同 step_no 已存在时转为“恢复并更新”（state 置 0，且不覆盖原 created_user）。
-
         :param step_in: 步骤创建schema
         :param scope: 数据权限上下文，步骤归属跟随用例所属人
         :return: 创建或恢复后的步骤实例
@@ -607,6 +741,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :raises NoPermissionException: 当前用户不在用例的写入范围内（由 assert_case_writable 抛出）
         :raises DataBaseStorageException: 落库冲突（唯一键或外键无效）
         """
+        # 校验顺序：用例存在且可写 → 父步骤存在且同用例 → 引用用例存在性（不限制类型，与 update_step 不同）
+        # → 环境配置引用必填 → 同用例同 step_no 已存在时转为“恢复并更新”（state 置 0，不覆盖原 created_user）
         case_id: int = step_in.case_id
         step_no: int = step_in.step_no
         case_crud = AutoTestCaseCrud()
@@ -637,6 +773,16 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
 
+        # 环境配置引用校验：请求型步骤必填 mode，DB/Redis 逐条操作必填 mode（一次 IN 查询）
+        await _assert_config_mode_references(_step_config_reference_requirements(
+            step_type=step_in.step_type,
+            request_config_mode=step_in.request_config_mode,
+            request_project_id=step_in.request_project_id,
+            database_operates=step_in.database_operates,
+            redis_operates=step_in.redis_operates,
+            step_label=step_in.step_name or f"step_no={step_no}",
+        ))
+
         step_dict = step_in.model_dump(exclude_none=True, exclude_unset=True)
         existing_step = await self.model.filter(case_id=case_id, step_no=step_no).first()
         if not existing_step:
@@ -644,12 +790,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 instance: AutoTestStepModel = await self.create(step_dict)
                 return instance
             except IntegrityError as e:
-                error_message: str = "新增步骤信息失败，步骤序号可能重复或关联用例、父步骤、引用用例无效，请检查步骤配置后重试"
+                error_message: str = "新增步骤信息失败, 步骤序号重复或关联用例、父步骤、引用用例无效"
                 LOGGER.error(
                     f"{error_message}, "
-                    f"关键字段: [case_id={case_id}, step_no={step_no}, "
-                    f"parent_step_id={step_in.parent_step_id}, quote_case_id={step_in.quote_case_id}]\n"
-                    f"{traceback.format_exc()}"
+                    f"关键字段: [case_id={case_id}, step_no={step_no}, parent_step_id={step_in.parent_step_id}, quote_case_id={step_in.quote_case_id}]\n"
+                    f"异常回溯: {traceback.format_exc()}"
                 )
                 raise DataBaseStorageException(message=error_message) from e
 
@@ -660,8 +805,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             step_dict["state"] = 0
             instance: AutoTestStepModel = await self.update(id=existing_step.id, obj_in=step_dict)
             return instance
-        except (DoesNotExist, IntegrityError) as e:
-            error_message: str = "新增步骤信息失败，目标步骤可能已被删除或步骤数据与现有记录冲突，请刷新后重试"
+        except IntegrityError as e:
+            # 基类 update 先按主键查询、不存在转 NotFoundException，此处只可能命中落库冲突
+            error_message: str = "新增步骤信息失败, 步骤数据与现有记录冲突"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [case_id={case_id}, step_no={step_no}, step_id={existing_step.id}]\n"
@@ -671,14 +817,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
     async def update_step(self, step_in: AutoTestStepUpdate, scope: DataScope) -> AutoTestStepModel:
         """
-        更新单条步骤（按 step_id 优先、否则 step_code 定位）。
-
-        校验顺序：定位步骤 → 目标用例存在且当前用户可写（含迁移后的目标用例）
-        → step_no 在用例内不重复 → 父步骤必须存在、同用例、类型为条件分支/循环结构且不构成环
-        → 引用用例必须存在且属于公共家族（公共脚本/公共接口）。
-
-        显式传 null 的 JSON 字段会回补为 None（STEP_CLEARABLE_JSON_FIELDS），避免 exclude_none 导致旧值残留。
-        边界：更新字典为空时直接返回原实例，不落库、也不触发用例存在性与写权限校验。
+        更新单条步骤，按step_id优先、否则step_code定位。
 
         :param step_in: 步骤更新schema
         :param scope: 数据权限上下文，步骤归属跟随用例所属人(含迁移后的目标用例)
@@ -687,6 +826,10 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :raises DataAlreadyExistsException: 同用例下 step_no 重复
         :raises DataBaseStorageException: 父步骤指向自身/成环，或落库冲突
         """
+        # 校验顺序：定位步骤 → 目标用例存在且可写 → step_no 不重复 → 父步骤同用例且不构成环
+        # → 引用用例属于公共家族 → 环境配置引用归属匹配
+        # 显式传 null 的 JSON 字段回补为 None（STEP_CLEARABLE_JSON_FIELDS），避免 exclude_none 导致旧值残留；
+        # 边界：更新字典为空时直接返回原实例，不落库、也不触发用例存在性与写权限校验
         step_id: Optional[int] = step_in.step_id
         step_code: Optional[str] = step_in.step_code
 
@@ -785,19 +928,26 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 LOGGER.error(error_message)
                 raise NotFoundException(message=error_message)
 
+        # 环境配置引用校验：仅校验本次显式提交的引用字段；未提交时沿用库内值，不阻断历史空标识步骤的局部更新
+        request_mode_submitted: bool = "request_config_mode" in step_in.model_fields_set
+        await _assert_config_mode_references(_step_config_reference_requirements(
+            step_type=update_dict.get("step_type", instance.step_type),
+            request_config_mode=(
+                update_dict.get("request_config_mode") if request_mode_submitted else instance.request_config_mode
+            ),
+            request_project_id=update_dict.get("request_project_id", instance.request_project_id),
+            database_operates=step_in.database_operates,
+            redis_operates=step_in.redis_operates,
+            step_label=update_dict.get("step_name") or instance.step_name or f"步骤ID:{step_id}",
+            require_request_mode=request_mode_submitted or "step_type" in step_in.model_fields_set,
+        ))
+
         try:
+            # 基类 update 先按主键查询、不存在转 NotFoundException，此处只捕获落库冲突
             instance = await self.update(id=step_id, obj_in=update_dict)
             return instance
-        except DoesNotExist as e:
-            error_message: str = "更新步骤信息失败，目标步骤不存在或已被删除，请刷新后重试"
-            LOGGER.error(
-                f"{error_message}, "
-                f"关键字段: [step_id={step_id}, step_code={step_code}]\n"
-                f"{traceback.format_exc()}"
-            )
-            raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = "更新步骤信息失败，步骤序号可能重复或关联用例、父步骤、引用用例无效，请检查步骤配置后重试"
+            error_message: str = "更新步骤信息失败, 步骤序号重复或关联用例、父步骤、引用用例无效"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [step_id={step_id}, step_code={step_code}, case_id={instance.case_id}]\n"
@@ -812,11 +962,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             step_code: Optional[str] = None,
     ) -> AutoTestStepModel:
         """
-        物理删除单条步骤（存在未软删子步骤时拒绝）。
-
-        删除后同步硬删该步骤关联的数据源记录与本地文件：清理入口按 step_code 匹配，
-        case_id 仅用于日志定位（见 AutoTestDataSourceCrud.delete_step_data_sources）。
-        注意：单条删除为物理删除，软删语义只保留在批量删除与淘汰链路。
+        物理删除单条步骤，存在未软删子步骤时拒绝。
 
         :param scope: 数据权限上下文，步骤归属跟随用例所属人
         :param step_id: 步骤主键ID，与step_code二选一
@@ -824,6 +970,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :return: 删除前的步骤实例快照
         :raises DataAlreadyExistsException: 该步骤仍存在子步骤
         """
+        # 删除后同步硬删该步骤关联的数据源记录与本地文件：清理入口按 step_code 匹配，case_id 仅用于日志定位；
+        # 单条删除为物理删除，软删语义只保留在批量删除与淘汰链路
         if step_id:
             instance = await self.get_by_id(step_id=step_id, on_error=True, state__not=1)
         else:
@@ -844,8 +992,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         # 单删步骤与单删用例一致为物理删除，软删语义仅保留在批量与淘汰链路
         await instance.delete()
-        # 同步硬删除该步骤关联的数据源（局部导入：仅删除链路需要，避免文件顶部长期耦合）
-        from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
+        # 同步硬删除该步骤关联的数据源
         await AutoTestDataSourceCrud().delete_step_data_sources(case_id=instance.case_id, step_code_list=[instance.step_code])
         return instance
 
@@ -858,15 +1005,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             exclude_step: Optional[Set[Tuple[Optional[int], Optional[str]]]] = None
     ) -> int:
         """
-        递归软删除步骤树（state=1），返回实际删除数量。
-
-        三种定位方式互斥，按优先级判定：step_id/step_code（单步及其子树）
-        → parent_step_id（该父步骤下所有子步骤）→ case_id（用例下所有根步骤及其子树）；
-        三者均未提供时不删除任何节点，直接返回 0。
-
-        实现要点：先后序收集待删节点（先子后父），再单次批量软删；
-        相比逐节点软删省去 N 次更新往返（收集阶段仍需逐层查询子节点）。
-        事务边界：收集与软删在同一事务内提交，数据源清理在事务提交后执行（不在事务内）。
+        递归软删除步骤树state=1，返回实际删除数量。
 
         :param step_id: 单步主键ID，与step_code二选一时删除该步及所有子步骤
         :param step_code: 单步标识代码，与step_id二选一
@@ -876,6 +1015,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :return: 实际软删除的步骤数量
         :raises NotFoundException: step_id/step_code 定位不到步骤
         """
+        # 三种定位方式互斥按优先级判定（step_id/step_code → parent_step_id → case_id），均未提供时直接返回 0；
+        # 实现要点：后序收集待删节点（先子后父）再单次批量软删，省去 N 次更新往返；
+        # 事务边界：收集与软删同事务提交，数据源清理在事务提交后执行
         if exclude_step is None:
             exclude_step = set()
         # 记录本次软删除的步骤，根据用例归类，事务提交后同步清理其数据源
@@ -884,7 +1026,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         pending_steps: List[AutoTestStepModel] = []
 
         async def collect_step_and_children(step_instance: AutoTestStepModel) -> None:
-            """后序收集当前步骤及其所有子步骤(先子后父)，exclude_step仅跳过节点自身、不阻断子树收集。"""
+            """后序收集当前步骤及其所有子步骤，先子后父；exclude_step仅跳过节点自身、不阻断子树收集。"""
             children = await self.model.filter(parent_step_id=step_instance.id, state__not=1).all()
             for child in children:
                 await collect_step_and_children(step_instance=child)
@@ -943,7 +1085,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
 
         # 步骤软删除提交后，同步清理对应用例下被删步骤的数据源
         if deleted_by_case:
-            from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
             data_source_curd = AutoTestDataSourceCrud()
             for ds_case_id, step_codes in deleted_by_case.items():
                 await data_source_curd.delete_step_data_sources(case_id=ds_case_id, step_code_list=step_codes)
@@ -964,20 +1105,19 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询步骤信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询步骤信息失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
     @classmethod
     def _iter_tree_steps(cls, steps_data):
         """
-        深度优先遍历步骤树的全部节点（先自身，再 children，最后 branch_items.branch_children）。
-
-        不进入 quote_steps：引用链属于被引用用例的树，不参与当前用例的公共家族校验。
+        深度优先遍历步骤树的全部节点：先自身，再children，最后branch_items.branch_children。
 
         :param steps_data: 根级或某一层的步骤项列表，None/空列表直接结束
         :return: 生成器，逐项产出步骤项
         """
+        # 不进入 quote_steps：引用链属于被引用用例的树，不参与当前用例的公共家族校验
         for step_data in steps_data or []:
             yield step_data
             yield from cls._iter_tree_steps(getattr(step_data, "children", None))
@@ -992,12 +1132,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             case_project: Optional[int] = None,
     ) -> None:
         """
-        校验公共家族（公共脚本/公共接口）步骤树约束，并在公共接口场景下就地修正所属应用。
-
-        校验项：全树不允许出现引用步骤（QUOTE_PUBLIC_SCRIPT/QUOTE_PUBLIC_API），不允许绑定数据源；
-        公共接口额外要求“有且仅有 1 个 HTTP/TCP 根步骤”。
-        副作用（非纯校验）：公共接口且仅有 1 个根步骤时，把该步骤的 request_project_id 强制对齐为用例所属应用
-        （前端已只读锁定，这里兜底 API 直调传入缺失或不一致的值）。
+        校验公共脚本与公共接口家族步骤树约束，并在公共接口场景下就地修正所属应用。
 
         :param steps_data: 根级步骤树项列表
         :param case_type: 当前用例目标类型(必为公共家族成员)
@@ -1005,6 +1140,9 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :return: None
         :raises ParameterException: 出现引用步骤、数据源绑定或公共接口形态不合法
         """
+        # 校验项：全树不允许引用步骤、不允许绑定数据源；公共接口额外要求有且仅有 1 个 HTTP/TCP 根步骤。
+        # 副作用（非纯校验）：公共接口仅 1 个根步骤时，把该步骤 request_project_id 强制对齐为用例所属应用
+        # （前端已只读锁定，这里兜底 API 直调传入缺失或不一致的值）
         if case_type == AutoTestCaseType.PUBLIC_API:
             cls._validate_public_api_tree(steps_data)
             # 所属应用自动对齐用例（前端已只读锁定；API 直调无论入参缺失或不一致，在此强制一致）
@@ -1036,12 +1174,12 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :raises ParameterException: 根步骤数量、类型或结构不符合公共接口约束
         """
         if len(steps_data) != 1:
-            error_message: str = f"公共接口用例有且仅需 1 个请求步骤，当前提交({len(steps_data)})步"
+            error_message: str = f"公共接口用例有且仅需 1 个请求步骤, 当前提交({len(steps_data)})步"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         only_step = steps_data[0]
         if only_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
-            error_message: str = f"公共接口用例仅支持HTTP/TCP请求步骤，当前步骤类型为({only_step.step_type})"
+            error_message: str = f"公共接口用例仅支持HTTP/TCP请求步骤, 当前步骤类型为({only_step.step_type})"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
         if getattr(only_step, "children", None) or getattr(only_step, "branch_items", None):
@@ -1064,27 +1202,22 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         递归保存步骤树：按 step_id/step_code 判定新增或更新，并处理条件分支、数据源复制与递归子节点。
 
-        定位与归属：step_id 优先、其次 step_code；定位到的步骤必须属于入参 case_id，否则拒绝
-        （禁止借 step_id 把他人步骤跨用例迁走）。
-        结构约束：父步骤必须存在、同用例且类型为循环结构/条件分支；新增时 step_no、step_type 必填。
-        branch_index 约定：分支子步骤写入所属分支序号（从 0 起），条件分支步骤自身归一化为 0，
-        其余步骤新增时不写入、更新时显式置 NULL（避免步骤移出分支后残留旧值）。
-        条件分支子步骤为“差量替换”：不在本次提交中的旧子步骤会被物理删除，并同步硬删其数据源；
-        其他子步骤为增量新增/更新。
-        step_no 唯一性不在逐个节点拦截，由调用方（步骤树保存视图）在整树写完后调 assert_step_no_unique 终态校验。
-
         :param steps_data: 当前层级的步骤项列表
         :param parent_step_id: 当前层级的父步骤ID（递归传入，优先于节点自带的 parent_step_id）
         :param branch_index: 当前层级所属分支序号（条件分支子步骤使用）
         :param parent_step_instance: 当前层级父步骤实例（递归时由上层传入，命中时复用免重复查询）
         :param case_cache: 用例实例缓存（根级调用自动创建，递归共享，同一用例整树只查一次）
-        :return: {"created_count": 新增数, "updated_count": 更新数,
-                 "process_detail": {case_id: 本次处理的 step_code 集合}, "success_detail": 节点摘要列表}
+        :return: {"created_count": 新增数, "updated_count": 更新数, "process_detail": {case_id: 已处理 step_code 集合}, "success_detail": 节点摘要列表}
         :raises ParameterException: 跨用例迁移、必填字段缺失、父步骤类型不允许包含子步骤
         :raises DataAlreadyExistsException: 新增时父步骤与当前步骤不属于同一用例
         :raises NotFoundException: 定位的步骤、用例、父步骤或引用用例不存在
         :raises DataBaseStorageException: 落库失败
         """
+        # 定位与归属：step_id 优先、其次 step_code；定位到的步骤必须属于入参 case_id，禁止借 step_id 跨用例迁移；
+        # 结构约束：父步骤必须存在、同用例且类型为循环结构/条件分支，新增时 step_no/step_type 必填；
+        # branch_index 约定：分支子步骤写入所属分支序号（从0起），条件分支步骤自身归一化为0，其余新增不写入/更新置NULL；
+        # 条件分支子步骤为“差量替换”（未提交的旧子步骤物理删除并同步硬删其数据源），其他子步骤增量新增/更新；
+        # step_no 唯一性不逐个节点拦截，由调用方在整树写完后调 assert_step_no_unique 终态校验
         # 本层及递归子层的累计指标：成功计数、节点摘要、按用例归集的已处理 step_code
         created_count: int = 0
         updated_count: int = 0
@@ -1110,6 +1243,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 )
                 if root_case and root_case.case_type in PUBLIC_CASE_TYPES:
                     self._validate_public_family_tree(steps_data, root_case.case_type, root_case.case_project)
+            # 环境配置引用：整树一次性收集后单次 IN 批量校验（含 children 与条件分支子步骤）
+            await _assert_config_mode_references(_collect_tree_config_mode_requirements(steps_data))
 
         for sid, step_data in enumerate(steps_data, start=1):
             case_id: Optional[int] = step_data.case_id
@@ -1218,7 +1353,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 try:
                     new_step_instance: AutoTestStepModel = await self.create(create_step_dict)
                 except Exception as e:
-                    error_message: str = f"第{sid}条步骤新增失败，步骤数据无效或暂时无法保存，请检查步骤配置后重试"
+                    error_message: str = f"第{sid}条步骤新增失败, 请稍后重试"
                     LOGGER.error(
                         f"{error_message}, "
                         f"关键字段: [case_id={case_id}, step_no={step_no}, "
@@ -1231,8 +1366,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 # 复制失败不中断整树保存，仅记日志并清空新步骤的数据源指针
                 source_data_source_id = getattr(step_data, "data_source_id", None)
                 if source_data_source_id:
-                    # 局部导入：仅数据源复制链路需要
-                    from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
                     new_data_source_id: Optional[int] = None
                     try:
                         new_data_source_id = await AutoTestDataSourceCrud().copy_data_source_for_step(
@@ -1428,7 +1561,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     updated_instance = step_instance.update_from_dict(update_dict)
                     await updated_instance.save()
                 except Exception as e:
-                    error_message: str = f"第{sid}步骤更新失败，步骤数据无效或暂时无法保存，请检查步骤配置后重试"
+                    error_message: str = f"第{sid}步骤更新失败, 请稍后重试"
                     LOGGER.error(
                         f"{error_message}, "
                         f"关键字段: [step_id={step_id}, step_code={step_code}, "
@@ -1464,7 +1597,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     if stale_rows:
                         await self.model.filter(id__in=[row["id"] for row in stale_rows]).delete()
                         # 分支子步骤同属淘汰步骤：同步硬删其数据源，避免残留孤儿数据源
-                        from backend.applications.autotest.services.autotest_data_source_crud import AutoTestDataSourceCrud
                         await AutoTestDataSourceCrud().delete_step_data_sources(
                             case_id=int(stale_rows[0]["case_id"] or 0),
                             step_code_list=[row["step_code"] for row in stale_rows if row["step_code"]],
@@ -1507,13 +1639,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         断言同一用例下 step_no 全局唯一，重复即抛异常触发外层事务回滚。
 
-        只统计未软删（state≠1）的步骤；整树保存过程中新增/更新可能瞬时出现重复序号
-        （如节点互换 step_no），因此不在写入途中拦截，而由调用方在整树写完后调用本方法做终态校验。
-
         :param case_id: 用例主键ID
         :return: None
         :raises DataAlreadyExistsException: 同一用例下存在重复 step_no
         """
+        # 只统计未软删（state≠1）步骤；整树保存中新增/更新可能瞬时重复（如节点互换 step_no），不在写入途中拦截
         step_nos: List[int] = await self.model.filter(
             case_id=case_id, state__not=1
         ).values_list("step_no", flat=True)
@@ -1545,15 +1675,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         执行单个用例：引擎执行不持事务，报告、明细与用例状态单事务落库。
 
-        执行流程：
-        1) 取用例（可复用调用方预载实例）并推导用例级变量池传递开关；
-        2) 取步骤树（可复用预载结果），步骤数为 0 直接拒绝；
-        3) 聚合会话变量（见下方优先级说明）；
-        4) 调引擎执行（save_report=True 仅生成报告/明细快照，执行期不落库）；
-        5) 单事务写入报告与明细，并回写用例状态（failed_steps==0 即成功）与最近执行时间。
-
-        异常行为：本方法不吞异常；执行期或落库期异常由调用方 _execute_one_case 统一兜底为失败结果。
-
         :param case_id: 用例主键ID
         :param report_type: 报告类型枚举
         :param initial_variables: 任务级初始变量列表，每项含key、value、desc（字典项在此边界转为StepVariablesBase）
@@ -1565,12 +1686,14 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :param preloaded_case: 调用方已查询的用例实例，传入时跳过用例查询(多轮执行复用)
         :param preloaded_tree: 调用方已加载的步骤树数据，传入时跳过步骤树查询(多轮执行复用)
         :param inherited_variables: 变量池传递模式下上一条数据源执行后的累积变量池，合并优先级最高(后者同名覆盖)
-        :return: 含 success、total_steps/success_steps/failed_steps/passed_ratio、report_code、
-                 saved_to_database、case_id/case_code/case_name、session_variables、session_transfer 的字典
+        :return: 含 success、total_steps/success_steps/failed_steps/passed_ratio、report_code、saved_to_database、case_id/case_code/case_name、session_variables、session_transfer 的字典
         :raises ParameterException: 步骤树无任何可执行步骤
         :raises NotFoundException: 用例不存在（未预载时）
         :raises DataBaseStorageException: 报告或明细落库失败（整事务回滚）
         """
+        # 执行流程：①取用例并推导变量池传递开关 ②取步骤树（步骤数0直接拒绝）③聚合会话变量
+        # ④引擎执行（save_report=True 仅生成快照不落库）⑤单事务写报告+明细并回写用例状态与最近执行时间；
+        # 本方法不吞异常，执行期/落库期异常由调用方 _execute_one_case 统一兜底为失败结果
         if not initial_variables or not isinstance(initial_variables, list):
             LOGGER.info(f"初始化变量[initial_variables]为空或非列表类型")
             initial_variables = []
@@ -1687,17 +1810,14 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         将同一用例多轮执行结果汇总为统一字段。
 
-        口径：步数按轮次累加（total/success/failed），passed_ratio 按累计步数重算；
-        success 直接取 case_ok（调用方对全部轮次取 AND），不在本方法内重算；
-        用例标识与 report_code 取最后一轮；error 仅在无轮次结果时填充失败原因，
-        有结果时置空（具体失败以各轮结果与报告为准）。
-
         :param case_id: 用例主键ID
         :param case_results: 多轮执行结果列表
         :param case_ok: 用例整体是否成功
         :param empty_error: 轮次结果为空时的失败原因
         :return: 聚合后的单用例结果字典（含 execute_runs 实际轮次）
         """
+        # 口径：步数按轮次累加、passed_ratio 按累计步数重算；success 直接取 case_ok 不在本方法内重算；
+        # 用例标识与 report_code 取最后一轮；error 仅在无轮次结果时填充失败原因，有结果时置空
         if not case_results:
             return {
                 "case_id": case_id,
@@ -1747,23 +1867,19 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         """
         批量执行多个用例并汇总成功失败与明细。
 
-        批次标识 batch_code 每次调用重新生成（时间戳-uuid），贯穿本批次所有报告与明细。
-        用例间执行顺序：execute_mode=PARALLEL 时并发派发（gather 保序，results 与 case_ids 顺序一致），
-        其余（为空/串行）逐个顺序执行；用例内多轮始终串行。
-        汇总口径：success_cases/failed_cases 按单用例聚合结果的 success 计数（与步数无关），
-        success_rate 为用例维度百分比；单用例异常已在 _execute_one_case 内兜底，不会中断整批。
-
         :param case_ids: 用例主键ID列表
         :param report_type: 报告类型枚举
         :param initial_variables: 初始变量列表，每项含key、value、desc
         :param steps_execute_config: 全部用例共用的执行配置
-        :param cases_execute_config: 按用例覆盖的执行配置（键为 case_id 的字符串或整数形式，
-                 支持 execute_count 与 steps_execute_config 两个字段，优先于 steps_execute_config）
+        :param cases_execute_config: 按用例覆盖的执行配置（键为 case_id 的字符串或整数形式，支持 execute_count 与 steps_execute_config 两个字段，优先于 steps_execute_config）
         :param task_code: 任务标识代码，可选
         :param dataset_enabled: 任务级数据源全局开关；启用时各用例自动纳入其全部数据场景执行
         :param execute_mode: 任务执行模式(并行执行/串行执行)；为空或串行时用例间顺序执行，并行时用例间并发执行(用例内多轮仍串行)
         :return: 含 batch_code、total_cases、success_cases、failed_cases、success_rate、results 的批次汇总字典
         """
+        # batch_code 每次调用重新生成（时间戳-uuid），贯穿本批次所有报告与明细；
+        # PARALLEL 时并发派发（gather 保序），其余顺序执行，用例内多轮始终串行；
+        # 汇总按单用例聚合结果的 success 计数（与步数无关），单用例异常已在 _execute_one_case 内兜底不中断整批
         if not initial_variables or not isinstance(initial_variables, list):
             initial_variables = []
 
@@ -1833,17 +1949,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             dataset_enabled: bool,
     ) -> Dict[str, Any]:
         """
-        执行单个用例的全部轮次（执行次数 × 数据场景）并聚合为统一结果。
-
-        分支口径：
-        - 存在数据场景：外层按执行次数、内层按场景执行，round_no 为执行次数序号（与执行历史“第N次执行”对齐）；
-        - 无数据场景且执行次数 > 1：按执行次数逐轮执行，round_no 从 1 递增；
-        - 其余：单次执行，round_no=1。
-        execute_count 非法时回落 1，并裁剪到 [1, 9999]。
-
-        用例与步骤树仅预载一次供多轮复用；单用例异常兜底为失败结果（空轮次），不中断批次内其他用例。
-        用例级变量池传递开关开启时，累积范围仅限同一轮次内的多条数据源（后者同名覆盖前者），
-        跨轮次重置回初始池；已串联的 session_variables 会从单轮结果中剔除，避免膨胀批量结果。
+        执行单个用例的全部轮次并聚合为统一结果，轮次为执行次数乘数据场景。
 
         :param case_id: 用例主键ID
         :param report_type: 报告类型枚举
@@ -1855,6 +1961,11 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :param dataset_enabled: 任务级数据源全局开关
         :return: 单用例聚合结果字典（含 execute_runs 实际轮次）
         """
+        # 分支口径：有数据场景时外层按执行次数、内层按场景执行（round_no=执行次数序号）；
+        # 无场景且次数>1 时按次数逐轮执行（round_no 从 1 递增）；其余单次执行（round_no=1）；
+        # execute_count 非法时回落 1，并裁剪到 [1, 9999]。
+        # 用例与步骤树仅预载一次供多轮复用；单用例异常兜底为失败结果（空轮次），不中断批次内其他用例；
+        # 变量池传递开启时累积范围仅限同一轮次内的多条数据源，跨轮次重置回初始池，已串联的变量从结果中剔除
         try:
             # 用例级配置：键兼容 str/int 两种 case_id 写法；非 dict 视为未配置
             case_cfg = (cases_cfg_map.get(str(case_id)) or cases_cfg_map.get(case_id) or {})
@@ -1960,7 +2071,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 case_id, case_results, case_ok=case_ok, empty_error=empty_error,
             )
         except Exception as e:
-            error_message: str = "执行用例失败，暂时无法完成用例执行，请稍后重试"
+            error_message: str = "执行用例失败, 请稍后重试"
             LOGGER.error(f"{error_message}, 关键字段: [case_id={case_id}]\n{traceback.format_exc()}")
             result = self._aggregate_case_runs(
                 case_id=case_id,

@@ -9,7 +9,7 @@
 import traceback
 from typing import Optional, Dict, Any, List, Union, Set, Tuple
 
-from tortoise.exceptions import DoesNotExist, IntegrityError, FieldError
+from tortoise.exceptions import IntegrityError, FieldError
 from tortoise.expressions import Q
 
 from backend.applications.autotest.models.autotest_tag_model import AutoTestTagModel
@@ -32,18 +32,16 @@ from backend.services import DataScope
 
 
 class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTestTagUpdate]):
-    """
-    标签CRUD：应用下的二级配置项，用例通过 case_tags(ID数组) 引用标签。
+    """标签CRUD：应用下的二级配置项，用例通过case_tags ID数组引用标签。"""
 
-    唯一口径：(tag_project, tag_mode, tag_name) 联合唯一，数据库索引不区分 state，
-    因此软删行同样占用组合；同组合的软删记录在写权限内复用复活。
-    父资源校验：创建时经 load_readable_project 确认所属应用对当前用户可读（B级）。
-    引用约束：物理/批量软删前须确认无用例标签数组引用，否则拒绝删除。
-    归属口径：以 created_user 为归属人。
-    """
+    # 关键口径：
+    # - 唯一口径 (tag_project, tag_mode, tag_name) 联合唯一，数据库索引不区分 state，软删行同样占用组合；同组合软删记录在写权限内复用复活
+    # - 父资源校验：创建时经 load_readable_project 确认所属应用对当前用户可读（B级）
+    # - 引用约束：物理/批量软删前须确认无用例标签数组引用，否则拒绝删除
+    # - 归属口径：以 created_user 为归属人
 
     def __init__(self):
-        """绑定标签模型（krun_autotest_tag），供基类通用CRUD复用。"""
+        """绑定标签模型krun_autotest_tag，供基类通用CRUD复用。"""
         super().__init__(model=AutoTestTagModel)
 
     async def get_by_id(self, tag_id: int, on_error: bool = False, **kwargs) -> Optional[AutoTestTagModel]:
@@ -73,9 +71,6 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         """
         根据主键ID列表批量查询标签；用于用例写入时校验标签存在与列表回显。
 
-        先只查一次主键判断缺失：有缺失且 on_error=False 时直接返回 False（而非空列表，
-        历史契约，调用方须按真值判断），全部存在才二次查询返回完整实例列表。
-
         :param tag_ids: 标签主键ID列表
         :param on_error: 存在缺失ID时是否抛出异常
         :param kwargs: 额外过滤条件
@@ -92,6 +87,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
+        # 先只查一次主键判断缺失：有缺失且on_error为False时直接返回False而非空列表（历史契约，调用方按真值判断），全部存在才二次查询完整实例
         existing_tags = await self.model.filter(id__in=tag_ids, **kwargs).values_list("id", flat=True)
         missing_tags: Set[int] = set(tag_ids) - set(existing_tags)
         if missing_tags:
@@ -155,7 +151,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
                 instance: AutoTestTagModel = await self.create(obj_in=tag_dict)
                 return instance
             except IntegrityError as e:
-                error_message: str = "新增标签信息失败，相同应用下标签大类和名称可能重复，或关联应用无效，请检查后重试"
+                error_message: str = "新增标签信息失败, 标签大类和名称与现有记录冲突或关联应用无效"
                 LOGGER.error(
                     f"{error_message}, 关键字段: [tag_project={tag_project}, "
                     f"tag_mode={tag_mode}, tag_name={tag_name}]\n"
@@ -178,8 +174,8 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             tag_dict["state"] = 0
             instance: AutoTestTagModel = await self.update(id=existing_tag.id, obj_in=tag_dict)
             return instance
-        except (DoesNotExist, IntegrityError) as e:
-            error_message: str = "恢复标签信息失败，目标标签可能已被删除，或标签信息与现有记录冲突，请刷新后重试"
+        except IntegrityError as e:
+            error_message: str = "恢复标签信息失败, 目标标签不存在或标签信息与现有记录冲突"
             LOGGER.error(
                 f"{error_message}, 关键字段: [tag_id={existing_tag.id}, tag_project={tag_project}, "
                 f"tag_mode={tag_mode}, tag_name={tag_name}]\n"
@@ -189,10 +185,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
 
     async def update_tag(self, tag_in: AutoTestTagUpdate, scope: DataScope) -> AutoTestTagModel:
         """
-        更新标签，根据tag_id或tag_code定位并校验(tag_project, tag_mode, tag_name)唯一。
-
-        仅在入参触及三键时重做判重；与创建不同，这里的判重只比对非软删行，
-        只要目标组合还处于软删态就不算冲突。
+        更新标签：根据tag_id或tag_code定位并校验tag_project、tag_mode、tag_name三键唯一。
 
         :param tag_in: 标签更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的标签
@@ -223,6 +216,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             exclude={"tag_id", "tag_code"}
         )
         if "tag_project" in update_dict or "tag_mode" in update_dict or "tag_name" in update_dict:
+            # 仅入参触及三键时才重做判重；与创建不同，这里只比对非软删行，目标组合仍处软删态就不算冲突
             tag_project: int = update_dict.get("tag_project", instance.tag_project)
             tag_mode: str = update_dict.get("tag_mode", instance.tag_mode)
             tag_name: str = update_dict.get("tag_name", instance.tag_name)
@@ -242,15 +236,8 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         try:
             instance = await self.update(id=tag_id, obj_in=update_dict)
             return instance
-        except DoesNotExist as e:
-            error_message: str = "更新标签信息失败，目标标签不存在或已被删除，请刷新后重试"
-            LOGGER.error(
-                f"{error_message}, 关键字段: [tag_id={tag_id}, tag_code={tag_code}]\n"
-                f"{traceback.format_exc()}"
-            )
-            raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = "更新标签信息失败，相同应用下标签大类和名称可能重复，或关联应用无效，请检查后重试"
+            error_message: str = "更新标签信息失败, 标签大类和名称与现有记录冲突或关联应用无效"
             LOGGER.error(
                 f"{error_message}, 关键字段: [tag_id={tag_id}, tag_code={tag_code}]\n"
                 f"{traceback.format_exc()}"
@@ -286,6 +273,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             raise NoPermissionException(message=error_message)
 
         from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
+        # 循环导入规避：case_crud 顶部依赖本模块，仅此处函数内导入
         cases_count = await AutoTestCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
         if cases_count > 0:
             error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"
@@ -298,9 +286,6 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
     async def delete_tags(self, tag_in: AutoTestTagDelete, scope: DataScope) -> int:
         """
         根据ID或code列表批量软删除标签；逐条复用单删的归属与引用校验。
-
-        先一次性批量定位，再逐条校验权限与引用，全部通过后才单次批量软删，
-        中途失败不会落库，具备全有或全无语义。
 
         :param tag_in: 标签删除schema
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的标签
@@ -317,7 +302,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        # 单次批量定位并按入参顺序收集，首个缺失(或空参)按单条查询原文案抛出，替代循环逐条查询
+        # 先一次性批量定位并逐条校验权限与引用，全部通过后才单次批量软删：中途失败不落库，具备全有或全无语义
         targets: List[AutoTestTagModel] = []
         if tag_ids:
             id_map: Dict[int, AutoTestTagModel] = {
@@ -350,7 +335,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
                     raise NotFoundException(message=error_message)
                 targets.append(instance)
 
-        # 先全量校验行级权限与引用关系，再单次批量软删，保证批量操作全有或全无
+        # 先全量校验行级权限与引用关系（循环导入规避：case_crud 顶部依赖本模块，仅此处函数内导入）
         from backend.applications.autotest.services.autotest_case_crud import AutoTestCaseCrud
         await scope.load_owners([instance.created_user for instance in targets])
         for instance in targets:
@@ -360,7 +345,7 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
                 raise NoPermissionException(message=error_message)
             cases_count = await AutoTestCaseCrud().model.filter(case_tags__contains=[instance.id], state__not=1).count()
             if cases_count > 0:
-                error_message: str = f"删除标签信息失败, 记录[id={instance.id}] 被{cases_count}个用例关联"
+                error_message: str = f"删除标签信息失败, 记录[id={instance.id}]被{cases_count}个用例关联"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
         await self.soft_delete_batch(ids=[instance.id for instance in targets])
@@ -380,6 +365,6 @@ class AutoTestTagCrud(ScaffoldCrud[AutoTestTagModel, AutoTestTagCreate, AutoTest
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询标签信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询标签信息失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e

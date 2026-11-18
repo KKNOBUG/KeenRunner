@@ -7,30 +7,26 @@
 @DateTime: 2026/3/6
 
 数据源解析器：DataSourceMatrixParser 类将xlsx文件或二维矩阵解析为dataset结构，供数据源落库与报文替换使用。
-
-协议约定：
-- 四分区：HEAD / BODY / ASSERT_HEAD / ASSERT_BODY(大小写不敏感)，分区标记所在行/列不允许用户内容
-- 方向：AXIS_HORIZONTAL=0水平(第0行分区标记+字段名，第0列场景名)，
-        AXIS_VERTICAL=1垂直(第0列分区标记+字段名，第0行场景名)
-- 存储类型：单元格一律以字符串读取并落库（不做数字/布尔/null推断）；
-  执行注入时由 datagram/value_adapter 按请求报文原字段类型适配（详见 value_adapter 模块）
-- 存量兼容：前导'为旧版强制文本协议标记，读取时剥去引号后按字符串存储
-- 空单元格：以_CELL_OMIT省略，不覆盖步骤原值
-
-数据流：
-    读取(_read_excel_*) → 方向识别(_detect/_resolve) → 清洗(_clean/_clear/_trim)
-    → sheet解析(_parse_sheet_*) → 字符串化(_dataset_field_value)
-    → dataset输出(normalize_dataset_record)
-
-对外入口(__all__)：
-- DataSourceMatrixParser.parse_xlsx_to_parsed_data_async：批量上传，解析全部sheet
-- DataSourceMatrixParser.parse_xlsx_first_sheet_async：单步骤上传，仅解析首个sheet
-- DataSourceMatrixParser.parse_dataframe_matrix_async：前端保存矩阵解析
-- DataSourceMatrixParser.json_safe_value / parse_kv_string / is_section_marker /
-  extract_scene_names_from_matrix / normalize_dataset_record / detect_matrix_axis /
-  resolve_matrix_axis / clean_matrix_by_axis / cell_text_value / dataset_cell_placeholder：
-  视图层与数据源服务的复用工具
 """
+# 协议约定：
+# - 四分区：HEAD / BODY / ASSERT_HEAD / ASSERT_BODY 大小写不敏感，分区标记所在行/列不允许用户内容
+# - 方向：AXIS_HORIZONTAL=0 水平（第0行分区标记+字段名，第0列场景名），
+#   AXIS_VERTICAL=1 垂直（第0列分区标记+字段名，第0行场景名）
+# - 存储类型：单元格一律以字符串读取并落库，不做数字/布尔/null推断；
+#   执行注入时由 datagram/value_adapter 按请求报文原字段类型适配
+# - 存量兼容：前导'为旧版强制文本协议标记，读取时剥去引号后按字符串存储
+# - 空单元格：以_CELL_OMIT省略，不覆盖步骤原值
+#
+# 数据流：读取(_read_excel_*) → 方向识别(_detect/_resolve) → 清洗(_clean/_clear/_trim)
+#   → sheet解析(_parse_sheet_*) → 字符串化(_dataset_field_value) → dataset输出(normalize_dataset_record)
+#
+# 对外入口(__all__)：
+# - parse_xlsx_to_parsed_data_async：批量上传，解析全部sheet
+# - parse_xlsx_first_sheet_async：单步骤上传，仅解析首个sheet
+# - parse_dataframe_matrix_async：前端保存矩阵解析
+# - json_safe_value / parse_kv_string / is_section_marker / extract_scene_names_from_matrix /
+#   normalize_dataset_record / detect_matrix_axis / resolve_matrix_axis / clean_matrix_by_axis /
+#   cell_text_value / dataset_cell_placeholder：视图层与数据源服务的复用工具
 import asyncio
 import math
 import os
@@ -53,11 +49,9 @@ __all__ = ["DataSourceMatrixParser"]
 
 
 class DataSourceMatrixParser:
-    """
-    数据源矩阵解析器：将xlsx文件或二维矩阵解析为dataset结构，供数据源落库与报文替换使用。
+    """数据源矩阵解析器：将xlsx文件或二维矩阵解析为dataset结构，供数据源落库与报文替换使用。"""
 
-    无实例状态，常量与规则集中为类属性，调用方统一经 DataSourceMatrixParser 入口访问。
-    """
+    # 无实例状态，常量与规则集中为类属性，调用方统一经 DataSourceMatrixParser 入口访问
 
     # ==================== 常量 ====================
 
@@ -171,7 +165,7 @@ class DataSourceMatrixParser:
 
     @classmethod
     def _read_excel_all_sheets(cls, file_path: str) -> Dict[str, pd.DataFrame]:
-        """读取xlsx全部sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
+        """读取xlsx全部sheet，header=None，并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
         sheets = pd.read_excel(file_path, sheet_name=None, header=None, engine="openpyxl")
         workbook = load_workbook(file_path)
         try:
@@ -185,7 +179,7 @@ class DataSourceMatrixParser:
 
     @classmethod
     def _read_excel_first_sheet(cls, file_path: str) -> pd.DataFrame:
-        """读取xlsx首个sheet(header=None)并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
+        """读取xlsx首个sheet，header=None，并还原quotePrefix前导'标记，属同步阻塞IO，仅可在线程池中执行。"""
         df = pd.read_excel(file_path, sheet_name=0, header=None, engine="openpyxl")
         workbook = load_workbook(file_path)
         try:
@@ -200,14 +194,13 @@ class DataSourceMatrixParser:
         """
         还原quotePrefix单元格的前导'标记，与数据源表格保存格式对齐。
 
-        导出时前导'协议标记被转为Excel原生quotePrefix形态，pandas读取不感知该样式位，
-        此处逐格还原，否则强制文本语义丢失（如'1被误转数字、空格保护失效）。
-
         :param df: header=None读入的sheet DataFrame
         :param sheet: 同一sheet页的openpyxl worksheet对象
         :return: 还原后的DataFrame，含非object列时返回astype副本
         """
         max_row, max_col = df.shape
+        # 导出时前导'协议标记被转为Excel原生quotePrefix样式位，pandas读取不感知，
+        # 此处逐格还原以保留强制文本语义（如'1被误转数字、空格保护失效）
         # 统一object dtype，避免纯数字列写字符串报dtype不兼容
         if df.dtypes.ne(object).any():
             df = df.astype(object)
@@ -282,11 +275,10 @@ class DataSourceMatrixParser:
         """
         检测二维矩阵方向并校验合法性。
 
-        仅识别第0行或第0列是否含分区标记，不接受其他位置的标记。
-
         :param values: 二维矩阵(DataFrame.values)
         :return: 方向，水平模式(第0行含分区标记)返回AXIS_HORIZONTAL，垂直模式(第0列含分区标记)返回AXIS_VERTICAL
         """
+        # 仅识别第0行或第0列是否含分区标记，不接受其他位置的标记
         if values.size == 0:
             raise ValueError("数据矩阵为空，无法识别方向")
         if cls._row_has_section_marker(values[0]):
@@ -301,13 +293,11 @@ class DataSourceMatrixParser:
         """
         按分区标记识别矩阵方向；识别失败时回落到调用方声明的 axis。
 
-        客户端/库中的 axis 可能与矩阵结构不一致（例如模型默认 0，实际为垂直矩阵），
-        清洗与解析必须以矩阵本身为准。
-
         :param matrix: 二维矩阵
         :param declared_axis: 调用方声明的方向
         :return: 实际使用的方向
         """
+        # 客户端/库中的 axis 可能与矩阵结构不一致（例如模型默认 0，实际为垂直矩阵），清洗与解析以矩阵本身为准
         padded = cls._pad_matrix(matrix)
         if not padded:
             return declared_axis if declared_axis in (cls.AXIS_HORIZONTAL, cls.AXIS_VERTICAL) else cls.AXIS_VERTICAL
@@ -352,21 +342,17 @@ class DataSourceMatrixParser:
         """
         按矩阵方向剔除空白字段行/列，以及无数据的场景行/列；分区标记始终保留。
 
-        水平模式(axis=0)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY列以外的整列为空列，
-        再剔除第0行以外、第0列以外全部为空的场景行。
-        垂直模式(axis=1)：剔除除HEAD/BODY/ASSERT_HEAD/ASSERT_BODY行以外的整行为空行，
-        再剔除第0列以外、第0行以外全部为空的场景列。
-        第0列(垂直字段名 / 水平场景名)与第0行始终保留。
-
         :param matrix: 原始二维矩阵
         :param axis: 0水平 / 1垂直
         :return: 清洗后的二维矩阵
         """
+        # 水平模式剔除非分区标记列外的整列为空列与空场景行；垂直模式剔除非分区标记行外的整行为空行与空场景列；
+        # 第0列(垂直字段名 / 水平场景名)、第0行与分区标记行/列始终保留，具体规则见_clean_padded_matrix
         return cls._clean_padded_matrix(cls._pad_matrix(matrix), axis)
 
     @classmethod
     def _clean_padded_matrix(cls, padded: List[List[Any]], axis: int) -> List[List[Any]]:
-        """对已对齐(含json_safe_value)的矩阵执行方向清洗；与resolve_matrix_axis共用pad结果。"""
+        """对已对齐矩阵执行方向清洗，对齐含json_safe_value；与resolve_matrix_axis共用pad结果。"""
         if not padded:
             return []
         row_count = len(padded)
@@ -437,15 +423,15 @@ class DataSourceMatrixParser:
     @classmethod
     def _clear_section_marker_cells(cls, matrix: List[List[Any]]) -> List[List[Any]]:
         """
-        分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行/列不允许任何用户内容，
-        后端保存时统一剔除（与前端拦截双保险）：
-        - 垂直模式：第0列为分区标记的行，剔除第0列以外的全部单元格内容
-        - 水平模式：第0行为分区标记的列，剔除第0行以外的全部单元格内容
-        两个方向同时处理（不依赖 axis），标记单元格本身始终保留。
+        剔除分区标记所在行/列的全部用户内容。
 
         :param matrix: 已对齐的矩形矩阵
         :return: 剔除后的矩阵（原地修改）
         """
+        # 分区标记(HEAD/BODY/ASSERT_HEAD/ASSERT_BODY)所在行/列不允许用户内容，此处与前端拦截双保险；
+        # 垂直模式：第0列为分区标记的行，剔除第0列以外的全部单元格内容；
+        # 水平模式：第0行为分区标记的列，剔除第0行以外的全部单元格内容；
+        # 两个方向同时处理（不依赖 axis），标记单元格本身始终保留
         if not matrix:
             return matrix
         header = matrix[0] if isinstance(matrix[0], list) else []
@@ -464,13 +450,12 @@ class DataSourceMatrixParser:
     @staticmethod
     def _trim_matrix_strings(matrix: List[List[Any]]) -> List[List[Any]]:
         """
-        对矩阵中每个字符串值执行清洗：
-        - 前导 ' 的值：强制文本标记，保持不变（不做 trim、不做类型推断）
-        - 非空纯空白字符串（如 "   "）：添加前导 ' 保护，避免空格丢失
-        - 空串：保持空串（空单元格无需保护，避免产生裸 ' 脏值）
-        - 其他字符串：去除首尾空白
-        - 非字符串值：保持不变
+        对矩阵中每个字符串值执行清洗。
+
+        :param matrix: 已对齐的矩形矩阵
+        :return: 清洗后的矩阵
         """
+        # 规则：前导'强制文本标记不变、非空纯空白串加'保护空格、空串保持、其他字符串trim、非字符串值不变
         result = []
         for row in matrix:
             new_row = []
@@ -511,13 +496,12 @@ class DataSourceMatrixParser:
     @classmethod
     def _parse_sheet_fast(cls, df: pd.DataFrame) -> Dict[str, Dict[str, Any]]:
         """
-        垂直模式解析单个sheet(第0行为场景名，第0列为分区标签/字段名)。
-
-        方法名为历史命名（早期仅支持该形态故称fast），实际职责固定为垂直模式解析。
+        垂直模式解析单个sheet：第0行为场景名，第0列为分区标签/字段名。
 
         :param df: 无表头(header=None)的sheet DataFrame
         :return: { 场景名: { head, body, assert_head, assert_body } }；某分区缺省时其值为 {}
         """
+        # 方法名为历史命名（早期仅支持该形态故称fast），实际职责固定为垂直模式解析
         values = df.values
         if values.size == 0:
             return {}
@@ -637,13 +621,12 @@ class DataSourceMatrixParser:
         """
         将单元格/字段值递归转为JSON可序列化类型。
 
-        pd.isna对list/dict返回数组，直接用于if会抛ValueError，故统一括入try。
-
         :param value: 原始值(可能为NaN/Inf/NaT/numpy类型或嵌套结构)
         :return: JSON可序列化值，NaN/Inf/NaT转为None
         """
         if value is None:
             return None
+        # pd.isna对list/dict返回数组，直接用于if会抛ValueError，故统一括入try
         try:
             if value is pd.NA or value is pd.NaT:
                 return None
@@ -672,11 +655,9 @@ class DataSourceMatrixParser:
     @staticmethod
     def parse_kv_string(text: str) -> Dict[str, str]:
         """
-        将多行key:value文本解析为字典(去除_x000D_回车符)。
+        将多行key:value文本解析为字典并去除_x000D_回车符。
 
-        每行仅按首个冒号切分，值中的冒号保留。
-
-        :param text: 形如 "Ammy:7860000182_x000D_\nCcy:CNY" 的多行文本
+        :param text: 形如 "Ammy:7860000182_x000D_回车Ccy:CNY" 的多行文本
         :return: 解析后的字典，如 {"Ammy": "7860000182", "Ccy": "CNY"}；非字符串入参返回 {}
         """
         if not isinstance(text, str):
@@ -686,6 +667,7 @@ class DataSourceMatrixParser:
         result = {}
         for line in re.split(r"[\n\r]+", text):
             if ":" in line:
+                # 每行仅按首个冒号切分，值中的冒号保留
                 k, v = line.split(":", 1)
                 result[k.strip()] = v.strip()
         return result
@@ -695,11 +677,10 @@ class DataSourceMatrixParser:
         """
         判断单元格是否未填写。
 
-        None/NaN/空串视为未填；单空格、0、False 视为已填写。
-
         :param value: 单元格值
         :return: 未填写返回True
         """
+        # None/NaN/空串视为未填；单空格、0、False 视为已填写
         if value is None:
             return True
         try:
@@ -712,7 +693,7 @@ class DataSourceMatrixParser:
     @staticmethod
     def cell_text_value(value: Any) -> str:
         """
-        将报文原始值转为单元格文本（dataframe/data_original统一字符串协议）。
+        将报文原始值转为单元格文本，实现dataframe/data_original统一字符串协议。
 
         :param value: 报文原始值(bool/int/float/str/None等)
         :return: 文本形态：bool为true/false、整值浮点去除.0、None为空串、其余str()
@@ -730,13 +711,12 @@ class DataSourceMatrixParser:
         """
         将报文原始值转为data_original单元格文本，特殊值反向映射为占位符。
 
-        与value_adapter占位符协议对齐：None→#NULL、空串→#空字符串、单空格→#单个空格；
-        bool写true/false小写、整值浮点去除.0、其余str()。
-        供/build接口构建data_original时消费，前端插入正交易场景时单元格显示占位符而非空白。
-
         :param value: 报文原始值(bool/int/float/str/None等)
         :return: 含占位符的单元格文本
         """
+        # 与value_adapter占位符协议对齐：None→#NULL、空串→#空字符串、单空格→#单个空格；
+        # bool写true/false小写、整值浮点去除.0、其余str()；供/build构建data_original时消费，
+        # 前端插入正交易场景时单元格显示占位符而非空白
         if value is None:
             return DATASET_NULL_VALUE
         if isinstance(value, bool):
@@ -756,13 +736,11 @@ class DataSourceMatrixParser:
         """
         将单元格转为 dataset 字段值；存储层统一字符串化，不做类型推断。
 
-        类型语义移交执行注入侧：datagram/value_adapter 按请求报文原字段类型适配。
-        存量兼容：前导'为旧版强制文本协议标记，读取时剥去引号；
-        Excel原生数值/布尔单元格转文本（true/false小写、整值浮点去除.0），保持书写值形态。
-
         :param value: 原始单元格
         :return: _CELL_OMIT 表示省略；否则为字符串形态字段值
         """
+        # 前导'为旧版强制文本协议标记，读取时剥去引号；数值/布尔单元格经cell_text_value转文本
+        # (true/false小写、整值浮点去除.0)；类型语义移交执行注入侧(datagram/value_adapter)，按报文原字段类型适配
         safe = cls.json_safe_value(value)
         if cls._cell_is_blank(safe):
             return cls._CELL_OMIT
@@ -816,7 +794,7 @@ class DataSourceMatrixParser:
     @classmethod
     def _dataframe_to_matrix(cls, df: pd.DataFrame) -> List[List[Any]]:
         """
-        将DataFrame转为二维矩阵，剔除全空白(None/NaN/空串)的行与列(第0列始终保留)。
+        将DataFrame转为二维矩阵，剔除全空白None/NaN/空串的行与列，第0列始终保留。
 
         :param df: sheet DataFrame
         :return: 二维列表，NaN/NaT/Inf置为None

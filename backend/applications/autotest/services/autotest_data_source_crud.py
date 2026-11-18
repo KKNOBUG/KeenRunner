@@ -12,11 +12,12 @@ from typing import Union
 
 import aiofiles.os as aos
 from tortoise.exceptions import FieldError
-from tortoise.exceptions import IntegrityError, DoesNotExist
+from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from backend.applications.autotest.models.autotest_data_source_model import AutoTestDataSourceModel
 from backend.applications.autotest.schemas.autotest_data_source_schema import AutoTestDataSourceCreate, AutoTestDataSourceUpdate
+from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
 from backend.applications.base.services.scaffold import ScaffoldCrud
 from backend.configure import LOGGER
 from backend.core.exceptions import DataAlreadyExistsException, NotFoundException, ParameterException
@@ -25,25 +26,20 @@ from backend.core.exceptions import DataBaseStorageException
 
 def make_cache_key(case_id: int, step_code: str) -> str:
     """
-    生成数据源缓存键名（dataset_{case_id}_{step_code}）。
-
-    该键仅用于落库标识与外部缓存对账；执行期读取按case_id+step_code+dataset_name直接查库，
-    不依赖该键。
+    生成数据源缓存键名：dataset_{case_id}_{step_code}。
 
     :param case_id: 用例主键
     :param step_code: 步骤标识代码
     :return: 缓存键字符串
     """
+    # 该键仅用于落库标识与外部缓存对账；执行期读取按case_id+step_code+dataset_name直接查库，不依赖该键
     return f"dataset_{case_id}_{step_code}"
 
 
 class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataSourceCreate, AutoTestDataSourceUpdate]):
-    """
-    数据驱动文件（数据源）聚合CRUD。
+    """数据驱动文件即数据源的聚合CRUD。"""
 
-    职责：按id/code/用例步骤定位记录、读取单场景dataset、创建与软删恢复、更新、
-    上传解析后落库、步骤间复制，以及步骤删除时硬删数据源并清理本地文件。
-    """
+    # 职责：按id/code/用例步骤定位记录、读取单场景dataset、创建与软删恢复、更新、上传解析后落库、步骤间复制，以及步骤删除时硬删数据源并清理本地文件
 
     def __init__(self):
         """绑定数据源模型，供基类通用CRUD复用。"""
@@ -103,9 +99,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         根据用例与步骤标识查询数据源，可返回单条或列表。
 
-        提供step_id或step_code时按首条返回（适用于步骤唯一挂载的场景）；
-        否则返回列表并按step_id、step_code排序。
-
         :param case_id: 用例主键
         :param case_code: 用例标识代码
         :param step_id: 步骤主键
@@ -134,6 +127,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             has_step_condition = True
 
         if has_step_condition:
+            # 提供step_id或step_code时按首条返回（适用于步骤唯一挂载的场景）；否则返回列表并按step_id、step_code排序
             instance = await self.model.filter(**conditions).first()
             if not instance and on_error:
                 error_message: str = "根据条件查询数据源暂无匹配记录"
@@ -143,7 +137,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
 
         instances = await self.model.filter(**conditions).order_by("step_id", "step_code").all()
         if not instances and on_error:
-            error_message: str = f"根据条件查询数据源暂无匹配记录"
+            error_message: str = "根据条件查询数据源暂无匹配记录"
             LOGGER.error(f"{error_message}, 条件明细: {conditions}")
             raise NotFoundException(message=error_message, data=conditions)
         return instances
@@ -151,9 +145,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
     async def get_dataset_scenario(self, case_id: int, step_code: str, dataset_name: str, **kwargs) -> Optional[Dict[str, Any]]:
         """
         根据用例、步骤、数据集名称取该步骤下单个场景的结构化数据。
-
-        仅按dataset_name非空即可查；执行期调用方（DatasetLoader）已保证case_id/step_code有效。
-        只读取id与dataset两列，避免把大字段dataframe一并读回。
 
         :param case_id: 用例主键
         :param step_code: 步骤标识代码
@@ -163,7 +154,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         if not (dataset_name or "").strip():
             return None
-        # 执行期只消费dataset；显式only避免把大字段dataframe一并读回（每个步骤每圈都会走这里）
+        # 仅按dataset_name非空即可查；执行期调用方（DatasetLoader）已保证case_id/step_code有效；显式only避免把大字段dataframe一并读回（每个步骤每圈都会走这里）
         conditions: Dict[str, Any] = {
             "case_id": case_id,
             "step_code": (step_code or "").strip(),
@@ -177,9 +168,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
     async def create_data_source(self, data_source_in: AutoTestDataSourceCreate) -> AutoTestDataSourceModel:
         """
         创建数据源，根据用例与步骤定位，已删除则恢复，已启用则拒绝。
-
-        定位键为case_id+step_code（表唯一约束）；状态优先级：存在启用记录时拒绝新增，
-        仅存在软删记录时恢复该记录（state置0，created_user转updated_user）。
 
         :param data_source_in: 创建schema(data_source_code由模型默认值生成，无需传入)
         :return: 新建或恢复后的数据源实例
@@ -206,37 +194,31 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         if data_dict.get("dataset_names") is None:
             data_dict["dataset_names"] = []
 
-        # 启用优先：启用+软删并存时定位到启用记录执行拒绝/更新判定，避免误选软删记录二次恢复
+        # 启用优先：启用+软删并存时定位到启用记录执行拒绝/更新判定，避免误选软删记录二次恢复；定位键为case_id+step_code（表唯一约束）
         existing = await self.model.filter(case_id=case_id, step_code=step_code).order_by("state").first()
 
         if not existing:
             try:
                 return await self.create(obj_in=data_dict)
             except IntegrityError as e:
-                error_message: str = "新增数据源失败，该步骤可能已绑定数据源，或关联的用例、步骤无效，请检查后重试"
+                error_message: str = "新增数据源失败, 该步骤已绑定数据源或关联的用例步骤无效"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
         if existing.state == 1:
+            # 恢复软删记录：state置0，created_user 转 updated_user
             update_dict: Dict[str, Any] = dict(data_dict)
             update_dict["state"] = 0
             if "created_user" in update_dict:
                 update_dict["updated_user"] = update_dict.pop("created_user")
             try:
                 return await self.update(id=existing.id, obj_in=update_dict)
-            except DoesNotExist as e:
-                error_message: str = "恢复数据源失败，目标数据源不存在或已被删除，请刷新后重试"
-                LOGGER.error(
-                    f"{error_message}, 关键字段: [data_source_id={existing.id}]\n"
-                    f"{traceback.format_exc()}"
-                )
-                raise NotFoundException(message=error_message) from e
             except IntegrityError as e:
-                error_message: str = "恢复数据源失败，可能与其他数据源冲突，或关联的用例、步骤无效，请刷新后重试"
+                error_message: str = "恢复数据源失败, 数据源与现有记录冲突或关联的用例步骤无效"
                 LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
                 raise DataBaseStorageException(message=error_message) from e
 
-        error_message: str = "新增数据源失败，该步骤已绑定启用中的数据源，请更新现有数据源或先解绑"
+        error_message: str = "新增数据源失败, 该步骤已绑定启用中的数据源"
         LOGGER.error(f"{error_message}, 查询条件: [case_id={case_id}, step_code={step_code}]")
         raise DataAlreadyExistsException(message=error_message)
 
@@ -247,10 +229,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
     ) -> AutoTestDataSourceModel:
         """
         更新数据源，根据id/code或用例步骤组合定位。
-
-        定位优先级：data_source_id > data_source_code > (case_id|case_code)+(step_id|step_code)；
-        更新字段排除定位键与cache_key，无可用更新字段时直接返回已定位实例；
-        只对启用中（state!=1）的记录生效。
 
         :param data_source_in: 更新schema
         :param located_instance: 调用方已定位的实例，传入时跳过定位查询
@@ -269,6 +247,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         if located_instance is not None:
             instance: Optional[AutoTestDataSourceModel] = located_instance
         elif data_source_id:
+            # 定位优先级：data_source_id > data_source_code > (case_id|case_code)+(step_id|step_code)；只对启用中（state!=1）的记录生效
             instance: Optional[AutoTestDataSourceModel] = await self.get_by_id(
                 data_source_id=data_source_id,
                 on_error=True,
@@ -300,6 +279,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             exclude={"cache_key", "case_id", "case_code", "step_id", "step_code", "data_source_id", "data_source_code"}
         )
         if not update_dict:
+            # 无可用更新字段（更新字段排除定位键与cache_key）时直接返回已定位实例
             return instance
 
         # 实例已定位，直接按基类update的写入序列落库，省去重复的存在性查询
@@ -308,7 +288,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         try:
             await updated_instance.save()
         except IntegrityError as e:
-            error_message: str = "更新数据源失败，数据源存在重复或无效内容，请检查后重试"
+            error_message: str = "更新数据源失败, 数据源与现有记录冲突或内容无效"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise DataBaseStorageException(message=error_message) from e
         LOGGER.info(f"更新成功: {self.model.__name__}(id={instance.id}), 字段: {list(update_dict.keys())}")
@@ -327,7 +307,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询数据源失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询数据源失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -351,9 +331,6 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         上传解析场景：根据case_id+step_id+step_code若已存在则更新，否则创建。
 
-        每个场景先强制补齐head/body/assert_head/assert_body四键；更新路径中
-        dataset_names/dataframe未传时保留原值（仅覆盖本次解析产物）。
-
         :param case_id: 用例主键
         :param case_code: 用例标识代码
         :param step_id: 步骤主键
@@ -376,9 +353,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
 
-        from backend.applications.autotest.services.autotest_data_source_parser import DataSourceMatrixParser
-
-        # 每个场景强制补齐 head/body/assert_head/assert_body 四键
+        # 每个场景先强制补齐 head/body/assert_head/assert_body 四键
         normalized_dataset = {
             str(scene_name): DataSourceMatrixParser.normalize_dataset_record(scene_data if isinstance(scene_data, dict) else {})
             for scene_name, scene_data in parsed_data.items()
@@ -443,10 +418,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
             source_data_source_id: int,
     ) -> Optional[int]:
         """
-        将源数据源复制为新步骤的独立数据源，仅复制解析数据(dataset/dataframe/dataset_names/axis)，
-        文件字段全部置空。
-
-        直接create新记录，不做启用/软删冲突判定；供步骤复制时保持数据驱动内容。
+        将源数据源复制为新步骤的独立数据源：仅复制解析数据dataset/dataframe/dataset_names/axis，文件字段全部置空。
 
         :param case_id: 新步骤所属用例主键
         :param case_code: 新步骤所属用例标识代码
@@ -463,6 +435,7 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         source = await self.get_by_id(data_source_id=source_data_source_id, on_error=False, state__not=1)
         if not source:
             return None
+        # 直接create新记录，不做启用/软删冲突判定；供步骤复制时保持数据驱动内容
         new_record = await self.create(
             {
                 "case_id": case_id,
@@ -486,12 +459,11 @@ class AutoTestDataSourceCrud(ScaffoldCrud[AutoTestDataSourceModel, AutoTestDataS
         """
         硬删除指定步骤关联的数据源记录，并清理其本地上传文件。
 
-        step_code在步骤表全局唯一（unique=True），因此仅按step_code__in删除；case_id仅用于日志定位。
-
         :param case_id: 用例主键(仅用于日志定位)
         :param step_code_list: 待清理的步骤标识列表
         :return: None
         """
+        # step_code在步骤表全局唯一（unique=True），因此仅按step_code__in删除；case_id仅用于日志定位
         instance_list = await self.model.filter(step_code__in=step_code_list).all()
         await self.model.filter(step_code__in=step_code_list).delete()
         for instance in instance_list:

@@ -43,19 +43,15 @@ from backend.services import DataScope
 
 
 class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate, AutoTestReportUpdate]):
-    """
-    执行报告CRUD：报告增删改查，以及报告聚合出来的三层查询视图。
+    """执行报告CRUD：报告增删改查，以及报告聚合出来的三层查询视图。"""
 
-    数据形态：一行报告 = 一个用例在某一轮/某一数据源上的一次执行（多数据源会展开成多行）；
-    同一次任务执行由 batch_code 串联，无 batch_code 的行是单次执行（非任务触发）。
-
-    查询分层（供前端三个抽屉逐层下钻）：
-    - search_reports：执行维度主查询（batch_code 唯一化为一行）；
-    - search_task_batches / search_batch_scripts：任务执行历史 → 批次内脚本；
-    - search_script_round_reports / search_batch_reports：脚本轮次明细 → 批次报告明细。
-
-    归属口径：报告以 created_user 为归属人，读过滤由调用方传入的 DataScope.read_q 拼接。
-    """
+    # 数据形态：一行报告 = 一个用例在某一轮/某一数据源上的一次执行（多数据源会展开成多行）；
+    # 同一次任务执行由 batch_code 串联，无 batch_code 的行是单次执行（非任务触发）。
+    # 查询分层（供前端三个抽屉逐层下钻）：
+    # - search_reports：执行维度主查询（batch_code 唯一化为一行）；
+    # - search_task_batches / search_batch_scripts：任务执行历史 → 批次内脚本；
+    # - search_script_round_reports / search_batch_reports：脚本轮次明细 → 批次报告明细。
+    # 归属口径：报告以 created_user 为归属人，读过滤由调用方传入的 DataScope.read_q 拼接
 
     def __init__(self):
         """绑定报告模型，供基类通用CRUD复用。"""
@@ -111,13 +107,12 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         创建报告，先校验关联用例存在且未软删。
 
-        仅执行引擎/内部流程调用（对外写接口需超管），因此不带数据权限参数。
-
         :param report_in: 报告创建schema
         :return: 创建后的报告实例
         :raises NotFoundException: 关联用例不存在或已软删
         :raises DataBaseStorageException: 落库失败（report_code 重复或用例外键无效）
         """
+        # 仅执行引擎/内部流程调用（对外写接口需超管），因此不带数据权限参数
         case_id: int = report_in.case_id
         case_code: str = report_in.case_code
 
@@ -134,11 +129,11 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "新增报告信息失败，报告标识可能重复或关联用例无效，请检查后重试"
+            error_message: str = "新增报告信息失败, 报告标识重复或关联用例无效"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [case_id={case_id}, case_code={case_code}, report_code={report_in.report_code}]\n"
-                f"{traceback.format_exc()}"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
 
@@ -177,11 +172,11 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             instance = await self.update(id=report_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "更新报告信息失败，报告标识可能重复或关联用例无效，请检查后重试"
+            error_message: str = "更新报告信息失败, 报告标识重复或关联用例无效"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [report_id={report_id}, report_code={report_code}]\n"
-                f"{traceback.format_exc()}"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
 
@@ -214,6 +209,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         async with in_transaction():
             report_code = instance.report_code
+            # detail_crud 顶部反向依赖本模块，函数内延迟导入打破模块循环
             from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
             detail_crud = AutoTestDetailCrud()
             # 明细与报告均物理删除，同事务避免明细已删而报告未删的中间态
@@ -272,6 +268,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
         target_ids: List[int] = [instance.id for instance in targets]
         target_codes: List[str] = [instance.report_code for instance in targets]
+        # detail_crud 顶部反向依赖本模块，函数内延迟导入打破模块循环
         from backend.applications.autotest.services.autotest_detail_crud import AutoTestDetailCrud
         detail_crud = AutoTestDetailCrud()
         async with in_transaction():
@@ -294,7 +291,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询报告信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询报告信息失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
@@ -303,11 +300,10 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         将耗时字段解析为秒数浮点值。
 
-        兼容“1.234s”这类带单位的存量字符串（去尾部s/S）；任何非法值统一归0，避免聚合页报错。
-
         :param val: 耗时原始值
         :return: 秒数；无法解析时返回0.0
         """
+        # 兼容“1.234s”这类带单位的存量字符串（去尾部s/S）；任何非法值统一归0，避免聚合页报错
         if val is None or val == "":
             return 0.0
         text = str(val).strip().rstrip("sS")
@@ -321,11 +317,10 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         判断用例执行状态是否表示成功。
 
-        case_state 为布尔字段，但存量/异构写入可能落成字符串 "true"，两种形态都视为成功。
-
         :param case_state: 用例执行状态
         :return: 是否成功
         """
+        # 存量/异构写入可能把布尔落成字符串 "true"，两种形态都视为成功
         return case_state is True or case_state == "true"
 
     @staticmethod
@@ -359,10 +354,6 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         """
         把一个批次的脚本汇总行和报告明细行拼成一条批次记录, 即任务执行历史列表中的一行。
 
-        通过/失败数、起止时间来自脚本汇总行; 执行人/涉及环境/总耗时来自报告明细行(需按case_st_time升序传入)。
-        绑定脚本数区分口径: 运行中批次取任务当前绑定数(当批落库尚不完整), 历史批次取当批实际落库脚本数
-        (任务绑定数随后续编辑漂移, 不能回填历史行)。
-
         :param batch_code: 批次标识
         :param task_name: 任务名称
         :param script_aggs: 脚本汇总行列表, 每行一个脚本, 含round_total/round_passed/first_case_st_time/last_case_ed_time
@@ -371,6 +362,9 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
         :param is_running: 该批次是否为正在执行的批次
         :return: 批次汇总数据
         """
+        # 通过/失败数、起止时间来自脚本汇总行; 执行人/涉及环境/总耗时来自报告明细行(需按case_st_time升序传入)。
+        # 绑定脚本数区分口径: 运行中批次取任务当前绑定数(当批落库尚不完整), 历史批次取当批实际落库脚本数
+        # (任务绑定数随后续编辑漂移, 不能回填历史行)
         report_script_count: int = len(script_aggs)
         # 脚本级成功 = 轮次总数>0且全部轮次通过；批次状态按成功脚本占比判定
         success_script_count: int = sum(1 for agg in script_aggs if 0 < agg["round_total"] == agg["round_passed"])
@@ -425,15 +419,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             scope: Optional[DataScope] = None,
     ) -> Tuple[int, List[AutoTestReportBatchItem]]:
         """
-        任务执行历史查询(任务维度): 按task_code把报告聚合成批次列表, 一行代表一次任务执行, 供/search_task_batches接口渲染执行历史。
-
-        查询分三层, 每次只取必要数据, 翻页代价不随该任务历史报告总量增长:
-        第1层按batch_code分组取每批次的最早开始时间, 用于批次排序和分页;
-        第2、3层只查当前页批次, 分别取脚本维度的汇总(轮次数/成功数/起止时间)和执行人/环境/耗时明细。
-        绑定脚本数分口径: 运行中批次取任务当前绑定数, 历史批次取当批实际落库脚本数(任务绑定数随后续编辑漂移);
-        任务正在执行时, 最近批次的结束时间留空且状态返回"正在执行",
-        等全部绑定脚本执行完落库后自然给出结束时间和最终状态。任务执行链路的报告必然携带batch_code;
-        脚本/报告维度的下钻由/search_batch_scripts与/search_script_round_reports接口承担。
+        任务执行历史查询：按task_code把报告聚合成批次列表, 一行代表一次任务执行, 供执行历史抽屉渲染。
 
         :param batch_in: 批次查询入参
         :param scope: 数据权限上下文
@@ -547,15 +533,14 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             scope: Optional[DataScope] = None,
     ) -> Tuple[int, List[AutoTestReportBatchScriptItem]]:
         """
-        批次内脚本维度下钻查询：按批次标识聚合脚本执行信息(一行=一个脚本), 供/search_batch_scripts接口渲染“脚本执行信息”抽屉。
-        脚本行按最早开始时间升序排列, 自上而下即执行先后顺序: 串行模式等价于任务绑定顺序, 并行模式呈现脚本被调度的先后。
-        轮次列表由前端按case_execute_count构建, 轮次内数据源名称由/search_script_round_reports按全轮次计算返回。
+        批次内脚本维度下钻查询：按批次标识聚合脚本执行信息, 一行即一个脚本, 供脚本执行信息抽屉渲染。
 
         :param script_in: 脚本维度查询入参
         :param scope: 数据权限上下文
         :return: (脚本总数, 当前页脚本行列表)
         :raises ParameterException: batch_code 为空
         """
+        # 轮次列表由前端按case_execute_count构建, 轮次内数据源名称由/search_script_round_reports按全轮次计算返回
         batch_code: str = (script_in.batch_code or "").strip()
         if not batch_code:
             raise ParameterException(message="参数[batch_code]不允许为空")
@@ -654,16 +639,14 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             scope: Optional[DataScope] = None,
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        脚本执行明细分页查询(报告维度)：按批次标识+用例ID分页返回执行报告(一行记录代表一次场景执行), 供/search_script_round_reports接口渲染明细表格。
-
-        双形态：传入round_no时按轮次过滤(轮次内明细)；缺省时返回全部轮次明细(执行次数模式无数据源场景),
-        两种形态统一按执行时间升序排列。
+        脚本执行明细分页查询：按批次标识与用例ID分页返回执行报告, 一行记录代表一次场景执行, 供报告明细表格渲染。
 
         :param report_in: 脚本明细查询入参
         :param scope: 数据权限上下文
         :return: (报告总数, 当前页报告行列表)
         :raises ParameterException: batch_code 或 case_id 为空
         """
+        # 双形态：传入round_no时按轮次过滤，缺省时返回全部轮次明细(执行次数模式无数据源场景)，统一按执行时间升序排列
         batch_code: str = (report_in.batch_code or "").strip()
         if not batch_code:
             raise ParameterException(message="参数[batch_code]不允许为空")
@@ -715,14 +698,13 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
 
     async def search_reports(self, search: Q, report_in: AutoTestReportSelect) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        执行维度主查询：将多数据源执行(同batch_code)唯一化为一行代表行, 批次行携带has_multiple_dataset与dataset_count, 多数据源批次行的step_pass_ratio为批内累积通过率; 批次明细由search_batch_reports按批次标识下钻。
-
-        三段式查询控制资源: 段1a/1b并发聚合执行维度轻量行 → 内存合并排序分页 → 段2代表行按主键回查全字段。
+        执行维度主查询：将同batch_code的多数据源执行唯一化为一行代表行, 批次行携带has_multiple_dataset与dataset_count, 多数据源批次行的step_pass_ratio为批内累积通过率; 批次明细由search_batch_reports按批次标识下钻。
 
         :param search: 查询条件(view层组装, 含state过滤, 不含batch_code空值分段)
         :param report_in: 报告查询入参(分页与state)
         :return: (执行维度总数, 当前页报告行列表)
         """
+        # 三段式查询控制资源: 段1a/1b并发聚合执行维度轻量行 → 内存合并排序分页 → 段2代表行按主键回查全字段
         case_curd: AutoTestCaseCrud = AutoTestCaseCrud()
         # gather返回List[Any], 经中转变量解包以保留两侧轻量行的类型注解
         batch_rep_rows, single_rows = await asyncio.gather(
@@ -798,7 +780,7 @@ class AutoTestReportCrud(ScaffoldCrud[AutoTestReportModel, AutoTestReportCreate,
             scope: Optional[DataScope] = None,
     ) -> Tuple[int, List[Dict]]:
         """
-        报告维度下钻查询：按批次标识精确分页返回同批次全部报告(一行=一条报告, 不做批次唯一化), 供/search_batch_reports接口渲染“执行报告”抽屉。
+        报告维度下钻查询：按批次标识精确分页返回同批次全部报告, 一行即一条报告且不做批次唯一化, 供执行报告抽屉渲染。
 
         :param page: 页码
         :param page_size: 每页数量

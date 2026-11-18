@@ -6,11 +6,10 @@
 @Module  : autotest_record_crud
 @DateTime: 2026/2/1 12:13
 
-任务执行记录（krun_autotest_record）的CRUD：异步中心与执行历史的统一记录表。
-
-一行记录代表一次Celery任务（导入/导出/脚本生成/用例执行等），终态以 celery_status 为准；
-task_summary 为结果快照，附件以 attachments 信封存放于其中，删除记录时需同步清理对应产物文件。
+任务执行记录krun_autotest_record的CRUD：异步中心与执行历史的统一记录表。
 """
+# 一行记录代表一次Celery任务，导入/导出/脚本生成/用例执行等，终态以 celery_status 为准；
+# task_summary 为结果快照，附件以 attachments 信封存放于其中，删除记录时需同步清理对应产物文件
 import os
 import traceback
 from datetime import datetime
@@ -43,12 +42,11 @@ def _remove_artifact_files(record: AutoTestRecordModel) -> None:
     """
     物理清理执行记录的产物文件；单个文件失败仅告警，不阻断其余清理。
 
-    附件从 task_summary 的 attachments 信封取 storage_key，再还原为本地磁盘路径；
-    非法键/磁盘异常均只记日志，因此调用方应在记录已删除之后调用，避免“文件已清、记录未删”。
-
     :param record: 已提交删除的执行记录行（仅需 task_summary）
     :return: None
     """
+    # 附件从 task_summary 的 attachments 信封取 storage_key，再还原为本地磁盘路径；
+    # 非法键/磁盘异常均只记日志，因此调用方应在记录已删除之后调用，避免“文件已清、记录未删”
     for attachment in list_attachments_from_summary(getattr(record, "task_summary", None)):
         storage_key = str(attachment.get("storage_key") or "").strip()
         if not storage_key:
@@ -64,12 +62,11 @@ def _remove_artifact_files(record: AutoTestRecordModel) -> None:
 
 
 class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate, AutoTestRecordUpdate]):
-    """
-    任务执行记录CRUD：异步任务进度/结果回写、异步中心列表查询与带产物的删除。
+    """任务执行记录CRUD：异步任务进度/结果回写、异步中心列表查询与带产物的删除。"""
 
-    写入主要由 Celery 任务回调驱动（直写 service，不过对外写接口）；读列表按 created_user 做范围过滤。
-    删除约束：仅终态（成功/失败/部分成功）可删，且记录为物理删除。
-    """
+    # 关键口径：
+    # - 写入主要由 Celery 任务回调驱动（直写 service，不过对外写接口）；读列表按 created_user 做范围过滤
+    # - 删除约束：仅终态（成功/失败/部分成功）可删，且记录为物理删除
 
     def __init__(self):
         """绑定执行记录模型，供基类通用CRUD复用。"""
@@ -102,14 +99,13 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         """
         根据Celery任务ID查询执行记录。
 
-        celery_id 仅有普通索引（非唯一），命中多行时返回首条；仅供 Celery 回调定位记录。
-
         :param celery_id: Celery任务ID；为空时返回None
         :param kwargs: 额外过滤条件
         :return: 记录实例或None
         """
         if not celery_id:
             return None
+        # celery_id 仅有普通索引（非唯一），命中多行时返回首条；仅供 Celery 回调定位记录
         return await self.model.filter(celery_id=celery_id, **kwargs).first()
 
     async def create_record(self, data: Union[AutoTestRecordCreate, Dict[str, Any]]) -> AutoTestRecordModel:
@@ -134,10 +130,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             celery_id: Optional[str] = None,
     ) -> AutoTestRecordModel:
         """
-        更新一条任务执行记录（按主键或celery_id定位）。
-
-        只写模型已有字段；task_summary/task_error/batch_code 允许显式置空（其余字段的 None 一律忽略，
-        防止部分更新把存量进度/结果抹掉）。无登录上下文（Celery回调）时 updated_user 回落创建人。
+        更新一条任务执行记录，按主键或celery_id定位。
 
         :param data: 更新入参Schema或字段字典
         :param record_id: 执行记录主键
@@ -167,7 +160,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             record_in = data
             raw = data.model_dump(exclude_unset=True)
         update_dict = record_in.update_dict()
-        # task_summary/task_error/batch_code允许显式置空
+        # 只写模型已有字段；task_summary/task_error/batch_code允许显式置空，其余字段的None一律忽略，防止部分更新抹掉存量进度/结果
         allow_none_keys = ("task_summary", "task_error", "batch_code")
         update_dict = {
             k: v for k, v in update_dict.items()
@@ -190,9 +183,6 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         """
         根据celery_id更新执行记录；仅写入模型已有字段，部分键允许置空。
 
-        与 update_record 的差异：记录不存在时返回 None 而不抛错，供 Celery 回调做幂等更新
-        （任务可能因强制终止而尚未建记录）。
-
         :param celery_id: Celery任务ID
         :param data: 更新入参Schema或字段字典
         :return: 更新后的记录；不存在则返回None
@@ -201,6 +191,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
         if not record:
             return None
         try:
+            # 与update_record的差异：记录不存在时返回None而不抛错，供Celery回调做幂等更新（任务可能因强制终止而尚未建记录）
             return await self.update_record(data, celery_id=celery_id)
         except NotFoundException:
             return None
@@ -208,9 +199,6 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
     async def select_records(self, record_in: AutoTestRecordSelect, scope: DataScope) -> Tuple[int, List[AutoTestRecordModel]]:
         """
         根据条件分页查询任务执行记录。
-
-        未指定 task_type/task_type_in 时默认排除三类“执行类”任务（多用例/单用例/调度扫描），
-        使异步中心只展示导入/导出/脚本生成等异步产物任务。
 
         :param record_in: 查询条件(含分页、排序与时间区间)
         :param scope: 数据权限上下文，按创建人过滤可见范围
@@ -237,7 +225,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
                 type_vals = [getattr(t, "value", t) for t in record_in.task_type_in]
                 q &= Q(task_type__in=type_vals)
             elif record_in.task_type is None:
-                # 默认排除仅用于异步中心缺省查询，显式单值类型不得再叠加相反条件
+                # 默认排除：未指定 task_type/task_type_in 时排除三类执行类任务，使异步中心只展示导入/导出/脚本生成等异步产物任务；显式单值类型不得再叠加相反条件
                 q &= Q(task_type__not_in=[
                     AutoTestTaskType.MULTIPLE_CASE_EXECUTE,
                     AutoTestTaskType.SINGLE_CASE_EXECUTE,
@@ -257,7 +245,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
                 q &= Q(celery_status=status_val)
 
             def _parse_dt(raw: Optional[str]) -> Optional[datetime]:
-                """将YYYY-MM-DD HH:MM:SS格式字符串解析为datetime，失败返回None；超长部分（如带小数秒）截断。"""
+                """将YYYY-MM-DD HH:MM:SS格式字符串解析为datetime，失败返回None；超长部分如带小数秒截断。"""
                 if not raw:
                     return None
                 try:
@@ -286,16 +274,13 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             )
             return total, list(instances)
         except FieldError as e:
-            error_message: str = "查询任务执行记录失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询任务执行记录失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
     async def delete_record_with_artifacts(self, record_id: int, scope: DataScope) -> int:
         """
         删除终态执行记录并物理清理产物文件。
-
-        仅终态(成功/失败/部分成功)且创建人为当前用户的记录允许删除；记录硬删后尽力清理task_summary
-        信封中的产物文件，单个文件清理失败仅告警不影响删除结果。
 
         :param record_id: 执行记录主键
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的执行记录
@@ -311,6 +296,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
             LOGGER.error(error_message)
             raise NoPermissionException(message=error_message)
         status_val = getattr(record.celery_status, "value", record.celery_status)
+        # 仅终态(成功/失败/部分成功)且创建人可删的记录允许删除；产物清理见下方
         if status_val not in _RECORD_FINAL_STATUS_VALUES:
             error_message: str = f"删除执行记录失败, 记录[id={record_id}]未到终态(当前状态: {status_val})"
             LOGGER.error(error_message)
@@ -357,7 +343,7 @@ class AutoTestRecordCrud(ScaffoldCrud[AutoTestRecordModel, AutoTestRecordCreate,
                 raise ParameterException(message=error_message)
 
         deleted = await self.model.filter(id__in=list(found_ids)).delete()
-        # 记录已物理删除后再清理产物文件，避免清理成功而删除失败的中间态
+        # 记录已物理删除后再清理产物文件（硬删后尽力清理task_summary信封中的产物，单个文件清理失败仅告警不影响删除结果）
         for instance in targets:
             _remove_artifact_files(record=instance)
         return deleted

@@ -11,11 +11,13 @@ import traceback
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Set, Tuple
 
-from tortoise.exceptions import DoesNotExist, IntegrityError
+from tortoise.exceptions import IntegrityError
 from tortoise.exceptions import FieldError
 from tortoise.expressions import Q, RawSQL
 from tortoise.timezone import now as tz_now
 
+from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel
+from backend.applications.autotest.models.autotest_env_model import AutoTestEnvModel
 from backend.applications.autotest.models.autotest_task_model import AutoTestTaskModel
 from backend.applications.autotest.schemas.autotest_task_schema import AutoTestTaskCreate, AutoTestTaskUpdate
 from backend.applications.autotest.services.autotest_scope_guard import (
@@ -36,21 +38,67 @@ from backend.enums import AutoTestTaskPeriodicMode, AutoTestTaskStatus
 from backend.services import DataScope
 
 
+# cases_execute_config 顶层全局键：累积用例级环境字段时必须跳过，避免把全局值误当用例配置
+TASK_CASE_CONFIG_TOP_LEVEL_KEYS: Tuple[str, ...] = ("env_mode", "env_id", "env_ids")
+
+
+def _coerce_env_bind_id(raw: Any) -> Optional[int]:
+    """
+    把环境绑定ID归一为正整数。
+
+    :param raw: 原始值
+    :return: 有效的绑定ID，无效返回None
+    """
+    # 存量JSON中ID可能以字符串形式出现，非数字/布尔/非正值一律视为无效
+    if isinstance(raw, bool):
+        return None
+    try:
+        bind_id: int = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return bind_id if bind_id > 0 else None
+
+
+def extract_task_involve_env_ids(cases_execute_config: Any) -> List[int]:
+    """
+    累积各用例involve_env_ids并去重，生成task级涉及环境绑定ID列表。
+
+    :param cases_execute_config: 任务级用例执行配置字典
+    :return: 升序环境绑定ID列表；非字典输入返回空列表
+    """
+    # 结果落库到task_involve_env_ids，供环境删除前精确反查“该绑定是否仍被任务引用”；
+    # 绑定ID不受环境改名影响，是任务引用的权威标识
+    if not isinstance(cases_execute_config, dict):
+        return []
+    env_ids: Set[int] = set()
+    for case_key, case_cfg in cases_execute_config.items():
+        # 跳过顶层全局键(env_mode/env_id/env_ids)，仅累积case_id配置的involve_env_ids
+        if case_key in TASK_CASE_CONFIG_TOP_LEVEL_KEYS:
+            continue
+        raw_ids = case_cfg.get("involve_env_ids") if isinstance(case_cfg, dict) else None
+        if not isinstance(raw_ids, list):
+            continue
+        for raw in raw_ids:
+            bind_id = _coerce_env_bind_id(raw)
+            if bind_id is not None:
+                env_ids.add(bind_id)
+    return sorted(env_ids)
+
+
 def extract_task_involve_envs(cases_execute_config: Any) -> List[str]:
     """
-    累积各用例involve_envs并去重，生成task级涉及环境名称列表。
-
-    结果落库到task_involve_envs，供环境删除前反查“该环境是否仍被任务引用”。
+    累积存量用例配置involve_envs名称并去重。
 
     :param cases_execute_config: 任务级用例执行配置字典
     :return: 排序后的环境名称列表；非字典输入返回空列表
     """
+    # 存量名称(批次5之前结构)仅作兜底：回填前的任务JSON以名称记录涉及环境，
+    # 环境删除校验与旧客户端请求需据此阻断；新结构任务的名称快照由绑定ID反查生成
     if not isinstance(cases_execute_config, dict):
         return []
     env_names: Set[str] = set()
     for case_key, case_cfg in cases_execute_config.items():
-        # 跳过顶层全局键(env_mode/env_name)，仅累积case_id配置的involve_envs
-        if case_key in ("env_mode", "env_name"):
+        if case_key in TASK_CASE_CONFIG_TOP_LEVEL_KEYS:
             continue
         involve_envs = case_cfg.get("involve_envs") if isinstance(case_cfg, dict) else None
         if isinstance(involve_envs, list):
@@ -58,23 +106,21 @@ def extract_task_involve_envs(cases_execute_config: Any) -> List[str]:
     return sorted(env_names)
 
 
-def extract_steps_execute_envs(cases_execute_config: Any) -> Dict[str, str]:
+def extract_steps_execute_envs(cases_execute_config: Any) -> Dict[str, Any]:
     """
-    累积各用例steps_execute_config的步骤执行环境名称映射(任务级扁平映射)。
-
-    跨用例key重复时后者覆盖前者：step_id格式key全局唯一不受影响，
-    仅@@step_name格式key(或历史脏数据)存在极小概率冲突。
-    视图层用它回显列表的steps_execute_env，环境删除前用它反查单步骤引用。
+    累积各用例steps_execute_config的步骤环境标识映射，生成任务级扁平映射。
 
     :param cases_execute_config: 任务级用例执行配置字典
-    :return: {步骤配置键(step_id|step_id_@@op_index): 环境名称}映射
+    :return: {步骤配置键(step_id|step_id_@@op_index): 绑定ID(int)或存量名称(str)}
     """
+    # 优先取新结构env_id；绑定ID缺失时回落存量env_name，以兼容回填前的任务数据。
+    # 跨用例key重复时后者覆盖前者：step_id格式key全局唯一不受影响，仅@@step_name格式key(或历史脏数据)冲突
     if not isinstance(cases_execute_config, dict):
         return {}
-    step_envs: Dict[str, str] = {}
+    step_envs: Dict[str, Any] = {}
     for case_key, case_cfg in cases_execute_config.items():
-        # 跳过顶层全局键(env_mode/env_name)，仅累积case_id配置的步骤执行环境
-        if case_key in ("env_mode", "env_name"):
+        # 跳过顶层全局键(env_mode/env_id/env_ids)，仅累积case_id配置的步骤执行环境
+        if case_key in TASK_CASE_CONFIG_TOP_LEVEL_KEYS:
             continue
         if not isinstance(case_cfg, dict):
             continue
@@ -82,10 +128,44 @@ def extract_steps_execute_envs(cases_execute_config: Any) -> Dict[str, str]:
         if not isinstance(steps_cfg, dict):
             continue
         for step_key, step_cfg in steps_cfg.items():
-            env_name = step_cfg.get("env_name") if isinstance(step_cfg, dict) else None
+            if not isinstance(step_cfg, dict):
+                continue
+            bind_id = _coerce_env_bind_id(step_cfg.get("env_id"))
+            if bind_id is not None:
+                step_envs[str(step_key)] = bind_id
+                continue
+            env_name = step_cfg.get("env_name")
             if env_name not in (None, ""):
                 step_envs[str(step_key)] = str(env_name)
     return step_envs
+
+
+async def resolve_env_names_by_bind_ids(env_ids: List[int]) -> Dict[int, str]:
+    """
+    批量反查环境绑定ID对应的环境名称。
+
+    :param env_ids: 环境绑定ID列表（可重复）
+    :return: {绑定ID: 环境名称}；空入参返回空字典
+    """
+    # 任务涉及环境名称快照由绑定ID实时反查生成，固定两次查询；
+    # 绑定缺失或字典缺失的ID不出现在结果中，由调用方回落ID文本展示
+    bind_ids: List[int] = sorted({bind_id for bind_id in map(_coerce_env_bind_id, env_ids or []) if bind_id})
+    if not bind_ids:
+        return {}
+    bind_rows: List[Dict[str, Any]] = await AutoTestEnvBindModel.filter(id__in=bind_ids).values("id", "env_enum_id")
+    enum_ids: List[int] = sorted({int(row["env_enum_id"]) for row in bind_rows if row.get("env_enum_id") is not None})
+    if not enum_ids:
+        return {}
+    name_rows: List[Dict[str, Any]] = await AutoTestEnvModel.filter(id__in=enum_ids).values("id", "env_name")
+    enum_name_map: Dict[int, str] = {
+        int(row["id"]): str(row["env_name"]) for row in name_rows if row.get("env_name")
+    }
+    result: Dict[int, str] = {}
+    for row in bind_rows:
+        env_name = enum_name_map.get(int(row["env_enum_id"]))
+        if env_name:
+            result[int(row["id"])] = env_name
+    return result
 
 
 def resolve_cases_execute_config(task_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -103,11 +183,10 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
     """
     规范化task_kwargs：仅承载initial_variables及未知扩展键。
 
-    非字典输入一律降为空字典，避免脏值写进JSONField后执行期取键报错。
-
     :param task_kwargs: 原始task_kwargs
     :return: 清洗后的字典；输入None时返回None（区别于显式传空对象）
     """
+    # 非字典输入一律降为空字典，避免脏值写进JSONField后执行期取键报错
     if task_kwargs is None:
         return None
     if not isinstance(task_kwargs, dict):
@@ -116,13 +195,11 @@ def normalize_task_kwargs(task_kwargs: Any) -> Optional[Dict[str, Any]]:
 
 
 class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoTestTaskUpdate]):
-    """
-    任务CRUD：任务创建/软删复活、复制、更新、删除、启停调度与执行权抢占。
+    """任务CRUD：任务创建/软删复活、复制、更新、删除、启停调度与执行权抢占。"""
 
-    唯一键为（task_name, task_project），含软删行判重（复活复用原记录）。
-    归属口径：任务以 created_user 为归属人（无独立 owner_user），删除只校验删除范围。
-    并发口径：执行入口统一经 claim_execution 原子抢占，避免多端点击/Beat重投重复执行。
-    """
+    # 唯一键为 (task_name, task_project)，含软删行判重（复活复用原记录）；
+    # 归属口径：任务以 created_user 为归属人，删除只校验删除范围；
+    # 并发口径：执行入口统一经 claim_execution 原子抢占，避免多端点击/Beat重投重复执行
 
     def __init__(self):
         """绑定任务模型，供基类通用CRUD复用。"""
@@ -131,7 +208,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
     @staticmethod
     def _dump_enum_fields(data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        将任务字典中的枚举字段(task_type等)转为原始值。
+        将任务字典中的枚举字段转为原始值。
 
         :param data: 任务字段字典
         :return: 原地转换后的字典
@@ -148,18 +225,34 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
     @staticmethod
     def _apply_task_fields(task_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
-        应用任务字段处理：
-        1. 规范化task_kwargs
-        2. 根据cases_execute_config累积task_involve_envs
+        应用任务字段处理：规范化task_kwargs。
 
         :param task_dict: 任务字段字典
         :return: 原地处理后的字典
         """
+        # 涉及环境相关字段由 _fill_task_involve_envs 异步回填，需访问环境表
         if "task_kwargs" in task_dict:
             task_dict["task_kwargs"] = normalize_task_kwargs(task_dict.get("task_kwargs"))
+        return task_dict
+
+    @staticmethod
+    async def _fill_task_involve_envs(task_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        根据cases_execute_config回填任务级涉及环境字段。
+
+        :param task_dict: 任务字段字典（需已包含cases_execute_config）
+        :return: 原地处理后的字典
+        """
+        # 绑定ID列表由各用例involve_env_ids去重得出，供环境删除精确校验；
+        # 名称快照由绑定ID实时反查生成，改名后重新保存即刷新；
+        # 旧客户端仅传存量名称时不覆盖为空，回落名称提取保持原有展示/筛选语义
         cases_cfg = resolve_cases_execute_config(task_dict)
-        if cases_cfg is not None:
-            task_dict["task_involve_envs"] = extract_task_involve_envs(cases_cfg)
+        if cases_cfg is None:
+            return task_dict
+        env_ids: List[int] = extract_task_involve_env_ids(cases_cfg)
+        bind_names: Dict[int, str] = await resolve_env_names_by_bind_ids(env_ids) if env_ids else {}
+        task_dict["task_involve_env_ids"] = env_ids
+        task_dict["task_involve_envs"] = sorted(set(bind_names.values())) or extract_task_involve_envs(cases_cfg)
         return task_dict
 
     # 运行态失效缓冲：Celery 硬时限 SIGKILL 后状态可能残留 RUNNING，超过「任务硬时限+缓冲」视为僵尸状态
@@ -193,14 +286,12 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
         """
         原子抢占任务执行权：仅当任务不在有效运行态时才能置为 RUNNING。
 
-        多端点击/Beat 重投会在同一条 UPDATE 上互斥，未抢到的消息不再执行，
-        避免同一任务并发生成多份报告。
-
         :param task_id: 任务主键ID
         :param execute_user: 本次执行人
         :param started_at: 本次执行开始时间，缺省取当前时刻
         :return: 抢占成功返回 True
         """
+        # 多端点击/Beat 重投会在同一条 UPDATE 上互斥，未抢到的消息不再执行，避免同一任务并发生成多份报告
         started_at = started_at or tz_now()
         claimed: int = await self.model.filter(id=task_id).filter(
             Q(last_execute_state__isnull=True)
@@ -297,6 +388,8 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             if task_dict.get("created_user") and not task_dict.get("updated_user"):
                 task_dict["updated_user"] = task_dict["created_user"]
             task_dict = self._apply_task_fields(task_dict)
+            # 涉及环境字段需按绑定ID反查名称快照，必须在落库前异步回填
+            task_dict = await self._fill_task_involve_envs(task_dict)
             if existing_task and existing_task.state == 1:
                 # 软删恢复不得跨写范围接管他人任务，且不覆盖原创建人
                 await scope.load_owners([existing_task.created_user])
@@ -320,11 +413,11 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
                 instance = await self.create(task_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "新增任务信息失败，相同应用下任务名称可能重复，或关联应用、用例无效，请检查后重试"
+            error_message: str = "新增任务信息失败, 相同应用下任务名称重复, 或关联应用、用例无效"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [task_name={task_name}, task_project={task_project}]\n"
-                f"{traceback.format_exc()}"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
 
@@ -335,8 +428,8 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             operate_user: Optional[str] = None,
     ) -> AutoTestTaskModel:
         """
-        完全复刻任务记录生成新任务：业务配置原样复制，task_code重新生成、
-        task_enabled默认停用(避免复制后立即产生双调度)、执行痕迹(last_execute_time/state/user)重置。
+        完全复刻任务记录生成新任务：业务配置原样复制，task_code重新生成，
+        task_enabled默认停用，执行痕迹重置。
 
         :param task_id: 源任务主键ID
         :param operate_user: 当前操作人，作为新任务的created_user/updated_user
@@ -377,10 +470,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
 
     async def update_task(self, task_in: AutoTestTaskUpdate, scope: DataScope) -> AutoTestTaskModel:
         """
-        更新任务，根据task_id或task_code定位并校验(task_name, task_project)唯一。
-
-        定时表达式显式置空时同步停用调度；时效/定时任一变更都会以合并后的值重新
-        校验并生成最终 task_schedule_expr，避免只改时效导致存量定时失配。
+        更新任务，根据task_id或task_code定位并校验任务名称与所属应用的唯一性。
 
         :param task_in: 任务更新schema
         :param scope: 数据权限上下文，仅允许修改归属人在当前用户可操作范围内的任务
@@ -434,9 +524,9 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             )
         if "task_kwargs" in update_dict:
             update_dict["task_kwargs"] = normalize_task_kwargs(update_dict.get("task_kwargs"))
-        # 提交了cases_execute_config时，同步累积task_involve_envs
+        # 提交了cases_execute_config时，同步重算涉及环境绑定ID与名称快照
         if "cases_execute_config" in update_dict:
-            update_dict["task_involve_envs"] = extract_task_involve_envs(update_dict.get("cases_execute_config"))
+            update_dict = await self._fill_task_involve_envs(update_dict)
         task_name = update_dict.get("task_name", instance.task_name)
         task_project = update_dict.get("task_project", instance.task_project)
         # 项目横移需重新校验父资源可读，用例集合变更需校验用例归属
@@ -454,18 +544,11 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             raise DataAlreadyExistsException(message=error_message)
 
         try:
+            # 基类 update 先按主键查询、不存在转 NotFoundException，此处只可能命中落库冲突
             instance = await self.update(id=task_id, obj_in=update_dict)
             return instance
-        except DoesNotExist as e:
-            error_message: str = "更新任务信息失败，目标任务不存在或已被删除，请刷新后重试"
-            LOGGER.error(
-                f"{error_message}, "
-                f"关键字段: [task_id={task_id}, task_code={task_code}]\n"
-                f"{traceback.format_exc()}"
-            )
-            raise NotFoundException(message=error_message) from e
         except IntegrityError as e:
-            error_message: str = "更新任务信息失败，相同应用下任务名称可能重复，或关联应用、用例无效，请检查后重试"
+            error_message: str = "更新任务信息失败, 相同应用下任务名称重复, 或关联应用、用例无效"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [task_id={task_id}, task_code={task_code}]\n"
@@ -481,8 +564,6 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
     ) -> AutoTestTaskModel:
         """
         软删除任务并关闭调度。
-
-        先软删再单独回写task_enabled=False：两者分开可避免基类软删字段集不含task_enabled。
 
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的任务
         :param task_id: 任务主键ID，与task_code二选一
@@ -504,6 +585,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             raise NoPermissionException(message=error_message)
 
         instance = await self.soft_delete(id=instance.id)
+        # 先软删再单独回写task_enabled=False：两者分开可避免基类软删字段集不含task_enabled
         instance.task_enabled = False
         await instance.save(update_fields=["task_enabled"])
         return instance
@@ -516,7 +598,7 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
             updated_user: Optional[str] = None,
     ) -> AutoTestTaskModel:
         """
-        设置任务是否启用调度(仅切换task_enabled，触发依赖task_schedule_expr)。
+        设置任务是否启用调度，仅切换task_enabled，触发依赖task_schedule_expr。
 
         :param task_id: 任务主键ID
         :param scope: 数据权限上下文，仅允许启停归属人在当前用户可操作范围内的任务
@@ -575,6 +657,6 @@ class AutoTestTaskCrud(ScaffoldCrud[AutoTestTaskModel, AutoTestTaskCreate, AutoT
                 return total, list(instances)
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询任务信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询任务信息失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e

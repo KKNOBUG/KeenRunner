@@ -6,15 +6,14 @@
 @Module  : autotest_task_schedule
 @DateTime: 2026/9/1 10:00
 
-任务结构化定时表达式(task_schedule_expr)的校验与运行时视图。
-
-两条职责严格分离：
-- normalize_schedule：落库前唯一校验入口，非法即抛 ParameterException；
-- TaskSchedule：Beat扫描/页面预览用的容错解析视图，脏数据只告警并返回None（该任务不参与扫描）。
-
-触发判定口径：反推“不晚于当前的最近触发点”与 last_execute_time 比较，对齐原Cron幂等语义；
-ONLY_ONCE 全部触发点被派发后由 is_completed 关闭调度。
+任务结构化定时表达式的校验与运行时视图。
 """
+
+# 两条职责严格分离：
+# - normalize_schedule：落库前唯一校验入口，非法即抛 ParameterException；
+# - TaskSchedule：Beat扫描/页面预览用的容错解析视图，脏数据只告警并返回None（该任务不参与扫描）。
+# 触发判定口径：反推“不晚于当前的最近触发点”与 last_execute_time 比较，对齐原Cron幂等语义；
+# ONLY_ONCE 全部触发点被派发后由 is_completed 关闭调度
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
@@ -116,7 +115,7 @@ def _normalize_int_set(raw: Any, low: int, high: int, field_name: str) -> List[i
 
 def _defensive_int_set(raw: Any) -> Set[int]:
     """
-    整数列表防御性解析(扫描链路容错, 不抛异常)，丢弃非法元素。
+    整数列表防御性解析，扫描链路容错不抛异常，丢弃非法元素。
 
     :param raw: 待解析列表
     :return: 整数集合；非列表入参返回空集合
@@ -155,16 +154,12 @@ def normalize_schedule(periodic: Any, schedule: Any) -> Optional[Dict[str, Any]]
     """
     校验并规范化结构化定时表达式，创建/更新任务落库前的唯一入口。
 
-    两种模式均保留trigger_month(月内日期多选1~31)与trigger_times(去重升序, 最多3个)，
-    供编辑任务抽屉无损回显(trigger_dates为二者展开产物, 当月不存在的日期展开时被跳过无法反推)；
-    ONLY_ONCE额外保留trigger_dates(触发日期时间列表, 去重升序)，运行时扫描仅消费该字段；
-    UNBOUNDED额外保留trigger_cycle，周模式追加trigger_weeks(1=周一~7=周日)。
-
     :param periodic: 时效枚举或字符串(执行1次/执行N次)
     :param schedule: 原始定时表达式字典
     :return: 规范化后的定时表达式字典；空入参返回None
     :raises ParameterException: 结构缺失、格式非法或越界
     """
+    # 运行时扫描仅消费 ONLY_ONCE 的 trigger_dates 字段，trigger_month 与 trigger_times 随表达式落库供编辑抽屉回显
     if schedule is None or schedule == {}:
         return None
     if not isinstance(schedule, dict):
@@ -207,16 +202,12 @@ def normalize_schedule(periodic: Any, schedule: Any) -> Optional[Dict[str, Any]]
 # ==================== 触发计算(运行时视图) ====================
 
 class TaskSchedule:
-    """
-    任务结构化定时表达式(task_schedule_expr)的运行时视图。
+    """任务结构化定时表达式的运行时视图。"""
 
-    ONLY_ONCE持有trigger_dates触发日期时间列表；
-    UNBOUNDED持有trigger_cycle×(trigger_weeks/trigger_month)×trigger_times。
-    提供到期反推(Beat扫描)、正推预览(新增/编辑页)、完成判定(ONLY_ONCE全部触发后关闭)三类能力。
-
-    from_expr为容错解析: 空定时返回None(未配置, 不参与扫描)，脏数据记录warning后返回None；
-    落库校验走normalize_schedule，二者职责分离。
-    """
+    # ONLY_ONCE持有trigger_dates触发日期时间列表；UNBOUNDED持有trigger_cycle×(trigger_weeks/trigger_month)×trigger_times。
+    # 提供到期反推(Beat扫描)、正推预览(新增/编辑页)、完成判定(ONLY_ONCE全部触发后关闭)三类能力；
+    # from_expr为容错解析: 空定时返回None(未配置, 不参与扫描)，脏数据记录warning后返回None；
+    # 落库校验走normalize_schedule，二者职责分离
 
     __slots__ = ("_periodic", "_trigger_dates", "_cycle", "_times", "_weeks", "_month")
     # 字段含义见 __init__：ONLY_ONCE只用 _trigger_dates，UNBOUNDED只用 _cycle/_times/_weeks/_month
@@ -297,7 +288,7 @@ class TaskSchedule:
 
     @property
     def is_only_once(self) -> bool:
-        """时效是否为ONLY_ONCE(执行1次)。"""
+        """判断时效是否为ONLY_ONCE执行1次模式。"""
         return self._periodic == AutoTestTaskPeriodicMode.ONLY_ONCE.value
 
     def _match_day(self, target_day: date) -> bool:
@@ -315,14 +306,12 @@ class TaskSchedule:
 
     def prev_fire_time(self, now: datetime) -> Optional[datetime]:
         """
-        反推不晚于now的最近一个触发时间点，供Beat扫描做到期判断(对齐原Cron到期语义)。
-
-        ONLY_ONCE取trigger_dates中不晚于now的最大值；
-        UNBOUNDED自today起按周期逐日回溯，取首个命中日期上不晚于now的最大时间点。
+        反推不晚于now的最近一个触发时间点，供Beat扫描判断是否到期，对齐原Cron幂等语义。
 
         :param now: 扫描当前时间
         :return: 最近触发时间点；无到期点时返回None
         """
+        # ONLY_ONCE取trigger_dates中不晚于now的最大值
         if self.is_only_once:
             latest: Optional[datetime] = None
             for fired_at in self._trigger_dates:
@@ -332,6 +321,7 @@ class TaskSchedule:
                     break
             return latest
 
+        # UNBOUNDED自today起按周期逐日回溯，取首个命中日期上不晚于now的最大时间点
         for back in range(DEDUCE_TRIGGER_TIMETABLE[self._cycle] + 1):
             target_day = now.date() - timedelta(days=back)
             if not self._match_day(target_day):
@@ -348,7 +338,7 @@ class TaskSchedule:
 
     def preview_fire_times(self, now: Optional[datetime] = None, limit: int = MAX_PREVIEW_LIMIT) -> List[str]:
         """
-        正推即将到来的触发日期时间列表，供新增/编辑页执行预览(近10次)。
+        正推即将到来的触发日期时间列表，供新增或编辑页预览最近10次执行。
 
         :param now: 预览基准时间，缺省当前时间
         :param limit: 预览条数上限
@@ -375,13 +365,13 @@ class TaskSchedule:
 
     def is_completed(self, moment: datetime) -> bool:
         """
-        判断ONLY_ONCE任务的全部触发日期时间是否均已到期(供执行后关闭调度)。
+        判断ONLY_ONCE任务的全部触发日期时间是否均已到期，供执行结束后关闭调度。
 
-        :param moment: 判定基准时刻；调用方应传“上一次执行启动时刻(last_execute_time)”
-            而非墙钟——触发点由扫描逐点派发，仅当上次执行启动时已越过最后一个触发点，
-            才能确认全部触发点均已被派发，避免单次执行跨越后续触发点时误关调度
+        :param moment: 判定基准时刻，调用方应传上一次执行启动时刻而非当前墙钟
         :return: ONLY_ONCE且全部trigger_dates已到期为True；UNBOUNDED恒为False
         """
+        # 触发点由扫描逐点派发，仅当上次执行启动时已越过最后一个触发点，才能确认全部触发点均已被派发，
+        # 避免单次执行跨越后续触发点时误关调度
         return self.is_only_once and bool(self._trigger_dates) and moment >= self._trigger_dates[-1]
 
 
@@ -410,10 +400,7 @@ async def fetch_schedulable_tasks(task_type: Any) -> List[Any]:
 
 def is_task_due(task: Any, now: Optional[datetime] = None) -> bool:
     """
-    基于task_periodic_expr + task_schedule_expr判断任务是否已到执行时间，供Beat扫描使用。
-
-    反推不晚于当前的最近触发时间点prev_fire，last_execute_time < prev_fire即到期，
-    与原Cron表达式到期语义一致(幂等、停机后补发一次)。
+    基于task_periodic_expr与task_schedule_expr判断任务是否已到执行时间，供Beat扫描使用。
 
     :param task: 任务模型实例(需含task_periodic_expr / task_schedule_expr / last_execute_time等字段)
     :param now: 扫描当前时间，缺省当前时间
@@ -447,6 +434,7 @@ def is_task_due(task: Any, now: Optional[datetime] = None) -> bool:
     schedule_obj = TaskSchedule.from_expr(getattr(task, "task_periodic_expr", None), schedule)
     if schedule_obj is None:
         return False
+    # 反推不晚于当前的最近触发时间点，last_execute_time < prev_fire即到期，与原Cron幂等语义一致(停机后补发一次)
     prev_fire = schedule_obj.prev_fire_time(now)
     if prev_fire is None:
         return False

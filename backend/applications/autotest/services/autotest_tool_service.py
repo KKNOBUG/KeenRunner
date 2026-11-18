@@ -30,12 +30,10 @@ __all__ = ["AutoTestToolService"]
 
 
 class AutoTestToolService:
-    """
-    自动化测试工具服务门面（供步骤引擎与调试视图复用）。
+    """自动化测试工具服务门面：供步骤引擎与调试视图复用。"""
 
-    实现根据领域拆分至autotest_runtime；本类只保留执行链实际消费的稳定入口，并提供跨模块共用的报文类型判定。
-    静态方法与类属性转发保证引擎、调试视图、Crud 走同一套实现，避免它们直接依赖autotest_runtime的具体类。
-    """
+    # 实现根据领域拆分至autotest_runtime；本类只保留执行链实际消费的稳定入口，并提供跨模块共用的报文类型判定。
+    # 静态方法与类属性转发保证引擎、调试视图、Crud 走同一套实现，避免它们直接依赖autotest_runtime的具体类
 
     # --- 数据的平铺和分组转换 / 日志收集 ---
     list_to_dict = KvUtils.list_to_dict
@@ -55,15 +53,14 @@ class AutoTestToolService:
     @staticmethod
     def looks_like_xml_payload(value: Any) -> bool:
         """
-        判断报文文本是否以XML起始标记开头（兼容BOM与前后空白）。
-
-        仅接受str；去前导BOM/空白后以"<"开头即视为疑似XML，不校验XML合法性。
+        判断报文文本是否以XML起始标记开头，兼容BOM与前后空白。
 
         :param value: 候选报文
         :return: 疑似XML返回True
         """
         if not isinstance(value, str):
             return False
+        # 仅接受str；去前导BOM/空白后以"<"开头即视为疑似XML，不校验XML合法性
         return value.lstrip("\ufeff \t\r\n").startswith("<")
 
     @classmethod
@@ -71,12 +68,11 @@ class AutoTestToolService:
         """
         提取步骤的XML报文本：优先request_text，缺失时兼容字符串型request_body。
 
-        逐个候选项嗅探，返回首个命中项并去掉前导BOM/空白；均未命中返回空串。
-
         :param request_text: 文本报文
         :param request_body: 对象/字符串报文
         :return: XML文本；非XML或为空时返回空串
         """
+        # 逐个候选项嗅探，返回首个命中项并去掉前导BOM/空白；均未命中返回空串
         for value in (request_text, request_body):
             if cls.looks_like_xml_payload(value):
                 return value.lstrip("\ufeff \t\r\n")
@@ -90,16 +86,14 @@ class AutoTestToolService:
             request_body: Any,
     ) -> bool:
         """
-        判定请求报文是否按XML处理（HTTP/TCP数据驱动共用同一口径）。
-
-        显式XML/JSON类型优先；未明确类型时，按request_text或字符串型request_body的内容嗅探。
-        args_type支持枚举或字符串，比对前统一去空白+小写。
+        判定请求报文是否按XML处理，HTTP/TCP数据驱动共用同一口径。
 
         :param args_type: 请求体类型
         :param request_text: 文本报文
         :param request_body: 对象/字符串报文
         :return: 按XML处理返回True
         """
+        # 显式XML/JSON类型优先；未明确类型时按request_text或字符串型request_body的内容嗅探；args_type支持枚举或字符串，比对前统一去空白+小写
         args_value = str(getattr(args_type, "value", args_type) or "").strip().lower()
         if args_value == AutoTestReqArgsType.XML.value:
             return True

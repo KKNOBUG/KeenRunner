@@ -37,7 +37,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
         "id", "case_id", "case_code", "report_code", "parent_step_id",
         "step_id", "step_no", "step_code", "step_name", "step_type", "step_state", "step_elapsed",
         "step_exec_except", "loop_cycles", "branch_index", "branch_match", "dataset_name",
-        "response_elapsed", "request_env_name", "request_config_name", "database_operates",
+        "response_elapsed", "request_env_name", "request_config_name", "request_config_mode", "database_operates",
         "step_st_time", "created_user",
     )
 
@@ -70,7 +70,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
     async def get_by_code(self, detail_code: str, on_error: bool = False, **kwargs) -> Optional[AutoTestDetailModel]:
         """
-        按报告标识代码取其下第一条明细（报告内明细不唯一，仅供报告级定位）。
+        按报告标识代码取其下第一条明细：报告内明细不唯一，仅供报告级定位。
 
         :param detail_code: 报告标识代码 report_code
         :param on_error: 未找到时是否抛出异常
@@ -93,7 +93,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
     async def create_detail(self, detail_in: AutoTestDetailCreate, *, skip_report_check: bool = False) -> AutoTestDetailModel:
         """
-        创建执行明细，校验用例与报告存在(可跳过报告校验)。
+        创建执行明细，校验用例与报告存在，可跳过报告校验。
 
         :param detail_in: 明细创建schema
         :param skip_report_check: 为True时不校验报告是否存在
@@ -125,19 +125,19 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             instance = await self.create(report_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "新增明细信息失败，明细记录重复或关联数据无效"
+            error_message: str = "新增明细信息失败, 明细记录重复或关联数据无效"
             LOGGER.error(
-                f"{error_message}, 关键字段: [report_code={detail_in.report_code}, "
-                f"case_id={case_id}, case_code={case_code}, step_code={detail_in.step_code}]\n"
-                f"{traceback.format_exc()}"
+                f"{error_message}, "
+                f"关键字段: [report_code={detail_in.report_code}, case_id={case_id}, case_code={case_code}, step_code={detail_in.step_code}]\n"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
-            error_message: str = "新增明细信息失败，暂时无法保存执行明细，请稍后重试"
+            error_message: str = "新增明细信息失败, 暂时无法保存执行明细，请稍后重试"
             LOGGER.error(
-                f"{error_message}, 关键字段: [report_code={detail_in.report_code}, "
-                f"case_id={case_id}, case_code={case_code}, step_code={detail_in.step_code}]\n"
-                f"{traceback.format_exc()}"
+                f"{error_message}, "
+                f"关键字段: [report_code={detail_in.report_code}, case_id={case_id}, case_code={case_code}, step_code={detail_in.step_code}]\n"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
 
@@ -160,15 +160,15 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             await self.model.bulk_create(instances)
             return instances
         except IntegrityError as e:
-            error_message: str = "批量新增明细信息失败，明细记录重复或关联数据无效"
+            error_message: str = "批量新增明细信息失败, 明细记录重复或关联数据无效"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [detail_count={len(details_in)}]\n"
-                f"{traceback.format_exc()}"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
         except Exception as e:
-            error_message: str = "批量新增明细信息失败，暂时无法保存执行明细，请稍后重试"
+            error_message: str = "批量新增明细信息失败, 暂时无法保存执行明细，请稍后重试"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [detail_count={len(details_in)}]\n"
@@ -178,7 +178,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
     async def update_detail(self, detail_in: AutoTestDetailUpdate, scope: DataScope) -> AutoTestDetailModel:
         """
-        更新明细，需提供detail_id或(report_code, step_code)定位。
+        更新明细，需提供detail_id或report_code与step_code定位。
 
         :param detail_in: 明细更新schema
         :param scope: 数据权限上下文
@@ -237,7 +237,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             instance = await self.update(id=detail_id, obj_in=update_dict)
             return instance
         except IntegrityError as e:
-            error_message: str = "更新明细信息失败，明细记录重复或关联数据无效"
+            error_message: str = "更新明细信息失败, 明细记录重复或关联数据无效"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [detail_id={detail_id}, report_code={report_code}, step_code={step_code}]\n"
@@ -253,7 +253,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             report_code: Optional[str] = None
     ) -> AutoTestDetailModel:
         """
-        物理删除明细，需提供detail_id或(report_code, step_code)。
+        物理删除明细，需提供detail_id或report_code与step_code。
 
         :param scope: 数据权限上下文
         :param detail_id: 明细主键ID，与(report_code, step_code)二选一
@@ -319,7 +319,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
 
     async def select_details(self, search: Q, page: int, page_size: int, order: List[str]) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        根据条件分页查询明细列表(轻量列，不含请求、响应、变量等大字段数据)。
+        根据条件分页查询明细列表：轻量列，不含请求、响应、变量等大字段数据。
 
         :param search: Tortoise Q查询条件
         :param page: 页码
@@ -336,13 +336,13 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             dataset = await query.offset(page_offset).limit(page_size).order_by(*order_fields).values(*self.DETAIL_LIGHT_COLUMNS)
             return total, dataset
         except FieldError as e:
-            error_message: str = "查询明细信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询明细信息失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
     async def select_tree_details(self, search: Q, order: List[str]) -> Tuple[int, List[Dict[str, Any]]]:
         """
-        查询明细树数据源：全量轻量列(不分页)，与select_details同列清单；返回平铺行(非树)，供build_detail_tree组装。
+        查询明细树数据源：全量轻量列不分页，与select_details同列清单；返回平铺行非树，供build_detail_tree组装。
 
         :param search: Tortoise Q查询条件
         :param order: 排序字段列表(固定执行时间线序, 保证父行先于子行)
@@ -355,25 +355,24 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             rows = await query.order_by(*order_fields).values(*self.DETAIL_LIGHT_COLUMNS)
             return len(rows), rows
         except FieldError as e:
-            error_message: str = "查询明细树失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询明细树失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
     @staticmethod
     def build_detail_tree(rows: List[Dict[str, Any]], only_failed: bool = False) -> List[Dict[str, Any]]:
         """
-        按执行时间线序(rows需父行先于子行, 即按步骤开始时间+id排序)单遍扫描组装明细树。
-
-        规则：
-        - 以step_id记录"最近活跃父行"：子行归属时间上最近的同步骤容器行(兼容嵌套容器多圈多行)；
-        - parent_step_id为NULL或父行缺失(存量报告/孤儿明细)时归为根节点，宁降级不丢行；
-        - 生成层级路径序号tree_node(1、1.1、2.1)供前端展示；children恒输出，无子记录时为空列表；
-        - only_failed=True时仅保留失败步骤及其祖先链。
+        按执行时间线序单遍扫描组装明细树：rows需父行先于子行，即按步骤开始时间加id排序。
 
         :param rows: 时间线序明细字典列表
         :param only_failed: 是否仅保留失败节点及其祖先链
         :return: 树结构列表(每个节点含children与tree_node)
         """
+        # 组装规则：
+        # - 以step_id记录"最近活跃父行"：子行归属时间上最近的同步骤容器行(兼容嵌套容器多圈多行)
+        # - parent_step_id为NULL或父行缺失(存量报告/孤儿明细)时归为根节点，宁降级不丢行
+        # - 生成层级路径序号tree_node(1、1.1、2.1)供前端展示；children恒输出，无子记录时为空列表
+        # - only_failed=True时仅保留失败步骤及其祖先链
         last_node_by_step_id: Dict[int, Dict[str, Any]] = {}
         roots: List[Dict[str, Any]] = []
         for row in rows:
@@ -388,7 +387,7 @@ class AutoTestDetailCrud(ScaffoldCrud[AutoTestDetailModel, AutoTestDetailCreate,
             last_node_by_step_id[row.get("step_id")] = node
 
         def walk(nodes: List[Dict[str, Any]], prefix: str) -> List[Dict[str, Any]]:
-            """自底向上生成tree_node并按only_failed裁剪保留祖先链；children恒输出(无子为空列表)。"""
+            """自底向上生成tree_node并按only_failed裁剪保留祖先链：children恒输出，无子为空列表。"""
             kept: List[Dict[str, Any]] = []
             for index, node in enumerate(nodes):
                 node["tree_node"] = f"{prefix}.{index + 1}" if prefix else str(index + 1)

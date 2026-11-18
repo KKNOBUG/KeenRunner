@@ -7,6 +7,7 @@
 @DateTime: 2026/4/16 10:51
 """
 import traceback
+from collections import defaultdict
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple, Union
 
@@ -15,7 +16,9 @@ from tortoise.expressions import Q
 from tortoise.queryset import QuerySet
 from tortoise.transactions import in_transaction
 
+from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
 from backend.applications.autotest.models.autotest_env_config_model import AutoTestEnvBindModel, AutoTestEnvConfigModel
+from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
 from backend.applications.autotest.schemas.autotest_env_config_schema import (
     AutoTestEnvConfigCreate,
     AutoTestEnvConfigUpdate,
@@ -26,7 +29,7 @@ from backend.applications.autotest.schemas.autotest_env_config_schema import (
 from backend.applications.autotest.schemas.autotest_env_schema import AutoTestEnvCreate
 from backend.applications.autotest.services.autotest_env_crud import AutoTestEnvCrud
 from backend.applications.autotest.services.autotest_scope_guard import ENV_TAG, assert_parent_readable, load_readable_project
-from backend.applications.base.services.scaffold import ScaffoldCrud
+from backend.applications.base.services.scaffold import ScaffoldCrud, unique_identify
 from backend.common.database.database_connection_pool import get_app_database_pool
 from backend.configure import LOGGER
 from backend.core.exceptions import (
@@ -41,6 +44,10 @@ from backend.services import DataScope, get_current_username
 
 
 class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConfigCreate, AutoTestEnvConfigUpdate]):
+    """环境配置CRUD：环境配置表krun_autotest_env_config的创建、更新、改名同步、删除引用校验、查询分类。"""
+
+    # 核心口径：config_mode 是同应用同节点类型下的跨环境逻辑唯一键；创建/恢复/改名均须持有绑定行锁，
+    # 改名经 _sync_config_mode_group_name 同标识批量同步
 
     def __init__(self):
         """绑定环境配置模型，供基类通用CRUD复用。"""
@@ -93,7 +100,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
 
     @classmethod
     def _deadlock_errno(cls, error: OperationalError) -> Optional[int]:
-        """提取MySQL死锁(1213)/锁等待超时(1205)错误码，其他数据库异常返回None。"""
+        """提取MySQL死锁1213与锁等待超时1205错误码，其他数据库异常返回None。"""
         raw = error.args[0] if error.args else None
         if isinstance(raw, BaseException) and getattr(raw, "args", None):
             return raw.args[0] if raw.args else None
@@ -101,12 +108,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
 
     async def create_config(self, config_in: AutoTestEnvConfigCreate, scope: DataScope) -> AutoTestEnvConfigModel:
         """
-        创建环境配置；同名软删记录在写权限内恢复启用。
+        创建环境配置；同应用同节点同名配置复用逻辑标识，同名软删记录在写权限内恢复启用。
 
-        :param config_in: 环境配置创建schema（project_id/env_name/env_type用于解析绑定，不落配置表）
+        :param config_in: 环境配置创建schema（project_id/env_name/env_type 用于解析绑定，env_name 不落配置表，project_id/env_type 冗余回填）
         :param scope: 数据权限上下文
         :return: 配置ORM实例
-        :raises ParameterException: 环境名称为空
+        :raises ParameterException: 配置名称或环境名称为空
         :raises NotFoundException: 所属应用/环境绑定不存在或已软删
         :raises NoPermissionException: 应用或环境归属不在当前用户可操作范围
         :raises DataAlreadyExistsException: 同绑定下已存在启用态同名配置，或 host/port 重复
@@ -114,7 +121,12 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         """
         env_type = config_in.env_type
         project_id = int(config_in.project_id)
-        config_name = config_in.config_name
+        config_name = config_in.config_name.strip()
+        # schema 只约束必填，空白名称会绕过改名与唯一性判断直接落库，入口必须拦截
+        if not config_name:
+            error_message: str = "新增环境配置失败, 参数[config_name]不允许为空"
+            LOGGER.error(error_message)
+            raise ParameterException(message=error_message)
         # B级父资源校验：应用必须可读，向后挂载的配置才能被当前用户感知
         await load_readable_project(scope, project_id)
 
@@ -133,10 +145,14 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         )
         payload.update({"env_bind_id": env_bind.id, "state": 0})
         try:
-            # 绑定内串行化写入：锁住同环境全部配置行，避免host唯一性预检被并发插入穿透
+            # 锁定同应用同节点的全部启用绑定行：创建/恢复与改名在该维度串行，
+            # 保证“按名查逻辑配置—落库”之间不被并发写入穿透（设计 5.2）
             async with in_transaction():
-                await self._lock_bind_config_rows(int(env_bind.id))
-                existing = await self.model.filter(env_bind_id=env_bind.id, config_name=config_name).first()
+                await self._lock_project_type_binds(project_id, env_type)
+                existing = await self.model.filter(
+                    env_bind_id=env_bind.id,
+                    config_name__iexact=config_name,
+                ).first()
                 if existing:
                     if existing.state == 0:
                         raise DataAlreadyExistsException(message="相同应用和环境下, 配置名称不允许重复")
@@ -147,25 +163,53 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                         LOGGER.error(error_message)
                         raise NoPermissionException(message=error_message)
                     payload.pop("created_user", None)
+                    if existing.config_mode:
+                        # 恢复沿用原逻辑标识；同组启用行存在时以现有写法为准（设计 5.6）
+                        sibling_names: List[str] = await self.model.filter(
+                            config_mode=existing.config_mode,
+                            state=0,
+                        ).exclude(id=existing.id).order_by("id").values_list("config_name", flat=True)
+                        payload["config_mode"] = existing.config_mode
+                        payload["config_name"] = sibling_names[0] if sibling_names else existing.config_name
+                    else:
+                        # 批次空隙遗留的空标识行：按同名启用行解析或就地补标识，避免分裂第二组逻辑配置
+                        mode, canonical_name = await self._resolve_config_mode(
+                            project_id=project_id,
+                            env_type=env_type,
+                            config_name=existing.config_name,
+                        )
+                        payload["config_mode"] = mode
+                        payload["config_name"] = canonical_name
+                    payload["project_id"] = project_id
+                    payload["env_type"] = env_type
                     await self._assert_host_unique(env_bind_id=env_bind.id, env_type=env_type, mapped=payload, exclude_id=existing.id)
                     return await self.update(id=existing.id, obj_in=payload)
 
+                # 同应用同节点下同名配置共享一个逻辑标识，名称取已有写法（设计 5.2/5.9）
+                mode, canonical_name = await self._resolve_config_mode(
+                    project_id=project_id,
+                    env_type=env_type,
+                    config_name=config_name,
+                )
+                payload["config_mode"] = mode
+                payload["config_name"] = canonical_name
+                payload["project_id"] = project_id
+                payload["env_type"] = env_type
                 await self._assert_host_unique(env_bind_id=env_bind.id, env_type=env_type, mapped=payload)
                 return await self.create(obj_in=payload)
         except IntegrityError as e:
-            error_message: str = "新增环境配置失败，配置名称、IP、端口或数据库名称可能与现有记录重复"
+            error_message: str = "新增环境配置失败, 配置名称、IP、端口或数据库名称与现有记录冲突"
             LOGGER.error(
                 f"{error_message}, "
-                f"关键字段: [env_bind_id={env_bind.id}, config_name={config_name}, config_host={payload.get('config_host')}, "
-                f"config_port={payload.get('config_port')}, database_name={payload.get('database_name')}]\n"
-                f"{traceback.format_exc()}"
+                f"关键字段: [env_bind_id={env_bind.id}, config_name={config_name}, config_host={payload.get('config_host')}, config_port={payload.get('config_port')}, database_name={payload.get('database_name')}]\n"
+                f"异常回溯: {traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
         except OperationalError as e:
             # 事务内的批量写入不经过基类的死锁转换，这里统一兜底
             errno: Optional[int] = self._deadlock_errno(e)
             if errno in (1213, 1205):
-                error_message = "新增环境配置失败，操作存在并发冲突，请稍后重试"
+                error_message = "新增环境配置失败, 操作存在并发冲突"
                 LOGGER.error(
                     f"{error_message}, "
                     f"关键字段: [env_bind_id={env_bind.id}, config_name={config_name}, errno={errno}]\n"
@@ -180,9 +224,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             scope: DataScope,
     ) -> Tuple[AutoTestEnvConfigModel, str, Dict[str, Any]]:
         """
-        更新环境配置，按 config_id 或 config_code 定位。
-        所属应用、环境与节点类型在创建时确定，更新时不再接受变更。
-        仅修改地址、端口、账密、备注等配置信息时直接更新，修改 config_name 时同步同应用、同节点类型下所有环境的同名配置。
+        更新环境配置：按 config_id 或 config_code 定位，改名时同步该逻辑配置的全部启用实例。
 
         :param config_in: 环境配置更新schema
         :param scope: 数据权限上下文
@@ -193,6 +235,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :raises DataAlreadyExistsException: 同绑定内名称或 host 重复，改名目标名称被同节点的其他环境占用
         :raises DataBaseStorageException: 落库失败或并发冲突
         """
+        # 所属应用、环境与节点类型在创建时确定，更新时不再接受变更；
+        # 不改名时仅更新当前配置的地址/端口/账密/备注等，改名时同步该逻辑配置的全部启用实例
         # 定位参数二选一，缺失时直接拒绝，避免无效查询
         config_id: Optional[int] = config_in.config_id
         config_code: Optional[str] = config_in.config_code
@@ -253,6 +297,11 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             error_message = "更新环境配置失败, 参数[config_name]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
+        # 逻辑标识决定改名同步范围；冗余维度随写入同步，空标识在事务锁内补齐
+        config_mode: str = str(instance.config_mode or "")
+        update_dict["config_mode"] = config_mode
+        update_dict["project_id"] = int(bind.project_id)
+        update_dict["env_type"] = env_type
 
         # 改名只同步名称，地址端口等具体信息只改当前配置
         is_renamed: bool = config_name != instance.config_name
@@ -264,9 +313,20 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         )
         sync_count: int = 0
         try:
-            # 同环境写入串行化，保证host/port唯一性校验与落库之间不被并发插入穿透
+            # 先锁同应用同节点绑定行（与创建/恢复互斥），改名时再锁同标识行
             async with in_transaction():
-                await self._lock_bind_config_rows(int(bind.id))
+                await self._lock_project_type_binds(int(bind.project_id), env_type)
+                if not config_mode:
+                    # 批次空隙遗留的空标识在锁内补齐，避免与并发创建分裂出第二组逻辑配置
+                    config_mode, _ = await self._resolve_config_mode(
+                        project_id=int(bind.project_id),
+                        env_type=env_type,
+                        config_name=instance.config_name,
+                    )
+                    update_dict["config_mode"] = config_mode
+                    LOGGER.warning(
+                        f"环境配置逻辑标识为空已自动补齐, 关键字段: [config_id={instance.id}, config_mode={config_mode}]"
+                    )
                 if host_changed:
                     await self._assert_host_unique(
                         env_bind_id=bind.id,
@@ -279,19 +339,20 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                         },
                         exclude_id=instance.id,
                     )
-                # 改名走同应用、同节点类型的跨环境名称同步，其余场景按主行更新
+                # 改名走同逻辑标识跨环境同步，其余场景按主行更新
                 if is_renamed:
-                    updated, sync_count = await self._sync_envs_config_name(
+                    updated, sync_count = await self._sync_config_mode_group_name(
                         instance=instance,
                         project_id=int(bind.project_id),
                         env_type=env_type,
+                        config_mode=config_mode,
                         update_dict=update_dict,
                     )
                 else:
                     updated = await self.update(id=config_id, obj_in=update_dict)
         # 唯一索引冲突统一转为存储异常，避免向前端泄露数据库细节
         except IntegrityError as e:
-            error_message: str = "更新环境配置失败，配置名称、IP、端口或数据库名称可能与现有记录重复"
+            error_message: str = "更新环境配置失败, 配置名称、IP、端口或数据库名称与现有记录冲突"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [config_id={config_id}, config_code={config_code}, env_bind_id={bind.id}, config_name={config_name}]\n"
@@ -302,7 +363,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         except OperationalError as e:
             errno: Optional[int] = self._deadlock_errno(e)
             if errno in (1213, 1205):
-                error_message = "更新环境配置失败，操作存在并发冲突，请稍后重试"
+                error_message = "更新环境配置失败, 操作存在并发冲突"
                 LOGGER.error(
                     f"{error_message}, "
                     f"关键字段: [config_id={config_id}, env_bind_id={bind.id}, errno={errno}]\n"
@@ -324,56 +385,49 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         }
         return updated, env_name, bind_meta
 
-    async def _sync_envs_config_name(
+    async def _sync_config_mode_group_name(
             self,
             *,
             instance: AutoTestEnvConfigModel,
             project_id: int,
             env_type: Union[AutoTestConfigNodeType, str],
+            config_mode: str,
             update_dict: Dict[str, Any],
     ) -> Tuple[AutoTestEnvConfigModel, int]:
         """
-        配置改名时同步同应用、同节点类型下所有启用环境中的同名配置。
+        配置改名时按逻辑标识同步同应用、同节点类型下全部启用实例。
 
         :param instance: 待改名的主配置实例
         :param project_id: 配置所属应用ID
         :param env_type: 配置所属节点类型，同步范围限定在该节点
+        :param config_mode: 逻辑配置标识，同步范围限定在该标识
         :param update_dict: 已过滤的更新字段，config_name 为新名称
-        :return: (改名后的主配置实例, 同步的其他配置条数)
-        :raises DataAlreadyExistsException: 同节点下任一环境已存在新名称配置，包括占用唯一键的软删记录
-        :raises DataBaseStorageException: 落库失败、并发冲突或行基线已变化
+        :return: (改名后的主配置实例, 同步的其他实例条数)
+        :raises DataAlreadyExistsException: 同节点下任一环境已存在新名称配置，含占用唯一键的软删记录
+        :raises DataBaseStorageException: 落库失败或并发冲突
         """
-        # 提前取出旧名、新名与环境 CRUD
-        old_config_name: str = instance.config_name
         new_config_name: str = update_dict["config_name"]
-        env_crud = AutoTestEnvCrud()
-
-        # 只取同应用、同节点类型的启用绑定，不同节点名称互不影响
-        bind_ids: List[int] = [
-            int(bind_id)
-            for bind_id in await AutoTestEnvBindModel.filter(
-                project_id=project_id,
-                env_type=env_type,
-                state__not=1,
-            ).values_list("id", flat=True)
-        ]
-        # 只取待同步配置的主键，同步范围不区分创建人
-        required_sync_ids: List[int] = list(
-            await self.model.filter(
-                env_bind_id__in=bind_ids,
-                config_name=old_config_name,
-                state=0,
-            ).exclude(id=instance.id).values_list("id", flat=True)
-        )
-        # 仅改大小写时新名会命中自身行，冲突预检必须排除主行与待同步行
-        rename_config_ids: List[int] = [instance.id, *required_sync_ids]
-        # 目标名称被任一配置占用都无法落库，唯一索引覆盖软删行
+        # 绑定行锁由调用方持有；这里先锁定同标识启用行（按主键升序），再做目标名冲突预检并批量改名，
+        # 保证组内不出现部分环境新名、部分环境旧名的中间态
+        # 锁定同标识启用行：改名期间不允许同组并发改名或删除穿插
+        group_rows: List[AutoTestEnvConfigModel] = await self.model.filter(
+            config_mode=config_mode,
+            state__not=1,
+        ).select_for_update().order_by("id").only("id")
+        group_ids: List[int] = [int(row.id) for row in group_rows] or [int(instance.id)]
+        # 同节点下任一环境被同名配置占用都会撞唯一键；软删行同样占用，必须纳入预检
+        bind_ids: List[int] = list(await AutoTestEnvBindModel.filter(
+            project_id=project_id,
+            env_type=env_type,
+            state__not=1,
+        ).values_list("id", flat=True))
         conflict_configs: List[Dict[str, Any]] = await self.model.filter(
             env_bind_id__in=bind_ids,
-            config_name=new_config_name,
-        ).exclude(id__in=rename_config_ids).values("env_bind_id", "state")
+            config_name__iexact=new_config_name,
+        ).exclude(id__in=group_ids).values("env_bind_id", "state")
         if conflict_configs:
             # 批量换取冲突环境名，软删记录点明占用唯一键
+            env_crud = AutoTestEnvCrud()
             conflict_labels: List[str] = []
             conflict_env_map = await env_crud.get_env_name_map(
                 [int(conflict_config["env_bind_id"]) for conflict_config in conflict_configs]
@@ -388,134 +442,189 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
 
-        # 同步是底层行为，命中的配置无论创建人都一起改名；异常由调用方事务统一转换
-        await self._lock_config_name_baseline(
-            instance_id=instance.id,
-            config_ids=required_sync_ids,
-            config_name=old_config_name,
-        )
+        # 主行先写其余字段与名称，再按标识批量同步同组实例
         updated = await self.update(id=instance.id, obj_in=update_dict)
-        if required_sync_ids:
-            # 带旧名条件批量改名，重复提交不会覆盖已完成或人工调整的数据
+        # group_ids 可能因空标识自愈而未包含主行，同步范围始终排除主行
+        sync_ids: List[int] = [cid for cid in group_ids if cid != int(instance.id)]
+        if sync_ids:
             await self.model.filter(
-                id__in=required_sync_ids,
-                config_name=old_config_name,
+                id__in=sync_ids,
+                state__not=1,
             ).update(
                 config_name=new_config_name,
                 updated_user=get_current_username() or updated.updated_user or instance.updated_user,
                 # 批量 update 不触发 auto_now，显式刷新更新时间
                 updated_time=datetime.now(),
             )
-        return updated, len(required_sync_ids)
+        return updated, len(sync_ids)
 
-    async def _lock_bind_config_rows(self, env_bind_id: int) -> None:
+    async def _lock_project_type_binds(
+            self,
+            project_id: int,
+            env_type: Union[AutoTestConfigNodeType, str],
+    ) -> None:
         """
-        事务内锁定绑定下全部配置行，串行化同环境写入。
+        事务内锁定同应用同节点的全部启用绑定行，串行化该维度下的配置创建/恢复与改名。
 
-        同环境并发写入会先后锁同一批行，按主键升序加锁降低死锁概率，
-        同时消除host唯一性预检与落库之间的竞态窗口。
-
-        :param env_bind_id: 环境绑定ID
+        :param project_id: 应用ID
+        :param env_type: 节点类型
         :return: None
         """
-        await self.model.filter(env_bind_id=env_bind_id).select_for_update().order_by("id").only("id")
+        # 锁粒度是该应用该节点类型的绑定行（通常 1~4 行），只影响同维度并发写入；按主键升序加锁降低死锁概率
+        await AutoTestEnvBindModel.filter(
+            project_id=project_id,
+            env_type=env_type,
+            state__not=1,
+        ).select_for_update().order_by("id").only("id")
 
-    async def _lock_config_name_baseline(self, *, instance_id: int, config_ids: List[int], config_name: str) -> None:
+    async def _resolve_config_mode(
+            self,
+            *,
+            project_id: int,
+            env_type: Union[AutoTestConfigNodeType, str],
+            config_name: str,
+    ) -> Tuple[str, str]:
         """
-        在修改配置名称的事务内锁定主行与各环境下相同配置名称的数据行，校验它们仍处于旧名称基线。
+        按同应用+同节点+同名启用配置解析逻辑标识与组内统一写法。
 
-        预检与写入之间存在时间窗：并发改名会把部分行改成新名称，并发删除会把行置为软删。
-        这里按主键排序一次性加排他锁（当前读），缺行或名称不一致即整体回滚，
-        既避免出现“部分环境新名、部分环境旧名”的不一致，也降低两个并发改名互相加锁的死锁概率。
-
-        :param instance_id: 主配置ID
-        :param config_ids: 待同步的配置ID列表
-        :param config_name: 待修改的配置名称
-        :return: None
-        :raises DataBaseStorageException: 任一配置已被并发修改或软删
+        :param project_id: 应用ID
+        :param env_type: 节点类型
+        :param config_name: 用户输入的配置名称
+        :return: (config_mode, 组内统一名称)
         """
-        instance_ids: List[int] = sorted({int(instance_id), *[int(cid) for cid in config_ids]})
-        locked_config_rows: List[AutoTestEnvConfigModel] = await self.model.filter(
-            id__in=instance_ids,
+        # 经绑定表定位同维度全部配置行，不依赖冗余列（兼容批次空隙未回填的存量行）：
+        # 命中启用行复用其 config_mode 与名称写法；仅命中空标识行时以新标识就地补齐；
+        # 未命中生成新标识；调用方需已持有绑定行锁
+        bind_ids: List[int] = list(await AutoTestEnvBindModel.filter(
+            project_id=project_id,
+            env_type=env_type,
+            state__not=1,
+        ).values_list("id", flat=True))
+        rows: List[Dict[str, Any]] = await self.model.filter(
+            env_bind_id__in=bind_ids,
+            config_name__iexact=config_name,
             state=0,
-        ).select_for_update().order_by("id").only("id", "config_name")
-        locked_config_names: Dict[int, str] = {
-            int(locked_row.id): locked_row.config_name for locked_row in locked_config_rows
-        }
-        # 名称比较按大小写不敏感处理，与库内唯一索引的排序规则保持一致
-        expected_name: str = config_name.casefold()
-        if len(locked_config_names) != len(instance_ids) or any(
-                str(locked_name).casefold() != expected_name for locked_name in locked_config_names.values()
-        ):
-            error_message: str = "环境配置改名失败，部分环境的配置已被其他操作修改，请刷新后重试"
-            LOGGER.error(
-                f"{error_message}, "
-                f"关键字段: [config_ids={instance_ids}, config_name={config_name}, locked_config_names={locked_config_names}]"
+        ).order_by("id").values("id", "config_mode", "config_name")
+        for row in rows:
+            if row["config_mode"]:
+                return str(row["config_mode"]), str(row["config_name"])
+        mode: str = unique_identify()
+        if rows:
+            # 批次 1~2 之间旧逻辑写入的空标识行：就地补齐，避免同一名称分裂出第二组逻辑配置
+            healed_ids: List[int] = [int(row["id"]) for row in rows]
+            await self.model.filter(id__in=healed_ids).update(
+                config_mode=mode,
+                project_id=project_id,
+                env_type=env_type,
+                updated_user=get_current_username(),
+                updated_time=datetime.now(),
             )
-            raise DataBaseStorageException(message=error_message)
+            LOGGER.warning(
+                f"环境配置逻辑标识为空已自动补齐, "
+                f"关键字段: [config_ids={healed_ids}, config_name={rows[0]['config_name']}, config_mode={mode}]"
+            )
+            return mode, str(rows[0]["config_name"])
+        return mode, config_name
 
     async def _assert_configs_not_referenced(self, targets: List[AutoTestEnvConfigModel]) -> None:
         """
-        校验环境配置未被步骤按名称引用：请求配置、数据库操作、Redis操作三处。
-
-        同应用的配置合并扫描，单次取出步骤行后按配置名匹配，避免逐条查库。
+        校验环境配置未被步骤或压测接口引用：逻辑标识精确匹配，DB/Redis 操作保留旧名称兜底。
 
         :param targets: 待删除的环境配置实例列表
         :return: None
         :raises NotFoundException: 配置关联的环境绑定已不存在
-        :raises DataAlreadyExistsException: 任一配置被步骤引用时拒绝删除
+        :raises DataAlreadyExistsException: 任一配置被步骤或压测接口引用时拒绝删除
         """
+        # 步骤与压测接口按 request_config_mode 精确匹配（旧名称列已随迁移 32 删除），
+        # DB/Redis 的 operates 内仍可能残留未回填的 config_name，按同应用名称兜底；
+        # 同应用的配置合并扫描，单次取回引用行后在内存匹配，避免逐条查库
         if not targets:
             return
-        from backend.applications.autotest.models.autotest_case_model import AutoTestCaseModel
-        from backend.applications.autotest.models.autotest_step_model import AutoTestStepModel
+        # 延迟导入: autotest 服务层不在模块加载期依赖 performance 模块，避免初始化顺序耦合
+        from backend.applications.performance.models.perf_api_model import PerfApiModel
 
         bind_map: Dict[int, int] = {
             obj.id: obj.project_id
             for obj in await AutoTestEnvBindModel.filter(id__in=[item.env_bind_id for item in targets])
         }
-        # 配置名只在所属应用的用例步骤中生效，按项目归组后统一扫描
-        names_by_project: Dict[int, List[str]] = {}
+        # 配置（mode/名称）只在所属应用的用例步骤与压测接口中生效，按项目归组后统一扫描
+        targets_by_project: Dict[int, List[AutoTestEnvConfigModel]] = {}
         for instance in targets:
             project_id = bind_map.get(instance.env_bind_id)
             if project_id is None:
                 raise NotFoundException(message=f"配置[{instance.config_name}]关联的环境信息不存在")
-            names_by_project.setdefault(project_id, []).append(instance.config_name)
+            targets_by_project.setdefault(int(project_id), []).append(instance)
 
-        for project_id, config_names in names_by_project.items():
+        for project_id, project_targets in targets_by_project.items():
+            # 目标行按 mode 与名称建索引：单个步骤/接口内多处引用同一配置只计一次，与“引用数”口径一致
+            mode_to_ids: Dict[str, List[int]] = defaultdict(list)
+            name_to_ids: Dict[str, List[int]] = defaultdict(list)
+            for target in project_targets:
+                if target.config_mode:
+                    mode_to_ids[str(target.config_mode)].append(int(target.id))
+                if target.config_name:
+                    name_to_ids[target.config_name].append(int(target.id))
+
+            # 步骤引用：请求配置按 mode 精确匹配，DB/Redis 操作按 mode 匹配并以旧名称兜底
+            step_counts: Dict[int, int] = {}
             case_ids = await AutoTestCaseModel.filter(
                 case_project=project_id, state__not=1
             ).values_list("id", flat=True)
-            if not case_ids:
-                continue
-            step_rows = await AutoTestStepModel.filter(
-                case_id__in=list(case_ids), state__not=1
-            ).values("request_config_name", "database_operates", "redis_operates")
-            # 单次扫描步骤并按目标配置名聚合引用数，避免逐个配置回扫步骤
-            target_names = set(config_names)
-            ref_counts: Dict[str, int] = {}
-            for row in step_rows:
-                step_names = set()
-                if row["request_config_name"]:
-                    step_names.add(row["request_config_name"])
-                for field in ("database_operates", "redis_operates"):
-                    operates = row[field]
-                    if not isinstance(operates, list):
-                        continue
-                    step_names.update(
-                        operate["config_name"]
-                        for operate in operates
-                        if isinstance(operate, dict) and operate.get("config_name")
-                    )
-                # 同一配置在单个步骤内多处引用只计一次，与“引用该配置的步骤数”口径一致
-                for config_name in step_names & target_names:
-                    ref_counts[config_name] = ref_counts.get(config_name, 0) + 1
-            for config_name in config_names:
-                ref_count: int = ref_counts.get(config_name, 0)
-                if ref_count > 0:
-                    error_message: str = f"删除环境配置失败, 配置[{config_name}]被{ref_count}个步骤引用"
-                    LOGGER.error(error_message)
-                    raise DataAlreadyExistsException(message=error_message)
+            if case_ids:
+                step_rows = await AutoTestStepModel.filter(
+                    case_id__in=list(case_ids), state__not=1
+                ).values("request_config_mode", "database_operates", "redis_operates")
+                for row in step_rows:
+                    step_modes = set()
+                    step_names = set()
+                    if row["request_config_mode"]:
+                        step_modes.add(row["request_config_mode"])
+                    for field in ("database_operates", "redis_operates"):
+                        operates = row[field]
+                        if not isinstance(operates, list):
+                            continue
+                        for operate in operates:
+                            if not isinstance(operate, dict):
+                                continue
+                            if operate.get("config_mode"):
+                                step_modes.add(operate["config_mode"])
+                            if operate.get("config_name"):
+                                step_names.add(operate["config_name"])
+                    matched_ids = set()
+                    for mode in step_modes:
+                        matched_ids.update(mode_to_ids.get(mode, ()))
+                    for name in step_names:
+                        matched_ids.update(name_to_ids.get(name, ()))
+                    for target_id in matched_ids:
+                        step_counts[target_id] = step_counts.get(target_id, 0) + 1
+
+            # 压测接口引用：同应用启用接口按 mode 精确匹配（一次查询覆盖整组目标）
+            perf_counts: Dict[int, int] = {}
+            target_modes: List[str] = list(mode_to_ids)
+            if target_modes:
+                perf_rows = await PerfApiModel.filter(
+                    request_project_id=project_id,
+                    request_config_mode__in=target_modes,
+                    state__not=1,
+                ).values("request_config_mode")
+                for row in perf_rows:
+                    for target_id in mode_to_ids.get(str(row["request_config_mode"]), ()):
+                        perf_counts[target_id] = perf_counts.get(target_id, 0) + 1
+
+            for target in project_targets:
+                target_id: int = int(target.id)
+                step_count: int = step_counts.get(target_id, 0)
+                perf_count: int = perf_counts.get(target_id, 0)
+                if step_count <= 0 and perf_count <= 0:
+                    continue
+                references: List[str] = []
+                if step_count > 0:
+                    references.append(f"{step_count}个步骤")
+                if perf_count > 0:
+                    references.append(f"{perf_count}个压测接口")
+                error_message: str = f"删除环境配置失败, 配置[{target.config_name}]被{'、'.join(references)}引用"
+                LOGGER.error(error_message)
+                raise DataAlreadyExistsException(message=error_message)
 
     async def delete_config(self, config_in: AutoTestEnvConfigTypedDelete, scope: DataScope) -> AutoTestEnvConfigModel:
         """
@@ -621,28 +730,28 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         try:
             return await self.list(page=page, page_size=page_size, search=search, order=order)
         except FieldError as e:
-            error_message: str = "查询配置信息失败，查询或排序条件包含不支持的字段，请调整筛选或排序条件"
+            error_message: str = "查询配置信息失败, 查询或排序条件包含不支持的字段"
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
     async def query_classified_by_project_ids(
             self,
             project_ids: List[int],
-            config_names: Optional[List[str]] = None,
+            config_modes: Optional[List[str]] = None,
             scope: Optional[DataScope] = None,
     ) -> Dict[int, Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]]:
         """
         按应用ID列表查询未删除配置并分类。
 
-        返回结构固定包含传入的每个应用；已出现环境会预置全部节点类型的空桶，
-        使调用方（调试/执行取环境）无需做层级判空。无环境名称或未知节点类型的配置会被跳过并告警。
-
         :param project_ids: 应用ID列表
-        :param config_names: 配置名称列表(可选)；非空时仅返回这些配置所在的环境及其配置
+        :param config_modes: 配置逻辑标识列表(可选)；非空时仅返回这些逻辑配置所在的环境及其配置
         :param scope: 数据权限上下文，传入时仅返回可见范围内的配置
-        :return: project_id -> env_name -> api|file|database|redis -> config_name -> 主机信息
+        :return: project_id -> env_id(数字字符串) -> api|file|database|redis -> config_mode -> {config_name, 主机信息}
         :raises ParameterException: project_ids 为空
         """
+        # 返回结构固定包含传入的每个应用；已出现环境会预置全部节点类型的空桶，
+        # 使调用方（调试/执行取环境）无需做层级判空；无逻辑标识或未知节点类型的配置会被跳过并告警；
+        # 环境层 key 为绑定ID（数字字符串），环境名称由 /env/list 单独提供，避免改名影响引用
         if not project_ids:
             error_message: str = "按应用列表查询环境配置失败, 参数[project_ids]不允许为空"
             LOGGER.error(error_message)
@@ -659,7 +768,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         bind_rows = await AutoTestEnvBindModel.filter(
             project_id__in=distinct_project_ids,
             state__not=1,
-        ).values("id", "project_id", "env_type", "env_enum_id")
+        ).values("id", "project_id", "env_type")
         if not bind_rows:
             return classified_config_result
 
@@ -667,77 +776,73 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             row["id"]: {
                 "project_id": row["project_id"],
                 "env_type": row["env_type"],
-                "env_enum_id": row["env_enum_id"],
             }
             for row in bind_rows
         }
         env_bind_ids = list(bind_meta.keys())
-        # 配置名称过滤：非空时仅返回这些配置所在的环境及其配置（去重去空白）
-        distinct_config_names: List[str] = [
-            str(n).strip() for n in (config_names or []) if n is not None and str(n).strip()
+        # 逻辑标识过滤：非空时仅返回这些配置所在的环境及其配置（去重去空白）
+        distinct_config_modes: List[str] = [
+            str(m).strip() for m in (config_modes or []) if m is not None and str(m).strip()
         ]
         config_filter: Dict[str, Any] = {"env_bind_id__in": env_bind_ids, "state__not": 1}
-        if distinct_config_names:
-            config_filter["config_name__in"] = list(dict.fromkeys(distinct_config_names))
+        if distinct_config_modes:
+            config_filter["config_mode__in"] = list(dict.fromkeys(distinct_config_modes))
         owner_q = scope.read_q("created_user") if scope is not None else None
         config_qs = self.model.filter(**config_filter)
         if owner_q is not None:
             config_qs = config_qs.filter(owner_q)
         env_config_rows: List[Dict[str, Any]] = await config_qs.values(
-            "id", "env_bind_id", "config_name", "config_host", "config_port", "database_name"
+            "id", "env_bind_id", "config_mode", "config_name", "config_host", "config_port", "database_name"
         )
         if not env_config_rows:
             return classified_config_result
 
-        # 绑定行已带字典ID，直接批量取名，避免二次回查绑定表
-        dict_name_map: Dict[int, str] = await AutoTestEnvCrud._get_dict_name_map(
-            {int(row["env_enum_id"]) for row in bind_rows}
-        )
         for cfg_row in env_config_rows:
-            meta = bind_meta.get(int(cfg_row["env_bind_id"]))
+            env_bind_id: int = int(cfg_row["env_bind_id"])
+            meta = bind_meta.get(env_bind_id)
             if not meta:
                 continue
             project_id: int = int(meta["project_id"])
             if project_id not in classified_config_result:
                 continue
-            env_name: Optional[str] = dict_name_map.get(int(meta["env_enum_id"]))
-            if not env_name:
-                LOGGER.warning(f"跳过无对应环境主表记录的配置: config_id={cfg_row['id']}, env_bind_id={cfg_row['env_bind_id']}")
-                continue
             env_type = meta["env_type"].value if hasattr(meta["env_type"], "value") else str(meta["env_type"])
             if env_type not in allowed_types:
-                LOGGER.warning(f"跳过未知配置类型: project_id={project_id}, env={env_name}, env_type={env_type}")
+                LOGGER.warning(f"跳过未知配置类型: project_id={project_id}, env_bind_id={env_bind_id}, env_type={env_type}")
                 continue
-            if env_name not in classified_config_result[project_id]:
-                classified_config_result[project_id][env_name] = {
-                    t: {} for t in empty_type_buckets
-                }
-            classified_config_result[project_id][env_name][env_type][cfg_row["config_name"]] = {
+            config_mode: Optional[str] = cfg_row["config_mode"]
+            if not config_mode:
+                LOGGER.warning(f"跳过逻辑标识为空的环境配置: config_id={cfg_row['id']}, env_bind_id={env_bind_id}")
+                continue
+            env_key: str = str(env_bind_id)
+            if env_key not in classified_config_result[project_id]:
+                classified_config_result[project_id][env_key] = {t: {} for t in empty_type_buckets}
+            classified_config_result[project_id][env_key][env_type][config_mode] = {
+                "config_name": cfg_row["config_name"],
                 "config_host": cfg_row["config_host"],
                 "config_port": cfg_row["config_port"],
                 "database_name": cfg_row["database_name"],
             }
         return classified_config_result
 
-    async def list_distinct_config_names(
+    async def list_distinct_configs(
             self,
             project_id: Optional[int] = None,
             env_id: Optional[int] = None,
             env_type: Optional[str] = None,
             scope: Optional[DataScope] = None,
-    ) -> List[str]:
+    ) -> List[Dict[str, str]]:
         """
-        未删除配置中config_name去重后的列表。
-
-        定位优先级：env_id 直接限定绑定；否则 project_id/env_type 经绑定表换算出绑定ID集合。
+        未删除配置的逻辑标识去重列表。
 
         :param project_id: 应用ID，经绑定表过滤
         :param env_id: 环境绑定主键
         :param env_type: 节点类型，经绑定表过滤
-        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置名称
-        :return: 去重且升序排列的配置名称列表
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置
+        :return: [{config_name, config_mode}]，按配置名称、逻辑标识升序
         """
-        stmt: QuerySet = self.model.filter(state__not=1)
+        # 定位优先级：env_id 直接限定绑定；否则 project_id/env_type 经绑定表换算出绑定ID集合；
+        # 只返回启用配置（R6），逻辑标识为空的历史行跳过并告警
+        stmt: QuerySet = self.model.filter(state=0)
         owner_q = scope.read_q("created_user") if scope is not None else None
         if owner_q is not None:
             stmt = stmt.filter(owner_q)
@@ -751,29 +856,40 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             if not env_bind_ids:
                 return []
             stmt = stmt.filter(env_bind_id__in=env_bind_ids)
-        names = await stmt.values_list("config_name", flat=True)
-        return sorted(set(names))
+        rows: List[Dict[str, Any]] = await stmt.order_by("config_name", "id").values("config_mode", "config_name")
+        mode_names: Dict[str, str] = {}
+        for row in rows:
+            config_mode: Optional[str] = row["config_mode"]
+            if not config_mode:
+                LOGGER.warning(f"跳过逻辑标识为空的启用配置: config_name={row['config_name']}")
+                continue
+            # 同一逻辑标识的理论写法一致，取最先生成的行作为展示名
+            mode_names.setdefault(str(config_mode), str(row["config_name"]))
+        return [
+            {"config_name": config_name, "config_mode": config_mode}
+            for config_mode, config_name in sorted(mode_names.items(), key=lambda item: (item[1], item[0]))
+        ]
 
     async def query_assign_config_env_names(
             self,
             query_in: QueryAssignConfigEnv,
             scope: Optional[DataScope] = None,
-    ) -> List[str]:
+    ) -> List[Dict[str, Any]]:
         """
-        按应用/配置名称/节点类型查询符合的环境名称列表。
-
-        与 list_distinct_config_names 不同，这里经外键反向取环境名（env_bind__env_enum__env_name）。
+        按应用/逻辑标识/节点类型查询符合的环境列表。
 
         :param query_in: 指派配置环境查询入参(三条件均可选)
-        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置所对应的环境名称
-        :return: 去重且升序排列的环境名称列表
+        :param scope: 数据权限上下文，传入时仅返回可见范围内的配置所对应的环境
+        :return: [{env_id, env_name}]，按环境名称、环境ID升序
         """
-        stmt: QuerySet = self.model.filter(state__not=1)
+        # 环境链为真实外键，经绑定表跨取环境名称；返回值同时携带 env_id 与 env_name，
+        # 前端可直接以 env_id 作为环境选择值，不再依赖名称匹配
+        stmt: QuerySet = self.model.filter(state=0)
         owner_q = scope.read_q("created_user") if scope is not None else None
         if owner_q is not None:
             stmt = stmt.filter(owner_q)
-        if query_in.config_name:
-            stmt = stmt.filter(config_name=query_in.config_name)
+        if query_in.config_mode:
+            stmt = stmt.filter(config_mode=query_in.config_mode)
         if query_in.project_id is not None or query_in.env_type is not None:
             env_bind_ids = await AutoTestEnvCrud().list_bind_ids(
                 project_id=query_in.project_id,
@@ -782,9 +898,17 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             if not env_bind_ids:
                 return []
             stmt = stmt.filter(env_bind_id__in=env_bind_ids)
-        # 环境链为真实外键, 经绑定表跨取环境名称
-        names: List[str] = await stmt.values_list("env_bind__env_enum__env_name", flat=True)
-        return sorted(set(names))
+        rows: List[Dict[str, Any]] = await stmt.values("env_bind_id", "env_bind__env_enum__env_name")
+        env_map: Dict[int, str] = {}
+        for row in rows:
+            env_name: Optional[str] = row.get("env_bind__env_enum__env_name")
+            if not env_name:
+                continue
+            env_map.setdefault(int(row["env_bind_id"]), str(env_name))
+        return [
+            {"env_id": env_id, "env_name": env_name}
+            for env_id, env_name in sorted(env_map.items(), key=lambda item: (item[1], item[0]))
+        ]
 
     async def serialize_config(
             self,
@@ -858,12 +982,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             exclude_id: Optional[int] = None,
     ) -> None:
         """
-        校验同绑定下host/port(/database_name)唯一。
-
-        未传 host 时视为不限制（凭据型配置可能只有名称）；仅 DB 节点额外比较 database_name。
-
-        唯一性含节点类型、软删与空值等条件分支，无法用普通唯一索引表达，
-        由调用方在同一事务内加锁后校验，保证少量并发下不产生重复主机。
+        校验同绑定下host、port、database_name唯一。
 
         :param env_bind_id: 环境绑定ID
         :param env_type: 节点类型（仅影响DB提示文案与database_name条件）
@@ -872,6 +991,9 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :return: None
         :raises DataAlreadyExistsException: 命中同 host/port(/database_name) 的启用态配置
         """
+        # 未传 host 时视为不限制（凭据型配置可能只有名称）；仅 DB 节点额外比较 database_name；
+        # 唯一性含节点类型、软删与空值等条件分支，无法用普通唯一索引表达，
+        # 由调用方在同一事务内加锁后校验，保证少量并发下不产生重复主机
         host = mapped.get("config_host")
         if not host:
             return
@@ -952,7 +1074,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         except ParameterException:
             raise
         except Exception as e:
-            error_message: str = "查询环境配置失败，暂时无法获取配置列表，请稍后重试"
+            error_message: str = "暂时无法获取配置列表, 请稍后重试"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [project_id={project_id}, env_name={env_name}, env_type={env_type}, page={page}, page_size={page_size}]\n"
@@ -989,7 +1111,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             env_type=AutoTestConfigNodeType.DB,
         )
         if not env_row:
-            raise NotFoundException(message="配置表未找到对应记录，请检查")
+            raise NotFoundException(message="未找到对应的数据库环境绑定记录")
 
         config = await self.model.filter(
             id=config_id,
@@ -999,7 +1121,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             state=0,
         ).first()
         if not config:
-            raise NotFoundException(message="配置表未找到对应记录，请检查")
+            raise NotFoundException(message="未找到对应的数据库配置记录")
 
         # 连接测试会暴露主机端口等凭据信息，必须限制在可见范围内
         if scope is not None:
@@ -1017,7 +1139,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                 database_name=database_name,
             )
         except Exception as e:
-            error_message: str = "数据库连接测试失败，暂时无法建立连接池，请检查配置后重试"
+            error_message: str = "暂时无法测试数据库连接, 请稍后重试"
             LOGGER.error(
                 f"{error_message}, "
                 f"关键字段: [config_id={config_id}, project_id={project_id}, env_name={env_name}, "

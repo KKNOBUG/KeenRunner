@@ -84,40 +84,23 @@ from backend.services import get_current_username
 
 
 class StepExecutionError(Exception):
-    """
-    步骤执行期业务异常：用于中断当前步骤并把可读错误信息带回统一收口点。
+    """步骤执行期业务异常：用于中断当前步骤并把可读错误信息带回统一收口点。"""
 
-    各执行器在 _execute 内抛出，由 BaseStepExecutor.execute 捕获后写入 StepExecutionResult，
-    因此该异常不会穿透到用例执行入口，也不会中断同级其它步骤。
-    """
+    # 各执行器在 _execute 内抛出，由 BaseStepExecutor.execute 捕获后写入 StepExecutionResult，
+    # 因此该异常不会穿透到用例执行入口，也不会中断同级其它步骤
 
 
 @dataclass
 class StepExecutionResult:
-    """
-    单步执行结果；容器步骤可通过children挂载子步骤结果树。
+    """单步执行结果；容器步骤可通过children挂载子步骤结果树。"""
 
-    执行器只负责填充快照字段，落库由 BaseStepExecutor._save_step_detail 读取本对象后组装明细。
-
-    :ivar case_id: 用例ID
-    :ivar step_id: 步骤ID
-    :ivar step_no: 步骤序号
-    :ivar step_code: 步骤标识，用于日志与统计去重
-    :ivar step_name: 步骤名称
-    :ivar step_type: 步骤类型枚举
-    :ivar success: 本步是否成功；容器步骤任一子步骤失败即置False（条件分支未命中任何分支时仍为True）
-    :ivar message: 补充说明（如条件分支命中的分支描述）
-    :ivar error: 失败时的错误信息
-    :ivar elapsed: 耗时（秒）
-    :ivar dataset_name: 参数化数据集名称
-    :ivar quote_case_id: 引用公共脚本/公共接口时的被引用用例ID（引用步骤的子步骤继承该值）
-    :ivar request: 请求快照，供明细落库
-    :ivar response: 响应快照
-    :ivar dataset_snapshot: 数据驱动替换用的数据集快照
-    :ivar extract_variables: 变量提取结果列表
-    :ivar assert_validators: 断言结果列表
-    :ivar children: 子步骤执行结果列表
-    """
+    # 执行器只负责填充快照字段，落库由 BaseStepExecutor._save_step_detail 读取本对象后组装明细。
+    # 基础字段：case_id用例ID, step_id步骤ID, step_no步骤序号, step_code步骤标识（日志与统计去重）,
+    # step_name步骤名称, step_type步骤类型, elapsed耗时（秒）, dataset_name参数化数据集名称；
+    # 语义字段：success任一子步骤失败即置False（条件分支未命中仍为True）；message补充说明（如分支描述）；
+    # error失败信息；quote_case_id被引用用例ID（引用步骤的子步骤继承）；request/response请求/响应快照；
+    # dataset_snapshot数据驱动替换用的数据集快照；extract_variables/assert_validators提取/断言结果；
+    # children子步骤执行结果列表
     case_id: Optional[int]
     step_id: Optional[int]
     step_no: Optional[int]
@@ -138,16 +121,59 @@ class StepExecutionResult:
     children: List["StepExecutionResult"] = field(default_factory=list)
 
 
-class HttpClientProtocol(Protocol):
-    """
-    HTTP客户端协议：只约束 request 方法签名，便于注入 httpx.AsyncClient 或测试替身。
+# 执行配置引用解析失败类型：empty=引用键不完整（未选择/旧结构），missing=该环境未创建对应逻辑配置
+EXECUTE_CONFIG_ERROR_EMPTY: str = "empty"
+EXECUTE_CONFIG_ERROR_MISSING: str = "missing"
 
-    引擎仅依赖此协议，不感知客户端的具体实现与连接管理方式。
-    """
+
+@dataclass
+class ResolvedStepExecuteConfig:
+    """步骤执行配置引用的解析结果快照。"""
+
+    # 引用键为（环境绑定ID env_id + 节点类型 config_type + 逻辑标识 config_mode），由
+    # StepExecutionContext.preload_execute_configs 在用例执行前一次性批量解析；
+    # 执行器只读快照不逐步骤触库，一次执行内名称与地址视为冻结（执行一致性）；
+    # 主机/端口/数据库名称统一来自解析结果，步骤内 database_name 仅为旧数据兜底
+
+    env_id: Optional[int] = None
+    project_id: Optional[int] = None
+    env_name: Optional[str] = None
+    config_type: Optional[AutoTestConfigNodeType] = None
+    config_mode: Optional[str] = None
+    config_name: Optional[str] = None
+    config_host: Optional[str] = None
+    config_port: Optional[str] = None
+    database_name: Optional[str] = None
+    # 解析失败类型：None=命中有效配置；empty=引用键不完整；missing=该环境未创建对应逻辑配置
+    missing_error: Optional[str] = None
+
+    @property
+    def display_name(self) -> str:
+        """缺失文案中的配置名称：快照无名称时以逻辑标识前8位定位。"""
+        if self.config_name:
+            return self.config_name
+        if self.config_mode:
+            return f"未知配置({self.config_mode[:8]})"
+        return "未知配置"
+
+    @property
+    def display_env_name(self) -> str:
+        """缺失文案中的环境名称：绑定缺失时以环境绑定ID定位。"""
+        if self.env_name:
+            return self.env_name
+        if self.env_id is not None:
+            return f"未知环境({self.env_id})"
+        return "未知环境"
+
+
+class HttpClientProtocol(Protocol):
+    """HTTP客户端协议：只约束 request 方法签名，便于注入 httpx.AsyncClient 或测试替身。"""
+
+    # 引擎仅依赖此协议，不感知客户端的具体实现与连接管理方式
 
     async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         """
-        发起HTTP请求（由httpx.AsyncClient实现）。
+        发起HTTP请求，由httpx.AsyncClient实现。
 
         :param method: HTTP方法
         :param url: 请求URL
@@ -158,18 +184,15 @@ class HttpClientProtocol(Protocol):
 
 
 class StepExecutionContext:
-    """
-    步骤执行上下文：单次用例执行期间共享的运行时状态与能力集合。
+    """步骤执行上下文：单次用例执行期间共享的运行时状态与能力集合。"""
 
-    职责：
-        - 持有用例/报告标识、执行配置映射、数据源场景名与引用链标记，供各执行器读取；
-        - 维护两级变量池（defined_variables 步骤局部 / session_variables 会话累积）并提供占位符解析；
-        - 按 step_code 归集执行日志，收集待落库明细（pending_details）；
-        - 管理 HTTP 客户端生命周期（AsyncExitStack）。
-
-    上下文同时充当运行时工具层的 finished_variables：工具层通过本类的 update_variables 把提取结果
-    即时写回会话池，因此 update_variables 的签名与写回语义属于对外契约，不可随意调整。
-    """
+    # 职责：
+    # - 持有用例/报告标识、执行配置映射、数据源场景名与引用链标记，供各执行器读取；
+    # - 维护两级变量池（defined_variables 步骤局部 / session_variables 会话累积）并提供占位符解析；
+    # - 按 step_code 归集执行日志，收集待落库明细（pending_details）；
+    # - 管理 HTTP 客户端生命周期（AsyncExitStack）。
+    # 上下文同时充当运行时工具层的 finished_variables：工具层通过本类的 update_variables 把提取结果
+    # 即时写回会话池，因此 update_variables 的签名与写回语义属于对外契约，不可随意调整
 
     def __init__(
             self,
@@ -199,6 +222,10 @@ class StepExecutionContext:
         self.case_code = case_code
         # 前端执行前选择的执行配置映射（key=step_id 或 @@step_name，DB/Redis 多操作再拼 _@@{index}）
         self.steps_execute_config: Dict[str, Any] = steps_execute_config or {}
+        # 执行配置解析快照（key 同上）：preload_execute_configs 构建，执行器只读不触库
+        self.execute_config_index: Dict[str, ResolvedStepExecuteConfig] = {}
+        # 本次引用的环境绑定ID → 环境名称（报告 involve_envs 与缺失文案回显使用）
+        self.env_bind_index: Dict[int, str] = {}
         # 报告标识：为空表示不收集明细（调试/内部调用场景）
         self.report_code = report_code
         # 参数化数据集名称：HTTP/TCP 执行器据此 + case_id/step_code 查表取数
@@ -233,11 +260,12 @@ class StepExecutionContext:
 
     async def __aenter__(self) -> "StepExecutionContext":
         """
-        异步上下文管理器入口方法, 初始化HTTP客户端（如未提供）。
+        异步上下文管理器入口方法，初始化HTTP客户端。
 
-        若未指定外部HTTP客户端, 将创建一个默认的httpx.AsyncClient实例，并通过AsyncExitStack管理其生命周期, 确保在上下文退出时自动关闭客户端连接。
         :return: 上下文管理器实例本身, 用于异步with语句
         """
+        # 若未指定外部HTTP客户端, 将创建一个默认的httpx.AsyncClient实例，并通过AsyncExitStack
+        # 管理其生命周期, 确保在上下文退出时自动关闭客户端连接
         try:
             if self._http_client is None:
                 # trust_env=False：忽略系统代理/环境变量，保证压测与执行流量按步骤配置直连目标
@@ -266,17 +294,189 @@ class StepExecutionContext:
             LOGGER.error(f"{error_message}, {traceback.format_exc()}")
             self.log(message=error_message)
 
+    @staticmethod
+    def normalize_config_node_type(value: Any) -> Optional[AutoTestConfigNodeType]:
+        """
+        将原始节点类型值规范化为 AutoTestConfigNodeType。
+
+        :param value: 枚举实例/字符串/None
+        :return: 枚举实例；无法识别时返回 None
+        """
+        if isinstance(value, AutoTestConfigNodeType):
+            return value
+        if value is None:
+            return None
+        try:
+            return AutoTestConfigNodeType(str(value).strip())
+        except ValueError:
+            return None
+
+    @staticmethod
+    def parse_execute_config_ref(cfg_value: Any) -> Tuple[Optional[int], Optional[AutoTestConfigNodeType], Optional[str]]:
+        """
+        从执行配置映射值中提取env_id、config_type、config_mode引用键。
+
+        :param cfg_value: 执行配置映射值
+        :return: (env_id, config_type, config_mode)，缺失项为 None
+        """
+        # 兼容 StepsExecuteConfigBase 与任务路径透传的原始 dict；结构非法时容忍并提取
+        # 可识别部分，由 preload_execute_configs 标记为引用缺失，执行期再报错（不阻断用例启动）
+        if cfg_value is None:
+            return None, None, None
+        if isinstance(cfg_value, StepsExecuteConfigBase):
+            env_id, config_type, config_mode = cfg_value.env_id, cfg_value.config_type, cfg_value.config_mode
+        elif isinstance(cfg_value, dict):
+            try:
+                parsed = StepsExecuteConfigBase.model_validate(cfg_value)
+                env_id, config_type, config_mode = parsed.env_id, parsed.config_type, parsed.config_mode
+            except Exception:
+                # 旧结构（env_name/config_name）或空标识：尽力提取可识别字段用于报错定位
+                raw_env_id = cfg_value.get("env_id")
+                try:
+                    env_id = int(str(raw_env_id).strip()) if raw_env_id not in (None, "") else None
+                except (TypeError, ValueError):
+                    env_id = None
+                config_type = StepExecutionContext.normalize_config_node_type(cfg_value.get("config_type"))
+                raw_mode = cfg_value.get("config_mode")
+                config_mode = str(raw_mode).strip() if raw_mode not in (None, "") else None
+                return env_id, config_type, config_mode or None
+        else:
+            return None, None, None
+
+        try:
+            env_id = int(str(env_id).strip()) if env_id not in (None, "") else None
+        except (TypeError, ValueError):
+            env_id = None
+        config_type = StepExecutionContext.normalize_config_node_type(config_type)
+        config_mode = str(config_mode).strip() if config_mode not in (None, "") else None
+        return env_id, config_type, config_mode or None
+
+    async def preload_execute_configs(self) -> None:
+        """
+        批量预加载执行配置引用，把env_id与config_mode解析为名称与地址快照。
+        """
+        # 固定最多 2 次查询（与步骤数无关）：
+        # 1) 环境配置表按 config_mode 批量取启用行；不按 env_bind_id 过滤，使"该环境未创建该配置"时
+        #    仍能回显跨环境共享的名称（缺失文案定位）；
+        # 2) 环境绑定表按 env_id 批量取环境名称、节点类型与所属应用。
+        # 解析失败不抛业务异常，写入 ResolvedStepExecuteConfig.missing_error 由步骤执行期报错
+        self.execute_config_index = {}
+        self.env_bind_index = {}
+
+        config_map: Dict[str, Any] = self.steps_execute_config
+        if not config_map or not isinstance(config_map, dict):
+            return
+
+        # 第一遍：提取引用键并收集去重的 env_id / config_mode（名称/地址/库名一律取环境配置库内当前值）
+        refs: Dict[str, Tuple[Optional[int], Optional[AutoTestConfigNodeType], Optional[str]]] = {}
+        env_ids: Set[int] = set()
+        config_modes: Set[str] = set()
+        for cfg_key, cfg_value in config_map.items():
+            env_id, config_type, config_mode = self.parse_execute_config_ref(cfg_value)
+            refs[str(cfg_key)] = (env_id, config_type, config_mode)
+            if env_id is not None:
+                env_ids.add(env_id)
+            if config_mode:
+                config_modes.add(config_mode)
+        if not refs:
+            return
+
+        # 必须与Tortoise初始化时注册的模块路径一致；运行期延迟导入避免服务层循环依赖
+        from backend.applications.autotest.models.autotest_env_config_model import (
+            AutoTestEnvBindModel,
+            AutoTestEnvConfigModel,
+        )
+
+        configs_by_key: Dict[Tuple[int, str], Dict[str, Any]] = {}
+        name_by_mode: Dict[str, str] = {}
+        if config_modes:
+            config_rows: List[Dict[str, Any]] = await AutoTestEnvConfigModel.filter(
+                config_mode__in=list(config_modes),
+                state__not=1,
+            ).values(
+                "config_mode",
+                "config_name",
+                "config_host",
+                "config_port",
+                "database_name",
+                "env_bind_id",
+                "env_type",
+            )
+            for row in config_rows:
+                mode: str = str(row.get("config_mode") or "").strip()
+                if not mode or row.get("env_bind_id") is None:
+                    continue
+                configs_by_key.setdefault((int(row["env_bind_id"]), mode), row)
+                config_name: str = str(row.get("config_name") or "").strip()
+                if config_name:
+                    name_by_mode.setdefault(mode, config_name)
+
+        bind_by_id: Dict[int, Dict[str, Any]] = {}
+        if env_ids:
+            bind_rows: List[Dict[str, Any]] = await AutoTestEnvBindModel.filter(
+                id__in=list(env_ids),
+                state__not=1,
+            ).values("id", "project_id", "env_type", "env_enum__env_name")
+            for row in bind_rows:
+                bind_by_id[int(row["id"])] = {
+                    "project_id": int(row["project_id"]) if row.get("project_id") is not None else None,
+                    "env_type": self.normalize_config_node_type(row.get("env_type")),
+                    "env_name": str(row.get("env_enum__env_name") or "").strip() or None,
+                }
+
+        for cfg_key, (env_id, config_type, config_mode) in refs.items():
+            bind_meta: Optional[Dict[str, Any]] = bind_by_id.get(env_id) if env_id is not None else None
+            resolved = ResolvedStepExecuteConfig(
+                env_id=env_id,
+                project_id=bind_meta["project_id"] if bind_meta else None,
+                env_name=bind_meta["env_name"] if bind_meta else None,
+                config_type=config_type,
+                config_mode=config_mode,
+            )
+            if env_id is None or config_type is None or not config_mode:
+                # 未选择配置或旧结构（名称版）数据：执行期提示重新选择
+                resolved.missing_error = EXECUTE_CONFIG_ERROR_EMPTY
+            elif bind_meta is None:
+                # 环境绑定不存在或已删除
+                resolved.missing_error = EXECUTE_CONFIG_ERROR_MISSING
+            else:
+                config_row: Optional[Dict[str, Any]] = configs_by_key.get((env_id, config_mode))
+                if config_row is None:
+                    resolved.config_name = name_by_mode.get(config_mode)
+                    resolved.missing_error = EXECUTE_CONFIG_ERROR_MISSING
+                else:
+                    # 节点类型以配置行冗余列为准：提交类型与行类型不符时由执行器期望类型校验拦截
+                    resolved.config_type = self.normalize_config_node_type(config_row.get("env_type")) or config_type
+                    resolved.config_name = str(config_row.get("config_name") or "").strip() or None
+                    resolved.config_host = str(config_row.get("config_host") or "").strip() or None
+                    resolved.config_port = (
+                        str(config_row.get("config_port")).strip()
+                        if config_row.get("config_port") not in (None, "")
+                        else None
+                    )
+                    resolved.database_name = (
+                        str(config_row.get("database_name")).strip()
+                        if config_row.get("database_name") not in (None, "")
+                        else None
+                    )
+            self.execute_config_index[cfg_key] = resolved
+
+        self.env_bind_index = {
+            env_id: meta["env_name"]
+            for env_id, meta in bind_by_id.items()
+            if meta.get("env_name")
+        }
+
     def resolve_placeholders(self, variables: Any, step_code: Optional[str] = None) -> Any:
         """
-        解析变量或配置中的${...}占位符（含函数占位符）。
-
-        上下文适配：统一绑定 logger_object、is_core_engine 与 finished_variables=self，
-        执行器无需在每个调用点重复传参。
+        解析变量或配置中的${...}占位符。
 
         :param variables: 待解析的值，常见为List[StepVariablesBase]或嵌套结构
         :param step_code: 日志归属的步骤标识，未传则使用当前步骤
         :return: 解析后的值；None原样返回，空容器/0/False保留原语义
         """
+        # 上下文适配：统一绑定 logger_object、is_core_engine 与 finished_variables=self，
+        # 执行器无需在每个调用点重复传参
         if variables is None:
             return None
         return AutoTestToolService.resolve_placeholders(
@@ -290,13 +490,12 @@ class StepExecutionContext:
         """
         重置会话变量池并求值，先置入原始池再整体解析函数占位符。
 
-        执行中途进入被引用用例时复用此入口，使被引用用例与宿主用例做相同的变量池初始化，
-        避免中途替换/并入的池绕过首次解析而残留${generate_xxx()}字面量。
-        “先置入再解析”使变量互引只在本池内求值（不回看宿主池），维持引用域半隔离语义。
-
         :param initial_variables: 原始初始变量池(未解析)，None按空池处理
         :return: 解析后的会话变量池，与self.session_variables指向同一列表(执行期就地追加对调用方可见)
         """
+        # 执行中途进入被引用用例时复用此入口，使被引用用例与宿主用例做相同的变量池初始化，
+        # 避免中途替换/并入的池绕过首次解析而残留${generate_xxx()}字面量；
+        # “先置入再解析”使变量互引只在本池内求值（不回看宿主池），维持引用域半隔离语义
         self.session_variables = list(initial_variables or [])
         resolved: List[StepVariablesBase] = self.resolve_placeholders(self.session_variables) or []
         self.session_variables = resolved
@@ -304,14 +503,13 @@ class StepExecutionContext:
 
     def resolve_xml_placeholders(self, xml_text: str, step_code: Optional[str] = None) -> str:
         """
-        解析XML报文中各文本节点与属性内的 ${...} 占位符（含算术表达式）。
-
-        上下文适配：统一绑定 logger_object、is_core_engine 与 finished_variables=self。
+        解析XML报文中各文本节点与属性内的${...}占位符。
 
         :param xml_text: XML报文字符串
         :param step_code: 日志归属的步骤标识，未传则使用当前步骤
         :return: 解析后的XML字符串；xml_text为空时原样返回
         """
+        # 上下文适配：统一绑定 logger_object、is_core_engine 与 finished_variables=self
         if not xml_text:
             return xml_text
         return AutoTestToolService.resolve_xml_placeholders(
@@ -411,17 +609,16 @@ class StepExecutionContext:
 
     def get_variable(self, name: str) -> Any:
         """
-        按 defined_variables → session_variables 的优先级取名为name的变量值（defined 遮蔽同名 session）。
-
-        defined_variables 为本步骤局部变量池（用户步骤定义 + 运行时内置变量），每次 execute() 重建；
-        session_variables 为跨步骤累积的会话变量池，所有步骤共享。
-        注意：此处 defined 优先；提取/断言查找表（build_session_lookup）则是 session 覆盖 defined，两者口径不同。
+        按 defined_variables → session_variables 的优先级取名为name的变量值。
 
         :param name: 变量名，非空字符串
         :return: 变量值（null 也是合法值）
         :raises StepExecutionError: 变量名为空或不是字符串
         :raises KeyError: 两级变量池均未定义该变量
         """
+        # defined_variables为本步骤局部变量池，每次execute()重建；session_variables为跨步骤累积的
+        # 会话变量池；注意此处defined优先，提取/断言查找表（build_session_lookup）则是session
+        # 覆盖defined，两者口径不同
         if not name or not isinstance(name, str):
             raise StepExecutionError(f"【获取变量】变量名无效: \n\t变量名必须是非空字符串, 当前值: {name}")
 
@@ -571,17 +768,16 @@ class StepExecutionContext:
         """
         在受限内置与namespace下执行code，支持单函数定义或顶层result变量。
 
-        执行顺序：记录原始代码快照 → 长度校验 → 占位符解析 → 单行代码规范化 → AST安全校验 → exec。
-        import/from 仅允许UserCodeSandbox.ALLOWED_IMPORT_ROOTS中的根模块；禁止下划线开头/帧自省属性访问（防对象自省逃逸沙箱）；
-        可用内建见 UserCodeSandbox.SAFE_BUILTINS（含常用异常类型），另可使用namespace变量（函数体内同可见，支持递归）。
-        返回值中的mapping key会递归转为str（tuple转为list），避免非字符串key导致orjson序列化或落库失败。
-
         :param code: Python 代码字符串，可为单行或多行
         :param namespace: 执行时的局部命名空间（如变量字典），可选；其中的__builtins__会被剥离，无法覆盖沙箱内置
         :param step_result: 可选；传入时写入其request，记录原始代码快照（未经占位符解析与规范化的原始code）
         :return: 代码中定义的 result 或单函数返回值；支持 Dict[str, Any] 或 List[Dict[Any, Any]]；无结果时返回空字典
         :raises StepExecutionError: 代码超长、安全校验不通过、执行异常或返回类型不被接受
         """
+        # 执行顺序：记录原始代码快照 → 长度校验 → 占位符解析 → 单行代码规范化 → AST安全校验 → exec；
+        # import/from仅允许UserCodeSandbox.ALLOWED_IMPORT_ROOTS中的根模块，禁止下划线开头/帧自省属性访问；
+        # 可用内建见UserCodeSandbox.SAFE_BUILTINS，另可使用namespace变量；
+        # 返回值中的mapping key会递归转为str（tuple转为list），避免非字符串key导致序列化失败
         if step_result is not None:
             step_result.request = {
                 "request_code": code,
@@ -735,17 +931,16 @@ class StepExecutionContext:
     @staticmethod
     def _validate_user_python_restricted(source: str) -> None:
         """
-        静态校验用户代码（只做AST分析，不执行），拦截沙箱逃逸与不支持的语法。
-
-        import/from仅允许UserCodeSandbox.ALLOWED_IMPORT_ROOTS中的根模块（与受限导入钩子一致）；
-        禁止下划线开头属性（namedtuple只读工具方法除外）及UserCodeSandbox.FORBIDDEN_ATTRS帧自省属性
-        （阻断().__class__与gi_frame等对象自省逃逸沙箱路径）；
-        仅允许普通def函数，禁止class/async def；语法错误不在本方法报错，留给exec统一提示。
+        静态校验用户代码，只做AST分析，拦截沙箱逃逸与不支持的语法。
 
         :param source: 待校验的Python源代码字符串
         :return: None
         :raises StepExecutionError: 命中任一安全限制
         """
+        # import/from仅允许UserCodeSandbox.ALLOWED_IMPORT_ROOTS中的根模块（与受限导入钩子一致）；
+        # 禁止下划线开头属性（namedtuple只读工具方法除外）及FORBIDDEN_ATTRS帧自省属性
+        # （阻断().__class__与gi_frame等对象自省逃逸沙箱路径）；
+        # 仅允许普通def函数，禁止class/async def；语法错误不在本方法报错，留给exec统一提示
         allowed_cn = "、".join(sorted(UserCodeSandbox.ALLOWED_IMPORT_ROOTS))
         try:
             tree = ast.parse(source)
@@ -803,9 +998,6 @@ class StepExecutionContext:
     def normalize_python_code(code: str) -> str:
         """
         将单行函数形式的代码格式化为多行：提取import/from，分离def与函数体并正确缩进。
-
-        仅处理不含换行的单行代码；import 语句会被提升到函数定义之前（与 exec 上下文同层）。
-        属于启发式处理：按首个冒号切分函数头与函数体，函数体统一缩进4空格，仅识别 return/if/for/while/with 开头的体。
 
         :param code: 原始Python代码字符串，可为单行函数定义
         :return: 格式化后的多行代码；空串或已有换行则原样返回
@@ -879,19 +1071,11 @@ class StepExecutionContext:
         """
         解析代码中的 ${var}：引号内替换为合法 Python 字面量，拼接形式保留字符串；代码逻辑中替换为 Python 字面量。
 
-        处理规则：
-        1. 字符串字面量中的占位符（如 '${var}'）替换为合法字面量：字符串用 repr 保留引号，数值/布尔/None 裸写
-           例如：dic["k"] = "${name}" -> dic["k"] = '张三'；'${idx_1}' == 1 -> 1 == 1（idx_1=1）
-        2. 字符串拼接中的占位符（如 '${item}_1001'）替换为实际值，保持字符串格式
-           例如：'${item_1}_1001' 会变成 'test_1001'（假设 item_1 = "test"）
-        3. 代码逻辑中的占位符（如 if ${var} == 1:）直接替换为实际值的 Python 表示
-        注意：对 f-string 中嵌套占位符的支持度有限，例如 id_card = '${generate_ident_card_number()}' 与
-        birthday = f'${{generate_ident_card_birthday(ident_card_number={id_card})}}' 这类写法可能无法正确解析。
-        引用失败（变量未定义/函数抛错）时保留原占位符并记日志，不在此抛出异常，后续 exec 可能因之报NameError。
-
         :param code: 含占位符的 Python 代码字符串
         :return: 占位符替换后的代码；异常时返回原 code
         """
+        # 依次替换三种占位符形态（引号内完整 -> 拼接 -> 裸逻辑），引用失败保留原占位符仅记日志；
+        # f-string 嵌套占位符支持度有限，可能无法正确解析
         if not code or not isinstance(code, str):
             return code
 
@@ -1008,17 +1192,14 @@ class StepExecutionContext:
 
 
 class BaseStepExecutor:
-    """
-    步骤执行器基类：一个实例只对应一个步骤节点，持有 step 与 context。
+    """步骤执行器基类：一个实例只对应一个步骤节点，持有 step 与 context。"""
 
-    统一执行骨架（子类只需实现 _execute）：
-        1. execute() 处理步骤跳过、步骤局部变量注入、日志归属保存与恢复；
-        2. 调用 _execute() 执行具体协议逻辑，异常在此收敛为 result.success=False；
-        3. finally 合并提取结果到会话池、计算耗时、按需收集明细。
-
-    契约：除「内置变量/局部变量准备阶段」失败会原样上抛外，execute() 不向上抛异常，所有执行期失败都记录在 StepExecutionResult 中，调用方据返回值做统计；
-    子类 _execute 失败时应抛出 StepExecutionError，由 execute() 统一收口。
-    """
+    # 统一执行骨架（子类只需实现 _execute）：
+    # 1. execute() 处理步骤跳过、步骤局部变量注入、日志归属保存与恢复；
+    # 2. 调用 _execute() 执行具体协议逻辑，异常在此收敛为 result.success=False；
+    # 3. finally 合并提取结果到会话池、计算耗时、按需收集明细。
+    # 契约：除内置变量/局部变量准备阶段失败会原样上抛外，execute() 不向上抛异常，所有执行期失败都记录在
+    # StepExecutionResult 中，调用方据返回值做统计；子类 _execute 失败时应抛出 StepExecutionError 由 execute() 收口
 
     # 是否在执行前解析本步骤defined_variables并注入变量池；引用壳执行器关闭（自身无目标环境，无法提供内置变量）
     resolve_own_defined_variables: bool = True
@@ -1066,12 +1247,12 @@ class BaseStepExecutor:
 
     @property
     def quote_case_id(self) -> Optional[int]:
-        """引用用例 ID（引用公共脚本时）。"""
+        """引用用例 ID，仅在引用公共脚本的步骤中存在。"""
         return self.step.quote_case_id
 
     @property
     def children(self) -> List[AutoTestStepTreeUpdateItem]:
-        """当前步骤的子步骤列表（children + quote_steps，按 step_no 升序；step_no 缺失按0参与排序）。"""
+        """当前步骤的子步骤列表：children 与 quote_steps 合并，按 step_no 升序，缺失时按 0 参与排序。"""
         return sorted(
             list(self.step.children or []) + list(self.step.quote_steps or []),
             key=lambda item: (item.step_no or 0),
@@ -1079,7 +1260,7 @@ class BaseStepExecutor:
 
     @classmethod
     async def get_services(cls) -> AutoTestServices:
-        """获取自动化测试CRUD服务聚合（延迟导入：dependencies 反向依赖本模块，顶层导入会构成循环依赖）。"""
+        """获取自动化测试CRUD服务聚合；延迟导入以避开与 dependencies 的循环依赖。"""
         from backend.applications.autotest.dependencies import get_autotest_api_services
         return await get_autotest_api_services()
 
@@ -1087,12 +1268,11 @@ class BaseStepExecutor:
         """
         加载当前请求步骤的数据源场景，并写入结果快照。
 
-        HTTP/TCP 共用：普通步骤按 case_id + step_code + dataset_name 查库；
-        引用链内层步骤直接消费引用壳预载的 quote_dataset_snapshot，不再重复查库（也避开引用链的加载短路）。
-
         :param result: 本步执行结果，用于回填dataset_snapshot/dataset_name
         :return: _acquire_dataset_payload结构（head/body/assert_head/assert_body）；无数据驱动或未命中时为None
         """
+        # HTTP/TCP 共用：普通步骤按 case_id + step_code + dataset_name 查库；引用链内层步骤直接消费引用壳
+        # 预载的 quote_dataset_snapshot，避免重复查库，同时避开引用链的加载短路
         dataset_name: Optional[str] = getattr(self.context, "dataset_name", None)
         executing_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         if executing_quote_case_id:
@@ -1112,13 +1292,12 @@ class BaseStepExecutor:
         """
         评估条件是否成立：解析左侧表达式与右侧比较值中的占位符，再按操作符比较。
 
-        Loop 条件循环与 Condition 条件分支共用，避免两套实现出现“只解析左侧、不解析右侧”的漂移。
-
         :param condition: 条件模型（condition_expr/condition_compare/condition_value）
         :param operation_type: 错误信息前缀（循环结构/条件分支）
         :return: 条件成立返回True
         :raises StepExecutionError: 条件字段缺失、占位符解析失败或比较符非法
         """
+        # Loop 条件循环与 Condition 条件分支共用，避免两套实现出现只解析左侧、不解析右侧的漂移
         condition_expr = condition.condition_expr
         condition_compare = condition.condition_compare
         condition_value = condition.condition_value
@@ -1156,57 +1335,89 @@ class BaseStepExecutor:
         except ValueError as e:
             raise StepExecutionError(f"【{operation_type}】条件表达式执行异常, 错误描述: {e}") from e
 
+    def execute_config_key(self, database_operates_index: Optional[int] = None) -> Optional[str]:
+        """
+        构造执行配置映射键：step_id 优先，否则用 @@step_name；DB/Redis 多操作时再按序号追加 _@@index 后缀。
+
+        :param database_operates_index: 数据库/Redis 多操作时的操作序号（从0起）
+        :return: 映射键；步骤无 step_id 且无名称时返回 None
+        """
+        step_id: Optional[int] = self.step.step_id
+        step_name: str = (self.step.step_name or "").strip()
+        if step_id:
+            cfg_key: str = str(step_id)
+        elif step_name:
+            cfg_key = f"@@{step_name}"
+        else:
+            return None
+        if database_operates_index is not None and database_operates_index >= 0:
+            cfg_key += f"_@@{database_operates_index}"
+        return cfg_key
+
     def get_execute_config(
             self,
             database_operates_index: Optional[int] = None,
             expected_config_type: Optional[Union[AutoTestConfigNodeType, Iterable[AutoTestConfigNodeType]]] = None,
-    ) -> Optional[StepsExecuteConfigBase]:
+    ) -> Optional[ResolvedStepExecuteConfig]:
         """
-        获取当前步骤的执行配置（APP/DB/REDIS）。
-        KEY：step_id 优先，否则@@step_name；DB/Redis多操作再拼_@@{index}。
-        指定expected_config_type时，类型不匹配视为未命中（避免HTTP误用database配置）。
+        获取当前步骤或指定操作的执行配置解析快照。
 
         :param database_operates_index: 数据库/Redis 多操作时的操作序号（从0起）
         :param expected_config_type: 期望的配置类型（单个或可迭代多种）
-        :return: 执行配置；未配置、类型不匹配或解析失败时返回 None
+        :return: 解析快照；未配置或类型不匹配时返回 None
         """
-        step_exec_config_map: Dict[str, Any] = self.context.steps_execute_config
-        if not step_exec_config_map or not isinstance(step_exec_config_map, dict):
+        # 指定 expected_config_type 时类型不匹配视为未命中，避免 HTTP 误用 database 配置；
+        # 本方法不抛异常，供采集内置变量等可选路径使用，必需校验见 require_execute_config
+        cfg_key: Optional[str] = self.execute_config_key(database_operates_index)
+        if cfg_key is None:
             return None
-
-        expected_types: Optional[Set[AutoTestConfigNodeType]] = None
+        resolved: Optional[ResolvedStepExecuteConfig] = self.context.execute_config_index.get(cfg_key)
+        if resolved is None:
+            return None
         if expected_config_type is not None:
             if isinstance(expected_config_type, AutoTestConfigNodeType):
-                expected_types = {expected_config_type}
+                expected_types: Set[AutoTestConfigNodeType] = {expected_config_type}
             else:
                 expected_types = set(expected_config_type)
-
-        step_id: Optional[int] = self.step.step_id
-        step_name: Optional[str] = self.step.step_name
-        cfg_key: str = str(step_id) if step_id else f"@@{str(step_name).strip()}"
-        if database_operates_index is not None and database_operates_index >= 0:
-            cfg_key += f"_@@{database_operates_index}"
-        cfg_value: Any = step_exec_config_map.get(cfg_key)
-        if not cfg_value:
-            return None
-
-        cfg: Optional[StepsExecuteConfigBase] = None
-        if isinstance(cfg_value, StepsExecuteConfigBase):
-            cfg = cfg_value
-        elif isinstance(cfg_value, dict):
-            try:
-                cfg = StepsExecuteConfigBase.model_validate(cfg_value)
-            except Exception:
+            if resolved.config_type not in expected_types:
                 return None
-        if cfg is None:
-            return None
-        if expected_types is not None and cfg.config_type not in expected_types:
-            return None
-        return cfg
+        return resolved
+
+    def require_execute_config(
+            self,
+            *,
+            label: str,
+            expected_config_type: AutoTestConfigNodeType,
+            database_operates_index: Optional[int] = None,
+            offset_message: Optional[str] = None,
+    ) -> ResolvedStepExecuteConfig:
+        """
+        获取执行配置解析快照；缺失时抛出步骤级错误，错误语义见设计6.4。
+
+        :param label: 错误信息前缀（如HTTP请求）
+        :param expected_config_type: 期望的配置节点类型
+        :param database_operates_index: 数据库/Redis 多操作时的操作序号（从0起）
+        :param offset_message: 操作定位前缀（如第1条数据库配置）
+        :return: 可用的解析快照
+        :raises StepExecutionError: 未选择配置、该环境未创建对应逻辑配置或节点类型不符
+        """
+        prefix: str = f"{offset_message}：" if offset_message else ""
+        cfg_key: Optional[str] = self.execute_config_key(database_operates_index)
+        resolved: Optional[ResolvedStepExecuteConfig] = (
+            self.context.execute_config_index.get(cfg_key) if cfg_key is not None else None
+        )
+        if resolved is None or resolved.missing_error == EXECUTE_CONFIG_ERROR_EMPTY:
+            raise StepExecutionError(f"【{label}】{prefix}参数[request_config_mode]不能为空，请重新选择配置")
+        if resolved.missing_error is not None or resolved.config_type != expected_config_type:
+            raise StepExecutionError(
+                f"【{label}】{prefix}执行配置缺失: 配置[{resolved.display_name}] "
+                f"在环境[{resolved.display_env_name}]的[{expected_config_type.value.upper()}]节点下不存在"
+            )
+        return resolved
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
         """
-        采集当前步骤的内置环境变量；默认无，HTTP/TCP执行器覆写提供SERVER_*/TARGET_*。
+        采集当前步骤的内置环境变量；默认无，HTTP/TCP 执行器覆写提供 SERVER 与 TARGET 前缀系列变量。
 
         :return: 内置变量列表；无内置变量时返回空列表
         """
@@ -1214,7 +1425,7 @@ class BaseStepExecutor:
 
     def existing_variable_keys(self) -> Set[str]:
         """
-        用户已定义的变量key集合（本步骤局部+会话累积），供内置变量同名跳过判定。
+        用户已定义的变量key集合，覆盖本步骤局部与会话累积变量，供内置变量同名跳过判定。
 
         :return: 变量key集合
         """
@@ -1250,11 +1461,6 @@ class BaseStepExecutor:
         """
         统一变量提取 + 断言：构建变量池查找表，调用工具管线，失败转为StepExecutionError。
 
-        查找表优先级：session 覆盖同名 defined，session_lookup_extra 最后覆盖；
-        与 get_variable 的 defined 优先口径不同，不要在两边套用同一优先级认知。
-        管线以 raise_on_failure=False 运行（先拿回逐项结果），再由本方法统一聚合成一个 StepExecutionError，
-        因此失败项仍会写入 result.extract_variables/assert_validators，明细不丢。
-
         :param result: 用于追加提取与断言结果的步骤执行结果对象
         :param step_label: 步骤标签，用于异常信息中标识来源步骤
         :param response_text: 响应文本
@@ -1273,6 +1479,8 @@ class BaseStepExecutor:
         :return: None
         :raises StepExecutionError: 存在提取/断言失败项，或管线执行异常
         """
+        # 查找表优先级：session 覆盖同名 defined，session_lookup_extra 最后覆盖，与 get_variable 的
+        # defined 优先口径不同；管线以 raise_on_failure=False 运行，失败项仍会写入结果明细，最后统一聚合抛错
         session_lookup = AutoTestToolService.build_session_lookup(
             self.context.defined_variables,
             self.context.session_variables,
@@ -1331,12 +1539,10 @@ class BaseStepExecutor:
         """
         执行当前步骤：注入局部变量、调用_execute、合并extract_variables、按需收集明细。
 
-        若 step_is_skipped 为True，仅打INFO日志并返回None（不写明细、不计入统计、不执行子步骤）。
-        无论本步成功还是失败，均返回同一个 StepExecutionResult（失败写入success/error）；
-        唯一例外：内置变量/局部变量准备阶段抛出的异常会原样上抛（此时尚未进入 _execute，无结果可返回）。
-
         :return: 本步骤执行结果；跳过时返回None
         """
+        # 除内置变量/局部变量准备阶段失败原样上抛外（尚未进入 _execute 无结果可返回），其余失败均写入
+        # result.success/error 并返回同一对象，调用方据返回值统一统计
         # 跳过/注释：当作没有该步骤（父跳过时不会进入子步，故无需祖先标记）
         if bool(getattr(self.step, "step_is_skipped", False)):
             LOGGER.info(
@@ -1466,13 +1672,12 @@ class BaseStepExecutor:
         """
         将本步骤执行结果序列化为明细创建体并追加到context.pending_details，由调用方在短事务内统一落库。
 
-        仅当 context.report_code 存在时被 execute() 调用；pending_details 为None时本方法不写入任何内容。
-
         :param result: 本步骤执行结果对象
         :param step_st_time_str: 步骤开始时间字符串
         :param num_cycles: 循环第几轮（非循环步骤为None，明细落NULL）
         :return: None
         """
+        # 仅当 context.report_code 存在时被 execute() 调用；pending_details 为None时本方法不写入任何内容
         step_end_time: datetime = datetime.now()
         step_ed_time_str: str = step_end_time.strftime("%Y-%m-%d %H:%M:%S.%f")
         step_elapsed: str = f"{result.elapsed:.2f}" if result.elapsed is not None else "0.00"
@@ -1529,7 +1734,8 @@ class BaseStepExecutor:
             request_method=actual_request.get("request_method"),
             request_args_type=actual_request.get("request_args_type"),
             request_project_id=self.step.request_project_id,
-            request_config_name=actual_request.get("request_config_name") or self.step.request_config_name,
+            request_config_name=actual_request.get("request_config_name"),
+            request_config_mode=actual_request.get("request_config_mode"),
             request_env_name=actual_request.get("request_env_name"),
             request_header=actual_request.get("request_header"),
             request_params=actual_request.get("request_params"),
@@ -1589,11 +1795,10 @@ class BaseStepExecutor:
         """
         生成条件循环判断条件快照。
 
-        优先取执行态 result.request.loop_conditions；缺省回落步骤定义 self.step.loop_conditions。
-
         :param actual_request: 本步骤 result.request 字典
         :return: Dict(condition_expr/condition_compare/condition_value) 或 None
         """
+        # 优先取执行态 result.request.loop_conditions；缺省回落步骤定义 self.step.loop_conditions
         from_request = actual_request.get("loop_conditions")
         if isinstance(from_request, dict) and from_request:
             return from_request
@@ -1608,7 +1813,7 @@ class BaseStepExecutor:
 
     def _snapshot_branch_items(self, actual_request: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
         """
-        生成条件分支执行快照：仅记录本次命中的那一条（不含 branch_children）。
+        生成条件分支执行快照，仅记录本次命中的那一条且不含 branch_children。
 
         :param actual_request: 本步骤 result.request 字典（含 branch_items / branch_match）
         :return: 仅含命中分支的列表；未命中或非条件分支时返回 None
@@ -1630,7 +1835,7 @@ class BaseStepExecutor:
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        子类实现：执行当前步骤逻辑，成功/失败写入result，异常由execute()捕获。
+        子类实现：执行当前步骤逻辑，成功/失败写入result，异常由 execute 统一捕获。
 
         :param result: 用于写入本步骤执行结果的StepExecutionResult实例
         :return: None
@@ -1639,12 +1844,11 @@ class BaseStepExecutor:
 
     async def _execute_children(self) -> List[StepExecutionResult]:
         """
-        根据step_no顺序执行所有子步骤（children + quote_steps）。
-
-        子步骤执行器创建失败或执行期抛出非预期异常时，不中断同级其它子步，而是转为一条失败结果项。
+        根据 step_no 顺序执行所有子步骤，children 与 quote_steps 合并参与排序。
 
         :return: 子步骤结果列表；step_is_skipped的子步返回None会被跳过；异常子步转为失败结果项
         """
+        # 子步骤执行器创建失败或执行期抛出非预期异常时不会中断同级其它子步，而是转为一条失败结果项
         results: List[StepExecutionResult] = []
         for child in self.children:
             try:
@@ -1677,16 +1881,13 @@ class BaseStepExecutor:
 
 
 class LoopStepExecutor(BaseStepExecutor):
-    """
-    循环结构执行器：按 loop_mode 分派次数/列表/字典/条件循环，逐轮写入循环变量并执行子步骤树。
+    """循环结构执行器：按 loop_mode 分派次数/列表/字典/条件循环，逐轮写入循环变量并执行子步骤树。"""
 
-    循环变量名直接取步骤配置（loop_index/loop_key/loop_value），前端输入框默认预填 loop_index/loop_key/loop_value。
-    schema 只做格式校验（strip 后为空归一为None，禁止空白符与 '${'/'}'），执行期不做默认名回落，
-    因此这三个字段为空时，本轮写入变量池会失败并导致本步失败。
-
-    子步骤失败按 loop_on_error 处理：继续下一轮（CONTINUE）/ 中断本层循环（BREAK）/ 结束本步（STOP）。
-    STOP 的异常文案写作“停止整个用例执行”，但该异常会被 execute() 收口为本步失败，同级与父层步骤仍继续执行。
-    """
+    # 循环变量名直接取步骤配置（loop_index/loop_key/loop_value），前端输入框默认预填同名字样；
+    # schema 只做格式校验（strip 后为空归一为None，禁止空白符与 '${'/'}'），执行期不做默认名回落，
+    # 因此这三个字段为空时，本轮写入变量池会失败并导致本步失败。
+    # 子步骤失败按 loop_on_error 处理：继续下一轮 CONTINUE / 中断本层循环 BREAK / 结束本步 STOP。
+    # STOP 的异常文案写作“停止整个用例执行”，但该异常会被 execute() 收口为本步失败，同级与父层步骤仍继续执行
 
     # 条件循环最大循环时间上限(秒)：schema 入库上限 + 执行期对存量超限数据的兜底裁剪
     CONDITION_LOOP_MAX_TIMEOUT: int = 300
@@ -1705,9 +1906,6 @@ class LoopStepExecutor(BaseStepExecutor):
     ) -> bool:
         """
         执行单轮子步骤：标记本轮轮次、写入本轮循环变量、执行子步骤树并按错误策略处理失败。
-        四种循环模式的单轮行为完全一致，仅循环变量注入与日志文案不同，故收敛至此统一处理。
-
-        轮次会同时写入本步与直接子步的 step_cycle_index（子步明细据自己的step_code取轮次）。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的处理策略：CONTINUE=继续下一轮，BREAK=中断本层循环，STOP=抛出异常结束本步
@@ -1718,6 +1916,7 @@ class LoopStepExecutor(BaseStepExecutor):
         :raises StepExecutionError: 子步骤失败且策略为 STOP 时抛出，由外层 execute() 收口为本步失败（不中断同级/父层步骤）
         :return: True=继续下一轮；False=按[中断循环]策略结束本层循环；STOP 策略不返回（直接抛出）
         """
+        # 四种循环模式的单轮行为完全一致，仅循环变量注入与日志文案不同，故收敛至此统一处理
         if self.step_code:
             self.context.step_cycle_index[self.step_code] = loop_no
 
@@ -1773,14 +1972,13 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         校验循环模式与错误策略后，分派到对应的_execute_*_loop实现。
 
-        校验顺序固定为 loop_mode → loop_on_error，任一为空或非法都不会进入轮次执行；
-        各模式抛出的 StepExecutionError 原样上抛，其余异常经 format_step_error_message 格式化、
-        写入 result.error 与执行日志后再转抛 StepExecutionError，统一由 execute() 收口置失败。
-
         :param result: 用于挂载子步骤结果与成败状态的执行结果对象
         :raises StepExecutionError: 循环模式/错误策略缺失或非法，或循环执行期出现其它异常
         :return: None
         """
+        # 校验顺序固定为 loop_mode → loop_on_error，任一为空或非法都不会进入轮次执行；
+        # 各模式 StepExecutionError 原样上抛，其余异常经 format_step_error_message 格式化并写入
+        # result.error 与执行日志后再转抛，统一由 execute() 收口置失败
         try:
             loop_mode: str = self.step.loop_mode
             if not loop_mode:
@@ -1819,12 +2017,11 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         解析次数循环的loop_maximums：支持字面量整数与${...}变量占位符，最终必须得到1-100的正整数。
 
-        可接受的最终取值：int、整数值 float、纯数字字符串（允许带正负号，负数随后由区间校验拒绝）；
-        布尔值、非整数浮点、非数字字符串与其它类型一律报错。
-
         :raises StepExecutionError: 参数为空/布尔值、占位符解析异常、取值类型非法或不在1-100区间
         :return: 解析后的最大循环次数（1-100）
         """
+        # 可接受的最终取值：int、整数值 float、纯数字字符串（允许带正负号，负数随后由区间校验拒绝）；
+        # 布尔值、非整数浮点、非数字字符串与其它类型一律报错
         loop_maximums_raw: str = self.step.loop_maximums
         if loop_maximums_raw is None or (isinstance(loop_maximums_raw, str) and not str(loop_maximums_raw).strip()):
             raise StepExecutionError("【循环结构】次数循环: 参数[loop_maximums]不允许为空")
@@ -1881,17 +2078,15 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_count_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        次数循环模式：按loop_maximums（字面量或变量占位符，解析后强制1-100）执行固定次数，可选loop_interval间隔。
-        每轮写入循环索引变量并执行子步骤树，失败按错误策略处理。
-
-        明细快照：result.request 只记录解析后的 loop_maximums；loop_interval 仅用于轮次之间等待，
-        最后一轮不再等待；BREAK/STOP 提前结束时直接返回，不补记"循环结束"日志。
+        次数循环模式：按解析后的 loop_maximums 执行固定次数，可选 loop_interval 间隔。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的处理策略：CONTINUE=继续下一轮，BREAK=中断本层循环，STOP=抛出异常结束本步
         :raises StepExecutionError: loop_maximums 缺失或解析值非法（见 _resolve_loop_maximums）
         :return: None
         """
+        # 每轮写入循环索引变量并执行子步骤树，失败按错误策略处理；明细快照只记录解析后的 loop_maximums，
+        # loop_interval 仅用于轮次之间等待，最后一轮不再等待；BREAK/STOP 提前结束时直接返回不补记循环结束日志
         loop_maximums: int = self._resolve_loop_maximums()
         result.request = {"loop_maximums": loop_maximums}
 
@@ -1917,18 +2112,15 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_list_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        列表循环模式：对可迭代对象（变量或 JSON 数组）逐项执行子步骤。
-        每轮写入循环索引变量（从 1 起的序号）与循环数据变量（当前项）并执行子步骤树。
-
-        明细快照：本模式不写 result.request，loop_iterable 只出现在执行日志中；
-        字符串/字节串与不可迭代对象直接报错，空列表按"跳过循环"处理且不算失败；
-        loop_interval 仅用于轮次之间等待，最后一轮不再等待。
+        列表循环模式：对变量或 JSON 数组等可迭代对象逐项执行子步骤，每轮写入循环索引与循环数据变量。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的处理策略：CONTINUE=继续下一轮，BREAK=中断本层循环，STOP=抛出异常结束本步
         :raises StepExecutionError: loop_iterable 缺失、解析失败或解析结果不是可迭代对象
         :return: None
         """
+        # 本模式不写明细快照，loop_iterable 只出现在执行日志中；字符串/字节串与不可迭代对象直接报错，
+        # 空列表按跳过循环处理且不算失败；loop_interval 仅用于轮次之间等待，最后一轮不再等待
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
             raise StepExecutionError("【循环结构】列表循环, 参数[loop_iterable]不允许为空")
@@ -1979,17 +2171,15 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_dict_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        字典循环模式：对字典逐 (key, value) 执行子步骤。
-        每轮写入循环索引变量（从 1 起的序号）、循环键名变量、循环数据变量并执行子步骤树。
-
-        明细快照：本模式不写 result.request；解析结果不是 dict 即报错，空字典按"跳过循环"处理且不算失败；
-        loop_interval 仅用于轮次之间等待，最后一轮不再等待。
+        字典循环模式：对字典逐键值对执行子步骤，每轮写入循环索引、循环键名与循环数据变量。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的处理策略：CONTINUE=继续下一轮，BREAK=中断本层循环，STOP=抛出异常结束本步
         :raises StepExecutionError: loop_iterable 缺失、解析失败或解析结果不是字典
         :return: None
         """
+        # 本模式不写明细快照；解析结果不是 dict 即报错，空字典按跳过循环处理且不算失败；
+        # loop_interval 仅用于轮次之间等待，最后一轮不再等待
         loop_iterable = self.step.loop_iterable
         if not loop_iterable:
             raise StepExecutionError("【循环结构】字典循环, 参数[loop_iterable]不允许为空")
@@ -2046,22 +2236,17 @@ class LoopStepExecutor(BaseStepExecutor):
 
     async def _execute_condition_loop(self, result: StepExecutionResult, on_error: AutoTestLoopErrorStrategy) -> None:
         """
-        条件循环模式：while语义每轮先根据loop_conditions判断是否继续，仅当条件满足时才执行子步骤。
-        条件一开始就不满足时子步骤一轮都不执行；超时（上限300秒，执行期兜底clamp存量超限数据）、
-        条件评估异常、或子步骤按错误策略中断时退出；最多100轮（每轮一次子步骤树）防死循环。
-
-        约定：loop_conditions与ConditionsBase一致（condition_expr/condition_compare/condition_value），
-        经evaluate_condition评估；返回True表示继续循环，返回False表示结束循环。
-
-        明细快照：result.request 只记录 loop_conditions，不含轮次与超时配置。
-        边界：超时在每轮开始前检查（上一轮耗时可能已越过上限，需等下一轮开头才退出）；
-        条件评估异常只记日志并置失败后退出，不再抛出；命中 LOOP_GUARD_LIMIT 则抛出 StepExecutionError 结束本步。
+        条件循环模式：按 while 语义每轮先评估 loop_conditions，条件满足才执行子步骤树。
 
         :param result: 用于挂载子步骤结果的StepExecutionResult
         :param on_error: 子步骤失败时的处理策略：CONTINUE=继续下一轮，BREAK=中断本层循环，STOP=抛出异常结束本步
         :raises StepExecutionError: loop_conditions 缺失，或条件满足轮数达到防死循环上限
         :return: None
         """
+        # 条件一开始就不满足则一轮都不执行；超时（上限300秒，执行期兜底clamp存量超限数据）、条件评估异常、
+        # 子步骤按错误策略中断时退出；最多100轮防死循环。loop_conditions 结构与 ConditionsBase 一致，
+        # 经 evaluate_condition 评估，返回 True 继续、False 结束。明细快照只记录 loop_conditions；
+        # 超时在每轮开始前检查，条件评估异常只记日志并置失败后退出、不再抛出，命中护栏上限则抛错结束本步
         condition_config = self.step.loop_conditions
         if not condition_config:
             raise StepExecutionError("【循环结构】条件循环, 参数[loop_conditions]不允许为空")
@@ -2141,13 +2326,11 @@ class LoopStepExecutor(BaseStepExecutor):
         """
         解析循环数据源：先做占位符替换，再根据变量名、JSON字符串或原值得到可迭代对象。
 
-        解析顺序：占位符替换 → 结果仍为纯 ${var} 形式则查变量池 → 字符串尝试 JSON 解析 → 失败则按普通字符串返回。
-        类型校验由调用方负责（列表循环拒绝字符串/字节串，字典循环要求 dict）。
-
         :param source: 数据源，可为${var}、JSON字符串或已解析对象
         :raises StepExecutionError: 占位符解析或变量取值失败
         :return: 可迭代对象（如 list、dict）；非 JSON 字符串时原样返回
         """
+        # 类型校验由调用方负责：列表循环拒绝字符串/字节串，字典循环要求 dict
         try:
             # 先整体替换占位符；未定义变量会保留 ${var} 原样，故下面仍需按纯占位符形式补查变量池
             resolved_source = self.context.resolve_placeholders(variables=source, step_code=self.step_code)
@@ -2172,25 +2355,22 @@ class LoopStepExecutor(BaseStepExecutor):
 
 
 class ConditionStepExecutor(BaseStepExecutor):
-    """
-    条件分支执行器：按 branch_items 顺序评估 if/elif/else，命中第一个分支即执行其子步骤（子步骤按 step_no 升序）。
+    """条件分支执行器：按 branch_items 顺序评估 if/elif/else，命中第一个分支即执行其下子步骤，子步骤按 step_no 升序。"""
 
-    else 分支不评估条件、恒为命中，因此排在 else 之后的兄弟分支永远不会被执行（顺序由前端保证）。
-    所有分支均未命中时本步 success 仍为 True，message 标记为跳过执行；
-    子步骤失败只体现为 children 中的失败项，不改变本步 success 也不向上抛，
-    仅当分支配置非法（branch_items 为空、if/elif 缺 branch_conditions）时本步才失败。
-    """
+    # else 分支不评估条件、恒为命中，因此排在 else 之后的兄弟分支永远不会被执行（顺序由前端保证）。
+    # 所有分支均未命中时本步 success 仍为 True，message 标记为跳过执行；子步骤失败只体现为
+    # children 中的失败项，不改变本步 success 也不向上抛；仅当分支配置非法（branch_items 为空、
+    # if/elif 缺 branch_conditions）时本步才失败
 
     async def _execute_branch_children(self, branch_children: List[AutoTestStepTreeUpdateItem]) -> List[StepExecutionResult]:
         """
         执行命中分支的子步骤：按 step_no 升序逐个构建执行器并执行。
 
-        单个子步抛出的异常在此就地转为 success=False 的失败结果（错误信息经 format_step_error_message
-        记录到父步日志），因此不会中断同分支内的后续子步骤，也不会把异常传给调用方。
-
         :param branch_children: 命中分支的子步骤定义列表
         :return: 子步骤执行结果列表；被跳过的子步骤（execute 返回 None）不进入列表
         """
+        # 单个子步抛出的异常在此就地转为失败结果（错误信息经 format_step_error_message 记录到父步日志），
+        # 不会中断同分支内的后续子步骤，也不会把异常传给调用方
         results: List[StepExecutionResult] = []
         for child in sorted(branch_children, key=lambda item: (item.step_no or 0)):
             try:
@@ -2219,12 +2399,10 @@ class ConditionStepExecutor(BaseStepExecutor):
         """
         顺序评估分支并执行第一个命中分支下的子步骤。
 
-        执行快照：result.request 固定写入 branch_match（命中分支下标，从0起）与 branch_items
-        （只含命中的那一条且不含 branch_children）；全部未命中时两者保持 None。
-
         :param result: 用于挂载子步骤结果、命中信息与成败状态的执行结果对象
         :return: None
         """
+        # 执行快照：branch_match 为命中分支下标（从0起），branch_items 只含命中的那条；全部未命中两者保持 None
         try:
             branch_items = self.step.branch_items
             if not branch_items:
@@ -2275,12 +2453,10 @@ class ConditionStepExecutor(BaseStepExecutor):
 
 
 class PythonStepExecutor(BaseStepExecutor):
-    """
-    Python 代码步骤执行器：在受限沙箱中执行 code，将返回的 dict/list 转为提取项与响应快照，再执行本步断言。
+    """Python 代码步骤执行器：在受限沙箱中执行 code，将返回的 dict/list 转为提取项与响应快照，再执行本步断言。"""
 
-    代码返回 None 或空 dict/空 list 时不写 extract_variables 与 response（视作无返回值）；
-    断言只支持变量池数据源（session_variables/变量池），查找顺序为 defined → session → 本步返回值。
-    """
+    # 代码返回 None 或空 dict/空 list 时不写 extract_variables 与 response（视作无返回值）；
+    # 断言只支持变量池数据源，查找顺序为 defined → session → 本步返回值
 
     @staticmethod
     def _pack_python_executive_result(
@@ -2289,12 +2465,11 @@ class PythonStepExecutor(BaseStepExecutor):
         """
         将 Python 步骤返回值转为提取项与变量池增量。
 
-        Dict：每个键生成一条提取项，变量池增量即该 dict 本身；
-        List：整体作为名为 result 的单条提取项，变量池增量为 {"result": [...]}。
-
         :param executive_result: run_python_code 的返回值（dict 或 list）
         :return: (提取项列表, 供断言查找表使用的变量池增量)
         """
+        # Dict：每个键生成一条提取项，变量池增量即该 dict 本身；List：整体作为名为 result 的单条
+        # 提取项，变量池增量为 result 键挂整个列表
         if isinstance(executive_result, list):
             extract_item = {
                 "name": "result",
@@ -2326,13 +2501,12 @@ class PythonStepExecutor(BaseStepExecutor):
         """
         在沙箱中执行步骤代码，合并返回字典/列表并运行变量池断言。
 
-        计时窗口只覆盖 run_python_code 本身（response_elapsed 不含提取打包与断言耗时）；
-        原始代码快照由 run_python_code 写入 result.request（request_code/request_args_type）。
-
         :param result: 本步执行结果
         :raises StepExecutionError: code 缺失、沙箱执行失败、返回值打包失败或存在断言失败项
         :return: None
         """
+        # 计时窗口只覆盖 run_python_code 本身（response_elapsed 不含提取打包与断言耗时）；
+        # 原始代码快照由 run_python_code 写入 result.request
         try:
             code = self.step.code
             if not code:
@@ -2393,11 +2567,9 @@ class PythonStepExecutor(BaseStepExecutor):
 
 
 class WaitStepExecutor(BaseStepExecutor):
-    """
-    等待步骤执行器：按 step.wait 秒数挂起当前步骤。
+    """等待步骤执行器：按 step.wait 秒数挂起当前步骤。"""
 
-    wait 为 None 时直接报错（不是"不等待"）；有效区间 0-300 秒，超出由 StepExecutionContext.sleep 拒绝。
-    """
+    # wait 为 None 时直接报错（不是不等待）；有效区间 0-300 秒，超出由 StepExecutionContext.sleep 拒绝
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -2423,24 +2595,21 @@ class WaitStepExecutor(BaseStepExecutor):
 
 
 class AssertStepExecutor(BaseStepExecutor):
-    """
-    断言步骤执行器：按 assert_validators 执行断言，规则/比较符/管线与 HTTP 步骤断言对齐。
+    """断言步骤执行器：按 assert_validators 执行断言，规则/比较符/管线与 HTTP 步骤断言对齐。"""
 
-    独立断言步骤无请求/响应报文时，数据源通常为变量池（session_variables/变量池）；
-    比较符复用 AutoTestAssertionOperation，经 StepAssertValidatorItem.operation 校验。
-    """
+    # 独立断言步骤无请求/响应报文时，数据源通常为变量池；比较符复用 AutoTestAssertionOperation，
+    # 经 StepAssertValidatorItem.operation 校验
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
         执行步骤上的断言规则，失败项通过apply_extract_and_assert转为StepExecutionError。
 
-        本步不涉及提取（extract_variables 传空列表）；逐项断言结果由管线写入 result.assert_validators，
-        但 result.response 只在全部通过后生成，失败时该汇总快照缺省为空。
-
         :param result: 本步执行结果
         :raises StepExecutionError: assert_validators 为空、子项类型非法或存在断言失败项
         :return: None
         """
+        # 本步不涉及提取；逐项断言结果由管线写入 result.assert_validators，但 result.response 只在全部
+        # 通过后生成，失败时该汇总快照缺省为空
         try:
             assert_validators = self.step.assert_validators
             if not assert_validators:
@@ -2478,24 +2647,21 @@ class AssertStepExecutor(BaseStepExecutor):
 
 
 class ExtractStepExecutor(BaseStepExecutor):
-    """
-    提取步骤执行器：按 extract_variables 执行变量提取，规则/来源/管线与 TCP/HTTP 步骤提取对齐。
+    """提取步骤执行器：按 extract_variables 执行变量提取，规则/来源/管线与 TCP/HTTP 步骤提取对齐。"""
 
-    独立提取步骤无请求/响应报文时，数据源通常为变量池（session_variables/变量池）；
-    提取成功项经管线写回会话变量池，供后续步骤以 ${name} 占位符引用。
-    """
+    # 独立提取步骤无请求/响应报文时，数据源通常为变量池；提取成功项经管线写回会话变量池，
+    # 供后续步骤以 ${name} 占位符引用
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
         执行步骤上的变量提取规则，失败项通过apply_extract_and_assert转为StepExecutionError。
 
-        本步不做断言（assert_validators 传空列表）；提取结果由管线写入 result.extract_variables，
-        但 result.response 只在全部成功后生成，失败时该汇总快照缺省为空。
-
         :param result: 本步执行结果
         :raises StepExecutionError: extract_variables 为空、子项类型非法或存在提取失败项
         :return: None
         """
+        # 本步不做断言；提取结果由管线写入 result.extract_variables，但 result.response 只在全部成功后
+        # 生成，失败时该汇总快照缺省为空
         try:
             extract_variables = self.step.extract_variables
             if not extract_variables:
@@ -2533,11 +2699,9 @@ class ExtractStepExecutor(BaseStepExecutor):
 
 
 class UserVariablesStepExecutor(BaseStepExecutor):
-    """
-    用户变量步骤执行器：解析 step.session_variables 中的占位符后合并进会话变量池。
+    """用户变量步骤执行器：解析 step.session_variables 中的占位符后合并进会话变量池。"""
 
-    未配置变量时本步直接成功且不写任何快照；同名变量按 key 覆盖会话池中的已有值。
-    """
+    # 未配置变量时本步直接成功且不写任何快照；同名变量按 key 覆盖会话池中的已有值
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -2562,21 +2726,11 @@ class UserVariablesStepExecutor(BaseStepExecutor):
 
 
 class BaseQuoteCaseStepExecutor(BaseStepExecutor):
-    """
-    引用类步骤执行器基类：以「壳步骤」形式加载被引用用例的根步骤树，按 step_no 顺序执行并挂到 result.children。
+    """引用类步骤执行器基类：以壳步骤形式加载被引用用例的根步骤树，按 step_no 顺序执行并挂到 result.children。"""
 
-    子类通过覆盖类属性声明策略：
-
-        - quote_step_label：日志与错误信息前缀；
-        - allowed_quote_case_types：查询被引用用例时按 case_type__in 过滤的用例类型元组；
-        - allowed_append_fields_container / allowed_merge_and_override_fields：引用步骤自身可追加的容器字段名，以及是否把它们合并进内层 HTTP/TCP 步骤；
-        - use_isolated_session_pool：引用域是否使用独立会话变量池（执行后整体回灌宿主，引用值覆盖宿主同名）；
-        - allowed_own_dataset：是否按(宿主 case_id, 引用步骤 step_code)预载数据源快照，供引用链内层 HTTP/TCP 步骤消费；
-        - resolve_own_defined_variables：基类统一关闭（容器层缺少 SERVER_*/TARGET_* 内置变量，解析自身变量会误报未定义）。
-
-    被引用用例 state=1（软删）不会被加载；加载失败本步失败，用例无根步骤则只记日志并视为成功。
-    内层根步骤失败仅把本步 success 置 False 并保留 children 明细，不向上抛异常。
-    """
+    # 子类通过覆盖类属性声明策略（各属性的行内注释见下）。被引用用例 state=1（软删）不会被加载；
+    # 加载失败本步失败，用例无根步骤则只记日志并视为成功。内层根步骤失败仅把本步 success 置 False
+    # 并保留 children 明细，不向上抛异常
 
     # 日志/错误信息前缀
     quote_step_label: str = "引用公共步骤"
@@ -2598,14 +2752,12 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
         """
         将引用步骤自身追加的 defined_variables/extract_variables/assert_validators 合并进内层 HTTP/TCP 请求步骤。
 
-        仅 allowed_merge_and_override_fields 开启且步骤类型为 HTTP/TCP 时合并（其它类型没有响应报文上下文）；
-        合并顺序为原数据在前、追加在后；defined_variables 会先剔除与追加项同名的原变量，避免重复 key 进入变量池，
-        变量查找取最后一个同名项，因此追加项天然覆盖原值；同名提取/断言则按执行先后自然覆盖。
-        返回的是 model_copy 副本，不修改被引用用例树上的原对象。
-
         :param quote_step: 被引用用例的待执行根步骤模型
         :return: 合并追加字段后的步骤模型；开关关闭/类型不匹配/无可合并字段时原样返回
         """
+        # 仅开关开启且步骤类型为 HTTP/TCP 时合并；合并顺序为原数据在前、追加在后；defined_variables
+        # 先剔除与追加项同名的原变量避免重复 key，变量查找取最后一个同名项，因此追加项天然覆盖原值；
+        # 同名提取/断言则按执行先后自然覆盖；返回 model_copy 副本不修改被引用用例树上的原对象
         if not self.allowed_merge_and_override_fields:
             return quote_step
         if quote_step.step_type not in (AutoTestStepType.HTTP, AutoTestStepType.TCP):
@@ -2626,7 +2778,7 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
 
     def _build_quote_session_pool(self, quote_case_instance: Any, quote_roots: List[AutoTestStepTreeUpdateItem]) -> List[StepVariablesBase]:
         """
-        构建被引用用例的原始初始变量池（未做占位符解析），聚合口径与 AutoTestStepCrud.execute_single_case 一致：
+        构建被引用用例的原始初始变量池，不预先解析占位符，聚合口径与 AutoTestStepCrud.execute_single_case 一致：
         用例级 session_variables 在前为基底、树内用户变量步骤的收集结果在后，同名 key 由后者覆盖。
 
         :param quote_case_instance: 被引用用例模型实例（取其用例级 session_variables 存储值）
@@ -2657,17 +2809,15 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
-        加载并执行被引用用例的根步骤树；被跳过的子步（execute 返回 None）不挂入 children。
-
-        执行顺序：校验 quote_case_id → 标记引用链（executing_quote_case_id/executing_parent_step_id）→
-        查被引用用例（按 allowed_quote_case_types 与 state 过滤）→ 取根步骤树 → 构建引用初始变量池
-        （隔离模式替换上下文池，共享模式按输出主导并入宿主池）→ 可选预载引用步骤自身数据源快照 →
-        根步骤按 step_no 升序补齐运行时字段后逐个执行 → finally 恢复引用链标记与数据源快照、回灌变量池。
+        加载并执行被引用用例的根步骤树；被跳过的子步不挂入 children。
 
         :param result: 本步执行结果，子步骤结果写入 children
         :raises StepExecutionError: quote_case_id 缺失、被引用用例不存在/类型不符/查询异常或步骤树加载失败
         :return: None
         """
+        # 执行顺序：校验引用ID → 标记引用链 → 查被引用用例 → 取根步骤树 → 构建引用初始变量池 →
+        # 可选预载引用步骤自身数据源快照 → 根步骤按 step_no 升序补齐运行时字段后逐个执行 →
+        # finally 恢复引用链标记与数据源快照、回灌变量池（具体策略见各行注释）
         allowed_types_desc: str = "、".join(t.value for t in self.allowed_quote_case_types)
         previous_quote_case_id: Optional[int] = getattr(self.context, "executing_quote_case_id", None)
         previous_parent_step_id: Optional[int] = getattr(self.context, "executing_parent_step_id", None)
@@ -2847,13 +2997,11 @@ class BaseQuoteCaseStepExecutor(BaseStepExecutor):
 
 
 class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
-    """
-    引用公共接口执行器：仅允许引用 case_type=PUBLIC_API 的公共用例。
+    """引用公共接口执行器：仅允许引用 case_type=PUBLIC_API 的公共用例。"""
 
-    引用步骤自身追加的局部变量/提取/断言会合并进内层 HTTP/TCP 请求步骤（原数据在前、追加在后）；
-    并开启引用步骤自身挂数据源：按(宿主 case_id, 引用步骤 step_code)预载快照注入引用链，供内层请求步骤数据驱动。
-    未开启会话池隔离，被引用用例的初始变量与执行产出按输出主导并入宿主池。
-    """
+    # 引用步骤自身追加的局部变量/提取/断言会合并进内层 HTTP/TCP 请求步骤（原数据在前、追加在后）；
+    # 并开启引用步骤自身挂数据源：按宿主 case_id 加引用步骤 step_code 预载快照注入引用链，供内层请求步骤
+    # 数据驱动。未开启会话池隔离，被引用用例的初始变量与执行产出按输出主导并入宿主池
 
     quote_step_label = "引用公共接口"
     allowed_quote_case_types = (AutoTestCaseType.PUBLIC_API,)
@@ -2862,12 +3010,10 @@ class QuotePublicApiStepExecutor(BaseQuoteCaseStepExecutor):
 
 
 class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
-    """
-    引用公共脚本执行器：仅允许引用 case_type=PUBLIC_SCRIPT 的公共用例。
+    """引用公共脚本执行器：仅允许引用 case_type=PUBLIC_SCRIPT 的公共用例。"""
 
-    不合并引用步骤的追加字段、不加载引用步骤自身数据源（保持被引用内容原样只读复用）；
-    开启会话变量池半隔离：引用域独享被引用用例聚合出的变量池，执行结束后整个引用池回灌宿主池。
-    """
+    # 不合并引用步骤的追加字段、不加载引用步骤自身数据源（保持被引用内容原样只读复用）；
+    # 开启会话变量池半隔离：引用域独享被引用用例聚合出的变量池，执行结束后整个引用池回灌宿主池
 
     quote_step_label = "引用公共脚本"
     allowed_quote_case_types = (AutoTestCaseType.PUBLIC_SCRIPT,)
@@ -2875,40 +3021,34 @@ class QuotePublicScriptStepExecutor(BaseQuoteCaseStepExecutor):
 
 
 class TcpStepExecutor(BaseStepExecutor):
-    """
-    TCP 步骤执行器：复用 HTTP 步骤的「数据驱动替换 → 占位符解析 → 请求发送 → 变量提取 → 断言」链路。
+    """TCP 步骤执行器：复用 HTTP 步骤的数据驱动替换、占位符解析、请求发送、变量提取与断言链路。"""
 
-    约定字段（沿用步骤基础字段，避免新增 schema 破坏兼容）：
-
-        - request_url 为 TCP host（如 127.0.0.1 或域名）、request_port 为 TCP port（字符串或数字）；
-          命中执行配置（APP）时两者整体被 config_host/config_port 覆盖；最终任一为空或端口无法转 int 即失败，
-          引擎不做端口区间校验。
-        - request_project_id 与 request_config_name 用于提取/断言的引用解析与请求快照，两者均必填；
-          命中执行配置时 request_config_name 会被 config_name 覆盖。
-        - 载荷选择见 select_tcp_payload：JSON 取 request_body，RAW/XML 取 request_text，
-          其它或未配置时 request_text 优先、仅当其为空才回落 request_body。
-        - XML 请求（request_args_type=XML 或以 '<' 开头）走 resolve_xml_placeholders，其余走 resolve_placeholders。
-        - TCP 帧配置由 resolve_tcp_frame_config 统一推导，帧字段相互独立不互斥，优先级：
-          进制数≠不使用 → 长度前缀；否则配置了请求或响应结束符 → 结束符；均未配置 → RAW。
-        - 读取超时取 tcp_response_timeout（未配置时缺省10秒），连接超时未单独暴露，
-          由 AioTcpClient 缺省为读取超时；单次响应读取上限 TCP_MAX_RESPONSE_BYTES（10MB）。
-        - tcp_connect_type=LONG 尚未实现，会按短连接降级执行；SEND_ONLY 只发不收，响应文本为空且 response_bytes=0。
-    """
+    # 约定字段（沿用步骤基础字段，避免新增 schema 破坏兼容）：
+    # - 目标主机/端口一律来自执行配置（APP 节点）解析快照 config_host/config_port，步骤自身
+    #   request_url/request_port 不参与寻址；任一为空或端口无法转 int 即失败，引擎不做端口区间校验。
+    # - request_project_id 用于提取/断言的引用解析，必填；执行配置引用经上下文预加载解析后，
+    #   请求快照写入解析名称 request_config_name 与逻辑标识 request_config_mode。
+    # - 载荷选择见 select_tcp_payload：JSON 取 request_body，RAW/XML 取 request_text，
+    #   其它或未配置时 request_text 优先、仅当其为空才回落 request_body。
+    # - XML 请求（request_args_type=XML 或以 '<' 开头）走 resolve_xml_placeholders，其余走 resolve_placeholders。
+    # - TCP 帧配置由 resolve_tcp_frame_config 统一推导，帧字段相互独立不互斥，优先级：进制数非不使用即长度前缀；
+    #   否则配置了请求或响应结束符即结束符；均未配置即 RAW。
+    # - 读取超时取 tcp_response_timeout（未配置时缺省10秒），连接超时未单独暴露，
+    #   由 AioTcpClient 缺省为读取超时；单次响应读取上限 TCP_MAX_RESPONSE_BYTES（10MB）。
+    # - tcp_connect_type=LONG 尚未实现，会按短连接降级执行；SEND_ONLY 只发不收，响应文本为空且 response_bytes=0
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
         """
-        采集TCP步骤内置环境变量：SERVER_*/TARGET_*（TARGET_PATH固定为空字符串）。
-        目标HOST/PORT取自执行配置，未命中时TARGET_*不注入并记录内置数据获取失败日志。
+        采集TCP步骤的内置环境变量：SERVER 与 TARGET 前缀系列变量，TARGET_PATH 固定为空字符串。
 
         :return: 内置变量列表
         """
-        current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+        # 目标 HOST/PORT 取自执行配置，未命中时 TARGET 前缀变量不注入并记录内置数据获取失败日志
+        current_step_config: Optional[ResolvedStepExecuteConfig] = self.get_execute_config(
             expected_config_type=AutoTestConfigNodeType.APP,
         )
         target_host: Optional[str] = current_step_config.config_host if current_step_config else None
-        target_port: Optional[str] = (
-            str(current_step_config.config_port) if current_step_config and current_step_config.config_port else None
-        )
+        target_port: Optional[str] = current_step_config.config_port if current_step_config else None
         return collect_builtin_step_variables(
             target_host=target_host,
             target_port=target_port,
@@ -2921,31 +3061,22 @@ class TcpStepExecutor(BaseStepExecutor):
         """
         解析执行主机/端口与请求报文，发送TCP请求并完成变量提取与断言。
 
-        流程：执行配置覆盖 host/port → 数据驱动替换（XML 与 JSON 两条替换路径）→ 占位符解析 →
-        select_tcp_payload 选载荷 → 推导帧配置与超时 → 写 result.request 快照 → 单次发送并本地解析响应后
-        记账 result.response → 复用提取/断言管线（请求侧取值由 resolve_tcp_request_extract_sources 归一口径）。
-        请求只发送一次，解析响应失败不会重发。
-
         :param result: 本步执行结果
-        :raises StepExecutionError: 主机/端口缺失或非法、request_project_id/request_config_name 缺失、
-                                    连接与响应解析失败、或提取/断言存在失败项
+        :raises StepExecutionError: 执行配置缺失、主机/端口缺失或非法、request_project_id 缺失、连接与响应解析失败、或提取/断言存在失败项
         :return: None
         """
+        # 流程：执行配置覆盖 host/port → 数据驱动替换（XML 与 JSON 两条路径）→ 占位符解析 →
+        # select_tcp_payload 选载荷 → 推导帧配置与超时 → 写 result.request 快照 → 单次发送并本地解析
+        # 响应后记账 result.response → 复用提取/断言管线（请求侧取值由 resolve_tcp_request_extract_sources
+        # 归一口径）。请求只发送一次，解析响应失败不会重发
         try:
-            env_name: Optional[str] = None
-            request_url = (self.step.request_url or "").strip()
-            request_port = self.step.request_port
-            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+            current_step_config: ResolvedStepExecuteConfig = self.require_execute_config(
+                label="TCP请求",
                 expected_config_type=AutoTestConfigNodeType.APP,
             )
-            if current_step_config:
-                request_url: str = current_step_config.config_host
-                request_port: str = current_step_config.config_port
-                self.step.request_config_name = current_step_config.config_name
-                env_name = current_step_config.env_name
-            if not any((env_name, request_url, request_port)):
-                error_message: str = f"【TCP请求】执行配置异常, 存在未明确项"
-                raise StepExecutionError(error_message)
+            env_name: Optional[str] = current_step_config.env_name
+            request_url: str = (current_step_config.config_host or "").strip()
+            request_port: Optional[str] = (current_step_config.config_port or "").strip() or None
             if not request_url or not request_port:
                 raise StepExecutionError(f"【TCP请求】请求主机[{request_url!r}]或请求端口[{request_port!r}]不是有效的配置")
 
@@ -2953,11 +3084,8 @@ class TcpStepExecutor(BaseStepExecutor):
             step_struct = await self.load_step_dataset(result)
 
             request_project_id: Optional[int] = self.step.request_project_id
-            request_config_name: Optional[str] = self.step.request_config_name
             if not request_project_id:
                 raise StepExecutionError("【TCP请求】参数[request_project_id]不能为空")
-            if not request_config_name:
-                raise StepExecutionError("【TCP请求】参数[request_config_name]不能为空")
 
             request_body = AutoTestToolService.try_serialize_request_body(self.step.request_body)
             request_text = self.step.request_text
@@ -3043,6 +3171,8 @@ class TcpStepExecutor(BaseStepExecutor):
                 "request_url": request_url,
                 "request_port": request_port,
                 "request_env_name": env_name,
+                "request_config_name": current_step_config.config_name,
+                "request_config_mode": current_step_config.config_mode,
                 "request_args_type": request_args_type_raw,
                 "tcp_frame_mode": frame_config.frame_mode.value,
                 "tcp_radix": self.step.tcp_radix,
@@ -3125,31 +3255,27 @@ class TcpStepExecutor(BaseStepExecutor):
 
 
 class DataBaseStepExecutor(BaseStepExecutor):
-    """
-    数据库请求步骤执行器：按 database_operates 顺序执行多条 SQL（先解析占位符），结果写入本步提取项与变量池。
+    """数据库请求步骤执行器：按 database_operates 顺序执行多条 SQL，先解析占位符，结果写入本步提取项与变量池。"""
 
-    每条操作自动产出两个提取变量：variable_name（SQL 结果集）与 variable_name_count（行数）；
-    database_searched=True 时某条 SQL 返回非空结果集即终止后续 SQL（查到即止）。
-    单条操作失败只置本步失败并记录错误，不中断后续操作；StepExecutionError（配置/参数非法）则立即上抛。
-    """
+    # 每条操作自动产出两个提取变量：variable_name（SQL 结果集）与 variable_name_count（行数）；
+    # database_searched=True 时某条 SQL 返回非空结果集即终止后续 SQL（查到即止）。
+    # 单条操作失败只置本步失败并记录错误，不中断后续操作；StepExecutionError（配置/参数非法）则立即上抛
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
         顺序执行 database_operates 中的 SQL，合并自动提取项并执行步骤自定义的提取/断言。
 
-        执行顺序：逐条解析操作配置（执行配置覆盖 config_name/database_name）→ 占位符解析 →
-        project_id 缺失时按 project_name 回查 → 取连接池执行 SQL → 记录自动提取项与请求/响应快照 →
-        非空结果集触发查到即止 → 循环结束后统一写 result.request/result.response →
-        以自动提取结果作为最高优先级查找项，复用提取/断言管线。
-
         :param result: 本步执行结果
-        :raises StepExecutionError: database_operates 缺失/非法、必填参数为空、extract_variables 类型非法，
-                                    或提取/断言存在失败项
+        :raises StepExecutionError: database_operates 缺失/非法、执行配置缺失、必填参数为空、extract_variables 类型非法，或提取/断言存在失败项
         :return: None
         """
+        # 执行顺序：逐条按 config_mode 解析执行配置 → 占位符解析 → project_id 缺失时按 project_name 回查 →
+        # 取连接池执行 SQL → 记录自动提取项与请求/响应快照 → 非空结果集触发查到即止 → 循环结束后统一写
+        # result.request/result.response → 以自动提取结果作为最高优先级查找项，复用提取/断言管线
         try:
             merge_operates_env_name: Optional[str] = None
-            display_config_name: Optional[str] = self.step.request_config_name
+            display_config_name: Optional[str] = None
+            config_modes: Set[str] = set()
             database_operates: Optional[List[DataBaseOperates]] = self.step.database_operates
             if database_operates is None:
                 raise StepExecutionError("【数据库请求】参数[database_operates]不能为空")
@@ -3165,10 +3291,6 @@ class DataBaseStepExecutor(BaseStepExecutor):
             executive_st_time: datetime = datetime.now()
             # 逐条执行并同步累积请求/响应快照（每项含 variable_name、sql_data、sql_count 等），供报告与「提取/断言」根据存储变量名匹配
             for db_idx, db_operate in enumerate(database_operates):
-                # 清空env_name/config_host/config_port，避免循环内数据库操作相互污染
-                env_name: Optional[str] = None
-                config_host: Optional[str] = None
-                config_port: Optional[str] = None
                 operate_no: str = f"第{db_idx + 1}条数据库配置"
                 if not isinstance(db_operate, DataBaseOperates):
                     raise StepExecutionError(
@@ -3176,43 +3298,45 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         f"预期类型: DataBaseOperates\n\t"
                         f"实际类型: {type(db_operate).__name__}"
                     )
-                current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(
-                    database_operates_index=db_idx,
+                # 每条操作按 operates[i].config_mode 解析执行配置：主机/端口/库名取解析快照，缺失即报错
+                current_op_execute_cfg: ResolvedStepExecuteConfig = self.require_execute_config(
+                    label="数据库请求",
                     expected_config_type=AutoTestConfigNodeType.DB,
+                    database_operates_index=db_idx,
+                    offset_message=operate_no,
                 )
-                if current_op_execute_cfg:
-                    env_name: str = str(current_op_execute_cfg.env_name or "").strip()
-                    config_host: str = current_op_execute_cfg.config_host
-                    config_port: str = current_op_execute_cfg.config_port
-                    config_name: str = current_op_execute_cfg.config_name
-                    database_name: str = current_op_execute_cfg.database_name
-                    db_operate.config_name = config_name
-                    db_operate.database_name = database_name
-                    if display_config_name:
-                        display_config_name += f", ({db_idx}){db_operate.config_name}"
-                    else:
-                        display_config_name = f"({db_idx}){db_operate.config_name}"
-                    if merge_operates_env_name:
-                        merge_operates_env_name += f", ({db_idx}){env_name}"
-                    else:
-                        merge_operates_env_name = f"({db_idx}){env_name}"
+                env_name: Optional[str] = current_op_execute_cfg.env_name
+                config_host: str = (current_op_execute_cfg.config_host or "").strip()
+                config_port: str = (current_op_execute_cfg.config_port or "").strip()
+                if not config_host or not config_port:
+                    raise StepExecutionError(
+                        f"【数据库请求】{operate_no}：执行配置[{current_op_execute_cfg.display_name}]的"
+                        f"主机[{config_host!r}]或端口[{config_port!r}]为空，请检查环境配置"
+                    )
+                operate_config_name: str = current_op_execute_cfg.display_name
+                display_config_name = (
+                    f"{display_config_name}, ({db_idx}){operate_config_name}"
+                    if display_config_name else f"({db_idx}){operate_config_name}"
+                )
+                merge_operates_env_name = (
+                    f"{merge_operates_env_name}, ({db_idx}){env_name or ''}"
+                    if merge_operates_env_name else f"({db_idx}){env_name or ''}"
+                )
+                if current_op_execute_cfg.config_mode:
+                    config_modes.add(current_op_execute_cfg.config_mode)
 
-                if not any((env_name, config_host, config_port)):
-                    error_message: str = f"【数据库请求】{operate_no}：执行配置异常, 存在未明确项"
-                    raise StepExecutionError(error_message)
                 operate_name: str = db_operate.name
                 operate_sql_expr: str = db_operate.expr
-                operate_project_id: int = db_operate.project_id
+                operate_project_id: Optional[int] = db_operate.project_id
                 operate_project_name: str = db_operate.project_name
                 operate_variable_name: str = db_operate.variable_name
-                operate_config_name: str = db_operate.config_name
-                operate_database_name: str = db_operate.database_name
+                # 库名只取执行配置解析快照；步骤内 config_id 仅作前端展示引用，不参与执行
+                operate_database_name: str = (current_op_execute_cfg.database_name or "").strip()
                 operate_desc: Optional[str] = db_operate.desc
                 operate_result_count: str = f"{operate_variable_name}_count"
                 try:
-                    # 解析SQL与配置字段中的占位符（variable_name 不参与解析，自动生成的 _count 名以其原值为前缀）
+                    # 解析SQL与操作字段中的占位符（variable_name 不参与解析，自动生成的 _count 名以其原值为前缀）
                     operate_sql_expr: str = self.context.resolve_placeholders(variables=operate_sql_expr, step_code=self.step_code)
-                    operate_config_name: str = self.context.resolve_placeholders(variables=operate_config_name, step_code=self.step_code)
                     operate_project_name: str = self.context.resolve_placeholders(variables=operate_project_name, step_code=self.step_code)
                     operate_database_name: str = self.context.resolve_placeholders(variables=operate_database_name, step_code=self.step_code)
                     if not operate_project_id and operate_project_name.strip():
@@ -3223,20 +3347,27 @@ class DataBaseStepExecutor(BaseStepExecutor):
                         operate_project_id = project_instance.id
                     if not operate_project_id:
                         raise StepExecutionError(f"【数据库请求】{operate_no}：参数[project_id]不能为空")
-                    if not operate_config_name:
-                        raise StepExecutionError(f"【数据库请求】{operate_no}：参数[config_name]不能为空")
                     if not operate_database_name:
-                        raise StepExecutionError(f"【数据库请求】{operate_no}：参数[database_name]不能为空")
+                        raise StepExecutionError(
+                            f"【数据库请求】{operate_no}：执行配置[{operate_config_name}]未维护数据库名称，请检查环境配置"
+                        )
                     if not operate_sql_expr:
                         raise StepExecutionError(f"【数据库请求】{operate_no}：参数[expr]不能为空")
                     if not operate_variable_name:
                         raise StepExecutionError(f"【数据库请求】{operate_no}：参数[variable_name]不能为空")
+                    if operate_project_id != current_op_execute_cfg.project_id:
+                        raise StepExecutionError(
+                            f"【数据库请求】{operate_no}：执行配置[{operate_config_name}]所属应用与"
+                            f"操作应用(project_id={operate_project_id})不一致，请重新选择配置"
+                        )
 
-                    database_pool: Pool = await pool_manager.get_or_create_pool(
+                    database_pool: Pool = await pool_manager.get_or_create_pool_by_mode(
                         project_id=str(operate_project_id),
-                        env_name=str(env_name).strip(),
-                        config_name=operate_config_name,
+                        env_id=current_op_execute_cfg.env_id,
+                        config_mode=current_op_execute_cfg.config_mode,
                         database_name=operate_database_name,
+                        config_host=config_host,
+                        config_port=config_port,
                     )
                     expr_executive_result: Dict[str, Any] = await pool_manager.execute_sql(
                         pool=database_pool,
@@ -3348,6 +3479,8 @@ class DataBaseStepExecutor(BaseStepExecutor):
                 "request_args_type": AutoTestReqArgsType.RAW,
                 "request_env_name": merge_operates_env_name,
                 "request_config_name": display_config_name,
+                # 顶层仅在全部操作引用同一逻辑配置时写 mode，跨配置场景由 operates 明细各自展示名称
+                "request_config_mode": next(iter(config_modes)) if len(config_modes) == 1 else None,
             }
             result.response = {
                 "response_body": database_operates_response,
@@ -3381,24 +3514,21 @@ class DataBaseStepExecutor(BaseStepExecutor):
 
 
 class RedisStepExecutor(BaseStepExecutor):
-    """
-    Redis 请求步骤执行器：按 redis_operates 顺序执行多条命令（先解析占位符），结果写入本步提取项与变量池。
+    """Redis 请求步骤执行器：按 redis_operates 顺序执行多条命令，先解析占位符，结果写入本步提取项与变量池。"""
 
-    每条操作自动产出两个提取变量：variable_name（命令返回值列表）与 variable_name_count（数量）；
-    redis_searched=True 时某条命令返回有效结果即终止后续命令（查到即止，有效判定见 has_effective_redis_result）。
-    单条操作失败只置本步失败并记录错误，不中断后续操作；StepExecutionError（配置/参数非法）则立即上抛。
-    """
+    # 每条操作自动产出两个提取变量：variable_name（命令返回值列表）与 variable_name_count（数量）；
+    # redis_searched=True 时某条命令返回有效结果即终止后续命令（查到即止，有效判定见 has_effective_redis_result）。
+    # 单条操作失败只置本步失败并记录错误，不中断后续操作；StepExecutionError（配置/参数非法）则立即上抛
 
     @staticmethod
     def has_effective_redis_result(command_results: Optional[List[Any]]) -> bool:
         """
         判断Redis命令结果列表是否含有效数据。
 
-        None、空 list/tuple/dict、空白字符串均视为无效；命中任意一项有效值即返回True。
-
         :param command_results: 命令返回值列表
         :return: 存在有效结果则为True
         """
+        # None、空 list/tuple/dict、空白字符串均视为无效；命中任意一项有效值即返回 True
         if not command_results:
             return False
         for result in command_results:
@@ -3415,18 +3545,18 @@ class RedisStepExecutor(BaseStepExecutor):
         """
         顺序执行 redis_operates 中的命令，合并自动提取项并执行步骤自定义的提取/断言。
 
-        执行顺序与数据库步骤一致：逐条解析配置 → 占位符解析（variable_name 解析后重算 _count 名）→
-        project_id 回查 → 取客户端执行命令 → 记录自动提取项与请求/响应快照 → 有效结果触发查到即止 →
-        循环结束后统一写 result.request/result.response → 以自动提取结果作为最高优先级查找项复用提取/断言管线。
-
         :param result: 本步执行结果
-        :raises StepExecutionError: redis_operates 缺失/非法、必填参数为空、extract_variables 类型非法，
-                                    或提取/断言存在失败项
+        :raises StepExecutionError: redis_operates 缺失/非法、执行配置缺失、必填参数为空、extract_variables 类型非法，或提取/断言存在失败项
         :return: None
         """
+        # 执行顺序与数据库步骤一致：逐条按 config_mode 解析执行配置 → 占位符解析（variable_name 解析后
+        # 重算 _count 名）→ project_id 回查 → 取客户端执行命令 → 记录自动提取项与请求/响应快照 →
+        # 有效结果触发查到即止 → 循环结束后统一写 result.request/result.response → 以自动提取结果作为
+        # 最高优先级查找项复用提取/断言管线
         try:
             merge_operates_env_name: Optional[str] = None
-            display_config_name: Optional[str] = self.step.request_config_name
+            display_config_name: Optional[str] = None
+            config_modes: Set[str] = set()
             redis_operates: Optional[List[RedisOperates]] = self.step.redis_operates
             if redis_operates is None:
                 raise StepExecutionError("【Redis请求】参数[redis_operates]不能为空")
@@ -3443,9 +3573,6 @@ class RedisStepExecutor(BaseStepExecutor):
             executive_st_time: datetime = datetime.now()
 
             for redis_idx, redis_operate in enumerate(redis_operates):
-                env_name: Optional[str] = None
-                config_host: Optional[str] = None
-                config_port: Optional[str] = None
                 operate_no: str = f"第{redis_idx + 1}条Redis配置"
                 if not isinstance(redis_operate, RedisOperates):
                     raise StepExecutionError(
@@ -3453,46 +3580,46 @@ class RedisStepExecutor(BaseStepExecutor):
                         f"预期类型: RedisOperates\n\t"
                         f"实际类型: {type(redis_operate).__name__}"
                     )
-                current_op_execute_cfg: Optional[StepsExecuteConfigBase] = self.get_execute_config(
-                    database_operates_index=redis_idx,
+                # 每条操作按 operates[i].config_mode 解析执行配置：主机/端口/库号取解析快照，缺失即报错
+                current_op_execute_cfg: ResolvedStepExecuteConfig = self.require_execute_config(
+                    label="Redis请求",
                     expected_config_type=AutoTestConfigNodeType.REDIS,
+                    database_operates_index=redis_idx,
+                    offset_message=operate_no,
                 )
-                if current_op_execute_cfg:
-                    env_name = str(current_op_execute_cfg.env_name or "").strip()
-                    config_host = current_op_execute_cfg.config_host
-                    config_port = current_op_execute_cfg.config_port
-                    config_name: str = current_op_execute_cfg.config_name
-                    database_name: str = current_op_execute_cfg.database_name or redis_operate.database_name
-                    redis_operate.config_name = config_name
-                    redis_operate.database_name = database_name
-                    if display_config_name:
-                        display_config_name += f", ({redis_idx}){redis_operate.config_name}"
-                    else:
-                        display_config_name = f"({redis_idx}){redis_operate.config_name}"
-                    if merge_operates_env_name:
-                        merge_operates_env_name += f", ({redis_idx}){env_name}"
-                    else:
-                        merge_operates_env_name = f"({redis_idx}){env_name}"
-
-                if not any((env_name, config_host, config_port)):
-                    raise StepExecutionError(f"【Redis请求】{operate_no}：执行配置异常, 存在未明确项")
+                env_name: Optional[str] = current_op_execute_cfg.env_name
+                config_host: str = (current_op_execute_cfg.config_host or "").strip()
+                config_port: str = (current_op_execute_cfg.config_port or "").strip()
+                if not config_host or not config_port:
+                    raise StepExecutionError(
+                        f"【Redis请求】{operate_no}：执行配置[{current_op_execute_cfg.display_name}]的"
+                        f"主机[{config_host!r}]或端口[{config_port!r}]为空，请检查环境配置"
+                    )
+                operate_config_name: str = current_op_execute_cfg.display_name
+                display_config_name = (
+                    f"{display_config_name}, ({redis_idx}){operate_config_name}"
+                    if display_config_name else f"({redis_idx}){operate_config_name}"
+                )
+                merge_operates_env_name = (
+                    f"{merge_operates_env_name}, ({redis_idx}){env_name or ''}"
+                    if merge_operates_env_name else f"({redis_idx}){env_name or ''}"
+                )
+                if current_op_execute_cfg.config_mode:
+                    config_modes.add(current_op_execute_cfg.config_mode)
 
                 operate_name: str = redis_operate.name
                 operate_expr: str = redis_operate.expr
-                operate_project_id: int = redis_operate.project_id
+                operate_project_id: Optional[int] = redis_operate.project_id
                 operate_project_name: str = redis_operate.project_name
                 operate_variable_name: str = redis_operate.variable_name
-                operate_config_name: str = redis_operate.config_name
-                operate_database_name: str = redis_operate.database_name
+                operate_database_name: str = (
+                    current_op_execute_cfg.database_name or redis_operate.database_name or ""
+                ).strip()
                 operate_desc: Optional[str] = redis_operate.desc
                 operate_result_count: str = f"{operate_variable_name}_count"
                 try:
                     operate_expr = self.context.resolve_placeholders(
                         variables=operate_expr,
-                        step_code=self.step_code
-                    )
-                    operate_config_name = self.context.resolve_placeholders(
-                        variables=operate_config_name,
                         step_code=self.step_code
                     )
                     operate_project_name = self.context.resolve_placeholders(
@@ -3518,20 +3645,25 @@ class RedisStepExecutor(BaseStepExecutor):
                         operate_project_id = project_instance.id
                     if not operate_project_id:
                         raise StepExecutionError(f"【Redis请求】{operate_no}：参数[project_id]不能为空")
-                    if not operate_config_name:
-                        raise StepExecutionError(f"【Redis请求】{operate_no}：参数[config_name]不能为空")
                     if not operate_database_name:
                         raise StepExecutionError(f"【Redis请求】{operate_no}：参数[database_name]不能为空")
                     if not operate_expr:
                         raise StepExecutionError(f"【Redis请求】{operate_no}：参数[expr]不能为空")
                     if not operate_variable_name:
                         raise StepExecutionError(f"【Redis请求】{operate_no}：参数[variable_name]不能为空")
+                    if operate_project_id != current_op_execute_cfg.project_id:
+                        raise StepExecutionError(
+                            f"【Redis请求】{operate_no}：执行配置[{operate_config_name}]所属应用与"
+                            f"操作应用(project_id={operate_project_id})不一致，请重新选择配置"
+                        )
 
-                    redis_client = await pool_manager.get_or_create_client(
+                    redis_client = await pool_manager.get_or_create_client_by_mode(
                         project_id=operate_project_id,
-                        env_name=env_name,
-                        config_name=operate_config_name,
+                        env_id=current_op_execute_cfg.env_id,
+                        config_mode=current_op_execute_cfg.config_mode,
                         database_name=operate_database_name,
+                        config_host=config_host,
+                        config_port=config_port,
                     )
                     expr_executive_result: Dict[str, Any] = await pool_manager.execute_commands(
                         client=redis_client,
@@ -3649,6 +3781,8 @@ class RedisStepExecutor(BaseStepExecutor):
                 "request_args_type": AutoTestReqArgsType.RAW,
                 "request_config_name": display_config_name,
                 "request_env_name": merge_operates_env_name,
+                # 顶层仅在全部操作引用同一逻辑配置时写 mode，跨配置场景由 operates 明细各自展示名称
+                "request_config_mode": next(iter(config_modes)) if len(config_modes) == 1 else None,
             }
             result.response = {
                 "response_body": redis_operates_response,
@@ -3682,29 +3816,26 @@ class RedisStepExecutor(BaseStepExecutor):
 
 
 class HttpStepExecutor(BaseStepExecutor):
-    """
-    HTTP 步骤执行器：组装 URL 与报文（先数据驱动替换、再变量占位符），发起请求后执行提取与断言。
+    """HTTP 步骤执行器：组装 URL 与报文，先数据驱动替换、再变量占位符解析，发起请求后执行提取与断言。"""
 
-    URL 补全：命中执行配置（APP）且 request_url 不是绝对地址时，按 config_host/config_port 拼成绝对 URL；
-    未命中执行配置（无 env_name）或最终地址不是 http(s) 开头时直接失败。
-    参数化驱动：context.dataset_name + case_id/step_code 查 AutoTestDataSourceModel 取数，替换请求头与正文字段。
-    """
+    # URL 补全：request_url 为相对地址时必须命中执行配置（APP），按解析快照的 host/port 拼成绝对 URL；
+    # 绝对地址不依赖环境配置（配置仅用于回显与内置变量，缺失/失效不阻断）；最终地址不是 http(s) 开头时直接失败。
+    # 参数化驱动：context.dataset_name 加 case_id/step_code 查数据源取数，替换请求头与正文字段
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
         """
-        采集HTTP步骤内置环境变量：SERVER_*/TARGET_*。
-
-        TARGET_HOST/TARGET_PORT 取自执行配置（APP），TARGET_PATH 取步骤 request_url 原值（未拼装）；
-        未命中执行配置时 TARGET_* 不注入，并记录内置数据获取失败日志。
+        采集HTTP步骤的内置环境变量：SERVER 与 TARGET 前缀系列变量。
 
         :return: 内置变量列表
         """
-        current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
+        # TARGET_HOST/TARGET_PORT 取自执行配置解析快照（APP），TARGET_PATH 取步骤 request_url 原值（未拼装）；
+        # 未命中执行配置时 TARGET 前缀变量不注入，并记录内置数据获取失败日志
+        current_step_config: Optional[ResolvedStepExecuteConfig] = self.get_execute_config(
             expected_config_type=AutoTestConfigNodeType.APP,
         )
         target_host: Optional[str] = current_step_config.config_host if current_step_config else None
         target_port: Optional[str] = (
-            str(current_step_config.config_port) if current_step_config and current_step_config.config_port else None
+            current_step_config.config_port if current_step_config and current_step_config.config_port else None
         )
         return collect_builtin_step_variables(
             target_host=target_host,
@@ -3718,35 +3849,45 @@ class HttpStepExecutor(BaseStepExecutor):
         """
         组装 URL 与报文，发送 HTTP 请求并完成变量提取与断言。
 
-        分两段执行：第一段校验请求方法与执行环境、补全 URL、预载数据驱动数据；
-        第二段按「列表转字典 → 数据驱动替换 → 占位符解析 → assemble_http_body_payloads 选载荷」组装报文，
-        发送前先落 result.request 快照，收到响应后再落 response 快照并复用提取/断言管线。
-
         :param result: 本步执行结果
-        :raises StepExecutionError: request_method 缺失、URL/执行环境非法、报文组装失败、请求异常，
-                                    或提取/断言存在失败项
+        :raises StepExecutionError: request_method 缺失、URL/执行环境非法、报文组装失败、请求异常，或提取/断言存在失败项
         :return: None
         """
+        # 分两段执行：第一段校验请求方法与执行环境、补全 URL、预载数据驱动数据；第二段按
+        # 列表转字典、数据驱动替换、占位符解析、assemble_http_body_payloads 选载荷的顺序组装报文，
+        # 发送前先落 result.request 快照，收到响应后再落 response 快照并复用提取/断言管线
         try:
             request_url: str = (self.step.request_url or "").strip()
             request_method: HTTPMethod = self.step.request_method
             if request_method is None:
                 raise StepExecutionError("【HTTP请求】请求方式[request_method]不能为空")
-            current_step_config: Optional[StepsExecuteConfigBase] = self.get_execute_config(
-                expected_config_type=AutoTestConfigNodeType.APP,
-            )
-            env_name: Optional[str] = None
-            if current_step_config:
-                env_name = current_step_config.env_name
-                config_name: str = current_step_config.config_name
-                config_host: str = (current_step_config.config_host or "").strip()
-                config_port: str = (str(current_step_config.config_port).strip() if current_step_config.config_port else "")
-                self.step.request_config_name = config_name
-                if not is_absolute_http_url(request_url):
-                    request_url = build_absolute_http_url(config_host, config_port, request_url)
+            # 绝对地址不依赖环境配置：配置仅用于回显与内置变量，引用缺失/失效不阻断执行
+            absolute_url: bool = is_absolute_http_url(request_url)
+            if absolute_url:
+                current_step_config: Optional[ResolvedStepExecuteConfig] = self.get_execute_config(
+                    expected_config_type=AutoTestConfigNodeType.APP,
+                )
+                if current_step_config is not None and current_step_config.missing_error is not None:
+                    current_step_config = None
+            else:
+                current_step_config = self.require_execute_config(
+                    label="HTTP请求",
+                    expected_config_type=AutoTestConfigNodeType.APP,
+                )
+            env_name: str = (current_step_config.env_name if current_step_config else "") or ""
+            config_mode: str = (current_step_config.config_mode if current_step_config else "") or ""
+            config_host: str = ((current_step_config.config_host if current_step_config else "") or "").strip()
+            config_port: str = ((current_step_config.config_port if current_step_config else "") or "").strip()
+            if not absolute_url:
+                if not config_host:
+                    raise StepExecutionError(
+                        f"【HTTP请求】执行配置缺失: 配置[{current_step_config.display_name}] "
+                        f"在环境[{current_step_config.display_env_name}]的[APP]节点下配置不完整(缺少主机地址)"
+                    )
+                request_url = build_absolute_http_url(config_host, config_port, request_url)
 
-            if not request_url or not request_url.lower().startswith("http") or not env_name:
-                raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址或未明确执行环境")
+            if not request_url or not request_url.lower().startswith("http"):
+                raise StepExecutionError(f"【HTTP请求】URL[{request_url!r}]不是有效的HTTP/HTTPS地址")
 
             # 参数化驱动：根据 context.dataset_name + case_id/step_code 查 AutoTestDataSourceModel 取该步骤数据集
             step_struct = await self.load_step_dataset(result)
@@ -3754,7 +3895,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 f"【HTTP请求】请求开始: \n\t"
                 f"环境名称: {env_name}\n\t"
                 f"应用ID: {self.step.request_project_id}\n\t"
-                f"配置名称: {self.step.request_config_name}\n\t"
+                f"配置名称: {current_step_config.config_name if current_step_config else ''}\n\t"
+                f"配置标识: {config_mode}\n\t"
                 f"请求方法: {request_method}\n\t"
                 f"请求地址: {request_url}\n\t"
                 f"参数类型: {self.step.request_args_type}\n\t"
@@ -3890,6 +4032,8 @@ class HttpStepExecutor(BaseStepExecutor):
                 "request_url": request_url,
                 "request_method": request_method.value,
                 "request_env_name": env_name,
+                "request_config_name": current_step_config.config_name if current_step_config else None,
+                "request_config_mode": config_mode,
                 "request_args_type": request_args_type,
                 "request_header": request_header,
                 "request_params": request_params,
@@ -3967,24 +4111,21 @@ class HttpStepExecutor(BaseStepExecutor):
 
 
 class DatagramDiffStepExecutor(BaseStepExecutor):
-    """
-    报文比对步骤执行器：解析 datagram_field_compare 的左右报文引用，调用 compare_messages 逐组比对。
+    """报文比对步骤执行器：解析 datagram_field_compare 的左右报文引用，调用 compare_messages 逐组比对。"""
 
-    项级 datagram_field_ordered 决定是否校验顺序（0=忽略顺序，1=控制顺序，缺省为0），语义与 compare_messages 一致；
-    任一组不一致即本步失败，但所有组都会执行完，逐组明细写入 result.response 供报告展示。
-    """
+    # 项级 datagram_field_ordered 决定是否校验顺序（0=忽略顺序，1=控制顺序，缺省为0），语义与 compare_messages 一致；
+    # 任一组不一致即本步失败，但所有组都会执行完，逐组明细写入 result.response 供报告展示
 
     @staticmethod
     def _to_message_text(value: Any) -> str:
         """
         将变量值规范为比对用文本。
 
-        None → 空串；bytes 按 UTF-8 解码（失败即报错）；dict/list 序列化为 JSON 字符串；其余走 str()。
-
         :param value: 报文引用解析后的原始值
         :raises StepExecutionError: bytes 无法按 UTF-8 解码
         :return: 用于比对的文本
         """
+        # None 转空串；bytes 按 UTF-8 解码（失败即报错）；dict/list 序列化为 JSON 字符串；其余走 str()
         if value is None:
             return ""
         if isinstance(value, str):
@@ -4000,7 +4141,7 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
 
     def _resolve_message_ref(self, raw: Any) -> Any:
         """
-        解析报文引用：裸变量名自动包成${name}；占位符未替换时再尝试从变量池取值。
+        解析报文引用：裸变量名自动按变量占位符语法包裹；占位符未替换时再尝试从变量池取值。
 
         :param raw: 步骤配置中的引用原文（${var}、裸变量名或其他字面量）
         :return: 解析后的报文值；变量不存在时返回保留原样的占位符字符串
@@ -4025,7 +4166,7 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
     @staticmethod
     def _get_datagram_field_ordered(raw: Any) -> int:
         """
-        校验并归一顺序开关：None 归一为0（忽略顺序），仅接受 0/1。
+        校验并归一顺序开关：None 归一为 0 即忽略顺序，仅接受 0 或 1。
 
         :param raw: 步骤配置中的 datagram_field_ordered 原值
         :raises StepExecutionError: 无法转为整数或值不是0/1
@@ -4043,13 +4184,12 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
 
     def _load_comparisons(self) -> List[Dict[str, Any]]:
         """
-        从步骤配置加载比对组：项级 datagram_field_ordered 缺省为0（忽略顺序）。
-
-        每项需包含 left_text/right_text，支持 DatagramFieldCompareItem 模型或 dict 两种形态。
+        从步骤配置加载比对组：项级 datagram_field_ordered 缺省为 0，即忽略顺序。
 
         :raises StepExecutionError: 配置缺失/非数组、项不是对象、缺少 left_text/right_text 或顺序开关非法
         :return: 归一后的比对组列表（left_text/right_text/datagram_field_ordered）
         """
+        # 每项需包含 left_text/right_text，支持 DatagramFieldCompareItem 模型或 dict 两种形态
         items = getattr(self.step, "datagram_field_compare", None)
         if not items:
             raise StepExecutionError("【报文比对】缺少必要配置: datagram_field_compare")
@@ -4085,13 +4225,12 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
         """
         逐组解析报文引用并比对，全部一致才算本步成功。
 
-        快照约定：result.request 记录配置原值（未解析的引用文本）；result.response 固定写 status 码
-        与逐组比对明细（含 is_equal、order_consistent、rows），失败时同样落库供报告定位差异。
-
         :param result: 本步执行结果
         :raises StepExecutionError: 配置非法、报文引用解析失败或存在不一致的比对组
         :return: None
         """
+        # 快照约定：result.request 记录配置原值（未解析的引用文本）；result.response 固定写状态码与
+        # 逐组比对明细（含 is_equal、order_consistent、rows），失败时同样落库供报告定位差异
         try:
             comparisons_raw = self._load_comparisons()
             self.context.log(
@@ -4159,11 +4298,9 @@ class DatagramDiffStepExecutor(BaseStepExecutor):
 
 
 class DefaultStepExecutor(BaseStepExecutor):
-    """
-    默认步骤执行器：仅顺序执行子步骤，作为未映射步骤类型的回退（容器类步骤也走这里）。
+    """默认步骤执行器：仅顺序执行子步骤，作为未映射步骤类型的回退，容器类步骤也走这里。"""
 
-    不写入请求/响应快照，只汇总 children 的成败；子步异常已在 _execute_children 内转为失败结果。
-    """
+    # 不写入请求/响应快照，只汇总 children 的成败；子步异常已在 _execute_children 内转为失败结果
 
     async def _execute(self, result: StepExecutionResult) -> None:
         """
@@ -4187,11 +4324,9 @@ class DefaultStepExecutor(BaseStepExecutor):
 
 
 class StepExecutorFactory:
-    """
-    步骤执行器工厂：按 step_type 从 EXECUTOR_MAP 取实现，未映射的合法类型回落到 DefaultStepExecutor。
+    """步骤执行器工厂：按 step_type 从 EXECUTOR_MAP 取实现，未映射的合法类型回落到 DefaultStepExecutor。"""
 
-    仅当 step_type 缺失或无法转为 AutoTestStepType、或执行器实例化失败时抛 StepExecutionError。
-    """
+    # 仅当 step_type 缺失或无法转为 AutoTestStepType、或执行器实例化失败时抛 StepExecutionError
 
     # 步骤类型 → 执行器实现；不在此表中的步骤类型（容器类等）统一由 DefaultStepExecutor 处理
     EXECUTOR_MAP: Dict[AutoTestStepType, Callable[[AutoTestStepTreeUpdateItem, StepExecutionContext], BaseStepExecutor]] = {
@@ -4241,11 +4376,9 @@ class StepExecutorFactory:
 
 
 class AutoTestStepExecutionEngine:
-    """
-    用例执行入口：生成报告标识、进入执行上下文、按 step_no 顺序执行根步骤，并汇总统计、日志与待落库数据。
+    """用例执行入口：生成报告标识、进入执行上下文、按 step_no 顺序执行根步骤，并汇总统计、日志与待落库数据。"""
 
-    本类不直接写库：报告与明细以 AutoTestReportCreate / AutoTestDetailCreate 形式返回，由调用方在单事务内落库。
-    """
+    # 本类不直接写库：报告与明细以 AutoTestReportCreate / AutoTestDetailCreate 形式返回，由调用方在单事务内落库
 
     def __init__(
             self, *,
@@ -4292,23 +4425,13 @@ class AutoTestStepExecutionEngine:
         """
         执行单用例：在上下文中根据 step_no 执行根步骤，可选收集报告与明细供调用方落库。
 
-        参数化时仅传入 dataset_name，HTTP/TCP 步骤根据 case_id/step_code 与数据集名称查表取数。
-        step_is_skipped 的步骤不进入 results、不写明细、不计入 statistics。
-
-        统计口径：按 step_code 去重合并，同一 step_code 任一次失败即整体失败；
-        引用壳步骤（QUOTE_PUBLIC_SCRIPT/QUOTE_PUBLIC_API）有 children 时跳过自身，避免与被引用用例的内部步骤重复计数。
-
         :param case: 用例信息字典，含 case_id、case_code、case_name
         :param steps: 根步骤可迭代对象（内部会按 step_no 重新排序）
         :param report_type: 报告类型枚举；为 None 时缺省写入 SYNC_EXEC
         :param steps_execute_config: 执行配置，同时用于汇总报告涉及的环境列表（involve_envs）
         :param initial_variables: 初始会话变量列表，每项含 key、value、desc
         :param dataset_name: 参数化时本次执行的数据集名称，写入每条步骤明细；步骤内据此查表取数
-        :return: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)，
-            results：根步骤执行结果列表（不含已跳过步骤）；logs：根据 step_code 分组；report_code：未保存时为 None；
-            statistics：含 total_steps、success_steps、failed_steps、passed_ratio；session_variables：执行后变量列表；
-            当 _save_report 为 True 时，最后两项为待落库的报告创建体与明细列表（report_code 已统一），
-            调用方在单事务内依次 create_report、create_detail、update_case
+        :return: 七元组 (results, logs, report_code, statistics, session_variables, defer_create_report, pending_create_details)；results为根步骤执行结果列表（不含已跳过步骤），logs按 step_code 分组，report_code未保存时为 None，statistics含 total_steps/success_steps/failed_steps/passed_ratio，session_variables为执行后变量列表，最后两项在 _save_report 为 True 时为待落库的报告创建体与明细列表，由调用方在单事务内依次落库
         """
         # 运行、调试及Worker共用此入口；缺省和空配置统一为空字典，后续可安全遍历
         steps_execute_config = steps_execute_config or {}
@@ -4332,6 +4455,8 @@ class AutoTestStepExecutionEngine:
                 initial_variables=initial_variables,
                 pending_details=pending_details_arg,
         ) as context:
+            # 执行配置引用键一次性解析为名称/地址快照（最多2次查询），解析失败在步骤级报错
+            await context.preload_execute_configs()
             ordered_root_steps: List[AutoTestStepTreeUpdateItem] = sorted(
                 [prepare_step_tree_item_for_execution(s) for s in steps],
                 key=lambda item: (item.step_no or 0),
@@ -4374,8 +4499,7 @@ class AutoTestStepExecutionEngine:
             defer_create_report: Optional[AutoTestReportCreate] = None
             pending_create_details: Optional[List[AutoTestDetailCreate]] = None
             involve_envs: Set[str] = {
-                var.env_name if isinstance(var, StepsExecuteConfigBase) else var.get("env_name")
-                for key, var in steps_execute_config.items()
+                env_name for env_name in context.env_bind_index.values() if env_name
             }
             if self._save_report and report_code:
                 user_name: Optional[str] = get_current_username()
@@ -4413,7 +4537,7 @@ class AutoTestStepExecutionEngine:
     @staticmethod
     def collect_all_results(results: List[StepExecutionResult]) -> List[StepExecutionResult]:
         """
-        递归收集所有步骤结果（含子步骤）为扁平列表。
+        递归收集所有步骤结果，含子步骤，汇总为扁平列表。
 
         :param results: 根步骤执行结果列表
         :return: 含所有根步骤及其子步骤的扁平结果列表
@@ -4433,15 +4557,13 @@ class AutoTestStepExecutionEngine:
         """
         将根步骤下所有子步骤的日志按 step_code 收集后，追加到该根步骤在 context.logs 中的日志列表。
 
-        汇总顺序为 step_code 字符串字典序（不是 step_no），与执行顺序可能不一致；
-        根步骤自身已有日志时保持在最前，子步日志追加在后。
-
         :param context: 执行上下文，其logs将被修改
         :param root_result: 根步骤的执行结果，用于遍历children
         :param root_step_code: 根步骤的step_code，用于写回context.logs
         :return: None
         """
-
+        # 汇总顺序为 step_code 字符串字典序（不是 step_no），与执行顺序可能不一致；根步骤自身已有
+        # 日志时保持在最前，子步日志追加在后
         # 递归收集 step_code（函数名沿用历史命名，实际返回的是 step_code 而非 step_no）
         def collect_child_step_nos(result: StepExecutionResult) -> List[str]:
             """

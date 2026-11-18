@@ -29,17 +29,15 @@ __all__ = ["DataSourceService"]
 
 
 class DataSourceService:
-    """
-    数据源业务服务：位于视图层与CRUD/解析器之间的无状态函数集合。
+    """数据源业务服务：位于视图层与CRUD/解析器之间的无状态函数集合。"""
 
-    职责分组（按数据源操作链路组织）：
-    - 用例/步骤/数据源定位：resolve_case_and_step/resolve_enabled_data_source，及ensure_request_step/ensure_case_allows_data_source准入校验
-    - 矩阵落库：apply_dataframe_payload（前端矩阵解析清洗）
-    - 路径收集与矩阵构建：从步骤报文采集JSONPath/XPath生成垂直矩阵（/build接口）
-    - 字段同步：sync_data_source_fields（按报文最新字段重建矩阵，/update_fields接口；正交易场景新增字段按报文原始值回填）
-    - 步骤元信息回写：sync_step_data_source_meta/clear_step_data_source_meta
-    - 场景名称与身份补齐：场景列提取、重复检测、新建身份生成（树保存一致性校验消费）
-    """
+    # 职责分组（按数据源操作链路组织）：
+    # - 用例/步骤/数据源定位：resolve_case_and_step/resolve_enabled_data_source，及ensure_request_step/ensure_case_allows_data_source准入校验
+    # - 矩阵落库：apply_dataframe_payload（前端矩阵解析清洗）
+    # - 路径收集与矩阵构建：从步骤报文采集JSONPath/XPath生成垂直矩阵（/build接口）
+    # - 字段同步：sync_data_source_fields（按报文最新字段重建矩阵，/update_fields接口；正交易场景新增字段按报文原始值回填）
+    # - 步骤元信息回写：sync_step_data_source_meta/clear_step_data_source_meta
+    # - 场景名称与身份补齐：场景列提取、重复检测、新建身份生成（树保存一致性校验消费）
 
     # ==================== 常量 ====================
     DEFAULT_SCENE_NAMES: Tuple[str, ...] = ("场景1名称",)
@@ -82,8 +80,6 @@ class DataSourceService:
         """
         定位用例与步骤，并校验步骤属于该用例。
 
-        id/code同时传入时由get_by_unique优先按id定位；两对参数均需至少命中一个。
-
         :param services: CRUD聚合
         :param case_id: 用例主键，与case_code二选一，id优先
         :param case_code: 用例标识
@@ -97,6 +93,7 @@ class DataSourceService:
         has_step = bool(step_id) or bool(DataSourceService._text(step_code))
         if not (has_case and has_step):
             raise ParameterException(message="请提供(case_id或case_code)且(step_id或step_code)")
+        # id/code同时传入时由get_by_unique优先按id定位；两对参数均需至少命中一个
         case: AutoTestCaseModel = await services.case_curd.get_by_unique(case_id=case_id, case_code=case_code, state__not=1)
         step: AutoTestStepModel = await services.step_curd.get_by_unique(step_id=step_id, step_code=step_code, state__not=1)
         if step.case_id != case.id:
@@ -106,11 +103,10 @@ class DataSourceService:
     @classmethod
     def ensure_request_step(cls, step: AutoTestStepModel, case: Optional[AutoTestCaseModel] = None) -> None:
         """
-        仅HTTP/TCP请求步骤允许绑定数据源；用户脚本宿主下的引用公共接口步骤除外（数据源挂载在宿主引用步骤上）。
+        仅HTTP/TCP请求步骤允许绑定数据源；用户脚本宿主下的引用公共接口步骤除外：数据源挂载在宿主引用步骤上。
 
         :param step: 步骤模型实例
-        :param case: 步骤所属用例模型实例；传入时放行非公共用例下用户脚本宿主的引用公共接口步骤，
-            不传时仅放行HTTP/TCP
+        :param case: 步骤所属用例模型实例；传入时放行非公共用例下用户脚本宿主的引用公共接口步骤，不传时仅放行HTTP/TCP
         :raises ParameterException: 步骤类型不允许挂载数据源
         """
         if step.step_type in cls.REQUEST_STEP_TYPES:
@@ -143,8 +139,6 @@ class DataSourceService:
         """
         数据源写操作准入：归属用例须允许当前用户写入、不允许公共类型、归属步骤须可挂载；入参携带用例定位时须与归属一致。
 
-        按id/code定位的更新路径绕过了创建时的准入校验，更新/删除/字段同步前必须调用。
-
         :param services: CRUD聚合
         :param instance: 已定位的启用中数据源
         :param scope: 数据权限上下文
@@ -154,6 +148,7 @@ class DataSourceService:
         :raises ParameterException: 归属用例为公共类型、入参定位与归属不一致、归属步骤不可挂载
         :raises NotFoundException: 归属用例不存在
         """
+        # 按id/code定位的更新路径绕过了创建时的准入校验，更新/删除/字段同步前必须调用
         owner_case = await services.case_curd.get_by_id(case_id=instance.case_id, on_error=True, state__not=1)
         # 数据源无独立归属，写范围跟随归属用例（父资源族）
         await assert_case_writable(scope, owner_case, "数据源操作")
@@ -174,7 +169,7 @@ class DataSourceService:
     @classmethod
     async def resolve_datagram_source_step(cls, services: AutoTestServices, step: AutoTestStepModel) -> AutoTestStepModel:
         """
-        解析报文来源步骤：引用公共接口步骤是壳（无自身报文），回落到被引用公共接口用例内的请求步骤。
+        解析报文来源步骤：引用公共接口步骤是壳且无自身报文，回落到被引用公共接口用例内的请求步骤。
 
         :param services: CRUD聚合
         :param step: 当前定位到的步骤
@@ -192,8 +187,6 @@ class DataSourceService:
         """
         批量解析报文来源步骤：引用公共接口壳统一回落到被引用用例内的请求步骤。
 
-        单步与批量共用同一解析口径；批量按quote_case_id一次性预载内部请求步骤，避免下载多sheet时逐步骤查库。
-
         :param services: CRUD聚合
         :param steps: 当前步骤集合
         :return: 原步骤id→报文来源步骤；非引用步骤映射自身，未找到内部请求步骤时兜底壳步骤
@@ -202,6 +195,7 @@ class DataSourceService:
         if not step_list:
             return {}
 
+        # 单步与批量共用同一解析口径；批量按quote_case_id一次性预载内部请求步骤，避免下载多sheet时逐步骤查库
         shell_case_ids = {
             int(step.quote_case_id)
             for step in step_list
@@ -286,8 +280,6 @@ class DataSourceService:
         """
         解析并清洗二维矩阵，生成dataset/dataset_names/dataframe/axis。
 
-        清洗后若没有任何带字段值的场景（水平空行 / 垂直空列全部被剔除），拒绝落库。
-
         :param dataframe: 二维矩阵
         :param axis: 调用方声明的方向；与矩阵结构冲突时以分区标记识别结果为准
         :return: 解析结果字典；dataframe为None时返回None（表示本次不改矩阵）
@@ -300,8 +292,9 @@ class DataSourceService:
             dataframe,
             axis=parsed_axis,
         )
+        # 清洗后若没有任何带字段值的场景（水平空行/垂直空列全部被剔除），拒绝落库
         if not step_data or not dataset_names:
-            raise ParameterException(message="数据源场景数据为空，不允许保存。请至少填写一个场景的字段值")
+            raise ParameterException(message="数据源场景数据为空, 请至少填写一个场景的字段值")
         return {
             "dataset": step_data,
             "dataset_names": dataset_names,
@@ -347,14 +340,13 @@ class DataSourceService:
         """
         将JSON展平为叶子JSONPath→原始值映射，保留文档序，值维持原类型。
 
-        空dict/空list视为叶子直接记录，不再往下展平。
-
         :param data: dict/list/标量
         :param prefix: 当前路径前缀
         :return: 叶子路径到原始值的映射
         """
         originals: Dict[str, Any] = {}
         if isinstance(data, dict):
+            # 空dict/空list视为叶子直接记录，不再往下展平
             for key, value in data.items():
                 path = f"{prefix}.{key}"
                 if isinstance(value, (dict, list)) and value:
@@ -393,9 +385,7 @@ class DataSourceService:
     @staticmethod
     def _flatten_xml_xpath_values(xml_text: str) -> Dict[str, Any]:
         """
-        按文档序将XML叶子与属性展平为ElementTree XPath→文本值映射（./Child、./Child/@attr）。
-
-        叶子值取节点文本去除首尾空白，属性值保持原样。
+        按文档序将XML叶子与属性展平为ElementTree的XPath到文本值映射：./Child与./Child/@attr。
 
         :param xml_text: XML字符串
         :return: XPath到文本值的映射；非法XML返回空字典
@@ -410,6 +400,7 @@ class DataSourceService:
 
         originals: Dict[str, Any] = {}
 
+        # 叶子值取节点文本去除首尾空白，属性值保持原样
         def walk(elem: ElementTree.Element, xpath_prefix: str) -> None:
             """递归记录属性与叶子文本；同名兄弟节点追加[序号]以保证路径唯一。"""
             for attr_name, attr_value in elem.attrib.items():
@@ -441,7 +432,7 @@ class DataSourceService:
     @staticmethod
     def _flatten_xml_xpath_paths(xml_text: str) -> List[str]:
         """
-        按文档序将XML叶子与属性展平为ElementTree XPath（./Child、./Child/@attr）。
+        按文档序将XML叶子与属性展平为ElementTree XPath：./Child与./Child/@attr。
 
         :param xml_text: XML字符串
         :return: XPath列表；非法XML返回空列表
@@ -480,14 +471,11 @@ class DataSourceService:
         """
         统一采集步骤报文的HEAD与BODY分区路径及原始值。
 
-        HEAD取自请求头键值对；BODY按request_args_type分支采集：
-        JSON展平叶子、XML展平XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED取键值；
-        RAW/NONE/未指定类型默认无结构化字段，但正文为XML时同样按XPath展平
-        （TCP/HTTP的RAW报文常直接存放XML，若只认xml类型会导致数据源矩阵与data_original为空）。
-
         :param step: 步骤实例(取request_args_type与报文)
         :return: 分区名→{路径→原始值}映射，如{"HEAD": {"$.Token": "x"}, "BODY": {"$.id": 1}}
         """
+        # HEAD取自请求头键值对；BODY按request_args_type分支采集：JSON展平叶子、XML展平XPath、PARAMS/FORM_DATA/X_WWW_FORM_URLENCODED取键值
+        # RAW/NONE/未指定类型默认无结构化字段，但正文为XML时同样按XPath展平（TCP/HTTP的RAW报文常直接存放XML，仅认xml类型会导致数据源矩阵与data_original为空）
         result: Dict[str, Dict[str, Any]] = {
             "HEAD": dict(cls._kv_originals(getattr(step, "request_header", None))),
             "BODY": {},
@@ -525,18 +513,14 @@ class DataSourceService:
     def _collect_body_paths(cls, step: AutoTestStepModel) -> List[str]:
         """
         按请求参数类型收集BODY分区路径。
-
-        raw/none 正文为XML时进入BODY；纯文本/十六进制及文件型form-data不进入。
         """
+        # raw/none 正文为XML时进入BODY；纯文本/十六进制及文件型form-data不进入
         return list(cls._collect_step_partition(step).get("BODY", {}))
 
     @classmethod
     def build_blank_vertical_matrix(cls) -> List[List[Any]]:
-        """
-        构建含分区标记的空白垂直矩阵模板。
-
-        每个分区标记后跟随一行空白填充区；用例无已存数据源时使用。
-        """
+        """构建含分区标记的空白垂直矩阵模板。"""
+        # 每个分区标记后跟随一行空白填充区；用例无已存数据源时使用
         empty: List[str] = [""] * len(cls.DEFAULT_SCENE_NAMES)
         matrix: List[List[Any]] = [["", *cls.DEFAULT_SCENE_NAMES]]
         for marker in ("HEAD", "BODY", "ASSERT_HEAD", "ASSERT_BODY"):
@@ -546,12 +530,8 @@ class DataSourceService:
 
     @classmethod
     def build_vertical_matrix_from_step(cls, step: AutoTestStepModel) -> List[List[Any]]:
-        """
-        按垂直模式根据当前步骤报文构建空白场景矩阵。
-
-        默认三列场景名；路径写入HEAD/BODY分区下，单元格值留空；
-        ASSERT_HEAD/ASSERT_BODY仅保留分区标记行。
-        """
+        """按垂直模式根据当前步骤报文构建空白场景矩阵。"""
+        # 默认三列场景名；路径写入HEAD/BODY分区下，单元格值留空；ASSERT_HEAD/ASSERT_BODY仅保留分区标记行
         empty = [""] * len(cls.DEFAULT_SCENE_NAMES)
         matrix: List[List[Any]] = [["", *cls.DEFAULT_SCENE_NAMES]]
         matrix.append(["HEAD", *empty])
@@ -569,13 +549,11 @@ class DataSourceService:
         """
         采集步骤报文原始值映射，按HEAD/BODY分区隔离，值统一文本化为字符串。
 
-        路径规则与字段同步一致：请求头$.Key、JSON叶子JSONPath、XML叶子XPath、键值型$.Key；
-        HEAD与BODY分区独立存放，同路径互不覆盖；逐值经dataset_cell_placeholder文本化，
-        与数据源dataset字符串化存储协议对齐（类型语义由执行注入侧按报文原字段适配）。
-
         :param step: 步骤实例(取request_args_type与报文)
         :return: 分区名->字段路径->原始文本值映射，如{"HEAD": {"$.Token": "x"}, "BODY": {"$.id": "1"}}
         """
+        # 路径规则与字段同步一致：请求头$.Key、JSON叶子JSONPath、XML叶子XPath、键值型$.Key；HEAD与BODY分区独立存放，同路径互不覆盖
+        # 逐值经dataset_cell_placeholder文本化，与数据源dataset字符串化存储协议对齐（类型语义由执行注入侧按报文原字段适配）
         originals = cls._collect_step_partition(step)
         return {
             section: {path: DataSourceMatrixParser.dataset_cell_placeholder(value) for path, value in mapping.items()}
@@ -596,8 +574,6 @@ class DataSourceService:
         """
         字段同步取场景值：保留字段搬移原值；新增字段其余场景补空，正交易场景按报文原始值回填。
 
-        仅新增字段（old_values为None）会回填；已存在字段即使报文值变化也保留用户维护的场景值。
-
         :param old_values: 原矩阵中该字段的场景值行/列，字段不存在时为None
         :param empty: 补空基准(与场景数等长)
         :param normal_index: 正交易场景在场景维度中的序号，-1表示未导入
@@ -607,6 +583,7 @@ class DataSourceService:
         :return: 该字段同步后的场景值
         """
         if old_values is not None:
+            # 仅新增字段（old_values为None）会回填；已存在字段即使报文值变化也保留用户维护的场景值
             return list(old_values)
         values = list(empty)
         if normal_index >= 0 and originals:
@@ -625,15 +602,13 @@ class DataSourceService:
         """
         垂直模式字段同步：以报文最新路径为准重建HEAD/BODY分区行，ASSERT分区原样保留。
 
-        保留字段的场景值从原矩阵按路径匹配搬移；删除字段整行剔除；
-        新增字段其余场景补空，正交易场景列按报文原始值回填(未导入正交易场景则补空)。
-
         :param matrix: 原垂直矩阵
         :param head_paths: 报文最新HEAD路径
         :param body_paths: 报文最新BODY路径
         :param originals: 报文原始值映射(按HEAD/BODY分区)，供正交易场景列回填新增字段值
         :return: 重建后的垂直矩阵
         """
+        # 保留字段的场景值从原矩阵按路径匹配搬移；删除字段整行剔除；新增字段其余场景补空，正交易场景列按报文原始值回填(未导入正交易场景则补空)
         scene_names = DataSourceMatrixParser.extract_scene_names_from_matrix(matrix, DataSourceMatrixParser.AXIS_VERTICAL)
         col_count = 1 + len(scene_names)
         empty = [""] * len(scene_names)
@@ -678,15 +653,13 @@ class DataSourceService:
         """
         水平模式字段同步：以报文最新路径为准重建HEAD/BODY分区列，ASSERT分区原样保留。
 
-        保留字段的场景值从原矩阵按路径匹配搬移；删除字段整列剔除；
-        新增字段其余场景补空，正交易场景行按报文原始值回填(未导入正交易场景则补空)。
-
         :param matrix: 原水平矩阵
         :param head_paths: 报文最新HEAD路径
         :param body_paths: 报文最新BODY路径
         :param originals: 报文原始值映射(按HEAD/BODY分区)，供正交易场景行回填新增字段值
         :return: 重建后的水平矩阵
         """
+        # 保留字段的场景值从原矩阵按路径匹配搬移；删除字段整列剔除；新增字段其余场景补空，正交易场景行按报文原始值回填(未导入正交易场景则补空)
         scene_names = DataSourceMatrixParser.extract_scene_names_from_matrix(matrix, DataSourceMatrixParser.AXIS_HORIZONTAL)
         # 原矩阵按分区+路径索引列，供保留字段搬移
         old_cols: Dict[Tuple[str, str], int] = {}
@@ -749,14 +722,12 @@ class DataSourceService:
         """
         按步骤当前报文同步数据源矩阵字段：新增字段补空值，删除字段剔除，保留字段场景值不动。
 
-        仅同步HEAD/BODY分区，ASSERT分区原样保留，方向以矩阵实际结构为准；
-        正交易场景列/行的新增字段按报文原始值回填，其余场景补空。
-
         :param step: 步骤实例(取request_args_type与报文)
         :param dataframe: 数据源当前二维矩阵
         :param axis: 数据源声明方向(仅作回落)
         :return: {dataset, dataset_names, dataframe, axis}更新载荷
         """
+        # 仅同步HEAD/BODY分区，ASSERT分区原样保留，方向以矩阵实际结构为准；正交易场景列/行的新增字段按报文原始值回填，其余场景补空
         used_axis = DataSourceMatrixParser.resolve_matrix_axis(dataframe, declared_axis=axis)
         head_paths = cls._collect_head_paths(step)
         body_paths = cls._collect_body_paths(step)
@@ -779,13 +750,10 @@ class DataSourceService:
 
     @staticmethod
     def _scene_names_from_dataframe(dataframe: Any, axis: Any = None) -> Optional[List[str]]:
-        """
-        从dataframe矩阵头/首列提取场景名（单元格全空时仍可得到列名）。
-
-        axis非法或缺失时按垂直模式处理；无有效名称返回None。
-        """
+        """从dataframe矩阵头/首列提取场景名，单元格全空时仍可得到列名。"""
         if not isinstance(dataframe, list) or not dataframe:
             return None
+        # axis非法或缺失时按垂直模式处理；无有效名称返回None
         used_axis = axis if axis in (DataSourceMatrixParser.AXIS_HORIZONTAL,
                                      DataSourceMatrixParser.AXIS_VERTICAL) else DataSourceMatrixParser.AXIS_VERTICAL
         names = DataSourceMatrixParser.extract_scene_names_from_matrix(dataframe, used_axis)
@@ -794,11 +762,9 @@ class DataSourceService:
     @staticmethod
     def data_source_scene_names(ds: Any) -> Optional[List[str]]:
         """
-        取出数据源场景列顺序：优先 dataset 的插入序，否则 dataset_names，
-        再否则从 dataframe 矩阵头提取（空单元格模板也能参与一致性校验）。
-
-        仅去掉空白名称，不去重、不排序；没有任何有效名称则返回 None。
+        取出数据源场景列顺序：优先dataset的插入序，否则dataset_names，再否则从dataframe矩阵头提取，空单元格模板也能参与一致性校验。
         """
+        # 仅去掉空白名称，不去重、不排序；没有任何有效名称则返回 None
         raw: Optional[List[Any]] = None
         if isinstance(getattr(ds, "dataset", None), dict) and ds.dataset:
             raw = list(ds.dataset.keys())
@@ -822,12 +788,10 @@ class DataSourceService:
         """
         提取单个数据源内重复的场景列名称。
 
-        优先从dataframe矩阵提取（保留重复出现），缺失时回落dataset_names；
-        dataset的dict键天然去重，不可用于重复检测。
-
         :param ds: 数据源记录
         :return: 按首次出现顺序返回重复名称，无重复返回空列表
         """
+        # 优先从dataframe矩阵提取（保留重复出现），缺失时回落dataset_names；dataset的dict键天然去重，不可用于重复检测
         names = DataSourceService._scene_names_from_dataframe(getattr(ds, "dataframe", None), getattr(ds, "axis", None))
         if names is None:
             raw = getattr(ds, "dataset_names", None)
@@ -856,11 +820,8 @@ class DataSourceService:
             file_name: Optional[str],
             file_desc: Optional[str],
     ) -> None:
-        """
-        回写步骤上的数据源指针。
-
-        仅更新未软删（state=0）的步骤；文件名/描述截断至2048；无匹配步骤时不报错。
-        """
+        """回写步骤上的数据源指针。"""
+        # 仅更新未软删（state=0）的步骤；文件名/描述截断至2048；无匹配步骤时不报错
         step_vals: Dict[str, Any] = {
             "data_source_id": data_source_id,
             "data_source_name": (file_name or "")[:2048] or None,
@@ -881,7 +842,7 @@ class DataSourceService:
             case_id: int,
             step_code: Optional[str] = None,
     ) -> int:
-        """清空步骤上的数据源指针；step_code为空时清空该用例全部可挂数据源步骤(含引用公共接口)。
+        """清空步骤上的数据源指针；step_code为空时清空该用例全部可挂数据源步骤，含引用公共接口。
 
         :return: 实际更新的步骤行数
         """
