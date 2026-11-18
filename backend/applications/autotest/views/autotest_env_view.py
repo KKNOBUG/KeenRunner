@@ -221,7 +221,7 @@ async def get_environment_names(
         scope: DataScope = DependTagScope,
 ):
     """
-    查询环境名称(去重)。
+    查询去重后的环境名称列表。
 
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
@@ -290,29 +290,30 @@ async def search_environments(
 
 @autotest_env.post("/query", summary="查询环境配置分类", description="根据应用列表查询环境配置并分类")
 async def classify_environment_configs(
-        env_config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表"),
+        env_config_in: AutoTestEnvConfigQueryByProjectsIn = Body(..., description="应用ID列表与配置逻辑标识列表"),
         services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
     按应用ID列表查询环境配置并分类返回。
 
-    :param env_config_in: 含project_ids的查询入参
+    :param env_config_in: 含 project_ids 与可选 config_modes 的查询入参
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 层级：project_id → env_id(数字字符串) → 节点类型 → config_mode → {config_name, 主机信息}
     try:
         data = await services.env_config_curd.query_classified_by_project_ids(
             project_ids=env_config_in.project_ids,
-            config_names=env_config_in.config_names,
+            config_modes=env_config_in.config_modes,
             scope=scope,
         )
         total_configs: int = sum(
-            len(names)
+            len(modes)
             for envs in data.values()
-            for buckets in envs.values()
-            for names in buckets.values()
+            for types in envs.values()
+            for modes in types.values()
         )
         return SuccessResponse(message="查询成功", data=data, total=total_configs)
     except ParameterException as e:

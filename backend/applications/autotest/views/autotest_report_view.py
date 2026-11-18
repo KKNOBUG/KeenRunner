@@ -50,10 +50,11 @@ async def create_report(
         _current_user: User = DependSuperUser,
 ):
     """
-    新增报告(仅任务执行引擎或管理员可直调)。
+    新增报告：仅任务执行引擎或管理员可直调。
 
     :param report_in: 报告入参
     :param services: 自动化测试CRUD依赖聚合
+    :param _current_user: 当前用户，由DependSuperUser限定为管理员或任务执行引擎
     :return: 统一HTTP响应
     """
     try:
@@ -125,7 +126,7 @@ async def delete_reports(
         scope: DataScope = DependTagScope,
 ):
     """
-    批量删除报告及其全部明细(物理删除)。
+    批量删除报告及其全部明细：物理删除。
 
     :param report_in: 报告ID列表或报告代码列表(二选一)
     :param services: 自动化测试CRUD依赖聚合
@@ -154,11 +155,12 @@ async def update_report(
         _current_user: User = DependSuperUser,
 ):
     """
-    根据id或code更新报告(仅任务执行引擎或管理员可直调)。
+    根据id或code更新报告：仅任务执行引擎或管理员可直调。
 
     :param report_in: 报告入参
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
+    :param _current_user: 当前用户，由DependSuperUser限定为管理员或任务执行引擎
     :return: 统一HTTP响应
     """
     try:
@@ -240,7 +242,7 @@ async def search_reports(
         scope: DataScope = DependTagScope,
 ):
     """
-    执行历史主查询(执行维度)：一次执行唯一化为一行, 多数据源批次行携带批次标识供下钻报告明细; 任务调度报告不在此范围(由/search_task_batches查询)。
+    执行历史主查询：不含任务调度报告, 一次执行唯一化为一行, 多数据源批次行携带批次标识供下钻报告明细。
 
     :param report_in: 报告查询入参
     :param services: 自动化测试CRUD依赖聚合
@@ -316,7 +318,7 @@ async def search_batch_reports(
         scope: DataScope = DependTagScope,
 ):
     """
-    批次报告下钻查询(报告维度)：面向“执行报告”抽屉, 按批次标识精确分页返回同一次执行的全部报告, 一行=一条报告。
+    批次报告下钻查询：面向执行报告抽屉, 按批次标识精确分页返回同一次执行的全部报告, 一行=一条报告。
 
     :param batch_detail_in: 批次报告查询入参
     :param services: 自动化测试CRUD依赖聚合
@@ -355,7 +357,7 @@ async def search_task_batches(
         scope: DataScope = DependTagScope,
 ):
     """
-    任务执行历史查询(任务维度)：面向任务执行历史列表, 按任务标识聚合报告批次并计算执行结果, 一行=一个批次, 批次行不内嵌报告明细。
+    任务执行历史查询：面向任务执行历史列表, 按任务标识聚合报告批次并计算执行结果, 一行=一个批次, 批次行不内嵌报告明细。
 
     :param batch_in: 含必填task_code；page/page_size针对批次数
     :param services: 自动化测试CRUD依赖聚合
@@ -382,15 +384,16 @@ async def search_report_batch_scripts(
         scope: DataScope = DependTagScope,
 ):
     """
-    批次脚本维度下钻查询(脚本维度)：面向“脚本执行信息”抽屉, 按批次标识聚合脚本执行信息并分页, 一行记录代表一个脚本。
-    执行次数case_execute_count=任务配置的执行轮次数(round_no去重数, 一轮内多数据源产生多条报告仅计1次), 供前端构建轮次列表; 历史数据无round_no时为报告行数。
-    has_multiple_dataset=数据源名称去重数>1, 语义对齐/search_reports; 多数据源脚本行由前端触发报告批次下钻(/search_batch_reports)。
+    批次脚本维度下钻查询：面向脚本执行信息抽屉, 按批次标识聚合脚本执行信息并分页, 一行记录代表一个脚本。
 
     :param script_in: 含必填batch_code；page/page_size针对脚本数
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 执行次数case_execute_count=任务配置的执行轮次数(round_no去重数, 一轮内多数据源产生多条报告仅计1次),
+    # 供前端构建轮次列表; 历史数据无round_no时为报告行数；has_multiple_dataset=数据源名称去重数>1,
+    # 语义对齐/search_reports; 多数据源脚本行由前端触发报告批次下钻(/search_batch_reports)
     try:
         total, items = await services.report_curd.search_batch_scripts(script_in, scope=scope)
         data = [item.model_dump(mode="json") for item in items]
@@ -412,15 +415,15 @@ async def search_script_round_reports(
         scope: DataScope = DependTagScope,
 ):
     """
-    脚本执行明细分页查询(报告维度)：面向“脚本执行明细”抽屉, 按批次标识+用例ID分页返回执行报告, 一行=一次场景执行(含dataset_no)。
-
-    双形态：传入round_no时按轮次过滤(轮次内明细)；缺省时返回全部轮次明细(执行次数模式无数据源场景), 统一按执行时间升序排列。
+    脚本执行明细分页查询：面向脚本执行明细抽屉, 按批次标识+用例ID分页返回执行报告, 一行=一次场景执行。
 
     :param report_in: 含必填batch_code、case_id, 可选round_no
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 双形态：传入round_no时按轮次过滤(轮次内明细)；缺省时返回全部轮次明细(执行次数模式无数据源场景),
+    # 统一按执行时间升序排列；一行=一次场景执行(含dataset_no)
     try:
         total, data = await services.report_curd.search_script_round_reports(report_in, scope=scope)
         return SuccessResponse(message="查询成功", data=data, total=total)

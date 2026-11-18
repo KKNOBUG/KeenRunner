@@ -9,7 +9,7 @@
 import traceback
 from typing import Optional, List
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from tortoise import connections
 from tortoise.expressions import Q
 
@@ -20,6 +20,7 @@ from backend.applications.autotest.schemas.autotest_project_schema import (
     AutoTestProjectSelect,
     AutoTestProjectDelete,
 )
+from backend.applications.autotest.services.autotest_project_sync_service import SyncProjectsResult
 from backend.configure import LOGGER
 from backend.core.exceptions import (
     NotFoundException,
@@ -365,3 +366,22 @@ async def search_projects(
     except Exception as e:
         LOGGER.error(f"根据条件分页查询应用列表信息失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@autotest_project.post("/sync", summary="API自动化测试-同步ATPM应用信息")
+async def sync_project_info(services: AutoTestServices = DependAutoTestServices):
+    """
+    同步ATPM应用信息。
+
+    :param services: 自动化测试CRUD依赖聚合
+    :return: 统一HTTP响应
+    """
+    try:
+        result: SyncProjectsResult = await services.project_sync_service.sync_projects()
+    except Exception as e:
+        error_message: str = f"同步ATPM应用信息失败, 异常描述: {e}"
+        LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
+        return FailureResponse(message=error_message)
+    if not result.success:
+        return FailureResponse(message=result.message, data=result.data)
+    return SuccessResponse(message=result.message, data=result.data, total=result.total)

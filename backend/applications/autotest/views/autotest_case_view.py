@@ -345,7 +345,7 @@ async def batch_fetch_related_data(
 
 
 def _protocol_from_step_type(step_type: Any) -> Optional[str]:
-    """步骤类型枚举值映射为协议标识（HTTP请求→HTTP，TCP请求→TCP）。"""
+    """步骤类型枚举值映射为协议标识。"""
     if step_type is None:
         return None
     value = step_type.value if hasattr(step_type, "value") else str(step_type)
@@ -504,13 +504,7 @@ async def get_request_step_selected_project_ids(
         scope: DataScope = DependTagScope,
 ):
     """
-    从步骤树中提取以下步骤类型所选择的应用ID并去重返回。
-
-    - HTTP请求：step.request_project_id
-    - TCP请求：step.request_project_id
-    - 数据库请求：step.database_operates[*].project_id（可能多个）
-
-    同时递归遍历children与quote_steps（引用公共脚本展开后的步骤）。
+    从步骤树中提取请求类步骤所选择的应用ID并去重返回。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
@@ -518,6 +512,8 @@ async def get_request_step_selected_project_ids(
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 提取口径：HTTP请求/TCP请求取 step.request_project_id，数据库请求取 step.database_operates[*].project_id；
+    # 同时递归遍历children与quote_steps（引用公共脚本展开后的步骤）
     try:
         project_ids: List[int] = await services.step_curd.get_step_usage_projects(
             case_id=case_id,
@@ -545,13 +541,12 @@ async def generate_case_scripts_async(
     """
     将指定的公共接口用例批量转换为独立的脚本用例。
 
-    校验全部入参用例均为公共接口后下发Celery任务；
-    命名规则：脚本名称=接口名称，同应用下已有同名记录时按'{接口名称}-{时间戳}'命名；生成结果在异步中心查询。
-
     :param generate_in: 脚本生成入参
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
+    # 校验全部入参用例均为公共接口后下发Celery任务；命名规则：脚本名称=接口名称，
+    # 同应用下已有同名记录时按'{接口名称}-{时间戳}'命名；生成结果在异步中心查询
     try:
         case_ids = generate_in.case_ids
         if not case_ids:
@@ -608,7 +603,11 @@ async def public_api_import_template_download():
         return NotFoundResponse(message="导入模板文件不存在，请联系管理员部署")
 
     quoted_name = quote(CaseExcelService.SCRIPT_IMPORT_TEMPLATE_DOWNLOAD_NAME)
-    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}",
+        # 下载文件不参与浏览器缓存，避免模板更新后客户端仍拿到旧文件
+        "Cache-Control": "no-store",
+    }
     return StreamingResponse(
         FileTransfer.iter_download_file_chunks(download_file=filepath, add_bom=False),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -623,12 +622,11 @@ async def import_case_scripts_async(
     """
     解析公共脚本导入文件数据, 完成新增或更新公共脚本。
 
-    数据文件解析与行格式校验完成(不合规行明细即时返回便于修稿重试)后下发Celery任务；
-    行级匹配校验与落库在后台执行(存在更新、不存在新增)，结果与不合规明细落入执行记录(task_summary)，在异步中心查询。
-
     :param file: 模板xlsx文件
     :return: 统一HTTP响应
     """
+    # 数据文件解析与行格式校验完成(不合规行明细即时返回便于修稿重试)后下发Celery任务；
+    # 行级匹配校验与落库在后台执行(存在更新、不存在新增)，结果与不合规明细落入执行记录(task_summary)，在异步中心查询
     if not (file.filename or "").endswith(".xlsx"):
         return FileExtensionResponse(message="仅支持.xlsx后缀的模板文件")
     try:
@@ -667,12 +665,11 @@ async def export_case_datagram_async(
     """
     将指定的公共接口用例的报文数据导出到模板文件提供下载。
 
-    校验通过后下发Celery任务，生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载。
-
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
+    # 校验通过后下发Celery任务，生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载
     try:
         if not case_ids:
             return ParameterResponse(message="请选择目标接口")
@@ -709,13 +706,12 @@ async def export_case_scripts_async(
     """
     将指定的公共脚本用例的完整数据导出到模板文件提供下载。
 
-    校验通过后下发Celery任务，生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载；
-    产出文件可直接用于导入脚本、更新或新增公共脚本。
-
     :param case_ids: 用例主键列表
     :param services: 自动化测试CRUD依赖聚合
     :return: 统一HTTP响应
     """
+    # 校验通过后下发Celery任务，生成xlsx并将产物落入执行记录(task_summary)，在异步中心查询与下载；
+    # 产出文件可直接用于导入脚本、更新或新增公共脚本
     try:
         if not case_ids:
             return ParameterResponse(message="请选择目标接口")

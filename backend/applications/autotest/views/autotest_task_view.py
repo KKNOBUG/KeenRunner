@@ -26,7 +26,7 @@ from backend.applications.autotest.schemas.autotest_task_schema import (
     AutoTestTaskUpdate,
 )
 from backend.applications.autotest.services.autotest_scope_guard import assert_cases_readable
-from backend.applications.autotest.services.autotest_task_crud import extract_steps_execute_envs
+from backend.applications.autotest.services.autotest_task_crud import extract_steps_execute_envs, resolve_env_names_by_bind_ids
 from backend.applications.autotest.services.autotest_task_schedule import (
     TaskSchedule,
     normalize_schedule,
@@ -263,12 +263,12 @@ async def search_tasks(
             q &= Q(task_involve_envs__contains=[task_in.env_name])
         elif task_in.env_id:
             # task_involve_envs存储环境名称：将入参env_id(环境绑定ID)转换为环境名称再匹配
-            env_bind = await AutoTestEnvBindModel.get_or_none(id=task_in.env_id)
+            env_bind = await AutoTestEnvBindModel.get_or_none(id=task_in.env_id, state__not=1)
             env_name = None
             if env_bind:
                 env_enum = await AutoTestEnvModel.get_or_none(id=env_bind.env_enum_id)
                 env_name = env_enum.env_name if env_enum else None
-            # 环境不存在时返回空结果集
+            # 环境绑定不存在或已删除时返回空结果集，避免筛选命中同名旧数据
             q &= Q(task_involve_envs__contains=[env_name]) if env_name else Q(pk=0)
         if task_in.execute_time_start:
             execute_time_start = task_in.execute_time_start.strip()
@@ -301,8 +301,15 @@ async def search_tasks(
         ]
         # 步骤执行环境映射 + 行级可删标记（按当前资源族的删除范围判定，含部门范围）
         await scope.load_owners([obj.created_user for obj in instances])
-        for task_dict, obj in zip(data, instances):
-            task_dict["steps_execute_env"] = extract_steps_execute_envs(task_dict.get("cases_execute_config"))
+        # 步骤级环境回显：结构存绑定ID，批量反查名称后返回；名称兜底兼容回填前存量任务
+        step_env_maps = [extract_steps_execute_envs(task_dict.get("cases_execute_config")) for task_dict in data]
+        all_bind_ids = sorted({value for step_envs in step_env_maps for value in step_envs.values() if isinstance(value, int)})
+        bind_name_map = await resolve_env_names_by_bind_ids(all_bind_ids) if all_bind_ids else {}
+        for task_dict, obj, step_envs in zip(data, instances, step_env_maps):
+            task_dict["steps_execute_env"] = {
+                key: (bind_name_map.get(value) or f"env_id={value}") if isinstance(value, int) else str(value)
+                for key, value in step_envs.items()
+            }
             task_dict["can_delete"] = scope.can_delete(obj.created_user)
         return SuccessResponse(message="查询成功", data=data, total=total)
     except ParameterException as e:
@@ -372,7 +379,7 @@ async def start_task(
         scope: DataScope = DependTagScope,
 ):
     """
-    启动任务（启用调度）。
+    启动任务：启用调度。
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
@@ -414,7 +421,7 @@ async def stop_task(
         scope: DataScope = DependTagScope,
 ):
     """
-    停止任务（关闭调度）。
+    停止任务：关闭调度。
 
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
@@ -458,14 +465,13 @@ async def copy_task(
     """
     完全复刻任务记录生成新任务。
 
-    复制规则：业务配置(用例/执行配置/定时表达式等)原样复制；
-    task_code重新生成、task_enabled停用、执行痕迹(最后执行时间/人/结果)重置。
-
     :param task_in: 任务入参
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 复制规则：业务配置(用例/执行配置/定时表达式等)原样复制；
+    # task_code重新生成、task_enabled停用、执行痕迹(最后执行时间/人/结果)重置
     try:
         task_id: int = task_in.task_id
         instance = await services.task_curd.copy_task(
@@ -603,6 +609,8 @@ async def download_task_record_attachment(
             path=file_path,
             media_type=str(item.get("content_type") or "application/octet-stream"),
             filename=file_name,
+            # 产物含业务敏感数据：禁止浏览器启发式缓存，避免鉴权失效时命中旧文件
+            headers={"Cache-Control": "no-store"},
         )
     except NoPermissionException:  # 归属校验失败需向上抛出，交由全局处理器返回403
         raise
@@ -620,15 +628,14 @@ async def delete_task_record(
         scope: DataScope = DependTagScope,
 ):
     """
-    删除终态执行记录(硬删)并物理清理产物文件。
-
-    仅终态(成功/失败/部分成功)任务允许删除；等待执行/正在执行任务拒绝删除。
+    删除终态执行记录：硬删并物理清理产物文件。
 
     :param record_id: 执行记录主键
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 仅终态(成功/失败/部分成功)任务允许删除；等待执行/正在执行任务拒绝删除
     try:
         deleted = await services.record_curd.delete_record_with_artifacts(record_id=record_id, scope=scope)
         LOGGER.info(f"删除执行记录成功, record_id={record_id}, deleted={deleted}")
@@ -651,15 +658,14 @@ async def delete_task_records(
         scope: DataScope = DependTagScope,
 ):
     """
-    批量删除终态执行记录(硬删)并物理清理产物文件。
-
-    仅终态(成功/失败/部分成功)任务允许删除；任一条等待执行/正在执行则整批拒绝。
+    批量删除终态执行记录：硬删并物理清理产物文件。
 
     :param record_in: 执行记录ID列表
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应，data为实际删除的记录数量
     """
+    # 仅终态(成功/失败/部分成功)任务允许删除；任一条等待执行/正在执行则整批拒绝
     try:
         deleted = await services.record_curd.delete_records_with_artifacts(record_in=record_in, scope=scope)
         LOGGER.info(f"批量删除执行记录成功, record_ids={record_in.record_ids}, deleted={deleted}")

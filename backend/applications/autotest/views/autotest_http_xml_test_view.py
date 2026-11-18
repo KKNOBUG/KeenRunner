@@ -212,16 +212,14 @@ async def http_xml_test(
         request: Request,
 ):
     """
-    接收XML格式请求报文（保险理赔申请），返回XML格式响应。
-
-    请求体为XML格式，包含Head（请求头）和Body（保单信息+报案人信息+理赔信息），
-    响应为XML格式，包含保单信息、报案人信息、审批结果、所需材料清单、处理时间线、联系方式等40+字段。
-
-    用于测试HTTP请求步骤中XML报文类型的发送与响应解析。
+    接收XML格式请求报文，返回XML格式响应。
 
     :param request: HTTP请求对象
     :return: XML格式响应
     """
+    # 请求体为XML格式，包含Head（请求头）和Body（保单信息+报案人信息+理赔信息）；
+    # 响应为XML格式，包含保单信息、报案人信息、审批结果、所需材料清单、处理时间线、联系方式等40+字段；
+    # 用于测试HTTP请求步骤中XML报文类型的发送与响应解析
     try:
         body_bytes = await request.body()
         text = body_bytes.decode("utf-8", errors="ignore").strip()
@@ -236,13 +234,12 @@ async def http_xml_test(
 @autotest_http_xml_test.get("/sample/request", summary="查询HTTP/XML请求示例报文", description="获取HTTP/XML测试接口的理赔申请请求示例")
 async def get_http_xml_sample_request():
     """
-    获取HTTP/XML测试接口的请求报文示例（保险理赔申请）。
-
-    将此XML报文作为HTTP请求步骤的请求体（选择xml类型），
-    发送到POST/xml接口，服务器将返回XML格式的理赔审批结果。
+    获取HTTP/XML测试接口的请求报文示例。
 
     :return: 统一HTTP响应
     """
+    # 将此XML报文作为HTTP请求步骤的请求体（选择xml类型），发送到POST/xml接口，
+    # 服务器将返回XML格式的理赔审批结果
     return SuccessResponse(message="查询成功", data=_SAMPLE_REQUEST_XML)
 
 

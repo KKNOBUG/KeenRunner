@@ -35,12 +35,11 @@ autotest_tcp_test = APIRouter()
 
 class _TcpFrameServerStartIn(BaseModel):
     """
-    TCP测试服务器端口启动入参（内置声明用，/start无外部入参）。
-
-    mock_type非空时为业务mock端口（json/xml），空时为帧诊断回显端口；
-    tcp_*字段取值与步骤schema完全一致且相互独立不互斥，帧模式复用 resolve_tcp_frame_config 按优先级推导
-    （进制数≠不使用 → 长度前缀，结束符字段保留但不参与成帧；进制数=不使用且配置了结束符 → 结束符；均未配置 → RAW）。
+    TCP测试服务器端口启动入参：仅内置声明使用，/start无外部入参。
     """
+    # mock_type非空时为业务mock端口(json/xml)，空时为帧诊断回显端口；
+    # tcp_*字段取值与步骤schema完全一致且相互独立不互斥，帧模式复用resolve_tcp_frame_config按优先级推导：
+    # 进制数≠不使用→长度前缀，结束符字段保留不参与成帧；进制数=不使用且配置结束符→结束符；均未配置→RAW
 
     port: int = Field(ge=1, le=65535, description="监听端口")
     mock_type: Optional[str] = Field(default=None, description="业务mock类型：json=银行账户交易查询，xml=贷款申请；空为帧诊断回显端口")
@@ -223,7 +222,7 @@ def _generate_transactions(count: int) -> List[Dict[str, Any]]:
 
 def _build_json_business_response(text: str) -> str:
     """
-    构造JSON端口（银行账户交易查询）的XML响应报文。
+    构造JSON端口的银行账户交易查询XML响应报文。
 
     :param text: 请求报文JSON文本
     :return: 交易查询结果XML文本
@@ -311,7 +310,7 @@ def _build_json_business_response(text: str) -> str:
 
 def _build_xml_business_response(text: str) -> str:
     """
-    构造XML端口（贷款申请）的XML响应报文。
+    构造XML端口的贷款申请XML响应报文。
 
     :param text: 请求报文XML文本
     :return: 贷款审批结果XML文本（含还款计划与贷款条款）
@@ -434,7 +433,7 @@ _TCP_MOCK_RESPONSE_BUILDERS: Dict[str, Callable[[str], str]] = {
 
 async def _read_until_idle(reader: asyncio.StreamReader, idle_timeout: float) -> bytes:
     """
-    无显式边界报文的收尾读取：持续读取直至静默窗口超时或对端关闭（超时按正常收尾处理而非异常）。
+    无显式边界报文的收尾读取：持续读取直至静默窗口超时或对端关闭，超时按正常收尾处理而非异常。
 
     :param reader: 流读取器
     :param idle_timeout: 静默窗口时长（秒）
@@ -461,7 +460,7 @@ class _TcpTestServerBase:
         self._is_running: bool = False
 
     async def stop(self) -> None:
-        """关闭监听套接字（幂等，未启动时仅归位状态）。"""
+        """关闭监听套接字，幂等语义：未启动时仅归位状态。"""
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
@@ -482,10 +481,9 @@ class _TcpTestServerBase:
 class _TcpMockServer(_TcpTestServerBase):
     """
     单端口业务 Mock TCP 服务器。
-
-    帧自动检测（启发式）：首读为纯数字文本时按8位十进制长度前缀精确读正文，否则按RAW读到静默窗口收尾；
-    响应侧与请求同帧（前缀请求回前缀响应）。业务响应报文由 _TCP_MOCK_RESPONSE_BUILDERS 按类型路由生成。
     """
+    # 帧自动检测启发式：首读为纯数字文本时按8位十进制长度前缀精确读正文，否则按RAW读到静默窗口收尾；
+    # 响应侧与请求同帧。业务响应报文由_TCP_MOCK_RESPONSE_BUILDERS按类型路由生成
 
     _LENGTH_FIELD_SIZE = 8
     _READ_TIMEOUT = 10.0
@@ -502,7 +500,7 @@ class _TcpMockServer(_TcpTestServerBase):
 
     async def start(self, cfg: "_TcpFrameServerStartIn", host: str) -> Dict[str, Any]:
         """
-        启动mock服务器（已运行时先停旧实例）。
+        启动mock服务器：已运行时先停旧实例。
 
         :param cfg: 保持与帧诊断服务器统一签名（端口与mock类型在构造时已确定）
         :param host: 监听地址（后端启动地址）
@@ -553,12 +551,11 @@ class _TcpMockServer(_TcpTestServerBase):
         """
         读取请求数据，自动检测帧协议，调用build_response构造响应。
 
-        长度前缀路径按声明长度精确读正文；RAW/结束符路径无显式长度边界，读到静默窗口或对端关闭收尾。
-
         :param reader: 流读取器
         :param build_response: 业务响应构造函数
         :return: (response_xml文本, 是否长度前缀帧)
         """
+        # 长度前缀路径按声明长度精确读正文；RAW/结束符路径无显式长度边界，读到静默窗口或对端关闭收尾
         first_chunk = await asyncio.wait_for(
             reader.read(self._LENGTH_FIELD_SIZE), timeout=self._READ_TIMEOUT,
         )
@@ -602,11 +599,10 @@ class _TcpMockServer(_TcpTestServerBase):
 
 class _TcpFrameTestServer(_TcpTestServerBase):
     """
-    按帧配置收发的TCP诊断服务器：读取侧镜像客户端（AioTcpClient）的组帧逻辑，
-    每次收发记录诊断快照（前缀文本/声明长度/实际长度/结束符/HEX/错误），供统一 /status 查询比对。
-
-    用于验证TCP步骤帧配置的字段组合是否产生预期报文、响应侧解析是否按同一配置工作。
+    按帧配置收发的TCP诊断服务器：读取侧镜像客户端AioTcpClient的组帧逻辑，每次收发记录诊断快照供统一/status查询比对。
     """
+    # 诊断快照覆盖前缀文本/声明长度/实际长度/结束符/HEX/错误细节；用于验证TCP步骤帧配置的字段组合
+    # 是否产生预期报文、响应侧解析是否按同一配置工作
 
     _READ_TIMEOUT = 10.0
     _IDLE_TIMEOUT = 1.0
@@ -625,7 +621,7 @@ class _TcpFrameTestServer(_TcpTestServerBase):
 
     async def start(self, req: _TcpFrameServerStartIn, host: str) -> Dict[str, Any]:
         """
-        按帧配置启动诊断服务器（已运行时先停旧实例）。
+        按帧配置启动诊断服务器：已运行时先停旧实例。
 
         :param req: 启动入参（tcp_*字段语义与步骤schema一致）
         :param host: 监听地址（与业务mock端口共用外层host）
@@ -747,7 +743,7 @@ class _TcpFrameTestServer(_TcpTestServerBase):
 
     def _build_response(self, body_bytes: bytes, report: Dict[str, Any]) -> bytes:
         """
-        按帧配置组装响应报文（客户端响应读取依赖同一帧规则）。
+        按帧配置组装响应报文：客户端响应读取依赖同一帧规则。
 
         :param body_bytes: 请求正文（response_text未配置时用于回显）
         :param report: 诊断快照（就地写入响应信息）
@@ -768,18 +764,17 @@ class _TcpFrameTestServer(_TcpTestServerBase):
 
 class _TcpFrameServerManager:
     """
-    TCP测试服务器统一管理器：按端口维护多实例（业务mock端口+帧诊断端口），支持一次启动内置组合。
-
-    声明式语义：每次start后运行中的端口与传入配置一一对应，未列出的存量端口将被停止；
-    启动中途失败时回停本次已启动的实例，避免残留半可用状态。
+    TCP测试服务器统一管理器：按端口维护多实例，覆盖业务mock端口与帧诊断端口，支持一次启动内置组合。
     """
+    # 声明式语义：每次start后运行中的端口与传入配置一一对应，未列出的存量端口将被停止；
+    # 启动中途失败时回停本次已启动的实例，避免残留半可用状态
 
     def __init__(self) -> None:
         self._servers: Dict[int, _TcpTestServerBase] = {}
 
     async def start(self, host: str, configs: List[_TcpFrameServerStartIn]) -> List[Dict[str, Any]]:
         """
-        按传入配置列表启动端口集合（mock类型端口建 _TcpMockServer，其余建 _TcpFrameTestServer）。
+        按传入配置列表启动端口集合：mock类型端口建_TcpMockServer，其余建_TcpFrameTestServer。
 
         :param host: 统一监听地址（外层host）
         :param configs: 端口配置列表，每项一个端口
@@ -807,7 +802,7 @@ class _TcpFrameServerManager:
 
     async def stop(self) -> List[Dict[str, Any]]:
         """
-        停止全部端口（保留实例以供状态查询）。
+        停止全部端口，保留实例以供状态查询。
 
         :return: 各端口状态快照列表
         """
@@ -835,14 +830,12 @@ _tcp_frame_servers = _TcpFrameServerManager()
                         description="按内置端口组合统一启动TCP测试服务器（业务mock端口9091/9092 + 帧协议诊断端口9093~9099），监听地址固定为后端启动地址")
 async def start_tcp_test_server():
     """
-    按内置端口组合一键启动全部TCP测试端口，监听地址取后端启动地址(PROJECT_CONFIG.SERVER_HOST)。
+    按内置端口组合一键启动全部TCP测试端口，监听地址取后端启动地址PROJECT_CONFIG.SERVER_HOST。
 
-    - **mock端口**：9091(JSON请求→银行交易查询XML响应)、9092(XML贷款请求→XML响应)，帧自动检测(8位十进制长度前缀/RAW)
-    - **帧诊断端口**（9093~9099）：一次启动全部帧配置组合
-      （10进制8位/16进制4位包含/结束符/HEX/GBK/RAW/共存组合），按各端口配置组帧/解帧并回显
-
-    :return: 统一HTTP响应，data含 frame 各端口状态快照列表
+    :return: 统一HTTP响应，data含frame各端口状态快照列表
     """
+    # mock端口：9091为JSON请求→银行交易查询XML响应，9092为XML贷款请求→XML响应，帧自动检测8位十进制长度前缀或RAW；
+    # 帧诊断端口9093~9099：一次启动全部帧配置组合10进制8位/16进制4位包含/结束符/HEX/GBK/RAW/共存组合，按各端口配置组帧/解帧并回显
     try:
         frame_statuses = await _tcp_frame_servers.start(PROJECT_CONFIG.SERVER_HOST, _DEFAULT_FRAME_CONFIGS)
         return SuccessResponse(message="启动成功", data={"frame": frame_statuses})
@@ -880,13 +873,11 @@ async def get_tcp_test_server_status():
 @autotest_tcp_test.get("/sample/json", summary="查询JSON请求示例报文", description="获取JSON端口银行账户交易查询请求示例")
 async def get_json_sample():
     """
-    获取JSON端口的请求报文示例（银行账户交易查询）。
-
-    将此报文通过TCP连接发送到JSON端口（默认9091），
-    服务器将返回XML格式的交易明细响应。
+    获取JSON端口的银行账户交易查询请求报文示例。
 
     :return: 统一HTTP响应
     """
+    # 将此报文通过TCP连接发送到JSON端口默认9091，服务器将返回XML格式的交易明细响应
     sample = {
         "request_header": {
             "channel": "mobile",
@@ -917,13 +908,11 @@ async def get_json_sample():
 @autotest_tcp_test.get("/sample/xml", summary="查询XML请求示例报文", description="获取XML端口贷款申请请求示例")
 async def get_xml_sample():
     """
-    获取XML端口的请求报文示例（贷款申请）。
-
-    将此报文通过TCP连接发送到XML端口（默认9092），
-    服务器将返回XML格式的贷款审批结果。
+    获取XML端口的贷款申请请求报文示例。
 
     :return: 统一HTTP响应
     """
+    # 将此报文通过TCP连接发送到XML端口默认9092，服务器将返回XML格式的贷款审批结果
     sample = """<?xml version="1.0" encoding="UTF-8"?>
 <Request>
   <Head>

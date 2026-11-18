@@ -349,7 +349,7 @@ async def copy_step_tree(
         scope: DataScope = DependTagScope,
 ):
     """
-    复制用例步骤树（返回未保存的副本）。
+    复制用例步骤树：返回未保存的副本。
 
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
@@ -382,14 +382,13 @@ async def splice_step_tree(
     """
     批量查询多用例步骤树并拼接为一个列表。
 
-    data.details: 所有用例拼接后的步骤节点, 结构与/tree接口data一致;
-    data.groups: case_id到details中对应步骤索引的映射。
-
     :param splice_in: 拼接查询入参(case_ids与case_codes二选一)
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # data.details: 所有用例拼接后的步骤节点, 结构与/tree接口data一致;
+    # data.groups: case_id到details中对应步骤索引的映射
     try:
         if not splice_in.case_ids and not splice_in.case_codes:
             return BadReqResponse(message="参数[case_ids, case_codes]不允许同时为空")
@@ -438,7 +437,7 @@ async def batch_update_steps_tree(
 
         # 1.5 校验数据源场景列名一致性（HTTP/TCP步骤 + 引用公共接口壳上挂载的数据源；含树上尚未带回 data_source_id、但库中已落库的数据源）
         def _walk_data_source_steps(steps: List[AutoTestStepTreeUpdateItem]) -> List[AutoTestStepTreeUpdateItem]:
-            """收集步骤树中全部可挂载数据源的步骤(HTTP/TCP/引用壳，含 children 与条件分支子步骤)；壳不依赖载荷回传data_source_id。"""
+            """收集步骤树中全部可挂载数据源的步骤, 覆盖HTTP/TCP/引用壳, 含children与条件分支子步骤；壳不依赖载荷回传data_source_id。"""
             collected: List[AutoTestStepTreeUpdateItem] = []
             for s in steps or []:
                 if s.step_type in DataSourceService.CLEAR_META_STEP_TYPES:
@@ -562,7 +561,7 @@ async def batch_update_steps_tree(
                     retained_ids: Set[int] = set()
 
                     def collect_retained_identities(steps: List[AutoTestStepTreeUpdateItem]) -> None:
-                        """递归收集整树中仍保留步骤的 step_code/step_id（含 children 与条件分支子步骤）。"""
+                        """递归收集整树中仍保留步骤的 step_code/step_id, 含children与条件分支子步骤。"""
                         for s in steps or []:
                             if s.step_code:
                                 retained_codes.add(s.step_code)
@@ -770,12 +769,11 @@ async def debug_python_code(
     """
     Python代码调试。
 
-    该端点只执行沙箱代码，不读取应用/环境/配置，不存在可按 project_id+env_name+config_name
-    访问他人凭据的数据范围入口；沙箱隔离由 UserCodeSandbox 承担。
-
     :param debug_in: 步骤调试入参
     :return: 统一HTTP响应
     """
+    # 该端点只执行沙箱代码，不读取应用/环境/配置，不存在可按 project_id+env_name+config_name
+    # 访问他人凭据的数据范围入口；沙箱隔离由 UserCodeSandbox 承担
     try:
         data = await StepDebugService.debug_python(debug_in)
         return SuccessResponse(message="Python代码调试成功", data=data, total=1)
@@ -861,7 +859,7 @@ async def execute_step_tree(
         await assert_parent_readable(scope, CASE_TAG, case_instance, "用例")
 
         def serialize_result(r: Any) -> Dict[str, Any]:
-            """递归序列化步骤执行结果（含children）。"""
+            """递归序列化步骤执行结果, 含children明细。"""
             return {
                 "case_id": r.case_id,
                 "step_id": r.step_id,
@@ -1110,9 +1108,9 @@ async def batch_execute_cases(
             raise NoPermissionException(message=error_message)
 
         initial_variables = batch_in.initial_variables or []
-        if batch_in.env_name:
+        if batch_in.env_id:
             LOGGER.warning(
-                f"批量执行入参[env_name={batch_in.env_name}]暂未接入执行引擎, "
+                f"批量执行入参[env_id={batch_in.env_id}]暂未接入执行引擎, "
                 f"请通过步骤执行配置steps_execute_config指定环境"
             )
 

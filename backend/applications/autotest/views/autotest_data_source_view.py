@@ -129,14 +129,15 @@ async def _collect_report_original(
         step: Optional[AutoTestStepModel] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
-    按数据源绑定的步骤实时采集报文原始值映射(HEAD/BODY分区隔离同名字段)，供前端本地插入正交易场景；
-    引用公共接口壳无自身报文，回落被引用用例的请求步骤采集；步骤缺失或无法定位请求步骤时返回空映射。
+    按数据源绑定的步骤实时采集报文原始值映射，供前端本地插入正交易场景。
 
     :param services: CRUD聚合
     :param instance: 数据源实例
     :param step: 已定位的归属步骤；传入时复用，避免/build已有数据源分支重复查库
     :return: HEAD/BODY分区原始值映射
     """
+    # HEAD/BODY分区隔离同名字段；引用公共接口壳无自身报文，回落被引用用例的请求步骤采集；
+    # 步骤缺失或无法定位请求步骤时返回空映射
     if step is None:
         try:
             step = await services.step_curd.model.filter(
@@ -155,7 +156,7 @@ async def _collect_report_original(
 
 
 def _safe_sheet_name(name: Any, used: Set[str]) -> str:
-    """清洗为合法Excel sheet名（去非法字符、截断31字符、重名追加序号）。"""
+    """清洗为合法Excel sheet名：去非法字符、截断31字符、重名追加序号。"""
     clean = re.sub(r"[:\\/?*\[\]]", "_", str(name or "").strip()) or "sheet"
     clean = clean[:31]
     base = clean
@@ -169,7 +170,7 @@ def _safe_sheet_name(name: Any, used: Set[str]) -> str:
 
 
 def _stream_xlsx_response(output: io.BytesIO, file_name: str) -> StreamingResponse:
-    """将已写入的BytesIO包装为xlsx文件流响应（统一seek+headers+media_type）。"""
+    """将已写入的BytesIO包装为xlsx文件流响应：统一seek+headers+media_type。"""
     output.seek(0)
     quoted_name: str = quote(file_name)
     headers: Dict[str, str] = {"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}"}
@@ -189,14 +190,13 @@ async def create_data_source(
     """
     为指定用例步骤创建数据源。
 
-    定位：(case_id或case_code)且(step_id或step_code)。该步骤已有启用数据源时拒绝；
-    若仅有软删记录则启用并覆盖。带dataframe时按axis清洗并生成dataset。
-
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 定位：(case_id或case_code)且(step_id或step_code)。该步骤已有启用数据源时拒绝；
+    # 若仅有软删记录则启用并覆盖。带dataframe时按axis清洗并生成dataset
     try:
         case, step = await DataSourceService.resolve_case_and_step(
             services,
@@ -258,8 +258,6 @@ async def delete_data_source(
     """
     删除数据源并清空对应步骤的data_source_id/name/desc。
 
-    定位：data_source_id或data_source_code优先；否则(case_id或case_code)且(step_id或step_code)。
-
     :param data_source_id: 数据源主键ID
     :param data_source_code: 数据源业务标识
     :param case_id: 用例主键ID
@@ -270,6 +268,7 @@ async def delete_data_source(
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 定位：data_source_id或data_source_code优先；否则(case_id或case_code)且(step_id或step_code)
     try:
         instance = await DataSourceService.resolve_enabled_data_source(
             services,
@@ -410,15 +409,13 @@ async def save_or_update_data_source(
     """
     保存或更新数据源。
 
-    有data_source_id或data_source_code时直接更新已有记录；
-    否则按(case_id或case_code)且(step_id或step_code)定位，有则更新、无则新增。
-    表格无任何有效场景数据时自动解绑该步骤已绑定的数据源(软删记录并清空步骤指针)，未绑定则视为无操作。
-
     :param data_source_in: 数据源入参
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 有data_source_id或data_source_code时直接更新已有记录；否则按(case_id或case_code)且(step_id或step_code)定位，
+    # 有则更新、无则新增。表格无任何有效场景数据时自动解绑该步骤已绑定的数据源(软删记录并清空步骤指针)，未绑定则视为无操作
     try:
         has_ds_locator = bool(data_source_in.data_source_id) or bool((data_source_in.data_source_code or "").strip())
         try:
@@ -568,14 +565,13 @@ async def update_data_source_fields(
     """
     按步骤当前报文同步数据源矩阵字段。
 
-    以报文展平后的字段路径为准：新增字段补空值，删除字段剔除，保留字段场景值不动；
-    ASSERT分区原样保留，方向以矩阵实际结构为准。
-
     :param data_in: 数据源定位入参
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 以报文展平后的字段路径为准：新增字段补空值，删除字段剔除，保留字段场景值不动；
+    # ASSERT分区原样保留，方向以矩阵实际结构为准
     try:
         case, step = await DataSourceService.resolve_case_and_step(
             services,
@@ -631,13 +627,12 @@ async def build_data_source(
     """
     获取用例下指定步骤的数据源结构，只查询不落库。
 
-    能定位到已有数据源时直接返回其dataframe；否则根据当前HTTP/TCP步骤报文构 建垂直矩阵。
-
     :param build_in: 数据源矩阵构建定位条件
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 能定位到已有数据源时直接返回其dataframe；否则根据当前HTTP/TCP步骤报文构建垂直矩阵
     try:
         has_ds_locator = bool(build_in.data_source_id) or bool((build_in.data_source_code or "").strip())
         if has_ds_locator:
@@ -720,8 +715,6 @@ async def get_data_source(
     """
     根据条件查询单条数据源信息。
 
-    定位优先级：data_source_id > data_source_code > (case+step)。
-
     :param data_source_id: 数据源主键ID
     :param data_source_code: 数据源业务标识
     :param case_id: 用例主键ID
@@ -732,6 +725,7 @@ async def get_data_source(
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 定位优先级：data_source_id > data_source_code > case与step组合条件
     try:
         if data_source_id:
             instance = await services.data_source_curd.get_by_id(data_source_id=data_source_id, on_error=True, state__not=1)
@@ -777,13 +771,12 @@ async def get_dataset_names(
     """
     案例数据场景查询。
 
-    合并当前用例下所有数据源的dataset_names，去重并保持出现顺序。
-
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 合并当前用例下所有数据源的dataset_names，去重并保持出现顺序
     if not case_id:
         return ParameterResponse(message="参数[case_id]不允许为空")
 
@@ -873,8 +866,6 @@ async def get_data_source_by_case_step(
     """
     根据用例与步骤查询数据源。
 
-    未传step条件时返回该用例下数据源列表；传入step条件时返回单条。
-
     :param case_id: 用例主键ID
     :param case_code: 用例业务标识
     :param step_id: 步骤主键ID
@@ -883,6 +874,7 @@ async def get_data_source_by_case_step(
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 未传step条件时返回该用例下数据源列表；传入step条件时返回单条
     try:
         await _assert_case_readable(services, scope, case_id=case_id, case_code=case_code)
         result = await services.data_source_curd.get_by_case_step(
@@ -1054,10 +1046,9 @@ async def download_import_template():
     """
     下载请求步骤数据集导入模板xlsx。
 
-    分发仓库内置于output/template的xlsx（HTTP/TCP请求步骤共用）；流式读取，不加UTF-8 BOM，避免损坏二进制格式。
-
     :return: 文件流响应
     """
+    # 分发仓库内置于output/template的xlsx，HTTP/TCP请求步骤共用；流式读取，不加UTF-8 BOM，避免损坏二进制格式
     filepath = os.path.normpath(os.path.join(PROJECT_CONFIG.OUTPUT_DIR, "template", "数据驱动模板.xlsx"))
     if not filepath.startswith(PROJECT_CONFIG.OUTPUT_DIR) or not os.path.isfile(filepath):
         LOGGER.error(f"导入模板文件不存在: {filepath}")
@@ -1229,8 +1220,6 @@ async def single_step_dataset_download(
     """
     根据用例步骤导出数据源xlsx，sheet名为步骤名称。
 
-    步骤未绑定数据源或矩阵为空时返回业务提示，引导使用模板下载。
-
     :param case_id: 用例主键ID
     :param step_id: 步骤主键ID
     :param step_code: 步骤业务标识
@@ -1238,6 +1227,7 @@ async def single_step_dataset_download(
     :param scope: 数据权限上下文
     :return: 文件流响应
     """
+    # 步骤未绑定数据源或矩阵为空时返回业务提示，引导使用模板下载
     try:
         await _assert_case_readable(services, scope, case_id=case_id)
         instance = await services.data_source_curd.get_by_case_step(
@@ -1280,9 +1270,7 @@ async def single_step_template_download(
         scope: DataScope = DependTagScope,
 ):
     """
-    下载步骤数据源模板xlsx：按当前HTTP/TCP步骤报文构建默认原始数据(垂直矩阵)，值留空。
-
-    文件名与数据源导出一致(数据源模板_步骤id_下载时间)，sheet名为步骤名称。
+    下载步骤数据源模板xlsx：按当前HTTP/TCP步骤报文构建默认原始数据垂直矩阵，值留空。
 
     :param case_id: 用例主键ID
     :param step_id: 步骤主键ID
@@ -1291,6 +1279,7 @@ async def single_step_template_download(
     :param scope: 数据权限上下文
     :return: 文件流响应
     """
+    # 文件名与数据源导出一致，即数据源模板_步骤id_下载时间，sheet名为步骤名称
     try:
         await _assert_case_readable(services, scope, case_id=case_id)
         # 模板矩阵依赖请求报文字段，需加载完整步骤记录
@@ -1334,12 +1323,6 @@ async def batch_step_dataset_upload(
     """
     参数化驱动-多步骤数据集批量上传。
 
-    根据 sheet 名匹配步骤树中的可挂载数据源步骤(HTTP/TCP/引用公共接口，sheet名=步骤名)，校验通过后逐步骤创建数据源。
-    校验规则（任一不满足即整体拒绝，不落库）：
-    - 每个sheet名均能匹配到步骤树中的可挂载数据源步骤；
-    - 各sheet的场景数量一致；
-    - 各sheet的场景名称及顺序一致。
-
     :param case_id: 用例主键ID
     :param file_desc: 文件描述
     :param file: 上传文件
@@ -1347,6 +1330,8 @@ async def batch_step_dataset_upload(
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 按sheet名匹配可挂载数据源步骤(HTTP/TCP/引用公共接口，sheet名=步骤名)，校验通过后逐步骤创建数据源；
+    # 校验规则：sheet名均能匹配、各sheet场景数量一致、各sheet场景名称及顺序一致，任一不满足即整体拒绝，不落库
     if not case_id:
         return ParameterResponse(message="参数[case_id]不允许为空")
     if not (file.filename or "").endswith(".xlsx"):
@@ -1510,15 +1495,14 @@ async def batch_step_dataset_download(
         scope: DataScope = DependTagScope,
 ):
     """
-    汇总导出用例下所有可挂载数据源步骤(HTTP/TCP/引用公共接口)绑定的数据源为单个xlsx。
-
-    每个步骤一个sheet（sheet名=步骤名，数据=该步骤数据源的dataframe）。
+    汇总导出用例下全部HTTP/TCP请求步骤及引用公共接口步骤绑定的数据源为单个xlsx。
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 文件流响应
     """
+    # 每个步骤一个sheet：sheet名=步骤名，数据=该步骤数据源的dataframe
     try:
         await _assert_case_readable(services, scope, case_id=case_id)
         data_sources = await services.data_source_curd.get_by_case_step(case_id=case_id, state__not=1)
@@ -1572,14 +1556,14 @@ async def batch_step_template_download(
         scope: DataScope = DependTagScope,
 ):
     """
-    汇总下载用例下所有可挂载数据源步骤(HTTP/TCP/引用公共接口)的默认原始数据模板，一个步骤一个sheet（sheet名=步骤名）。
-    引用公共接口壳无自身报文，模板矩阵回落到被引用公共接口用例内的首个请求步骤（与单步模板下载同口径）。
+    汇总下载用例下全部HTTP/TCP请求步骤及引用公共接口步骤的默认原始数据模板，一个步骤一个sheet，sheet名=步骤名。
 
     :param case_id: 用例主键ID
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文，按用例所属人校验可见范围
     :return: 文件流响应
     """
+    # 引用公共接口壳无自身报文，模板矩阵回落到被引用公共接口用例内的首个请求步骤，与单步模板下载同口径
     try:
         await _assert_case_readable(services, scope, case_id=case_id)
         # 模板矩阵依赖请求报文字段，需加载完整步骤记录

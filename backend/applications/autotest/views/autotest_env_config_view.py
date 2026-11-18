@@ -500,7 +500,7 @@ async def search_env_configs(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.get("/config_names", summary="查询配置名称", description="查询去重后的配置名称列表")
+@autotest_env_config.get("/config_names", summary="查询配置名称", description="查询去重后的配置名称与逻辑标识列表")
 async def get_env_config_names(
         project_id: Optional[int] = Query(None, ge=1, description="应用ID，可选"),
         env_id: Optional[int] = Query(None, ge=1, description="环境ID，可选"),
@@ -509,7 +509,7 @@ async def get_env_config_names(
         scope: DataScope = DependTagScope,
 ):
     """
-    获取去重后的配置名称列表。
+    获取去重后的配置名称与逻辑标识列表。
 
     :param project_id: 应用主键ID
     :param env_id: 环境主键ID
@@ -518,9 +518,10 @@ async def get_env_config_names(
     :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
+    # 仅返回启用配置；元素为 {config_name, config_mode}，前端保存时以 mode 作为引用键
     try:
         env_type_val = env_type.value if env_type is not None else None
-        data = await services.env_config_curd.list_distinct_config_names(
+        data = await services.env_config_curd.list_distinct_configs(
             project_id=project_id,
             env_id=env_id,
             env_type=env_type_val,
@@ -532,19 +533,19 @@ async def get_env_config_names(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env_config.post("/query_assign_config_envs", summary="查询配置可指派的环境名称", description="根据应用/配置名称/节点类型查询环境名称列表")
+@autotest_env_config.post("/query_assign_config_envs", summary="查询配置可指派的环境名称", description="根据应用/配置逻辑标识/节点类型查询环境列表")
 async def query_assign_config_envs(
         query_in: QueryAssignConfigEnv = Body(..., description="指派配置环境查询条件"),
         services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
-    根据应用/配置名称/节点类型查询符合的环境名称列表。
+    根据应用/配置逻辑标识/节点类型查询符合的环境列表。
 
-    :param query_in: 指派配置环境查询入参(三条件均可选)
+    :param query_in: 指派配置环境查询入参(三条件均可选)，按 config_mode 定位逻辑配置
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
-    :return: 统一HTTP响应
+    :return: 统一HTTP响应，元素为 {env_id, env_name}
     """
     try:
         data = await services.env_config_curd.query_assign_config_env_names(query_in=query_in, scope=scope)
