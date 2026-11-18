@@ -87,11 +87,11 @@ export default {
   /** 批量删除：Body { env_ids?: number[] } 或 { env_codes?: string[] } */
   deleteEnvBatch: (data = {}) => request.post('/autotest/env/deletes', data),
   updateEnv: (data = {}) => request.post('/autotest/env/update', data),
-  /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } */
+  /** 按节点类型/应用聚合环境名称。Body: { project_id?: number[] } -> 叶子为 [{env_id, env_name}] */
   listEnvNames: (data = {}) => request.post('/autotest/env/list', data),
   /** 环境分页列表（聚合应用名/是否可删）。Body: project_id/env_name/env_type/ip/config_name + 分页 */
   getEnvPage: (data = {}) => request.post('/autotest/env/search_page', data),
-  /** Body: { project_ids: number[] } -> project_id -> env_name -> api|file|database|redis -> config_name -> {config_host,...} */
+  /** Body: { project_ids: number[] } -> project_id -> env_id -> api|file|database|redis -> config_mode -> {config_name,...} */
   queryEnvConfigClassifiedByProjects: (data = {}) => request.post('/autotest/env/query', data),
   /** 全部启用应用（环境侧）。Query: page/page_size */
   getAllApps: (params = {}) => request.get('/autotest/env/get_all_app', { params }),
@@ -120,9 +120,9 @@ export default {
   searchEnvConfig: (data = {}) => request.post('/autotest/config/search', { page: 1, page_size: 20, state: 0, ...data }),
   /** 子表配置分页列表。Query: project_id/env_name/env_type(app|file|database|redis)/page/page_size */
   getEnvConfigList: (params = {}) => request.get('/autotest/config/list', { params }),
-  /** Query: project_id、env_id(绑定主键)、env_type 可选 */
+  /** Query: project_id、env_id(绑定主键)、env_type 可选；返回 [{config_name, config_mode}] */
   getEnvConfigNameList: (params = {}) => request.get('/autotest/config/config_names', { params }),
-  /** 按应用/配置名称/节点类型查询环境名称列表。Body: { project_id?, config_name?, env_type? } */
+  /** 按应用/配置逻辑标识/节点类型查询环境列表。Body: { project_id?, config_mode?, env_type? } -> [{env_id, env_name}] */
   queryAssignConfigEnvs: (data = {}) => request.post('/autotest/config/query_assign_config_envs', data),
   /** 数据库连通性测试。Body: { config_id, project_id, env_name, config_name, database_name } */
   testDbConnection: (data = {}) => request.post('/autotest/config/database/test_connection', data),

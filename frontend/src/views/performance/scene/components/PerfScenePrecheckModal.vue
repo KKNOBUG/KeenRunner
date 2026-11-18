@@ -150,10 +150,12 @@ async function loadEnvNames(projectId) {
   }
   envLoading.value = true
   try {
-    // 仅返回该应用挂载了 APP 配置的环境名称，与调试链路取数口径一致
+    // 响应为 [{env_id, env_name}]；预检入参按 D 级契约仍传环境名称，选项值保持名称
     const res = await api.queryAssignConfigEnvs({ project_id: projectId, env_type: 'app' })
-    const names = Array.isArray(res?.data) ? res.data : []
-    envOptions.value = names.map((name) => ({ label: name, value: name }))
+    const rows = Array.isArray(res?.data) ? res.data : []
+    envOptions.value = rows
+      .filter((item) => item && item.env_name)
+      .map((item) => ({ label: item.env_name, value: item.env_name }))
   } catch (e) {
     envOptions.value = []
   } finally {

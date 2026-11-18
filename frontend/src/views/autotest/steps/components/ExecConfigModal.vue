@@ -60,7 +60,8 @@
  * defineExpose: openRun(ctx), openDebug(ctx)
  *
  * 嵌入式（任务向导）：传 caseIds + savedConfigs，聚合多脚本步骤环境行，
- * 统一全局环境与数据源开关，通过 update:configs 回传 { [caseId]: config }
+ * 统一全局环境与数据源开关，通过 update:configs 回传
+ * { env_mode, env_id, env_ids, [caseId]: { execute_count, involve_env_ids, steps_execute_config } }（只含引用键）
  */
 import { computed, provide, reactive, ref, watch } from 'vue'
 import {
@@ -130,6 +131,10 @@ const debugEnvMode = ref('single')
 const debugGlobalEnvId = ref(null)
 const debugSelectedProjectId = ref(null)
 const debugEnvConfigDict = ref({})
+/** 环境绑定ID → 环境名称（/env/list 提供，跨应用/跨节点同名换算是单环境模式的核心依据） */
+const envNameById = ref(new Map())
+/** 应用ID → 节点类型 → [{ env_id, env_name }]（行级环境选项与同名换算） */
+const envBindsByProject = ref({})
 
 const envLoading = ref(false)
 const debugEnvOptions = ref([])
@@ -177,8 +182,9 @@ const forEachStepWithQuote = (list, fn, quoteStepsMap, { includeQuoteInner = tru
 }
 
 /**
- * 从步骤树收集需在弹窗里配置环境的行（按应用+配置名分组）
- * HTTP/TCP → apiRows；数据库多操作 → dbRows；Redis 多操作 → redisRows；文件类 → fileRows
+ * 从步骤树收集需在弹窗里配置环境的行（按应用+配置逻辑标识分组）
+ * HTTP/TCP → apiRows；数据库多操作 → dbRows；Redis 多操作 → redisRows
+ * 行对象只保留引用键（config_mode/env_id），配置名称与 IP/端口由环境配置字典实时反查
  */
 const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
   const getBackendKeyFromStep = (step) => {
@@ -211,112 +217,62 @@ const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
   const dbGroup = new Map()
   const redisGroup = new Map()
   const fileGroup = new Map()
-  const apiConfigNameSetByProject = new Map()
-  const dbConfigNameSetByProject = new Map()
-  const dbNameSetByProject = new Map()
-  const redisConfigNameSetByProject = new Map()
-  const redisDbNameSetByProject = new Map()
-  const fileConfigNameSetByProject = new Map()
 
-  const pushSet = (map, k, v) => {
-    if (!k) return
-    const key = String(k)
-    if (!map.has(key)) map.set(key, new Set())
-    if (v != null && String(v).trim() !== '') map.get(key).add(String(v))
+  const toMode = (raw) => (raw == null ? '' : String(raw).trim())
+  const toBindId = (raw) => {
+    const n = Number(raw)
+    return Number.isFinite(n) && n > 0 ? n : null
   }
 
   const walk = Array.isArray(sourceSteps) ? sourceSteps : []
   forEachStepWithQuote(walk, (step) => {
     if (!step) return
-    // 从步骤数据中获取环境名称（编辑模式时由 build_splice_tree 接口返回）
-    const stepEnvName = step.env_name || step.original?.env_name || null
+    // 编辑回显：步骤上注入的绑定ID（initEmbeddedCases 预填），用于按 mode 还原行环境
+    const stepEnvId = toBindId(step.env_id ?? step.original?.env_id)
     if (step.type === 'http' || step.type === 'tcp') {
       const cfg = step.config || {}
       const orig = step.original || {}
       const project_id = cfg.request_project_id ?? orig.request_project_id ?? null
       if (!project_id) return
-      const request_config_name = cfg.request_config_name ?? orig.request_config_name ?? null
-      pushSet(apiConfigNameSetByProject, project_id, request_config_name)
+      const config_mode = toMode(cfg.request_config_mode ?? orig.request_config_mode)
       const backend_key = getBackendKeyFromStep(step)
-      const normalizedName = request_config_name != null ? String(request_config_name).trim() : ''
-      const groupKey = normalizedName ? `p:${project_id}|n:${normalizedName}` : `p:${project_id}|step:${backend_key}`
+      const groupKey = config_mode ? `p:${project_id}|m:${config_mode}` : `p:${project_id}|step:${backend_key}`
       addToGroup(
           apiGroup,
           groupKey,
           () => ({
             key: `api:${groupKey}`,
             project_id,
-            request_config_name: normalizedName || null,
-            env_id: stepEnvName, // 使用步骤中的环境名称
+            config_mode: config_mode || null,
+            env_id: stepEnvId,
             targets: [],
           }),
           makeTarget({ local_step_id: step.id, backend_key }),
       )
-    } else if (step.type === 'database') {
+    } else if (step.type === 'database' || step.type === 'redis') {
+      const isDb = step.type === 'database'
       const cfg = step.config || {}
       const orig = step.original || {}
-      const ops = cfg.database_operates ?? orig.database_operates
-      const list = normalizeOpsList(ops)
-      list.forEach((op, idx) => {
+      const opField = isDb ? 'database_operates' : 'redis_operates'
+      const ops = cfg[opField] ?? orig[opField]
+      const group = isDb ? dbGroup : redisGroup
+      normalizeOpsList(ops).forEach((op, idx) => {
         if (!op) return
         const project_id = op.project_id ?? null
         if (!project_id) return
-        const opCfgName = op.config_name ?? op.configName ?? null
-        const opDbName = op.database_name ?? op.databaseName ?? null
-        pushSet(dbConfigNameSetByProject, project_id, opCfgName)
-        pushSet(dbNameSetByProject, project_id, opDbName)
+        const config_mode = toMode(op.config_mode ?? op.configMode)
         const backend_key = getBackendKeyFromStep(step)
-        const cfgName = opCfgName != null ? String(opCfgName).trim() : ''
-        const dbName = opDbName != null ? String(opDbName).trim() : ''
-        const groupKey = (cfgName && dbName)
-            ? `p:${project_id}|c:${cfgName}|d:${dbName}`
-            : `p:${project_id}|step:${backend_key}|op:${idx}`
+        const groupKey = config_mode ? `p:${project_id}|m:${config_mode}` : `p:${project_id}|step:${backend_key}|op:${idx}`
         addToGroup(
-            dbGroup,
+            group,
             groupKey,
             () => ({
-              key: `db:${groupKey}`,
+              key: `${isDb ? 'db' : 'redis'}:${groupKey}`,
               project_id,
-              config_name: cfgName || null,
-              database_name: dbName || null,
-              config_bucket: 'database',
-              op_field: 'database_operates',
-              env_id: null,
-              targets: [],
-            }),
-            makeTarget({ local_step_id: step.id, backend_key, op_index: idx }),
-        )
-      })
-    } else if (step.type === 'redis') {
-      const cfg = step.config || {}
-      const orig = step.original || {}
-      const ops = cfg.redis_operates ?? orig.redis_operates
-      const list = normalizeOpsList(ops)
-      list.forEach((op, idx) => {
-        if (!op) return
-        const project_id = op.project_id ?? null
-        if (!project_id) return
-        const opCfgName = op.config_name ?? op.configName ?? null
-        const opDbName = op.database_name ?? op.databaseName ?? null
-        pushSet(redisConfigNameSetByProject, project_id, opCfgName)
-        pushSet(redisDbNameSetByProject, project_id, opDbName)
-        const backend_key = getBackendKeyFromStep(step)
-        const cfgName = opCfgName != null ? String(opCfgName).trim() : ''
-        const dbName = opDbName != null ? String(opDbName).trim() : ''
-        const groupKey = (cfgName && dbName)
-            ? `p:${project_id}|c:${cfgName}|d:${dbName}`
-            : `p:${project_id}|step:${backend_key}|op:${idx}`
-        addToGroup(
-            redisGroup,
-            groupKey,
-            () => ({
-              key: `redis:${groupKey}`,
-              project_id,
-              config_name: cfgName || null,
-              database_name: dbName || null,
-              config_bucket: 'redis',
-              op_field: 'redis_operates',
-              env_id: null,
+              config_mode: config_mode || null,
+              config_bucket: isDb ? 'database' : 'redis',
+              op_field: opField,
+              env_id: stepEnvId,
               targets: [],
             }),
             makeTarget({ local_step_id: step.id, backend_key, op_index: idx }),
@@ -324,22 +280,6 @@ const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
       })
     }
   }, quoteStepsMap)
-
-  const buildOptions = (set) => Array.from(set || []).map((x) => ({ label: x, value: x }))
-  Array.from(apiGroup.values()).forEach((r) => {
-    r._configNameSeed = buildOptions(apiConfigNameSetByProject.get(String(r.project_id)))
-  })
-  Array.from(dbGroup.values()).forEach((r) => {
-    r._configNameSeed = buildOptions(dbConfigNameSetByProject.get(String(r.project_id)))
-    r._dbNameSeed = buildOptions(dbNameSetByProject.get(String(r.project_id)))
-  })
-  Array.from(redisGroup.values()).forEach((r) => {
-    r._configNameSeed = buildOptions(redisConfigNameSetByProject.get(String(r.project_id)))
-    r._dbNameSeed = buildOptions(redisDbNameSetByProject.get(String(r.project_id)))
-  })
-  Array.from(fileGroup.values()).forEach((r) => {
-    r._configNameSeed = buildOptions(fileConfigNameSetByProject.get(String(r.project_id)))
-  })
 
   const strip = (rows) => rows.map((r) => {
     delete r._targetKeySet
@@ -356,12 +296,6 @@ const collectDebugRows = (sourceSteps, quoteStepsMap, caseId = null) => {
 
 /** 多脚本：按 row.key 合并聚合行，targets 带 case_id */
 const mergeDebugRowBags = (bags) => {
-  const mergeSeed = (a, b) => {
-    if (!b?.length) return a || []
-    const m = new Map((a || []).map((o) => [String(o.value), o]))
-    b.forEach((o) => m.set(String(o.value), o))
-    return [...m.values()]
-  }
   const mergeKind = (lists) => {
     const map = new Map()
     for (const list of lists) {
@@ -371,8 +305,6 @@ const mergeDebugRowBags = (bags) => {
           map.set(row.key, {
             ...row,
             targets: [...(row.targets || [])],
-            _configNameSeed: [...(row._configNameSeed || [])],
-            _dbNameSeed: [...(row._dbNameSeed || [])],
           })
           continue
         }
@@ -389,8 +321,6 @@ const mergeDebugRowBags = (bags) => {
             existing.targets.push(t)
           }
         }
-        existing._configNameSeed = mergeSeed(existing._configNameSeed, row._configNameSeed)
-        existing._dbNameSeed = mergeSeed(existing._dbNameSeed, row._dbNameSeed)
       }
     }
     return [...map.values()]
@@ -465,34 +395,114 @@ const resetModalFormState = () => {
   debugGlobalEnvId.value = null
   debugSelectedProjectId.value = null
   debugEnvConfigDict.value = {}
+  envNameById.value = new Map()
+  envBindsByProject.value = {}
 }
 
-const loadDebugEnvEnums = async () => {
+/** 聚合配置行引用的配置逻辑标识，供 /env/query 收窄环境选项 */
+const collectReferencedConfigModes = () => {
+  const modes = new Set()
+  const grab = (rows) => {
+    ;(rows || []).forEach((r) => {
+      const mode = r.config_mode == null ? '' : String(r.config_mode).trim()
+      if (mode) modes.add(mode)
+    })
+  }
+  grab(debugRows.value.apiRows)
+  grab(debugRows.value.dbRows)
+  grab(debugRows.value.redisRows)
+  grab(debugRows.value.fileRows)
+  return [...modes]
+}
+
+/** 全局环境选项：配置字典中出现的绑定按名称去重（同名跨应用/节点只保留一个代表绑定ID），
+ *  无配置行时回退环境绑定全集；value 为绑定ID，label 为环境名称 */
+const deriveGlobalEnvOptions = () => {
+  const dict = debugEnvConfigDict.value || {}
+  const byName = new Map()
+  const put = (envId) => {
+    const numericId = Number(envId)
+    const name = envNameById.value.get(numericId)
+    if (!name || byName.has(name)) return
+    byName.set(name, numericId)
+  }
+  Object.values(dict).forEach((envs) => {
+    Object.keys(envs || {}).forEach(put)
+  })
+  if (!byName.size) envNameById.value.forEach((_name, envId) => put(envId))
+  return [...byName.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], 'zh-CN'))
+      .map(([name, envId]) => ({ label: name, value: envId }))
+}
+
+/** 环境选项加载：/env/list 提供绑定ID→名称（跨应用按名称换算的依据），
+ *  /env/query 提供配置字典（判断某环境是否配置了某 log级标识），两请求并行且互不阻断 */
+const loadEnvOptionsForContext = async () => {
+  const project_ids = debugApps.value.map((x) => Number(x.project_id)).filter((x) => Number.isFinite(x))
+  if (!project_ids.length) {
+    debugEnvConfigDict.value = {}
+    envNameById.value = new Map()
+    envBindsByProject.value = {}
+    debugEnvOptions.value = []
+    return
+  }
   envLoading.value = true
   try {
-    // listEnvNames：{ project_id: { api|file|database|redis: env_name[] } }，第二层 key 为枚举 .value
-    const namesRes = await api.listEnvNames({ project_id: [] })
-    const byProject = namesRes?.data || {}
-    const names = new Set()
-    Object.values(byProject).forEach((byType) => {
-      if (!byType || typeof byType !== 'object') return
-      Object.values(byType).forEach((arr) => {
-        if (Array.isArray(arr)) arr.forEach((n) => { if (n) names.add(n) })
+    const config_modes = collectReferencedConfigModes()
+    const [envListRes, cfgRes] = await Promise.all([
+      api.listEnvNames({ project_id: project_ids }).catch((e) => {
+        console.error('加载环境绑定失败', e)
+        return null
+      }),
+      api.queryEnvConfigClassifiedByProjects({
+        project_ids,
+        ...(config_modes.length ? { config_modes } : {}),
+      }).catch((e) => {
+        console.error('加载环境配置失败', e)
+        return null
+      }),
+    ])
+    const byProject = envListRes?.data && typeof envListRes.data === 'object' ? envListRes.data : {}
+    const nameById = new Map()
+    const bindsByProject = {}
+    Object.entries(byProject).forEach(([pid, byType]) => {
+      const typeMap = {}
+      Object.entries(byType || {}).forEach(([envType, binds]) => {
+        if (!Array.isArray(binds)) return
+        typeMap[envType] = []
+        binds.forEach((bind) => {
+          const envId = Number(bind?.env_id)
+          const envName = bind?.env_name == null ? '' : String(bind.env_name)
+          if (!Number.isFinite(envId) || envId <= 0 || !envName) return
+          nameById.set(envId, envName)
+          typeMap[envType].push({ env_id: envId, env_name: envName })
+        })
       })
+      bindsByProject[String(pid)] = typeMap
     })
-    const sorted = [...names].sort((a, b) => String(a).localeCompare(String(b), 'zh-CN'))
-    // 选项 value 用环境名，与 /config/query 分类字典第二层 key 对齐；
-    // 步骤引用配置时后续由 loadEnvConfigByProjects 按配置所在环境收窄
-    debugEnvOptions.value = sorted.map((n) => ({ label: n, value: n }))
-  } catch (e) {
-    console.error('加载环境枚举失败', e)
-    debugEnvOptions.value = []
+    envNameById.value = nameById
+    envBindsByProject.value = bindsByProject
+    debugEnvConfigDict.value = cfgRes?.data && typeof cfgRes.data === 'object' ? cfgRes.data : {}
+    debugEnvOptions.value = deriveGlobalEnvOptions()
+    // 已选全局环境不在新选项中时清空，避免提交一个不存在/无配置的绑定
+    const currentGlobalId = Number(debugGlobalEnvId.value)
+    if (
+        Number.isFinite(currentGlobalId)
+        && currentGlobalId > 0
+        && !debugEnvOptions.value.some((opt) => Number(opt.value) === currentGlobalId)
+    ) {
+      const fallbackName = envNameById.value.get(currentGlobalId)
+      const fallback = fallbackName
+          ? debugEnvOptions.value.find((opt) => opt.label === fallbackName)
+          : null
+      debugGlobalEnvId.value = fallback ? fallback.value : null
+    }
   } finally {
     envLoading.value = false
   }
 }
 
-/** 打开弹窗：重置表单 →（调试时）加载引用脚本 → 聚合配置行 → 拉环境枚举 */
+/** 打开弹窗：重置表单 →（调试时）加载引用脚本 → 聚合配置行 → 拉取环境绑定与配置字典 */
 const openWithContext = async (ctx) => {
   execCtx.value = ctx
   execConfigMode.value = ctx.mode
@@ -522,106 +532,104 @@ const onModalAfterEnter = () => {
   }
 }
 
-const loadEnvConfigByProjects = async (project_ids) => {
-  try {
-    const payload = { project_ids }
-    // 步骤引用的配置名称：/env/query 仅返回这些配置所在的环境，环境选项同步收窄为配置所在环境
-    const config_names = collectReferencedConfigNames()
-    if (config_names.length) payload.config_names = config_names
-    const res = await api.queryEnvConfigClassifiedByProjects(payload)
-    const dict = res?.data || {}
-    debugEnvConfigDict.value = dict
-    const names = new Set()
-    Object.values(dict).forEach((envs) => {
-      Object.keys(envs || {}).forEach((n) => { if (n) names.add(String(n)) })
-    })
-    debugEnvOptions.value = [...names]
-        .sort((a, b) => a.localeCompare(b, 'zh-CN'))
-        .map((n) => ({ label: n, value: n }))
-  } catch (e) {
-    console.error('加载环境配置失败', e)
-    debugEnvConfigDict.value = {}
+/** 行所属节点类型：API=app、数据库=database、Redis=redis、文件=file */
+const rowBucketType = (row) => row?.config_bucket || 'app'
+
+/**
+ * 解析行实际生效的环境绑定ID。
+ * - 多环境：行选绑定优先，未选回落全局；
+ * - 单环境：全局绑定ID；全局绑定不属于行所属应用/节点类型时，按环境名称换算该应用同节点类型的同名绑定，
+ *   换算不到返回 null（由缺失校验标红提示）。
+ */
+const resolveRowEnvId = (row) => {
+  const globalIdRaw = Number(debugGlobalEnvId.value)
+  const globalId = Number.isFinite(globalIdRaw) && globalIdRaw > 0 ? globalIdRaw : null
+  if (debugEnvMode.value === 'multi' && row?.env_id != null) {
+    const picked = Number(row.env_id)
+    if (Number.isFinite(picked) && picked > 0) return picked
   }
+  if (globalId == null) return null
+  const type = rowBucketType(row)
+  const binds = envBindsByProject.value[String(row.project_id)]?.[type] || []
+  if (binds.some((bind) => Number(bind.env_id) === globalId)) return globalId
+  const envName = envNameById.value.get(globalId)
+  if (!envName) {
+    // 绑定清单不可用时按配置字典兜底：字典含该绑定且节点类型匹配即视为当前绑定
+    const projectEnvs = debugEnvConfigDict.value?.[row.project_id] || debugEnvConfigDict.value?.[String(row.project_id)] || {}
+    return projectEnvs[String(globalId)]?.[type] ? globalId : null
+  }
+  const mapped = binds.find((bind) => bind.env_name === envName)
+  return mapped ? Number(mapped.env_id) : null
 }
 
-/** 聚合调试行引用的配置名称（api行request_config_name；db/redis/file行config_name），供环境过滤 */
-const collectReferencedConfigNames = () => {
-  const names = new Set()
-  const grab = (rows) => {
-    ;(rows || []).forEach((r) => {
-      const n = r.request_config_name || r.config_name
-      if (n != null && String(n).trim() !== '') names.add(String(n).trim())
-    })
-  }
-  grab(debugRows.value.apiRows)
-  grab(debugRows.value.dbRows)
-  grab(debugRows.value.redisRows)
-  grab(debugRows.value.fileRows)
-  return [...names]
-}
-
-/** 弹框环境选项加载：有配置行时走 /env/query 单请求（选项由配置字典派生并按引用收窄）；
- *  无配置行时退回全量环境枚举兜底 */
-const loadEnvOptionsForContext = async () => {
-  const project_ids = debugApps.value.map((x) => Number(x.project_id)).filter((x) => !Number.isNaN(x))
-  if (project_ids.length) {
-    await loadEnvConfigByProjects(project_ids)
-  } else {
-    await loadDebugEnvEnums()
-  }
-}
-
-const getEffectiveEnvIdForRow = (row) => (
-    debugEnvMode.value === 'single'
-        ? (debugGlobalEnvId.value || null)
-        : (row.env_id || debugGlobalEnvId.value || null)
-)
-
+/** 行在当前环境下的配置字典桶：project_id -> env_id -> 节点类型 -> config_mode -> 配置信息 */
 const getBucket = (row, configType) => {
   const dict = debugEnvConfigDict.value || {}
-  const envName = getEffectiveEnvIdForRow(row)
-  if (!envName) return {}
-  // /config/query：project_id -> env_name -> app|file|database|redis -> config_name
+  const envId = resolveRowEnvId(row)
+  if (envId == null) return {}
   const p = dict?.[row.project_id] || dict?.[String(row.project_id)] || {}
-  return p?.[envName]?.[configType] || {}
+  return p?.[String(envId)]?.[configType] || {}
 }
 
 const getDbDatabaseDisplay = (row) => {
-  const envId = getEffectiveEnvIdForRow(row)
-  if (envId == null) return ''
-  const bucketKey = row.config_bucket || 'database'
-  const bucket = getBucket({ ...row, env_id: envId }, bucketKey)
-  const cfgName = row.config_name
-  const info = cfgName ? bucket?.[cfgName] : null
-  const fromEnv = info?.database_name
-  if (fromEnv != null && String(fromEnv).trim() !== '') return String(fromEnv)
-  return row.database_name ? String(row.database_name) : ''
+  const bucket = getBucket(row, row.config_bucket || 'database')
+  const info = row.config_mode ? bucket?.[row.config_mode] : null
+  return info?.database_name != null ? String(info.database_name) : ''
 }
 
 const getRowAddrPreview = (row, configType) => {
   const bucket = getBucket(row, configType)
-  const name = configType === 'app' ? row.request_config_name : row.config_name
-  const info = name ? bucket?.[name] : null
+  const info = row.config_mode ? bucket?.[row.config_mode] : null
   return info?.config_host ? `${info.config_host}${info.config_port ? `:${info.config_port}` : ''}` : ''
 }
 
-/** 多环境模式行级"环境"列选项：按行所属应用+行配置名称过滤（仅配置所在环境可选）；
- *  行未选配置名时退化为该应用下有配置的环境全集；配置字典未加载时退回全局选项 */
+/** 行绑定配置名称：当前环境未配置时回退该应用任一环境下的同名逻辑标识（Q15：仍显示绑定配置名） */
+const getRowConfigName = (row) => {
+  const dict = debugEnvConfigDict.value || {}
+  const byEnv = dict?.[row.project_id] || dict?.[String(row.project_id)] || {}
+  const type = rowBucketType(row)
+  const mode = row.config_mode
+  if (!mode) return ''
+  const envId = resolveRowEnvId(row)
+  const current = envId != null ? byEnv?.[String(envId)]?.[type]?.[mode] : null
+  if (current?.config_name) return String(current.config_name)
+  for (const buckets of Object.values(byEnv)) {
+    const info = buckets?.[type]?.[mode]
+    if (info?.config_name) return String(info.config_name)
+  }
+  return ''
+}
+
+/** 行完整性判定（Q15）：返回缺失原因，完整返回 null */
+const rowMissingReason = (row) => {
+  if (!row?.config_mode) return '配置未选择'
+  if (resolveRowEnvId(row) == null) return '环境未选择'
+  const bucket = getBucket(row, rowBucketType(row))
+  if (!bucket?.[row.config_mode]) return '该环境未配置'
+  return null
+}
+
+/** 多环境模式行级"环境"列选项：按行所属应用+节点类型过滤出已配置该逻辑标识的绑定；
+ *  字典未覆盖该行时回退该应用全部绑定，仍为空时回退全局选项 */
 const getRowEnvOptions = (row) => {
   const dict = debugEnvConfigDict.value || {}
   const byEnv = dict?.[row.project_id] || dict?.[String(row.project_id)]
-  if (!byEnv || typeof byEnv !== 'object') return debugEnvOptions.value
-  const configName = String(row.request_config_name || row.config_name || '').trim()
-  const bucketType = row.config_bucket || 'app'
-  const names = new Set()
-  Object.entries(byEnv).forEach(([envName, buckets]) => {
-    if (!buckets || typeof buckets !== 'object') return
-    if (!configName || (buckets?.[bucketType] && configName in buckets[bucketType])) {
-      names.add(String(envName))
-    }
-  })
-  if (!names.size) return debugEnvOptions.value
-  return [...names].sort((a, b) => a.localeCompare(b, 'zh-CN')).map((n) => ({ label: n, value: n }))
+  const type = rowBucketType(row)
+  const mode = row.config_mode
+  const options = []
+  if (byEnv && typeof byEnv === 'object') {
+    Object.keys(byEnv).forEach((envId) => {
+      if (mode && !byEnv[envId]?.[type]?.[mode]) return
+      const numericId = Number(envId)
+      options.push({ label: envNameById.value.get(numericId) || `环境${envId}`, value: numericId })
+    })
+  }
+  if (!options.length) {
+    const binds = envBindsByProject.value[String(row.project_id)]?.[type] || []
+    binds.forEach((bind) => options.push({ label: bind.env_name, value: Number(bind.env_id) }))
+  }
+  if (!options.length) return debugEnvOptions.value
+  return options.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
 }
 
 const selectAllDebugExecDatasets = () => {
@@ -788,114 +796,24 @@ watch(debugExecDataSourceEnabled, (on) => {
   if (!isAggregatedEmbedded.value) fetchDebugExecDatasetNames({ force: true })
 })
 
-watch(() => debugGlobalEnvId.value, (envId) => {
-  const apply = (rows) => {
-    rows.forEach((r) => {
-      // multi 模式下已由 savedConfigs 还原的行级环境不被全局环境覆盖
-      if (debugEnvMode.value === 'multi' && r.env_id) return
-      r.env_id = envId ?? null
-    })
-  }
-  apply(debugRows.value.apiRows || [])
-  apply(debugRows.value.dbRows || [])
-  apply(debugRows.value.redisRows || [])
-  apply(debugRows.value.fileRows || [])
-})
-
+/** 行级缺失收集（Q15）：环境未选择、配置逻辑标识缺失、当前环境未配置该标识；缺失原因同步用于行标红与提示 */
 const collectExecConfigMissingRows = () => {
   const missing = []
-  const push = (type, row, text) => {
-    missing.push({ type, project_id: row.project_id, text: String(text || '') })
+  const check = (type, rows) => {
+    ;(rows || []).forEach((row) => {
+      const reason = rowMissingReason(row)
+      if (!reason) return
+      missing.push({
+        type,
+        project_id: row.project_id,
+        text: `${getRowConfigName(row) || row.config_mode || '未命名配置'}（${reason}）`,
+      })
+    })
   }
-
-  const checkApiRow = (row) => {
-    const envId = getEffectiveEnvIdForRow(row)
-    if (envId == null || String(envId).trim() === '') {
-      push('app', row, '环境未选择')
-      return
-    }
-    const cfgName = row.request_config_name
-    if (!cfgName || !String(cfgName).trim()) {
-      push('app', row, '配置名未填写')
-      return
-    }
-    const addr = getRowAddrPreview(row, 'app')
-    if (!addr || !String(addr).trim()) {
-      push('app', row, `${String(cfgName).trim()}(IP/端口未获取)`)
-    }
-  }
-
-  const checkDbRow = (row) => {
-    const envId = getEffectiveEnvIdForRow(row)
-    if (envId == null || String(envId).trim() === '') {
-      push('db', row, '环境未选择')
-      return
-    }
-    const cfgName = row.config_name
-    if (!cfgName || !String(cfgName).trim()) {
-      push('db', row, '配置名未填写')
-      return
-    }
-    const bucketKey = 'database'
-    const bucket = getBucket({ ...row, env_id: envId }, bucketKey)
-    const info = bucket?.[cfgName]
-    const addr = getRowAddrPreview({ ...row, config_bucket: bucketKey }, bucketKey)
-    if (!addr || !String(addr).trim()) {
-      push('db', row, `${String(cfgName).trim()}(IP/端口未获取)`)
-      return
-    }
-    const dbName = info?.database_name ?? row.database_name
-    if (!dbName || !String(dbName).trim()) {
-      push('db', row, `${String(cfgName).trim()}(库编号未获取)`)
-    }
-  }
-
-  const checkRedisRow = (row) => {
-    const envId = getEffectiveEnvIdForRow(row)
-    if (envId == null || String(envId).trim() === '') {
-      push('redis', row, '环境未选择')
-      return
-    }
-    const cfgName = row.config_name
-    if (!cfgName || !String(cfgName).trim()) {
-      push('redis', row, '配置名未填写')
-      return
-    }
-    const bucketKey = 'redis'
-    const bucket = getBucket({ ...row, env_id: envId }, bucketKey)
-    const info = bucket?.[cfgName]
-    const addr = getRowAddrPreview({ ...row, config_bucket: bucketKey }, bucketKey)
-    if (!addr || !String(addr).trim()) {
-      push('redis', row, `${String(cfgName).trim()}(IP/端口未获取)`)
-      return
-    }
-    const dbName = info?.database_name ?? row.database_name
-    if (!dbName || !String(dbName).trim()) {
-      push('redis', row, `${String(cfgName).trim()}(库编号未获取)`)
-    }
-  }
-
-  const checkFileRow = (row) => {
-        const envId = getEffectiveEnvIdForRow(row)
-        if (envId == null || String(envId).trim() === '') {
-          push('file', row, '环境未选择')
-          return
-        }
-        const cfgName = row.config_name
-        if (!cfgName || !String(cfgName).trim()) {
-          push('file', row, '配置名未填写')
-          return
-        }
-        const addr = getRowAddrPreview(row, 'file')
-        if (!addr || !String(addr).trim()) {
-          push('file', row, `${String(cfgName).trim()}(IP/端口未获取)`)
-        }
-      }
-
-  ;(debugRows.value.apiRows || []).forEach(checkApiRow)
-  ;(debugRows.value.dbRows || []).forEach(checkDbRow)
-  ;(debugRows.value.redisRows || []).forEach(checkRedisRow)
-  ;(debugRows.value.fileRows || []).forEach(checkFileRow)
+  check('app', debugRows.value.apiRows)
+  check('database', debugRows.value.dbRows)
+  check('redis', debugRows.value.redisRows)
+  check('file', debugRows.value.fileRows)
   return missing
 }
 
@@ -909,67 +827,11 @@ const formatExecConfigMissingMessage = (missing, actionLabel) => {
   return `存在${missing.length}条配置未完成：${detail}${more}，请补全后再${actionLabel}`
 }
 
-const applyDebugConfigToSteps = () => {
-  const findStep = execCtx.value?.findStep
-  if (typeof findStep !== 'function') return
-
-  debugRows.value.apiRows.forEach((r) => {
-    const targets = Array.isArray(r.targets) ? r.targets : []
-    targets.forEach((t) => {
-      const step = findStep(t.local_step_id)
-      if (!step) return
-      if (!step.config) step.config = {}
-      step.config.request_project_id = r.project_id ?? step.config.request_project_id
-      step.config.request_config_name = r.request_config_name ?? step.config.request_config_name
-    })
-  })
-
-  debugRows.value.dbRows.forEach((r) => {
-    const envId = getEffectiveEnvIdForRow(r)
-    const bucketKey = 'database'
-    const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
-    const cfgNm = r.config_name
-    const info = cfgNm ? bucket?.[cfgNm] : null
-    const resolvedDb = info?.database_name ?? r.database_name
-    const opField = 'database_operates'
-    const targets = Array.isArray(r.targets) ? r.targets : []
-    targets.forEach((t) => {
-      const step = findStep(t.local_step_id)
-      if (!step) return
-      const cfg = step.config || {}
-      const ops = Array.isArray(cfg[opField]) ? cfg[opField] : normalizeOpsList(cfg[opField])
-      const idx = t.op_index
-      if (idx == null || !ops[idx]) return
-      ops[idx].project_id = r.project_id ?? ops[idx].project_id
-      ops[idx].config_name = r.config_name ?? ops[idx].config_name
-      ops[idx].database_name = resolvedDb ?? ops[idx].database_name
-    })
-  })
-
-  debugRows.value.redisRows.forEach((r) => {
-    const envId = getEffectiveEnvIdForRow(r)
-    const bucketKey = 'redis'
-    const bucket = getBucket({ ...r, env_id: envId }, bucketKey)
-    const cfgNm = r.config_name
-    const info = cfgNm ? bucket?.[cfgNm] : null
-    const resolvedDb = info?.database_name ?? r.database_name
-    const opField = 'redis_operates'
-    const targets = Array.isArray(r.targets) ? r.targets : []
-    targets.forEach((t) => {
-      const step = findStep(t.local_step_id)
-      if (!step) return
-      const cfg = step.config || {}
-      const ops = Array.isArray(cfg[opField]) ? cfg[opField] : normalizeOpsList(cfg[opField])
-      const idx = t.op_index
-      if (idx == null || !ops[idx]) return
-      ops[idx].project_id = r.project_id ?? ops[idx].project_id
-      ops[idx].config_name = r.config_name ?? ops[idx].config_name
-      ops[idx].database_name = resolvedDb ?? ops[idx].database_name
-    })
-  })
-}
-
-/** 根据弹窗表格与环境配置字典，生成后端 steps_execute_config 对象；caseIdFilter 用于多脚本拆分。每行 env_name/env_id 按行实际环境（single=全局，multi=行选或全局兜底） */
+/**
+ * 根据弹窗聚合行生成后端 steps_execute_config（只含引用键 env_id/config_type/config_mode）。
+ * caseIdFilter 用于多脚本按用例拆分；行环境由 resolveRowEnvId 解析（单环境=全局按名称换算，多环境=行选优先）。
+ * 解析不到环境或当前环境未配置该逻辑标识的行不生成键（由缺失校验拦截，不编造引用）。
+ */
 const buildStepExecConfigMap = (caseIdFilter = null) => {
   const map = {}
   const targetBelongs = (t) => {
@@ -977,115 +839,28 @@ const buildStepExecConfigMap = (caseIdFilter = null) => {
     if (t.case_id == null) return true
     return Number(t.case_id) === Number(caseIdFilter)
   }
-  const prefill = (rows, mode) => {
-    rows.forEach((r) => {
-      const targets = Array.isArray(r.targets) ? r.targets : []
+  const applyRows = (rows, keyBuilder) => {
+    ;(rows || []).forEach((row) => {
+      const envId = resolveRowEnvId(row)
+      const mode = row?.config_mode == null ? '' : String(row.config_mode).trim()
+      if (envId == null || !mode) return
+      const configType = rowBucketType(row)
+      if (!getBucket(row, configType)?.[mode]) return
+      const targets = Array.isArray(row.targets) ? row.targets : []
       targets.forEach((t) => {
         if (!targetBelongs(t)) return
-        const bk = String(t.backend_key)
-        if (mode === 'db' && t.op_index != null && t.op_index >= 0) {
-          map[`${bk}_@@${t.op_index}`] = {}
-        } else if (mode !== 'db') {
-          map[bk] = {}
-        }
+        const key = keyBuilder(t)
+        if (!key) return
+        map[key] = { env_id: Number(envId), config_type: configType, config_mode: mode }
       })
     })
   }
-  prefill(debugRows.value.apiRows || [], 'api')
-  prefill(debugRows.value.dbRows || [], 'db')
-  prefill(debugRows.value.redisRows || [], 'db')
-  prefill(debugRows.value.fileRows || [], 'file')
-
-  debugRows.value.apiRows.forEach((r) => {
-    const envName = getEffectiveEnvIdForRow(r)
-    const bucket = getBucket({ ...r, env_id: envName }, 'app')
-    const name = r.request_config_name
-    const info = name ? bucket?.[name] : null
-    if (!envName || !name || !info) return
-    const targets = Array.isArray(r.targets) ? r.targets : []
-    targets.forEach((t) => {
-      if (!targetBelongs(t)) return
-      map[String(t.backend_key)] = {
-        env_id: envName,
-        env_name: envName,
-        config_type: 'app',
-        config_name: name,
-        config_host: info.config_host,
-        config_port: info.config_port,
-        database_name: info.database_name ?? null,
-      }
-    })
-  })
-
-  debugRows.value.dbRows.forEach((r) => {
-    const envName = getEffectiveEnvIdForRow(r)
-    const bucketKey = 'database'
-    const bucket = getBucket({ ...r, env_id: envName }, bucketKey)
-    const name = r.config_name
-    const info = name ? bucket?.[name] : null
-    if (!envName || !name || !info) return
-    const targets = Array.isArray(r.targets) ? r.targets : []
-    targets.forEach((t) => {
-      if (!targetBelongs(t)) return
-      const opIdx = t.op_index
-      if (opIdx == null || opIdx < 0) return
-      map[`${String(t.backend_key)}_@@${opIdx}`] = {
-        env_id: envName,
-        env_name: envName,
-        config_type: bucketKey,
-        config_name: name,
-        config_host: info.config_host,
-        config_port: info.config_port,
-        database_name: info.database_name ?? r.database_name ?? null,
-      }
-    })
-  })
-
-  debugRows.value.redisRows.forEach((r) => {
-    const envName = getEffectiveEnvIdForRow(r)
-    const bucketKey = 'redis'
-    const bucket = getBucket({ ...r, env_id: envName }, bucketKey)
-    const name = r.config_name
-    const info = name ? bucket?.[name] : null
-    if (!envName || !name || !info) return
-    const targets = Array.isArray(r.targets) ? r.targets : []
-    targets.forEach((t) => {
-      if (!targetBelongs(t)) return
-      const opIdx = t.op_index
-      if (opIdx == null || opIdx < 0) return
-      map[`${String(t.backend_key)}_@@${opIdx}`] = {
-        env_id: envName,
-        env_name: envName,
-        config_type: bucketKey,
-        config_name: name,
-        config_host: info.config_host,
-        config_port: info.config_port,
-        database_name: info.database_name ?? r.database_name ?? null,
-      }
-    })
-  })
-
-  debugRows.value.fileRows.forEach((r) => {
-    const envName = getEffectiveEnvIdForRow(r)
-    const bucket = getBucket({ ...r, env_id: envName }, 'file')
-    const name = r.config_name
-    const info = name ? bucket?.[name] : null
-    if (!envName || !name || !info) return
-    const targets = Array.isArray(r.targets) ? r.targets : []
-    targets.forEach((t) => {
-      if (!targetBelongs(t)) return
-      map[String(t.backend_key)] = {
-        env_id: envName,
-        env_name: envName,
-        config_type: 'file',
-        config_name: name,
-        config_host: info.config_host,
-        config_port: info.config_port,
-        database_name: info.database_name ?? null,
-      }
-    })
-  })
-
+  const stepKey = (t) => (t.backend_key == null ? '' : String(t.backend_key))
+  const opKey = (t) => (t.op_index == null || t.op_index < 0 ? '' : `${String(t.backend_key)}_@@${t.op_index}`)
+  applyRows(debugRows.value.apiRows, stepKey)
+  applyRows(debugRows.value.dbRows, opKey)
+  applyRows(debugRows.value.redisRows, opKey)
+  applyRows(debugRows.value.fileRows, stepKey)
   return map
 }
 
@@ -1098,11 +873,11 @@ const getDatasetPayloadPart = () => {
 }
 
 const confirmExecConfigBeforeRun = async (actionLabel, runAction) => {
-  if (!debugGlobalEnvId.value) {
+  // 多环境模式下行级环境独立生效，全局环境可为空；单环境模式必须选全局环境
+  if (debugEnvMode.value !== 'multi' && !debugGlobalEnvId.value) {
     window.$message?.warning?.('请选择全局环境')
     return
   }
-  const env_name = debugGlobalEnvId.value
   if (!validateExecDatasetSelection()) return
   const missingCfg = collectExecConfigMissingRows()
   if (missingCfg.length) {
@@ -1110,12 +885,11 @@ const confirmExecConfigBeforeRun = async (actionLabel, runAction) => {
     return
   }
   showModel.value = false
-  const step_exec_config_map = buildStepExecConfigMap()
-  await runAction(env_name, step_exec_config_map)
+  await runAction(buildStepExecConfigMap())
 }
 
-/** 与 confirmExecConfigBeforeRun 约定：第 1 参为 env_name，第 2 参为步骤执行配置字典 */
-const doExecuteFromSavedTree = async (_env_name, step_exec_config_map = null) => {
+/** 与 confirmExecConfigBeforeRun 约定：第 1 参为步骤执行配置字典（只含引用键） */
+const doExecuteFromSavedTree = async (step_exec_config_map = null) => {
   const source = Array.isArray(execCtx.value?.sourceSteps) ? execCtx.value.sourceSteps : []
   if (!source.length) {
     window.$message?.warning?.('暂无已保存的步骤树可执行，请先保存后再执行')
@@ -1161,7 +935,7 @@ const doExecuteFromSavedTree = async (_env_name, step_exec_config_map = null) =>
   }
 }
 
-const doDebug = async (_env_name, step_exec_config_map = null) => {
+const doDebug = async (step_exec_config_map = null) => {
   const buildPayload = execCtx.value?.buildDebugExecutePayload
   if (typeof buildPayload !== 'function') {
     window.$message?.error?.('调试参数未就绪')
@@ -1189,7 +963,6 @@ const doDebug = async (_env_name, step_exec_config_map = null) => {
 }
 
 const confirmDebugConfigAndRun = async () => {
-  applyDebugConfigToSteps()
   await confirmExecConfigBeforeRun('调试', doDebug)
 }
 
@@ -1229,100 +1002,121 @@ provide(
       execConfigMode,
       getRowAddrPreview,
       getRowEnvOptions,
+      resolveRowEnvId,
       getDbDatabaseDisplay,
+      getRowConfigName,
+      rowMissingReason,
       toggleDebugExecDatasetRow,
       selectAllDebugExecDatasets,
       clearDebugExecDatasetSelection,
     }),
 )
 
+/** 回显顶层环境配置：存储枚举 single/multiple，UI 内部值 single/multi；存量 env_name 按名称匹配代表绑定 */
 const applySavedConfig = (cfg) => {
   if (!cfg || typeof cfg !== 'object') return
-  
-  // 新结构：从顶层提取 env_mode 和 env_name
-  if (cfg.env_name != null) {
-    debugGlobalEnvId.value = cfg.env_name
-  }
   if (cfg.env_mode === 'multiple' || cfg.env_mode === 'single') {
-    // 存储枚举为 single/multiple；UI 内部值为 single/multi，需映射
     debugEnvMode.value = cfg.env_mode === 'single' ? 'single' : 'multi'
   }
+  let globalId = Number(cfg.env_id)
+  if (!Number.isFinite(globalId) || globalId <= 0) {
+    const legacyName = typeof cfg.env_name === 'string' ? cfg.env_name : ''
+    const matched = legacyName ? debugEnvOptions.value.find((opt) => opt.label === legacyName) : null
+    globalId = matched ? Number(matched.value) : null
+  }
+  if (globalId == null || !Number.isFinite(globalId) || globalId <= 0) return
+  // 选项按环境名称去重（value 为代表绑定ID）：已保存绑定不在选项中时按名称换算，换算不到则留空由用户重选
+  if (debugEnvOptions.value.some((opt) => Number(opt.value) === globalId)) {
+    debugGlobalEnvId.value = globalId
+    return
+  }
+  const envName = envNameById.value.get(globalId)
+  const fallback = envName ? debugEnvOptions.value.find((opt) => opt.label === envName) : null
+  debugGlobalEnvId.value = fallback ? fallback.value : null
 }
 
-/** 多脚本：按 savedConfigs 中各 case 的 steps_execute_config 还原行级环境（multi 模式） */
+/** 多脚本：按 savedConfigs 中各 case 的 steps_execute_config 精确定位行 targets 还原环境（同一 mode 的多行可各选不同环境） */
 const applySavedStepsEnv = () => {
   const map = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : null
   if (!map) return
-  
-  const rowEnvByKey = new Map()
-  
-  // 新结构：跳过顶层的 env_mode 和 env_name，只处理用例配置
-  Object.entries(map).forEach(([key, cfg]) => {
-    // 跳过顶层字段
-    if (key === 'env_mode' || key === 'env_name') return
-    
+  // key: `${case_id}|${步骤配置键}` → 环境绑定ID；步骤配置键与 buildStepExecConfigMap 保持同一规则
+  const envByTarget = new Map()
+  Object.entries(map).forEach(([caseKey, cfg]) => {
+    if (caseKey === 'env_mode' || caseKey === 'env_id' || caseKey === 'env_ids') return
     const steps = cfg?.steps_execute_config
     if (!steps || typeof steps !== 'object') return
-    
-    Object.values(steps).forEach((sc) => {
-      if (!sc || typeof sc !== 'object') return
-      const envKey = sc.env_id ?? sc.env_name
-      const envName = typeof envKey === 'string' ? envKey : null
-      if (!envName) return
-      ;['app', 'database', 'redis', 'file'].forEach((ct) => {
-        if (sc.config_type === ct && sc.config_name) {
-          const k = `${ct}|${String(sc.config_name)}`
-          if (!rowEnvByKey.has(k)) rowEnvByKey.set(k, envName)
-        }
-      })
+    Object.entries(steps).forEach(([stepKey, sc]) => {
+      const envId = Number(sc?.env_id)
+      if (!Number.isFinite(envId) || envId <= 0) return
+      envByTarget.set(`${caseKey}|${String(stepKey)}`, envId)
     })
   })
-  
-  if (!rowEnvByKey.size) return
-  const applyTo = (rows, ct, nameOf) => {
-    ;(rows || []).forEach((r) => {
-      const k = `${ct}|${String(nameOf(r) || '')}`
-      if (rowEnvByKey.has(k)) r.env_id = rowEnvByKey.get(k)
+  if (!envByTarget.size) return
+  const lookup = (target, type) => {
+    if (target?.case_id == null) return null
+    const backendKey = target.backend_key == null ? '' : String(target.backend_key)
+    if (!backendKey) return null
+    let stepKey = backendKey
+    if (type === 'database' || type === 'redis') {
+      // DB/Redis 多操作键为 `{backend_key}_@@{op_index}`，无操作下标时无对应配置
+      if (target.op_index == null || Number(target.op_index) < 0) return null
+      stepKey = `${backendKey}_@@${target.op_index}`
+    }
+    return envByTarget.get(`${String(target.case_id)}|${stepKey}`) ?? null
+  }
+  // 聚合行跨 case 共用同一个环境选择：取首个命中 target 的绑定ID（与生成侧统一写入一致）
+  const applyTo = (rows, type) => {
+    ;(rows || []).forEach((row) => {
+      for (const target of Array.isArray(row.targets) ? row.targets : []) {
+        const envId = lookup(target, type)
+        if (envId != null) {
+          row.env_id = envId
+          break
+        }
+      }
     })
   }
-  applyTo(debugRows.value.apiRows, 'app', (r) => r.request_config_name)
-  applyTo(debugRows.value.dbRows, 'database', (r) => r.config_name)
-  applyTo(debugRows.value.redisRows, 'redis', (r) => r.config_name)
-  applyTo(debugRows.value.fileRows, 'file', (r) => r.config_name)
+  applyTo(debugRows.value.apiRows, 'app')
+  applyTo(debugRows.value.dbRows, 'database')
+  applyTo(debugRows.value.redisRows, 'redis')
+  applyTo(debugRows.value.fileRows, 'file')
 }
 
+/** 多脚本回显：顶层环境配置(env_mode/env_id/env_ids) + 首个匹配脚本的用例级配置 */
 const pickSavedConfigForCases = (ids) => {
   const map = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : null
   if (map) {
-    // 新结构：从顶层提取环境配置(env_mode/env_name)；数据源开关为任务表独立字段，不在cases_execute_config中
     const topLevelConfig = {
       env_mode: map.env_mode,
-      env_name: map.env_name,
+      env_id: map.env_id,
+      env_ids: map.env_ids,
     }
-    
-    // 查找第一个匹配的用例配置
     for (const cid of ids) {
       const cfg = map[String(cid)]
       if (cfg && typeof cfg === 'object') {
-        // 合并顶层配置和用例配置
-        return {
-          ...topLevelConfig,
-          ...cfg,
-        }
+        return { ...topLevelConfig, ...cfg }
       }
     }
+    return topLevelConfig
   }
-  if (ids.length === 1 && props.savedConfig) return props.savedConfig
   return props.savedConfig
 }
 
+/** 用例级涉及环境绑定ID：以步骤执行配置中的 env_id 去重升序 */
+const collectInvolveEnvIds = (stepsConfig) => [...new Set(
+  Object.values(stepsConfig || {})
+    .map((sc) => Number(sc?.env_id))
+    .filter((n) => Number.isFinite(n) && n > 0),
+)].sort((a, b) => a - b)
+
+/** 单脚本嵌入式回传：只含引用键（env_mode/env_id/env_ids + steps_execute_config），数据源由任务表字段独立承载 */
 const buildConfigPayload = () => {
-  const env_name = debugGlobalEnvId.value
+  const stepsConfig = buildStepExecConfigMap()
   const payload = {
-    steps_execute_config: buildStepExecConfigMap(),
-    global_env_id: debugGlobalEnvId.value,
-    env_mode: debugEnvMode.value,
-    env_name,
+    env_mode: debugEnvMode.value === 'multi' ? 'multiple' : 'single',
+    env_id: debugGlobalEnvId.value ?? null,
+    env_ids: collectInvolveEnvIds(stepsConfig),
+    steps_execute_config: stepsConfig,
   }
   if (debugExecDataSourceEnabled.value && debugExecDatasetSelectedIds.value.length) {
     payload.selected_dataset_names = [...debugExecDatasetSelectedIds.value]
@@ -1330,38 +1124,27 @@ const buildConfigPayload = () => {
   return payload
 }
 
-/** 多脚本：共享全局环境与全局数据源配置 */
+/** 多脚本：共享全局环境与全局数据源配置；用例级回传 involve_env_ids（权威）+ involve_envs（名称，仅供脚本行展示） */
 const buildConfigsPayload = () => {
-  const env_name = debugGlobalEnvId.value
   const ids = resolveEmbeddedCaseIds()
-  
-  // 顶层结构：环境配置(env_mode/env_name)（存储枚举：single/multiple，UI 内部值为 single/multi）；数据源开关为任务表独立字段dataset_enabled
   const out = {
     env_mode: debugEnvMode.value === 'multi' ? 'multiple' : 'single',
-    env_name: env_name,            // 全局环境名称
+    env_id: debugGlobalEnvId.value ?? null,
+    env_ids: [],
   }
-  
-  // 每个用例的配置
+  const allEnvIds = new Set()
   for (const cid of ids) {
     const stepsConfig = buildStepExecConfigMap(cid)
-    
-    // 提取该用例涉及的所有环境名称（去重）
-    const involveEnvs = new Set()
-    Object.values(stepsConfig).forEach((stepCfg) => {
-      if (stepCfg && stepCfg.env_name) {
-        involveEnvs.add(stepCfg.env_name)
-      }
-    })
-    
-    const cfg = {
+    const involveIds = collectInvolveEnvIds(stepsConfig)
+    involveIds.forEach((id) => allEnvIds.add(id))
+    out[String(cid)] = {
       execute_count: 1,  // 默认执行次数，后续由 TaskFormModal 覆盖
-      involve_envs: Array.from(involveEnvs),  // 用例级别涉及的环境名称列表
+      involve_env_ids: involveIds,
+      involve_envs: involveIds.map((id) => envNameById.value.get(id) || `env_id=${id}`),
       steps_execute_config: stepsConfig,
     }
-    
-    out[String(cid)] = cfg
   }
-  
+  out.env_ids = [...allEnvIds].sort((a, b) => a - b)
   return out
 }
 
@@ -1371,7 +1154,6 @@ const validateConfigPayload = ({ silent = false, actionLabel = '保存' } = {}) 
     if (!silent) window.$message?.warning?.('请选择全局环境')
     return false
   }
-  const env_name = debugGlobalEnvId.value
   if (!validateExecDatasetSelection(silent)) return false
   const missingCfg = collectExecConfigMissingRows()
   if (missingCfg.length) {
@@ -1409,24 +1191,24 @@ const initEmbeddedCases = async () => {
       throw new Error('build_splice_tree 接口返回数据格式异常')
     }
     
-    // 编辑模式：将保存的环境信息插入到对应步骤中
+    // 编辑模式：将保存的环境绑定ID注入到对应步骤，供 collectDebugRows 按行还原环境
     const savedConfigsMap = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : {}
-    const stepEnvMap = new Map() // key: `${case_id}_${step_id}`, value: env_name
+    const stepEnvMap = new Map() // key: `${case_id}_${step_id}`, value: 环境绑定ID
     
     // 遍历保存的配置，提取每个步骤的环境信息
     Object.entries(savedConfigsMap).forEach(([key, cfg]) => {
-      // 跳过顶层字段
-      if (key === 'env_mode' || key === 'env_name') return
+      // 跳过顶层字段（env_mode/env_id/env_ids）
+      if (key === 'env_mode' || key === 'env_id' || key === 'env_ids') return
       
       if (!cfg || typeof cfg !== 'object') return
       const stepsConfig = cfg.steps_execute_config || {}
       Object.entries(stepsConfig).forEach(([stepKey, stepCfg]) => {
         if (!stepCfg || typeof stepCfg !== 'object') return
-        const envName = stepCfg.env_name
-        if (!envName) return
+        const envId = Number(stepCfg.env_id)
+        if (!Number.isFinite(envId) || envId <= 0) return
         // stepKey 格式：step_id 或 step_id_@@op_index
         const stepId = stepKey.split('_@@')[0]
-        stepEnvMap.set(`${key}_${stepId}`, envName)
+        stepEnvMap.set(`${key}_${stepId}`, envId)
       })
     })
     
@@ -1437,13 +1219,12 @@ const initEmbeddedCases = async () => {
         const step = details[idx]
         if (!step) return null
         
-        // 插入环境信息到步骤数据中
+        // 插入环境绑定ID到步骤数据中（collectDebugRows 读取 step.env_id）
         const stepId = step.step_id || step.id
         if (stepId != null) {
-          const envName = stepEnvMap.get(`${cid}_${stepId}`)
-          if (envName) {
-            // 在步骤数据中添加 env_name 字段
-            step.env_name = envName
+          const envId = stepEnvMap.get(`${cid}_${stepId}`)
+          if (envId != null) {
+            step.env_id = envId
           }
         }
         return step

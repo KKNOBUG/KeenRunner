@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import api from '@/api'
-import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { downloadBlobResponse, handleDownloadError } from '@/utils/common/downloadFile'
 
 /**
  * 数据源批量上传/下载
@@ -60,7 +60,7 @@ export function useDataSourceBatch({ caseId, loadSteps }) {
             await downloadBlobResponse(res, '数据源汇总.xlsx')
             window.$message?.success?.('下载成功')
         } catch (e) {
-            window.$message?.error?.(e?.message || '下载失败')
+            await handleDownloadError(e, '下载失败')
         } finally {
             summaryDownloadLoading.value = false
         }
@@ -78,7 +78,7 @@ export function useDataSourceBatch({ caseId, loadSteps }) {
             await downloadBlobResponse(res, '数据源汇总模板.xlsx')
             window.$message?.success?.('下载成功')
         } catch (e) {
-            window.$message?.error?.(e?.message || '下载失败')
+            await handleDownloadError(e, '下载失败')
         } finally {
             templateDownloadLoading.value = false
         }

@@ -38,7 +38,7 @@ backend/
 ├─ pyproject.toml           # uv 依赖与项目元数据
 ├─ requirements.txt         # pip 兼容依赖清单
 ├─ uv.lock                  # uv 锁定文件
-├─ .env / .env.example      # 环境变量（PROJECT_CONFIG 驱动）
+├─ .env / .env.example       # 环境配置文件（.env 不入 git，内容由环境部署负责人手动修改，PROJECT_CONFIG 驱动）
 │
 ├─ applications/            # 业务模块（按领域拆分，每个模块独立 models/schemas/services/views）
 │  ├─ autotest/             # 接口自动化（用例/步骤/任务/报告/明细/环境/数据源/标签）
@@ -170,7 +170,7 @@ views/autotest_data_source_view.py (/autotest/data_source/*)
 - 读取契约：`/autotest/env/query` 返回 `project_id → env_id(数字字符串) → 节点类型 → config_mode → {config_name, 主机信息}`，入参为 `config_modes`；`get_envs` 叶子统一为 `{env_id, env_name}`（value 用绑定 ID，名称仅展示）；`/autotest/config/*/config_names` 返回 `[{config_name, config_mode}]` 且只含启用配置。`list_env_names` 经启用绑定过滤，未被任何绑定引用的孤儿字典不泄漏。
 - host/port/database_name 只有实际变化时才重做唯一性校验（host 不是数据库唯一键）；名称未变由唯一索引兜底，不再重复查名。更新不再解析环境名或重建绑定。改名**不级联**步骤与压测引用：读取按 mode 定位（步骤与压测旧名称列已删除，未回填 mode 的存量行执行期报配置缺失）；任务 `cases_execute_config` 只存 `{env_id, config_type, config_mode}` 引用键，执行期实时解析地址；任务保存后该快照即执行期权威，步骤随后改选配置不影响已存任务，需重新保存任务才会刷新。
 - 执行期解析：`StepsExecuteConfigBase` 只含 `{env_id, config_type, config_mode}` 引用键；`AutoTestStepExecutionEngine.execute_case` 执行前调 `StepExecutionContext.preload_execute_configs` 固定 2 次查询（配置行按 `config_mode IN`、绑定按 `id IN`），执行器只读 `ResolvedStepExecuteConfig` 快照（名称/主机/端口/库名），缺失按设计 6.4 文案报错（空引用报 `参数[request_config_mode]不能为空`，缺失报 `执行配置缺失: 配置[名称] 在环境[环境名]的[节点]节点下不存在`）；明细写解析名称 `request_config_name` + 逻辑标识 `request_config_mode`；DB/Redis 建池/建客户端走 `*_by_mode`（四层缓存键含 host/port，改地址立即生效）；报告 `involve_envs` 由 `env_bind_index`（env_id→名称）生成。单步调试（HTTP/TCP/Redis）入参统一 `env_id + request_config_mode`，Redis 顶层 `env_id` 必须是 REDIS 节点绑定、跨应用 operate 按同名环境反查绑定；HTTP 绝对地址不依赖配置。执行弹窗与任务 `cases_execute_config` 已切换为引用键结构；步骤与压测接口的旧名称列已删除，明细快照字段保留（展示层专用）。
-- 数据库步骤库名不落快照：`database_operates[].database_name` 新数据不再写入（schema 保留可选字段仅为旧数据兜底），前端「数据库名称」按 `config_mode` 实时取环境配置展示，执行期库名以解析值为准。
+- 数据库步骤库名不落快照：`database_operates[]` 以 `config_mode` 为执行引用、`config_id` 为库名展示引用（指向 `krun_autotest_env_config` 行，仅前端反显、不参与执行；旧 `database_name` 字段已移除、不再接受）；前端「数据库名称」下拉按 `config_id` 反显库名，未选或引用失效时展示同 mode 库名合集作为参考，执行期库名一律取环境配置解析值。
 
 **调试模式**（不落库，顺序严格对齐执行模式）：
 ```
@@ -319,12 +319,14 @@ views (/http_debugging, /tcp_debugging, /redis_debugging)
 
 ## 5. 配置（configure/）
 
-**配置一律来自 `.env` → `PROJECT_CONFIG`，禁止硬编码 host/port/队列名/配置值。**
+**配置一律来自环境文件 → `PROJECT_CONFIG`，禁止硬编码 host/port/队列名/配置值。**
 
-- `project_config.py`：`PROJECT_CONFIG` 单例（APP_TITLE/SERVER_HOST/SERVER_PORT/...）
+- 环境配置 `.env`：全环境共用唯一文件（不入 git，内容由环境部署负责人按目标机器手动修改，修改后重启服务生效）；`.env.example` 为字段模板；禁止按字段名/主机/端口推断环境
+- `project_config.py`：直接加载 `backend/.env` 构建 `PROJECT_CONFIG` 单例（APP_TITLE/SERVER_HOST/SERVER_PORT/...）；维护脚本固定读 `backend/.env`，部署脚本从 `.env` grep `SERVER_PORT`（PID/日志/队列/进程名均按该端口区分）
 - `celery_config.py`：队列名 = `{port}_default` / `{port}_autotest` / `{port}_perf`（端口前缀派生）；`task_routes` 统一路由
+- **同机多实例共存（端口主线）**：部署脚本的 PID 文件（`gunicorn_{port}.pid`、`celery_worker_{port}.pid`、`celery_beat_{port}.pid`）、nohup 日志（`backend_main_{port}.log`，应用日志按天复用见 logging_config 条目）、worker 节点名（`worker_{port}@%h`）与 gunicorn 进程名（`--name=gunicorn_{port}`）全部携带 `SERVER_PORT` 区分，停止/状态/强制清理（force_kill）仅匹配 `{port}` 模式，禁止不经端口过滤按 cwd 清理进程；Celery broker/backend/redbeat 三个 Redis 库号由 `.env` 配置（同机多实例各自 `.env` 错开即可），redbeat 锁随各自库天然隔离；同机部署还需保证各实例 `DATABASE_NAME` 不同
 - `database_config.py`：MySQL 连接
-- `logging_config.py`：loguru 格式与轮转
+- `logging_config.py`：loguru 格式与轮转；日志文件按天复用——应用日志 `output/logs/{YYYYmmdd}-{HHMMSS}-执行日志.log`（gunicorn 各 worker 经 `resolve_daily_log_path` 命中同一文件，多进程共写靠 ConcurrentRotatingFileHandler 跨进程锁），Celery 日志 `output/logs/celery_logs/{YYYYmmdd}-{HHMMSS}-{Worker|Beat}-{port}.log` 同口径；`LOGGER` 仅绑定 Loguru 引用不产生初始化副作用，应用进程由 `backend_main.py` 显式调 `loguru_logging()`、Celery 由 `setup_loggers` 安装专属 sink（禁止再让 Celery 往「执行日志」写入）；启动时按 `LOGGER_RETENTION_DAYS`（环境文件可配，默认30）以 mtime 清理过期日志/滚动备份/孤儿锁
 
 ---
 
@@ -453,7 +455,7 @@ models → schemas → services → views(router)
 ### 10.8 后端专项约束
 - 容器式字段与步骤类型变更必须四处同步：model 注释、schema 定义、执行引擎、前端 `useStepTreeSerialization.js`；遗漏任一处即断链
 - 修复以根因为主：禁止持续打补丁、留存历史淘汰痕迹；拒绝死代码与透传函数，不为用不到的扩展预留字段
-- 配置一律来自 `.env` → `PROJECT_CONFIG`，禁止硬编码 host/port/队列名/配置值
+- 配置一律来自环境文件（backend/.env 单一文件）→ `PROJECT_CONFIG`，禁止硬编码 host/port/队列名/配置值
 - 接口与页面的同步动作（`POST /base/router/refresh`、`krun_menu` 写入）按第 14 章检查清单执行
 
 ### 10.9 错误提示文案（面向用户）
@@ -474,7 +476,7 @@ models → schemas → services → views(router)
 - 跨表引用优先 `*_code`，表内定位用 `id`
 - 除环境链外均为 BigInt **逻辑关联**、无物理外键，业务层校验；**禁止擅自补外键**
 - 新增字段走 Tortoise Model + aerich 迁移；**禁止裸写原生 SQL**
-- 配置逻辑标识迁移链：29 占位 → 30 回填 mode → 31 收紧 NOT NULL + 索引 → 32 删除 step/perf_api 旧名称列；新版本上线前用 `scripts/apply_pending_migrations.py`（先 `--dry-run` 预检）预执行并登记，否则启动时 aerich 会生成重复迁移；29/30 之后跑 `scripts/backfill_config_mode_operates.py` 升级存量 operates 与任务结构，重复 mode 合并用 `scripts/merge_config_mode_duplicates.py`。
+- 配置逻辑标识迁移链（历史，已完成）：29 占位 → 30 回填 mode → 31 收紧 NOT NULL + 索引 → 32 删除 step/perf_api 旧名称列；配套维护脚本（apply_pending_migrations/backfill_config_mode_operates/merge_config_mode_duplicates）已完成使命并删除，存量 operates/任务结构均已回填；今后迁移一律走 aerich migrate + aerich upgrade
 - 报告 `report_code` 全局唯一；明细 `unique_together=(report_code, case_code, step_code, loop_cycles)`
 - `krun_autotest_details` 只追加执行快照，禁止用明细数据回改步骤定义
 
@@ -487,11 +489,11 @@ models → schemas → services → views(router)
 | FastAPI 开发 | `uvicorn backend.backend_main:app --reload` |
 | FastAPI 生产 | `gunicorn -c backend/gunicorn.conf.py backend.backend_main:app` |
 | 后端直启 | `PYTHONPATH=. python backend/backend_main.py`（从仓库根目录执行） |
-| Celery worker | `bash backend/celery_deploy.sh` |
+| Celery worker | `bash backend/celery_deploy.sh`（PID/日志/节点名按 .env 端口隔离） |
 | Celery 队列 | worker `-Q` 需覆盖 `{port}_default,{port}_autotest,{port}_perf` |
-| 一键部署 | `bash backend/full_deploy.sh` |
+| 一键部署 | `bash backend/full_deploy.sh`（PID/日志/队列/进程名按 .env 端口区分） |
 | 依赖安装 | `uv sync`（或 `pip install -r requirements.txt`） |
-| 迁移 | 上线前在 `backend/` 下执行 `python scripts/apply_pending_migrations.py`（先 `--dry-run` 预检）；日常 `aerich migrate` + `aerich upgrade` |
+| 迁移 | 在 `backend/` 下 `aerich migrate` 生成迁移文件 + `aerich upgrade` 应用；对齐/登记问题用 `scripts/repair_aerich_alignment.py`（`--help` 查看用法） |
 
 ---
 
@@ -538,7 +540,7 @@ models → schemas → services → views(router)
 写代码前：
 5. 评估对线上接口/业务的影响；有影响先说明影响范围
 6. 复用 `core/responses` 与 `core/exceptions`，禁止自造返回/错误结构
-7. 配置一律来自 `.env` → `PROJECT_CONFIG`，禁止硬编码
+7. 配置一律来自环境文件 → `PROJECT_CONFIG`，禁止硬编码
 8. Celery 队列名统一，`apply_async` 不得硬编码 queue
 9. 受数据权限管控的写操作：service 必传 `scope`，view 注入 `DependTagScope`（按路由绑定的资源族编码解析）并 `except NoPermissionException: raise`
 
@@ -611,7 +613,7 @@ models → schemas → services → views(router)
 3. 明细表（details）只追加执行结果快照，禁止用明细数据回改步骤定义；软删字段 `state` 查询必须过滤。
 4. 文档同步：链路、接口契约、菜单/权限、队列、模板资产等约定变化时，同步更新本文件，避免文档滞后于代码。
 5. 部署资产：`backend/output/template/*.xlsx` 是运行时模板资产，需随代码交付/同步（该目录下其余下载、日志、上传产物不入 git）。
-6. 迁移顺序约束：29 占位 → 30 回填 mode → 31 收紧 NOT NULL + 索引 → 32 删除 step/perf_api 旧名称列；部署新版本前先跑 `backend/scripts/apply_pending_migrations.py`（可 `--dry-run`，分批用 `--stop-before`）登记 pending 迁移，否则启动时 aerich 会生成重复迁移；29/30 之后、开启定时任务前跑 `backfill_config_mode_operates.py` 升级存量 operates/任务结构，重复 mode 合并用 `merge_config_mode_duplicates.py`。
+6. 迁移顺序约束（历史，已完成）：29 占位 → 30 回填 mode → 31 收紧 NOT NULL + 索引 → 32 删除 step/perf_api 旧名称列；配套维护脚本已删除，存量环境均已迁移完成；新变更一律在 `backend/` 下 `aerich migrate` 生成迁移文件并 `aerich upgrade` 应用，对齐/登记问题用 `scripts/repair_aerich_alignment.py` 修复。
 
 ---
 

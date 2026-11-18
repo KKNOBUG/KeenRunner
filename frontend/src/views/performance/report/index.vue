@@ -52,7 +52,7 @@ import CrudTable from '@/components/table/CrudTable.vue'
 import PerfReportCompareModal from '../components/PerfReportCompareModal.vue'
 
 import { formatDateTime, renderIcon } from '@/utils'
-import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { downloadBlobResponse, handleDownloadError } from '@/utils/common/downloadFile'
 import api from '@/api'
 
 // 组件名需与菜单管理中页面项 name 一致（KeepAlive include 按 componentName 匹配）
@@ -243,7 +243,7 @@ async function handleExportReport(row) {
     const res = await api.exportPerfReport({ report_code: row.report_code })
     await downloadBlobResponse(res, `压测报告_${row.report_code}.xlsx`)
   } catch (e) {
-    window.$message?.error?.(e?.message || '报告导出失败')
+    await handleDownloadError(e, '报告导出失败')
   } finally {
     exportingCode.value = null
   }

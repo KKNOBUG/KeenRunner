@@ -134,26 +134,30 @@
                         </n-form-item>
                         <n-form-item label="配置名称" required class="db-op-fi-fill">
                           <n-select
-                              v-model:value="item.config_name"
+                              v-model:value="item.config_mode"
                               :options="configOptionsForRow(item)"
-                              placeholder="选择或输入配置名称（支持 ${变量}）"
+                              placeholder="请选择配置名称"
                               clearable
                               filterable
-                              tag
+                              :render-label="renderConfigModeLabel"
                               :disabled="props.readonly"
-                              @update:value="() => onConfigNameChange(item)"
+                              @update:value="() => onConfigModeChange(item)"
                           />
                         </n-form-item>
-                        <n-form-item label="数据库名称" required class="db-op-fi-fill">
-                          <n-select
-                              v-model:value="item.database_name"
-                              :options="dbNameOptionsForRow(item)"
-                              placeholder="选择或输入库名（支持 ${变量}）"
-                              clearable
-                              filterable
-                              tag
-                              :disabled="props.readonly"
-                          />
+                        <n-form-item label="数据库名称" class="db-op-fi-fill">
+                          <n-tooltip trigger="hover">
+                            <template #trigger>
+                              <n-select
+                                  :value="selectedDatabaseConfigId(item)"
+                                  :options="databaseNameOptionsForRow(item)"
+                                  :placeholder="databaseNamePlaceholder(item)"
+                                  clearable
+                                  :disabled="props.readonly"
+                                  @update:value="(value) => onDatabaseConfigChange(item, value)"
+                              />
+                            </template>
+                            仅用于展示，调试/执行以所选环境的配置为准
+                          </n-tooltip>
                         </n-form-item>
                         <n-form-item label="存储变量" required class="db-op-fi-fill">
                           <n-input v-model:value="item.variable_name" placeholder="写入变量池的变量名" clearable :disabled="props.readonly"/>
@@ -282,8 +286,8 @@ const buildConfigFromState = () => {
       desc: row.desc ?? '',
       project_id: projectId,
       project_name: pname,
-      config_name: row.config_name ?? '',
-      database_name: row.database_name ?? '',
+      config_mode: row.config_mode ?? '',
+      config_id: row.config_id ?? null,
       expr: row.expr ?? '',
       variable_name: row.variable_name ?? ''
     }
@@ -300,11 +304,46 @@ const buildConfigFromState = () => {
   }
 }
 
-const dbNameOptionsForRow = (item) => {
+/** 未选择展示引用时的参考展示：同 mode 的多个环境配置去重后以“ / ”连接 */
+const databaseNamePreview = (item) => {
   const pid = item?.project_id
-  const rows = (configCache[pid] || []).filter((r) => !item?.config_name || r.config_name === item.config_name)
-  const names = [...new Set(rows.map((r) => r.database_name).filter(Boolean))]
-  return names.map((label) => ({label, value: label}))
+  if (!pid || !item?.config_mode) return ''
+  const names = [
+    ...new Set(
+        (configCache[pid] || [])
+            .filter((r) => r.config_mode === item.config_mode)
+            .map((r) => String(r.database_name ?? '').trim())
+            .filter(Boolean)
+    )
+  ]
+  return names.join(' / ')
+}
+
+/** 数据库名称下拉选项：同配置名称下全部启用环境配置行，label 带环境名区分同名库 */
+const databaseNameOptionsForRow = (item) => {
+  const pid = item?.project_id
+  if (!pid || !item?.config_mode) return []
+  return (configCache[pid] || [])
+      .filter((r) => r.config_mode === item.config_mode && r.config_id != null)
+      .map((r) => {
+        const name = String(r.database_name ?? '').trim()
+        const envName = String(r.env_name ?? '').trim()
+        return {label: envName ? `${name}（${envName}）` : name, value: r.config_id}
+      })
+}
+
+/** 仅当展示引用仍命中当前选项时回传，避免失效引用在控件上裸露原始ID */
+const selectedDatabaseConfigId = (item) => {
+  if (item?.config_id == null) return null
+  const hit = databaseNameOptionsForRow(item).some((o) => o.value === item.config_id)
+  return hit ? item.config_id : null
+}
+
+/** 未选择或引用失效时以同配置名称下现有库名做参考展示 */
+const databaseNamePlaceholder = (item) => databaseNamePreview(item) || '选择配置名称后自动带出'
+
+const onDatabaseConfigChange = (item, value) => {
+  item.config_id = value ?? null
 }
 
 /** 从 props 合并出表单值（config 优先、original 兜底）；纯函数，供 useStepEditorForm 灌入 */
@@ -321,8 +360,8 @@ const hydrateDatabaseForm = (p) => {
       desc: row.desc ?? '',
       project_id: row.project_id ?? findProjectIdByName(p.projectOptions, row.project_name),
       project_name: String(row.project_name ?? '').trim() || findProjectNameById(p.projectOptions, row.project_id) || '',
-      config_name: row.config_name ?? '',
-      database_name: row.database_name ?? '',
+      config_mode: row.config_mode ?? '',
+      config_id: row.config_id ?? null,
       expr: row.expr ?? '',
       variable_name: row.variable_name ?? ''
     }
@@ -382,7 +421,8 @@ const {
   removeOp,
   duplicateOp,
   onProjectChange,
-  onConfigNameChange,
+  onConfigModeChange,
+  renderConfigModeLabel,
 } = useOperatesListEditor({
   props,
   form,
@@ -394,8 +434,8 @@ const {
     desc: '',
     project_id: null,
     project_name: '',
-    config_name: '',
-    database_name: '',
+    config_mode: '',
+    config_id: null,
     expr: '',
     variable_name: ''
   }),

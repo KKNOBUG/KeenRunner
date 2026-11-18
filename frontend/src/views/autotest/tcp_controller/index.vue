@@ -66,16 +66,16 @@
                 :disabled="props.readonly || props.lockProject"
             />
           </n-form-item>
-          <n-form-item label="配置名称" path="request_config_name" required class="tcp-field-config">
+          <n-form-item label="配置名称" path="request_config_mode" required class="tcp-field-config">
             <div class="tcp-config-debug-inline">
               <n-select
-                  v-model:value="state.form.request_config_name"
-                  placeholder="配置名称"
-                  :options="tcpConfigNameOptions"
-                  :loading="tcpConfigNameLoading"
+                  v-model:value="state.form.request_config_mode"
+                  placeholder="请选择配置名称"
+                  :options="tcpConfigModeOptions"
+                  :loading="tcpConfigModeLoading"
                   clearable
                   filterable
-                  tag
+                  :render-label="renderConfigModeLabel"
                   class="request-toolbar-select tcp-config-select-inline"
                   :disabled="props.readonly"
               />
@@ -414,7 +414,7 @@
     <div style="padding: 8px 0;">
       <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedDebugEnvName"
+          v-model:value="selectedDebugEnvId"
           :options="envOptions"
           :loading="envLoading"
           placeholder="请选择执行环境"
@@ -425,7 +425,7 @@
     </div>
     <template #action>
       <n-button @click="debugModalVisible = false">取消</n-button>
-      <n-button type="primary" :disabled="selectedDebugEnvName == null || selectedDebugEnvName === ''" @click="confirmDebugModal">确定</n-button>
+      <n-button type="primary" :disabled="selectedDebugEnvId == null" @click="confirmDebugModal">确定</n-button>
     </template>
   </n-modal>
 </template>
@@ -479,6 +479,7 @@ import {
   validateExtractList,
 } from '@/utils/autotestExtractAssert'
 import { useStepEditorForm } from '@/composables/step-editor'
+import { buildConfigModeOptions, renderConfigModeLabel } from '@/composables/step-editor/configModeSelect'
 
 const props = defineProps({
   config: { type: Object, default: () => ({}) },
@@ -678,11 +679,11 @@ const rules = {
       trigger: ['change', 'blur']
     }
   ],
-  request_config_name: [
+  request_config_mode: [
     {
       validator(_rule, value) {
         if (value === null || value === undefined || String(value).trim() === '') {
-          return new Error('请填写或选择配置名称')
+          return new Error('请选择配置名称')
         }
         return true
       },
@@ -854,8 +855,8 @@ const buildConfigFromState = () => {
     step_name: state.form.step_name,
     step_desc: state.form.step_desc,
     request_project_id: state.form.request_project_id,
-    request_config_name: state.form.request_config_name != null && String(state.form.request_config_name).trim() !== ''
-        ? String(state.form.request_config_name).trim()
+    request_config_mode: state.form.request_config_mode != null && String(state.form.request_config_mode).trim() !== ''
+        ? String(state.form.request_config_mode).trim()
         : null,
     /** 目标地址由「脚本执行配置」或后端按应用+环境解析，页面不再编辑 */
     request_url: '',
@@ -936,7 +937,7 @@ const hydrateTcpForm = (p) => {
     step_name: cfg.step_name ?? original.step_name ?? p.step?.name ?? '',
     step_desc: cfg.step_desc ?? original.step_desc ?? '',
     request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
-    request_config_name: cfg.request_config_name ?? original.request_config_name ?? null,
+    request_config_mode: cfg.request_config_mode ?? original.request_config_mode ?? null,
     bodyType: argsType,
     xmlBody,
     jsonBody,
@@ -975,7 +976,7 @@ const { form, syncFromExternal } = useStepEditorForm({
     step_name: '',
     step_desc: '',
     request_project_id: null,
-    request_config_name: null,
+    request_config_mode: null,
     bodyType: 'xml',
     xmlBody: '',
     jsonBody: '',
@@ -1001,7 +1002,7 @@ const { form, syncFromExternal } = useStepEditorForm({
   buildConfig: () => buildConfigFromState(),
   watchFields: (f) => [
     f.step_name, f.step_desc,
-    f.request_project_id, f.request_config_name,
+    f.request_project_id, f.request_config_mode,
     f.bodyType, f.xmlBody, f.jsonBody, f.rawBody,
     f.data_source_id, f.data_source_name, f.data_source_desc,
     f.tcp_radix, f.tcp_radix_length, f.tcp_datagram_length,
@@ -1109,8 +1110,10 @@ watch(
     }
 )
 
-const tcpConfigNameOptions = ref([])
-const tcpConfigNameLoading = ref(false)
+const tcpConfigModePairs = ref([])
+const tcpConfigModeLoading = ref(false)
+/** label=config_name / value=config_mode；失效 mode 自动补标红项 */
+const tcpConfigModeOptions = computed(() => buildConfigModeOptions(tcpConfigModePairs.value, state.form.request_config_mode))
 
 /* =================== TCP帧配置选项（value 与后端枚举展示值同源，落库即展示值） =================== */
 const TCP_RADIX_OPTIONS = [
@@ -1148,32 +1151,32 @@ const normalizeTcpEndSymbol = (v) => {
   return text || null
 }
 
-const loadTcpConfigNames = async (projectId) => {
+const loadTcpConfigModes = async (projectId) => {
   const pid = projectId != null && projectId !== '' ? Number(projectId) : null
   if (!pid) {
-    tcpConfigNameOptions.value = []
+    tcpConfigModePairs.value = []
     return
   }
-  tcpConfigNameLoading.value = true
+  tcpConfigModeLoading.value = true
   try {
     const res = await api.getEnvConfigNameList({ project_id: pid, env_type: 'app' })
-    const list = Array.isArray(res?.data) ? res.data : []
-    tcpConfigNameOptions.value = list.map((name) => ({ label: name, value: name }))
+    tcpConfigModePairs.value = Array.isArray(res?.data) ? res.data : []
   } catch (e) {
     console.error('加载配置名称列表失败', e)
-    tcpConfigNameOptions.value = []
+    tcpConfigModePairs.value = []
   } finally {
-    tcpConfigNameLoading.value = false
+    tcpConfigModeLoading.value = false
   }
 }
 watch(
     () => state.form.request_project_id,
     (pid, prev) => {
-      void loadTcpConfigNames(pid)
+      void loadTcpConfigModes(pid)
       if (pid == null || pid === '') {
-        state.form.request_config_name = null
+        state.form.request_config_mode = null
       } else if (prev != null && Number(pid) !== Number(prev)) {
-        state.form.request_config_name = null
+        // 配置按应用隔离，切应用后逻辑标识必然失效
+        state.form.request_config_mode = null
       }
     },
     { immediate: true }
@@ -1184,7 +1187,7 @@ let emitTimer = null
 watch(
     () => [
       state.form.step_name, state.form.step_desc,
-      state.form.request_project_id, state.form.request_config_name,
+      state.form.request_project_id, state.form.request_config_mode,
       state.form.bodyType, state.form.xmlBody, state.form.jsonBody, state.form.rawBody,
       state.form.data_source_id, state.form.data_source_name, state.form.data_source_desc,
       state.form.tcp_radix, state.form.tcp_radix_length, state.form.tcp_datagram_length,
@@ -1478,27 +1481,36 @@ const validatorColumns = [
 
 const envOptions = ref([])
 const envLoading = ref(false)
-/** 调试所选环境名称（与后端 /tcp_debugging schema 的 env_name 对齐） */
-const selectedDebugEnvName = ref(null)
+/** 调试所选环境绑定ID（与后端 /tcp_debugging schema 的 env_id 对齐，改名不影响调试） */
+const selectedDebugEnvId = ref(null)
 const debugModalVisible = ref(false)
 
 const loadEnvNames = async () => {
   const pid = Number(state.form.request_project_id)
-  const configName = String(state.form.request_config_name || '').trim()
-  if (!pid || !configName) {
+  const configMode = String(state.form.request_config_mode || '').trim()
+  if (!pid || !configMode) {
     envOptions.value = []
-    selectedDebugEnvName.value = null
+    selectedDebugEnvId.value = null
     return
   }
   envLoading.value = true
   try {
-    // 仅返回挂载了该请求配置(app类型)的环境名称，收敛调试范围
-    const res = await api.queryAssignConfigEnvs({ project_id: pid, config_name: configName, env_type: 'app' })
-    const names = Array.isArray(res?.data) ? res.data : []
-    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
-    envOptions.value = sorted.map((n) => ({ label: n, value: n }))
-    if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {
-      selectedDebugEnvName.value = envOptions.value[0].value
+    // 仅返回挂载了该请求配置(app类型)的环境，收敛调试范围；响应为 [{env_id, env_name}]
+    const res = await api.queryAssignConfigEnvs({ project_id: pid, config_mode: configMode, env_type: 'app' })
+    const rows = Array.isArray(res?.data) ? res.data : []
+    // 调试入参按环境绑定ID定位（改名不影响调试），同ID去重后按名称排序展示
+    const seen = new Set()
+    const options = []
+    for (const row of rows) {
+      const id = Number(row?.env_id)
+      const name = String(row?.env_name ?? '').trim()
+      if (!Number.isInteger(id) || id <= 0 || !name || seen.has(id)) continue
+      seen.add(id)
+      options.push({ label: name, value: id })
+    }
+    envOptions.value = options.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
+      selectedDebugEnvId.value = envOptions.value[0].value
     }
   } catch (e) {
     console.error('加载环境列表失败', e)
@@ -1514,19 +1526,19 @@ const openDebugModal = () => {
     window.$message?.warning?.('请先选择所属应用')
     return
   }
-  selectedDebugEnvName.value = null
+  selectedDebugEnvId.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
-  const envName = selectedDebugEnvName.value
-  if (!envName || !String(envName).trim()) {
+  const envId = Number(selectedDebugEnvId.value)
+  if (!Number.isInteger(envId) || envId <= 0) {
     window.$message?.warning?.('请选择执行环境')
     return
   }
   debugModalVisible.value = false
-  doDebugRequest(String(envName).trim())
+  doDebugRequest(envId)
 }
 
 const debugging = async () => {
@@ -1539,7 +1551,7 @@ const debugging = async () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_name) => {
+const doDebugRequest = async (env_id) => {
   // 语法校验：JSON 或 XML 有语法错误时阻止调试
   if (jsonBodyError.value) {
     window.$message?.error?.(jsonBodyError.value)
@@ -1567,21 +1579,15 @@ const doDebugRequest = async (env_name) => {
     const cfg = buildConfigFromState()
     const original = props.step?.original || {}
 
-    const requestConfigName =
-        cfg.request_config_name != null && String(cfg.request_config_name).trim() !== ''
-            ? String(cfg.request_config_name).trim()
-            : (original.request_config_name != null && String(original.request_config_name).trim() !== ''
-                ? String(original.request_config_name).trim()
-                : '')
-
     const bodyType = normalizeBodyType(cfg.request_args_type)
 
     /** @type {Record<string, unknown>} */
     const debugPayload = {
-      env_name: env_name,
+      env_id,
       step_name: state.form.step_name || original.step_name || 'TCP 调试',
       request_project_id: Number(cfg.request_project_id ?? original.request_project_id),
-      request_config_name: requestConfigName,
+      // 目标地址由后端按 env_id + request_config_mode 从环境配置解析
+      request_config_mode: String(cfg.request_config_mode || '').trim() || null,
       request_args_type: bodyType,
     }
     if (bodyType === 'json') {

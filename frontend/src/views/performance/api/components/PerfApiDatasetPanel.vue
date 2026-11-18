@@ -110,7 +110,7 @@ import {
 import TheIcon from '@/components/icon/TheIcon.vue'
 import Luckysheet from '@/components/common/Luckysheet.vue'
 import api from '@/api'
-import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { downloadBlobResponse, handleDownloadError } from '@/utils/common/downloadFile'
 
 defineOptions({ name: 'PerfApiDatasetPanel' })
 
@@ -527,7 +527,7 @@ async function handleExport() {
     await downloadBlobResponse(res, `${name}.xlsx`)
     window.$message?.success('导出成功')
   } catch (e) {
-    window.$message?.error(`导出失败：${e?.message || e}`)
+    await handleDownloadError(e, '导出失败')
   } finally {
     exportLoading.value = false
   }
@@ -583,7 +583,7 @@ async function handleTemplateDownload() {
     await downloadBlobResponse(res, '数据源导出模板.xlsx')
     window.$message?.success('下载成功')
   } catch (e) {
-    window.$message?.error(`下载失败：${e?.message || e}`)
+    await handleDownloadError(e, '下载失败')
   } finally {
     templateDownloadLoading.value = false
   }

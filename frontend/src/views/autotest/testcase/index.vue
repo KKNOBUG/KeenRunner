@@ -12,7 +12,7 @@ import QueryBarItem from '@/components/query-bar/QueryBarItem.vue'
 import CrudTable from '@/components/table/CrudTable.vue'
 
 import {formatDateTime, renderIcon} from '@/utils'
-import {downloadBlobResponse} from '@/utils/common/downloadFile'
+import {downloadBlobResponse, handleDownloadError} from '@/utils/common/downloadFile'
 import {useApiPermission, useBatchDeleteGuard, useCRUD} from '@/composables'
 import api from '@/api'
 import {useAutotestStore, useTagsStore, useUserStore} from '@/store'
@@ -283,7 +283,7 @@ async function handleDownloadTemplate() {
     window.$message?.success?.('接口模板下载成功')
   } catch (err) {
     // 后端异常时为JSON错误体，已由 downloadBlobResponse 解析message；网络/鉴权错误在此兜底
-    window.$message?.error?.(`接口模板下载失败：${err?.message || err}`)
+    await handleDownloadError(err, '接口模板下载失败')
   } finally {
     templateDownloading.value = false
   }

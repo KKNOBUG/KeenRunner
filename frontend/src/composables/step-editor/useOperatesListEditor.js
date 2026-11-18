@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 import api from '@/api'
+import { buildConfigModeOptions, renderConfigModeLabel } from './configModeSelect'
 
 /** 按 project_id 从应用选项反查应用名（纯函数，供 hydrate 与 composable 共用） */
 export const findProjectNameById = (projectOptions, id) => {
@@ -24,7 +25,7 @@ export const findProjectIdByName = (projectOptions, name) => {
  * - operatesField：表单中操作项字典的字段名（database_operates / redis_operates）
  * - labelPrefix：操作项默认标题前缀（数据库请求 / Redis请求）
  * - configType：环境配置类型（database / redis）
- * - emptyOp：空操作项工厂（database 含 desc 且 database_name 默认 ''；redis 无 desc 且默认 '0'）
+ * - emptyOp：空操作项工厂（database 含 desc 与 config_id 展示引用；redis 无 desc 且 database_name 为库编号默认 '0'）
  *
  * @param {object} options
  * @param {object} options.props          - 组件 props（须含 projectOptions / readonly）
@@ -46,8 +47,8 @@ export function useOperatesListEditor({
     const editingOpKey = ref('')
     const opCollapseState = reactive({})
     const configCache = reactive({})
-    /** project_id -> 去重后的配置名称列表（与 getEnvConfigNameList 一致） */
-    const configNameListByProject = reactive({})
+    /** project_id -> 启用配置去重列表 [{config_name, config_mode}]（与 getEnvConfigNameList 一致） */
+    const configModeListByProject = reactive({})
 
     const projectNameFromId = (id) => findProjectNameById(props.projectOptions, id)
     const projectIdFromName = (name) => findProjectIdByName(props.projectOptions, name)
@@ -135,27 +136,33 @@ export function useOperatesListEditor({
                 })
             ])
             const nameList = Array.isArray(resNames?.data) ? resNames.data : []
-            configNameListByProject[pid] = nameList
+            configModeListByProject[pid] = nameList
             const rows = Array.isArray(res?.data) ? res.data : []
             configCache[pid] = rows
             return rows
         } catch (e) {
             console.error(`加载${labelPrefix}配置失败`, e)
-            configNameListByProject[pid] = []
+            configModeListByProject[pid] = []
             configCache[pid] = []
             return []
         }
     }
 
+    /** 行内「配置名称」下拉：label=config_name、value=config_mode；失效引用追加标红项 */
     const configOptionsForRow = (item) => {
         const pid = item?.project_id
-        const fromList = configNameListByProject[pid]
+        const fromList = configModeListByProject[pid]
         if (Array.isArray(fromList) && fromList.length) {
-            return fromList.map((name) => ({ label: name, value: name }))
+            return buildConfigModeOptions(fromList, item?.config_mode)
         }
+        // 名称列表尚未返回时用配置明细兜底：同一 mode 只保留一条展示名
         const rows = configCache[pid] || []
-        const names = [...new Set(rows.map((r) => r.config_name).filter(Boolean))]
-        return names.map((label) => ({ label, value: label }))
+        const pairsByMode = new Map()
+        for (const row of rows) {
+            if (!row?.config_mode || pairsByMode.has(row.config_mode)) continue
+            pairsByMode.set(row.config_mode, { config_name: row.config_name, config_mode: row.config_mode })
+        }
+        return buildConfigModeOptions([...pairsByMode.values()], item?.config_mode)
     }
 
     const addOp = () => {
@@ -190,21 +197,26 @@ export function useOperatesListEditor({
 
     const onProjectChange = async (item) => {
         item.project_name = projectNameFromId(item.project_id) || ''
-        item.config_name = ''
-        item.database_name = emptyOp().database_name
+        // 配置按应用隔离，切换应用后逻辑标识必然失效，清空强制重新选择
+        item.config_mode = ''
+        // Redis 重置库编号快照；数据库清空库名展示引用，库名由 config_mode 引用的环境配置实时解析
+        if ('database_name' in item) item.database_name = emptyOp().database_name
+        if ('config_id' in item) item.config_id = null
         if (item.project_id) await loadConfigsForProject(item.project_id, true)
     }
 
-    const onConfigNameChange = async (item) => {
+    const onConfigModeChange = async (item) => {
         const pid = item.project_id
         if (!pid) return
         const rows = await loadConfigsForProject(pid)
+        // 数据库换配置名称后，原展示引用指向旧配置组，清空待用户重选
+        if ('config_id' in item) item.config_id = null
         const names = [
             ...new Set(
-                rows.filter((r) => r.config_name === item.config_name).map((r) => r.database_name).filter(Boolean)
+                rows.filter((r) => r.config_mode === item.config_mode).map((r) => r.database_name).filter(Boolean)
             )
         ]
-        if (names.length === 1) {
+        if (names.length === 1 && 'database_name' in item) {
             item.database_name = names[0]
         }
     }
@@ -213,7 +225,7 @@ export function useOperatesListEditor({
         editingOpKey,
         opCollapseState,
         configCache,
-        configNameListByProject,
+        configModeListByProject,
         opKeys,
         storageVariableSelectOptions,
         ensureCollapseKeys,
@@ -231,6 +243,7 @@ export function useOperatesListEditor({
         removeOp,
         duplicateOp,
         onProjectChange,
-        onConfigNameChange,
+        onConfigModeChange,
+        renderConfigModeLabel,
     }
 }

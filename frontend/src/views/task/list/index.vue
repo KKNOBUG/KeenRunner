@@ -300,27 +300,33 @@ const loadProjects = async () => {
   }
 }
 
-/** 执行环境下拉：与环境配置弹框同源(listEnvNames聚合)，按环境名称去重；有应用时仅该应用下已配置的环境 */
+/** 执行环境下拉：与环境配置弹框同源(listEnvNames)，value 为环境绑定ID、label 为环境名称；有应用时仅该应用下已配置的环境 */
 const loadEnvOptions = async (projectId = null) => {
   try {
     envLoading.value = true
-    // { project_id: { app|file|database|redis: env_name[] } }：类型键摊平去重，value/label均为环境名称
+    // { project_id: { app|file|database|redis: [{ env_id, env_name }] } }：类型键摊平，按环境名称去重（同名取首个绑定ID）
     const res = await api.listEnvNames({ project_id: projectId != null ? [Number(projectId)] : [] })
     const byProject = res?.data || {}
-    const names = new Set()
+    const seenNames = new Set()
+    const options = []
     Object.values(byProject).forEach((byType) => {
       if (!byType || typeof byType !== 'object') return
       Object.values(byType).forEach((arr) => {
-        if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
+        if (!Array.isArray(arr)) return
+        arr.forEach((bind) => {
+          const envId = Number(bind?.env_id)
+          const envName = bind?.env_name == null ? '' : String(bind.env_name).trim()
+          if (!Number.isFinite(envId) || envId <= 0 || !envName || seenNames.has(envName)) return
+          seenNames.add(envName)
+          options.push({ label: envName, value: envId })
+        })
       })
     })
-    envOptions.value = [...names]
-        .sort((a, b) => a.localeCompare(b, 'zh-CN'))
-        .map((n) => ({ label: n, value: n }))
+    envOptions.value = options.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
     // 当前选中环境不在新选项中时清空
-    const cur = queryItems.value.env_name
+    const cur = queryItems.value.env_id
     if (cur != null && !envOptions.value.some((o) => o.value === cur)) {
-      queryItems.value.env_name = null
+      queryItems.value.env_id = null
     }
   } catch (error) {
     console.error('加载环境列表失败:', error)
@@ -824,7 +830,7 @@ onMounted(() => {
         </QueryBarItem>
         <QueryBarItem label="执行环境：">
           <NSelect
-              v-model:value="queryItems.env_name"
+              v-model:value="queryItems.env_id"
               :options="envOptions"
               :loading="envLoading"
               clearable

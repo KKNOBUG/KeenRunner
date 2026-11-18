@@ -118,7 +118,7 @@ import TextPreviewModal from '@/components/common/TextPreviewModal.vue'
 import api from '@/api'
 import { useApiPermission, useBatchDeleteGuard } from '@/composables'
 import { formatDateTime, formatJsonBrief, resultPayloadOf, toPrettyJson } from '@/utils'
-import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { downloadBlobResponse, handleDownloadError } from '@/utils/common/downloadFile'
 import { TASK_RECORD_TASK_TYPE_VALUES } from '@/constants/autotestTaskType'
 
 defineOptions({ name: '执行记录' })
@@ -249,7 +249,7 @@ const downloadAttachment = async (row, att) => {
     const res = await api.downloadApiTaskRecordAttachment(recordId, att?.key || 'main')
     await downloadBlobResponse(res, att?.name || 'download.bin')
   } catch (e) {
-    window.$message?.error?.(e?.message || '下载失败')
+    await handleDownloadError(e, '下载失败')
   }
 }
 

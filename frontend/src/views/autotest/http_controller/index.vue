@@ -100,15 +100,15 @@
                   :disabled="props.readonly || props.lockProject"
               />
             </n-form-item>
-            <n-form-item label="配置名称" path="request_config_name" required class="http-field-config">
+            <n-form-item label="配置名称" path="request_config_mode" required class="http-field-config">
               <n-select
-                  v-model:value="state.form.request_config_name"
+                  v-model:value="state.form.request_config_mode"
                   placeholder="请选择配置名称"
-                  :options="httpConfigNameOptions"
-                  :loading="httpConfigNameLoading"
+                  :options="httpConfigModeOptions"
+                  :loading="httpConfigModeLoading"
                   clearable
                   filterable
-                  tag
+                  :render-label="renderConfigModeLabel"
                   class="request-toolbar-select"
                   :disabled="props.readonly"
               />
@@ -473,7 +473,7 @@
     <div style="padding: 8px 0;">
       <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedDebugEnvName"
+          v-model:value="selectedDebugEnvId"
           :options="envOptions"
           :loading="envLoading"
           placeholder="请选择执行环境"
@@ -533,6 +533,7 @@ import {
   validateExtractList,
 } from '@/utils/autotestExtractAssert'
 import { useStepEditorForm } from '@/composables/step-editor'
+import { buildConfigModeOptions, renderConfigModeLabel } from '@/composables/step-editor/configModeSelect'
 import {useUserStore} from '@/store';
 import {useRoute} from 'vue-router'
 
@@ -777,11 +778,11 @@ const rules = {
       trigger: ['change', 'blur']
     }
   ],
-  request_config_name: [
+  request_config_mode: [
     {
       validator(_rule, value) {
         if (value === null || value === undefined || String(value).trim() === '') {
-          return new Error('请填写或选择配置名称')
+          return new Error('请选择配置名称')
         }
         return true
       },
@@ -889,7 +890,7 @@ const hydrateHttpForm = (p) => {
     step_name: cfg.step_name !== undefined ? cfg.step_name : (step.name || original.step_name || ''),
     description: cfg.step_desc !== undefined ? (cfg.step_desc ?? '') : (original.step_desc || ''),
     request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
-    request_config_name: cfg.request_config_name ?? original.request_config_name ?? null,
+    request_config_mode: cfg.request_config_mode ?? original.request_config_mode ?? null,
     data_source_id: cfg.data_source_id ?? original.data_source_id ?? null,
     data_source_name: cfg.data_source_name ?? original.data_source_name ?? '',
     data_source_desc: cfg.data_source_desc ?? original.data_source_desc ?? '',
@@ -923,7 +924,7 @@ const { form, isExternalUpdate, syncFromExternal } = useStepEditorForm({
     step_name: '',
     description: '',
     request_project_id: null,
-    request_config_name: null,
+    request_config_mode: null,
     data_source_id: null,
     data_source_name: '',
     data_source_desc: '',
@@ -938,7 +939,7 @@ const { form, isExternalUpdate, syncFromExternal } = useStepEditorForm({
     f.url, f.headers, f.params,
     f.bodyType, f.bodyParams, f.bodyForm,
     f.jsonBody, f.xmlBody, f.rawBody, f.request_project_id,
-    f.request_config_name,
+    f.request_config_mode,
     f.data_source_id, f.data_source_name, f.data_source_desc,
     f.defined_variables, f.extract_variables, f.assert_validators
   ],
@@ -992,34 +993,36 @@ watch(
     },
 )
 
-const httpConfigNameOptions = ref([])
-const httpConfigNameLoading = ref(false)
-const loadHttpConfigNames = async (projectId) => {
+const httpConfigModePairs = ref([])
+const httpConfigModeLoading = ref(false)
+/** label=config_name / value=config_mode；失效 mode 自动补标红项 */
+const httpConfigModeOptions = computed(() => buildConfigModeOptions(httpConfigModePairs.value, state.form.request_config_mode))
+const loadHttpConfigModes = async (projectId) => {
   const pid = projectId != null && projectId !== '' ? Number(projectId) : null
   if (!pid) {
-    httpConfigNameOptions.value = []
+    httpConfigModePairs.value = []
     return
   }
-  httpConfigNameLoading.value = true
+  httpConfigModeLoading.value = true
   try {
     const res = await api.getEnvConfigNameList({ project_id: pid, env_type: 'app' })
-    const list = Array.isArray(res?.data) ? res.data : []
-    httpConfigNameOptions.value = list.map((name) => ({ label: name, value: name }))
+    httpConfigModePairs.value = Array.isArray(res?.data) ? res.data : []
   } catch (e) {
     console.error('加载配置名称列表失败', e)
-    httpConfigNameOptions.value = []
+    httpConfigModePairs.value = []
   } finally {
-    httpConfigNameLoading.value = false
+    httpConfigModeLoading.value = false
   }
 }
 watch(
     () => state.form.request_project_id,
     (pid, prev) => {
-      void loadHttpConfigNames(pid)
+      void loadHttpConfigModes(pid)
       if (pid == null || pid === '') {
-        state.form.request_config_name = null
+        state.form.request_config_mode = null
       } else if (prev != null && Number(pid) !== Number(prev)) {
-        state.form.request_config_name = null
+        // 配置按应用隔离，切应用后逻辑标识必然失效
+        state.form.request_config_mode = null
       }
     },
     { immediate: true }
@@ -1112,8 +1115,8 @@ const buildConfigFromState = () => {
     params: normalizeList(paramsList),
     request_args_type: state.form.bodyType,
     request_project_id: state.form.request_project_id ?? null,
-    request_config_name: state.form.request_config_name != null && String(state.form.request_config_name).trim() !== ''
-        ? String(state.form.request_config_name).trim()
+    request_config_mode: state.form.request_config_mode != null && String(state.form.request_config_mode).trim() !== ''
+        ? String(state.form.request_config_mode).trim()
         : null,
     data_source_id: state.form.data_source_id ?? null,
     data_source_name: state.form.data_source_name || '',
@@ -1342,26 +1345,35 @@ const debugResultRef = ref(null)
 const debugModalVisible = ref(false)
 const envOptions = ref([])
 const envLoading = ref(false)
-/** 调试所选环境名称（与后端 schema 的 env_name 对应） */
-const selectedDebugEnvName = ref(null)
+/** 调试所选环境绑定ID（与后端 schema 的 env_id 对应，改名不影响调试） */
+const selectedDebugEnvId = ref(null)
 
 const loadEnvNames = async () => {
   const pid = Number(state.form.request_project_id)
-  const configName = String(state.form.request_config_name || '').trim()
-  if (!pid || !configName) {
+  const configMode = String(state.form.request_config_mode || '').trim()
+  if (!pid || !configMode) {
     envOptions.value = []
-    selectedDebugEnvName.value = null
+    selectedDebugEnvId.value = null
     return
   }
   envLoading.value = true
   try {
-    // 仅返回挂载了该请求配置(app类型)的环境名称，收敛调试范围
-    const res = await api.queryAssignConfigEnvs({ project_id: pid, config_name: configName, env_type: 'app' })
-    const names = Array.isArray(res?.data) ? res.data : []
-    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
-    envOptions.value = sorted.map((n) => ({ label: n, value: n }))
-    if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {
-      selectedDebugEnvName.value = envOptions.value[0].value
+    // 仅返回挂载了该请求配置(app类型)的环境，收敛调试范围；响应为 [{env_id, env_name}]
+    const res = await api.queryAssignConfigEnvs({ project_id: pid, config_mode: configMode, env_type: 'app' })
+    const rows = Array.isArray(res?.data) ? res.data : []
+    // 调试入参按环境绑定ID定位（改名不影响调试），同ID去重后按名称排序展示
+    const seen = new Set()
+    const options = []
+    for (const row of rows) {
+      const id = Number(row?.env_id)
+      const name = String(row?.env_name ?? '').trim()
+      if (!Number.isInteger(id) || id <= 0 || !name || seen.has(id)) continue
+      seen.add(id)
+      options.push({ label: name, value: id })
+    }
+    envOptions.value = options.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
+      selectedDebugEnvId.value = envOptions.value[0].value
     }
   } catch (e) {
     console.error('加载环境列表失败', e)
@@ -1377,19 +1389,19 @@ const openDebugModal = () => {
     $message.warning('请先选择所属应用')
     return
   }
-  selectedDebugEnvName.value = null
+  selectedDebugEnvId.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
-  const envName = selectedDebugEnvName.value
-  if (!envName || !String(envName).trim()) {
+  const envId = Number(selectedDebugEnvId.value)
+  if (!Number.isInteger(envId) || envId <= 0) {
     $message.warning('请选择执行环境')
     return false
   }
   debugModalVisible.value = false
-  doDebugRequest(String(envName).trim())
+  doDebugRequest(envId)
 }
 
 /* 调试方法：先选环境再发请求 */
@@ -1403,7 +1415,7 @@ const debugging = async () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_name) => {
+const doDebugRequest = async (env_id) => {
   const extractCheck = validateExtractList(buildExtractForBackend())
   if (!extractCheck.valid) {
     $message.error(extractCheck.message)
@@ -1447,7 +1459,7 @@ const doDebugRequest = async (env_name) => {
     const original = props.step?.original || {}
 
     const debugPayload = {
-      env_name: String(env_name || '').trim(),
+      env_id,
       case_id: caseId,
       step_type: original.step_type || 'HTTP/HTTPS协议网络请求',
       step_name: state.form.step_name || original.step_name || 'HTTP 调试',
@@ -1455,12 +1467,8 @@ const doDebugRequest = async (env_name) => {
       request_method: cfg.method,
       request_args_type: cfg.request_args_type ?? original.request_args_type ?? 'none',
       request_project_id: cfg.request_project_id ?? original.request_project_id ?? null,
-      request_config_name:
-          cfg.request_config_name != null && String(cfg.request_config_name).trim() !== ''
-              ? String(cfg.request_config_name).trim()
-              : (original.request_config_name != null && String(original.request_config_name).trim() !== ''
-                  ? String(original.request_config_name).trim()
-                  : ''),
+      // 相对地址由后端按 env_id + request_config_mode 解析目标主机；绝对地址不依赖配置
+      request_config_mode: String(cfg.request_config_mode || '').trim() || null,
       request_params: Array.isArray(cfg.params) && cfg.params.length > 0 ? cfg.params : null,
       request_body: cfg.data,
       request_form_data: Array.isArray(cfg.form_data) && cfg.form_data.length > 0 ? cfg.form_data : null,

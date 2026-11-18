@@ -290,7 +290,7 @@ import VChart from 'vue-echarts'
 import CommonPage from '@/components/page/CommonPage.vue'
 import { useTagsStore } from '@/store'
 import api from '@/api'
-import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { downloadBlobResponse, handleDownloadError } from '@/utils/common/downloadFile'
 import {
   buildStatTargetOptions, buildZonedMetricsOption, resolveSeriesByTarget, TOTAL_SERIES_NAME,
 } from '@/composables/usePerfMetrics'
@@ -549,7 +549,7 @@ async function downloadArtifact(row) {
     const res = await api.downloadPerfReportArtifact({ report_code: reportCode.value, name: row.name })
     await downloadBlobResponse(res, row.name)
   } catch (e) {
-    window.$message?.error?.(e?.message || '产物下载失败')
+    await handleDownloadError(e, '产物下载失败')
   }
 }
 
@@ -561,7 +561,7 @@ async function handleExport() {
     const res = await api.exportPerfReport({ report_code: reportCode.value })
     await downloadBlobResponse(res, `压测报告_${reportCode.value}.xlsx`)
   } catch (e) {
-    window.$message?.error?.(e?.message || '报告导出失败')
+    await handleDownloadError(e, '报告导出失败')
   } finally {
     exporting.value = false
   }

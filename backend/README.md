@@ -1,3 +1,91 @@
+# 环境配置与部署（.env 单一配置）
+
+> 2026-11-18 更新：全环境共用唯一配置文件 `backend/.env`（不入 git，模板见 `.env.example`），内容由环境部署负责人按目标机器手动修改，修改后重启服务生效；已删除 .env.dev/.env.test/.env.production 与 PROGRAM_ENV 环境变量机制，所有平台启动前无需设置任何环境变量。
+
+## 1. 环境配置（所有平台一致）
+
+```shell
+# 首次部署：以 .env.example 为模板复制，并按目标机器填写实际值
+cd backend
+cp .env.example .env
+vi .env   # 至少核对 SERVER_PORT / SERVER_DEBUG / DATABASE_* / REDIS_* / CELERY_*_DB / AUTH_SECRET_KEY
+```
+
+- 开发（Mac/Windows）与测试/生产（Linux）都使用同一份 `.env`，仅字段值随机器不同；
+- `SERVER_PORT` 同时决定 PID/日志/队列名/进程名后缀，同机多实例需错开端口，并保证 `DATABASE_NAME` 与 Celery 库号不冲突。
+
+## 2. 启动命令
+
+### 2.1 Linux 部署（生产推荐 full_deploy.sh 一键）
+
+```shell
+cd backend && uv sync                          # 安装依赖
+# 首次上线：数据库迁移（在 backend 目录下，先预检再应用）
+aerich migrate --name init
+aerich upgrade
+# 一键部署（停旧→拉取分支代码→启动 Celery Worker+Beat→启动 Gunicorn）
+bash full_deploy.sh start
+bash full_deploy.sh status    # 查看状态
+bash full_deploy.sh restart   # 重启（不拉代码）
+bash full_deploy.sh stop      # 停止
+
+# 手动启动 Gunicorn（与 fastapi_deploy.sh 内启动命令同口径；端口以 .env 的 SERVER_PORT 为准，示例 8520）
+nohup gunicorn -c gunicorn.conf.py backend_main:app \
+    --pid gunicorn_8520.pid --name gunicorn_8520 \
+    > backend_main_8520.log 2>&1 &
+```
+
+### 2.2 macOS / Windows 开发
+
+```shell
+cd backend && uv sync
+# 使 import backend.* 可用（backend 包位于仓库根；Windows 见下方说明）
+export PYTHONPATH="$(pwd)/..:${PYTHONPATH:-}"
+uv run uvicorn backend_main:app --reload      # 主服务（端口由 .env 的 SERVER_PORT 决定）
+# Celery（需要任务执行时，队列名按 .env 端口派生，{port} 换成实际端口）
+celery -A celery_scheduler.celery_worker:celery worker \
+    --pool=solo --loglevel=info -Q {port}_default,{port}_autotest,{port}_perf
+celery -A celery_scheduler.celery_worker:celery beat \
+    --loglevel=info --scheduler=redbeat.schedulers:RedBeatScheduler
+# 前端（仓库根目录 frontend）
+cd ../frontend && pnpm install && pnpm dev
+```
+
+Windows：命令一致，差异仅在 PYTHONPATH 写法——PowerShell `$env:PYTHONPATH="..;$env:PYTHONPATH"`，CMD `set PYTHONPATH=..;%PYTHONPATH%`；无需设置其他环境变量。
+
+## 3. 同机双环境部署（可选）
+
+同机跑两个环境（如测试+生产）时，部署为**两份独立后端目录**（如 `/xxx1/project1` 与 `/xxx2/project2`，各自一套完整代码 + 各自的 `.env`）——单目录只有一份 `.env`，无法同时加载两套配置：
+
+```shell
+mkdir -p /xxx2/project2 && cp -r /xxx1/project1/* /xxx2/project2/   # 第二份完整代码
+vi /xxx2/project2/backend/.env        # 按下方清单与第一份错开
+```
+
+第二份 `.env` 需要核对的字段（celery 侧无需改任何脚本，全部从 `.env` 派生）：
+
+| 字段 | 说明 |
+|------|------|
+| `SERVER_PORT` | 必须不同 → 队列名 {port}_default/_autotest/_perf、PID、日志、worker 节点名自动错开 |
+| `DATABASE_NAME` | 必须不同（两环境各自 MySQL 库；若 MySQL 实例也不同则 `DATABASE_HOST/PORT/USERNAME/PASSWORD` 一并对齐） |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | 建议各自独立 Redis 实例；两环境共用同一实例时，靠右列三个 Celery 库号错开（业务键无共享前纠冲突） |
+| `CELERY_BROKER_DB` / `CELERY_BACKEND_DB` / `CELERY_REDBEAT_DB` | 两环境**共用同一 Redis 实例时**必须与另一环境错开（如 7/8/9 → 10/11/12）——broker 任务消息、结果后端、redbeat 调度锁都在这些库里，错开才互不干扰；**各自独立 Redis 实例时可保持相同** |
+| `AUTH_SECRET_KEY` | 建议不同，避免两环境 JWT 互通 |
+
+然后分别在各自目录执行 `bash full_deploy.sh start`（或 celery_deploy.sh + fastapi_deploy.sh），命令完全一致。
+
+## 4. 日志文件位置（按天生成，启动复用当天）
+
+| 服务 | 位置 / 格式 |
+|------|-------------|
+| 应用 | `output/logs/{YYYYmmdd}-{HHMMSS}-执行日志.log` |
+| Celery | `output/logs/celery_logs/{YYYYmmdd}-{HHMMSS}-{Worker|Beat}-{端口}.log` |
+| Gunicorn nohup | `backend_main_{端口}.log`（backend 根目录） |
+
+历史日志按 `LOGGER_RETENTION_DAYS`（`.env` 可配置，默认 30 天，0=不清理）在启动时自动清理。
+
+---
+
 # 技术栈：
 
 | 技术                 | 版本       | 作用                                                       |   

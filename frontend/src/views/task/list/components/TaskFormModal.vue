@@ -108,8 +108,8 @@ watch(selectedCaseIds, (ids) => {
   const cfg = { ...casesExecuteConfig.value }
   const idSet = new Set(ids.map(String))
   for (const key of Object.keys(cfg)) {
-    // 顶层全局配置(env_mode/env_name)不属于用例键，清理时必须跳过，否则编辑回显与保存均丢失全局环境
-    if (key === 'env_mode' || key === 'env_name') continue
+    // 顶层全局配置(env_mode/env_id/env_ids)不属于用例键，清理时必须跳过，否则编辑回显与保存均丢失全局环境
+    if (key === 'env_mode' || key === 'env_id' || key === 'env_ids') continue
     if (!idSet.has(key)) delete cfg[key]
   }
   casesExecuteConfig.value = cfg
@@ -211,9 +211,10 @@ function validateStep2() {
   if (execConfigRef.value?.validateConfigPayload && !execConfigRef.value.validateConfigPayload({ actionLabel: '保存' })) {
     return false
   }
-  // 新结构：顶层携带全局环境配置，各用例仅含 execute_count/involve_envs/steps_execute_config
+  // 新结构：顶层携带全局环境绑定ID(env_id/env_ids)，各用例仅含 execute_count/involve_env_ids/steps_execute_config
   const cfgRoot = casesExecuteConfig.value || {}
-  if (!cfgRoot.env_name) {
+  const hasGlobalEnv = !!cfgRoot.env_id || (Array.isArray(cfgRoot.env_ids) && cfgRoot.env_ids.length > 0)
+  if (!hasGlobalEnv) {
     window.$message?.warning?.('请完善环境与数据源配置（全局环境与步骤配置）')
     return false
   }
@@ -243,17 +244,19 @@ function goPrev() {
 function onCasesExecConfigsUpdate(configsMap) {
   if (!configsMap || typeof configsMap !== 'object') return
   
-  // 新结构：configsMap 顶层包含环境配置(env_mode/env_name)；数据源开关为任务表独立字段
+  // 新结构：configsMap 顶层包含环境配置(env_mode/env_id/env_ids)；数据源开关为任务表独立字段
   const next = { ...casesExecuteConfig.value }
   
-  // 保存顶层的全局配置：env_mode/env_name；数据源开关为任务表独立字段，不在 cases_execute_config 中
+  // 保存顶层的全局配置：env_mode/env_id/env_ids；数据源开关为任务表独立字段，不在 cases_execute_config 中
   if (configsMap.env_mode) next.env_mode = configsMap.env_mode
-  if (configsMap.env_name) next.env_name = configsMap.env_name
+  // 显式处理 null：多环境模式下全局环境可被清空，必须同步置空，避免提交旧绑定的残留值
+  if ('env_id' in configsMap) next.env_id = configsMap.env_id ?? null
+  next.env_ids = Array.isArray(configsMap.env_ids) ? configsMap.env_ids : []
   
   // 处理每个用例的配置
   for (const [key, cfg] of Object.entries(configsMap)) {
     // 跳过顶层字段
-    if (key === 'env_mode' || key === 'env_name') continue
+    if (key === 'env_mode' || key === 'env_id' || key === 'env_ids') continue
     
     const prev = next[key] || {}
     const script = selectedScripts.value.find((r) => Number(r.case_id) === Number(key))
@@ -307,6 +310,44 @@ function resetState() {
   editOriginalName = ''
   editOriginalProject = null
   scriptPickerRef.value?.collapse?.()
+}
+
+/** 编辑回显：按用例级 involve_env_ids 反查环境名称，填充脚本行“涉及环境”列（仅展示，不提交） */
+async function fillScriptInvolveEnvs() {
+  const idSet = new Set()
+  Object.values(casesExecuteConfig.value || {}).forEach((cfg) => {
+    if (!cfg || typeof cfg !== 'object') return
+    ;(Array.isArray(cfg.involve_env_ids) ? cfg.involve_env_ids : []).forEach((id) => {
+      const n = Number(id)
+      if (Number.isFinite(n) && n > 0) idSet.add(n)
+    })
+  })
+  if (!idSet.size || !selectedScripts.value.length) return
+  const projectIds = [...new Set(selectedScripts.value
+    .map((row) => Number(row.case_project?.project_id ?? row.project_id))
+    .filter((n) => Number.isFinite(n) && n > 0))]
+  try {
+    const res = await api.listEnvNames({ project_id: projectIds })
+    const nameById = new Map()
+    Object.values(res?.data || {}).forEach((byType) => {
+      Object.values(byType || {}).forEach((binds) => {
+        if (!Array.isArray(binds)) return
+        binds.forEach((bind) => {
+          const id = Number(bind?.env_id)
+          if (Number.isFinite(id) && id > 0) nameById.set(id, bind?.env_name || '')
+        })
+      })
+    })
+    selectedScripts.value = selectedScripts.value.map((row) => {
+      const cfg = casesExecuteConfig.value[String(row.case_id)] || {}
+      const names = (Array.isArray(cfg.involve_env_ids) ? cfg.involve_env_ids : [])
+        .map((id) => nameById.get(Number(id)))
+        .filter(Boolean)
+      return names.length ? { ...row, involve_envs: [...new Set(names)] } : row
+    })
+  } catch (e) {
+    console.error('加载脚本涉及环境失败', e)
+  }
 }
 
 async function loadTaskDetail() {
@@ -385,6 +426,8 @@ async function loadTaskDetail() {
           }
         })
       }
+      // 按用例级 involve_env_ids 反查环境名称，回显“涉及环境”列（环境改名后展示新名）
+      await fillScriptInvolveEnvs()
     } else {
       // 新增模式或无绑定脚本：初始化为空数组
       selectedScripts.value = []
@@ -431,33 +474,32 @@ async function handleSubmit() {
   const caseIds = selectedCaseIds.value
   const casesCfgPayload = {}
   
-  // 新结构：顶层包含全局配置 env_mode/env_name；数据源开关为任务表独立字段 dataset_enabled
+  // 新结构：顶层包含全局配置 env_mode/env_id/env_ids（只存绑定ID）；数据源开关为任务表独立字段 dataset_enabled
   const cfgRoot = casesExecuteConfig.value || {}
   casesCfgPayload.env_mode = cfgRoot.env_mode || 'single'
-  casesCfgPayload.env_name = cfgRoot.env_name || ''
+  const globalEnvId = Number(cfgRoot.env_id)
+  casesCfgPayload.env_id = Number.isFinite(globalEnvId) && globalEnvId > 0 ? globalEnvId : null
+  const envIdSet = new Set(Number.isFinite(globalEnvId) && globalEnvId > 0 ? [globalEnvId] : [])
   
-  // 每个用例的配置
+  // 每个用例的配置：只提交引用键（involve_env_ids + steps_execute_config），involve_envs 仅前端展示用
   for (const cid of caseIds) {
     const key = String(cid)
     const base = casesExecuteConfig.value[key]
     const script = selectedScripts.value.find((r) => Number(r.case_id) === Number(cid))
-    
-    // 提取该用例涉及的所有环境名称（去重）
-    const involveEnvs = new Set()
-    if (base?.steps_execute_config) {
-      Object.values(base.steps_execute_config).forEach((stepCfg) => {
-        if (stepCfg && stepCfg.env_name) {
-          involveEnvs.add(stepCfg.env_name)
-        }
-      })
-    }
-    
+    const stepsConfig = base?.steps_execute_config || {}
+    const involveIds = [...new Set(
+      Object.values(stepsConfig)
+        .map((stepCfg) => Number(stepCfg?.env_id))
+        .filter((n) => Number.isFinite(n) && n > 0),
+    )].sort((a, b) => a - b)
+    involveIds.forEach((id) => envIdSet.add(id))
     casesCfgPayload[key] = {
       execute_count: normalizeExecuteCount(script?.execute_count ?? base?.execute_count ?? 1),
-      involve_envs: Array.from(involveEnvs),
-      steps_execute_config: base?.steps_execute_config || {},
+      involve_env_ids: involveIds,
+      steps_execute_config: stepsConfig,
     }
   }
+  casesCfgPayload.env_ids = [...envIdSet].sort((a, b) => a - b)
 
   modalLoading.value = true
   try {

@@ -17,7 +17,7 @@
             <n-gi :span="12">
               <n-form-item label="调试环境">
                 <n-select
-                    v-model:value="envName"
+                    v-model:value="envId"
                     :options="envOptions"
                     :loading="envLoading"
                     clearable
@@ -119,7 +119,7 @@ const emit = defineEmits(['finished'])
 const show = defineModel('show', { type: Boolean, default: false })
 
 const apiRow = ref(null)
-const envName = ref(null)
+const envId = ref(null)
 // 数据源取数（对齐 autotest 设计：一个接口绑定一个数据源）
 const enableDataSource = ref(false)
 const sceneName = ref(null)
@@ -157,9 +157,11 @@ async function loadEnvNames(projectId) {
   if (!projectId) return
   envLoading.value = true
   try {
-    // 仅返回该应用挂载了 APP 配置的环境名称，与施压环境解析口径一致
+    // 响应为 [{env_id, env_name}]：仅返回该应用挂载了 APP 配置的环境，环境用绑定ID定位
     const res = await api.queryAssignConfigEnvs({ project_id: projectId, env_type: 'app' })
-    envOptions.value = (Array.isArray(res?.data) ? res.data : []).map((name) => ({ label: name, value: name }))
+    envOptions.value = (Array.isArray(res?.data) ? res.data : [])
+      .filter((item) => item && item.env_id)
+      .map((item) => ({ label: item.env_name, value: item.env_id }))
   } catch (e) {
     envOptions.value = []
   } finally {
@@ -212,8 +214,8 @@ async function handleDebug() {
   try {
     const res = await api.debugPerfApi({
       api_id: apiRow.value.api_id,
-      env_name: envName.value,
-      // 不再传 env_config_name（APP配置已在接口定义中）
+      env_id: envId.value,
+      // 不再传 env_config_mode（APP配置已在接口定义中）
       enable_data_source: enableDataSource.value,
       scene_name: enableDataSource.value ? sceneName.value : null,
     })
@@ -234,7 +236,7 @@ async function handleDebug() {
 /** 打开抽屉并预载环境候选 */
 async function open(row) {
   apiRow.value = row
-  envName.value = null
+  envId.value = null
   enableDataSource.value = false
   sceneName.value = null
   result.value = null

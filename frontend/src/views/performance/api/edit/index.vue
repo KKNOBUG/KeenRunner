@@ -100,7 +100,7 @@
               </n-form-item>
             </div>
 
-            <!-- 三字段同行：接口名称 + 所属应用 + 配置名称（无端口：施压目标 host/port 全由施压环境解析） -->
+            <!-- 三字段同行：接口名称 + 所属应用 + APP配置（无端口：施压目标 host/port 全由施压环境解析） -->
             <div class="request-row">
               <n-form-item
                   label="接口名称"
@@ -119,15 +119,14 @@
                     filterable
                 />
               </n-form-item>
-              <n-form-item label="配置名称" path="request_config_name" class="request-field-third">
+              <n-form-item label="APP配置" path="request_config_mode" class="request-field-third">
                 <n-select
-                    v-model:value="form.request_config_name"
-                    placeholder="请选择配置名称"
+                    v-model:value="form.request_config_mode"
+                    placeholder="请选择APP配置"
                     :options="configNameOptions"
                     :loading="configNameLoading"
                     clearable
                     filterable
-                    tag
                 />
               </n-form-item>
             </div>
@@ -275,7 +274,7 @@
         <div>
           <div style="margin-bottom: 8px;">调试环境：</div>
           <n-select
-              v-model:value="debugForm.envName"
+              v-model:value="debugForm.envId"
               :options="debugEnvOptions"
               :loading="debugEnvLoading"
               placeholder="请选择调试环境（绝对地址可留空）"
@@ -405,7 +404,7 @@ const emptyForm = () => ({
   request_body: null,
   request_args_type: 'none',
   request_project_id: null,
-  request_config_name: null,
+  request_config_mode: null,
   defined_variables: [],
   // 提取/断言在表单内为面板字典形态（key=序号），保存时经 perfExtractAssert 转回存储列表
   extract_variables: {},
@@ -487,7 +486,7 @@ async function loadProjects() {
   }
 }
 
-/** 配置名称下拉选项（对齐 http_controller / tcp_controller 联动：选应用后加载该应用下的配置名） */
+/** APP配置下拉选项（/config/config_names 返回 [{config_name, config_mode}]，选项值落配置逻辑标识） */
 const configNameOptions = ref([])
 const configNameLoading = ref(false)
 
@@ -501,7 +500,10 @@ async function loadConfigNames(projectId) {
   try {
     const res = await api.getEnvConfigNameList({ project_id: pid, env_type: 'app' })
     const list = Array.isArray(res?.data) ? res.data : []
-    configNameOptions.value = list.map((name) => ({ label: name, value: name }))
+    // 缺逻辑标识的存量行无法参与执行解析，不进下拉
+    configNameOptions.value = list
+      .filter((item) => item && item.config_mode)
+      .map((item) => ({ label: item.config_name, value: item.config_mode }))
   } catch (e) {
     configNameOptions.value = []
   } finally {
@@ -509,15 +511,15 @@ async function loadConfigNames(projectId) {
   }
 }
 
-/** 所属应用变化时联动加载配置名称选项并重置已选值（对齐用例编辑页联动逻辑） */
+/** 所属应用变化时联动加载APP配置选项并重置已选值（对齐用例编辑页联动逻辑） */
 watch(
     () => form.request_project_id,
     (pid, prev) => {
       void loadConfigNames(pid)
       if (pid == null || pid === '') {
-        form.request_config_name = null
+        form.request_config_mode = null
       } else if (prev != null && Number(pid) !== Number(prev)) {
-        form.request_config_name = null
+        form.request_config_mode = null
       }
     },
     { immediate: true },
@@ -729,7 +731,7 @@ const debugModalVisible = ref(false)
 const debugLoading = ref(false)
 const debugResult = ref(null)
 
-const debugForm = reactive({ envName: null, enableDataSource: false, selectedDatasetIds: [] })
+const debugForm = reactive({ envId: null, enableDataSource: false, selectedDatasetIds: [] })
 const debugEnvOptions = ref([])
 const debugEnvLoading = ref(false)
 const debugDatasetRows = ref([])
@@ -741,7 +743,7 @@ function openDebugModal() {
     window.$message?.warning('请先保存接口后再调试')
     return
   }
-  debugForm.envName = null
+  debugForm.envId = null
   debugForm.enableDataSource = false
   debugForm.selectedDatasetIds = []
   debugEnvOptions.value = []
@@ -760,7 +762,10 @@ async function loadDebugEnvs() {
       return
     }
     const res = await api.queryAssignConfigEnvs({ project_id: projectId, env_type: 'app' })
-    debugEnvOptions.value = (Array.isArray(res?.data) ? res.data : []).map((name) => ({ label: name, value: name }))
+    // 响应为 [{env_id, env_name}]：环境用绑定ID定位（改名不影响已保存接口）
+    debugEnvOptions.value = (Array.isArray(res?.data) ? res.data : [])
+      .filter((item) => item && item.env_id)
+      .map((item) => ({ label: item.env_name, value: item.env_id }))
   } catch (e) {
     debugEnvOptions.value = []
   } finally {
@@ -822,7 +827,7 @@ async function confirmDebug() {
   try {
     const res = await api.debugPerfApi({
       api_id: form.api_id,
-      env_name: debugForm.envName,
+      env_id: debugForm.envId,
       // 对齐 autotest 设计：一个接口绑定一个数据源，调试时选择是否启用 + 场景名称
       enable_data_source: debugForm.enableDataSource,
       scene_name: debugForm.enableDataSource ? (debugForm.selectedDatasetIds[0] || null) : null,

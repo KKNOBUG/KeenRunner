@@ -143,14 +143,14 @@
                         </n-form-item>
                         <n-form-item label="配置名称" required class="db-op-fi-fill">
                           <n-select
-                              v-model:value="item.config_name"
+                              v-model:value="item.config_mode"
                               :options="configOptionsForRow(item)"
-                              placeholder="选择或输入配置名称（支持 ${变量}）"
+                              placeholder="请选择配置名称"
                               clearable
                               filterable
-                              tag
+                              :render-label="renderConfigModeLabel"
                               :disabled="props.readonly"
-                              @update:value="() => onConfigNameChange(item)"
+                              @update:value="() => onConfigModeChange(item)"
                           />
                         </n-form-item>
                         <n-form-item label="存储变量" required class="db-op-fi-fill">
@@ -343,7 +343,7 @@
     <div style="padding: 8px 0;">
       <div style="margin-bottom: 8px;">执行环境：</div>
       <n-select
-          v-model:value="selectedDebugEnvName"
+          v-model:value="selectedDebugEnvId"
           :options="envOptions"
           :loading="envLoading"
           placeholder="请选择执行环境"
@@ -437,7 +437,7 @@ const buildConfigFromState = () => {
       name: String(row.name ?? '').trim(),
       project_id: projectId,
       project_name: pname,
-      config_name: row.config_name ?? '',
+      config_mode: row.config_mode ?? '',
       database_name: resolveDatabaseNameForRow(row),
       variable_name: row.variable_name ?? '',
       expr: row.expr ?? '',
@@ -457,9 +457,9 @@ const buildConfigFromState = () => {
 
 const resolveDatabaseNameForRow = (item) => {
   const pid = item?.project_id
-  const configName = item?.config_name
-  if (!pid || !configName) return item?.database_name || '0'
-  const rows = (configCache[pid] || []).filter((r) => r.config_name === configName)
+  const configMode = item?.config_mode
+  if (!pid || !configMode) return item?.database_name || '0'
+  const rows = (configCache[pid] || []).filter((r) => r.config_mode === configMode)
   const names = [...new Set(rows.map((r) => r.database_name).filter(Boolean))]
   if (names.length === 1) return names[0]
   return item?.database_name || '0'
@@ -478,7 +478,7 @@ const hydrateRedisForm = (p) => {
       name: row.name ?? '',
       project_id: row.project_id ?? findProjectIdByName(p.projectOptions, row.project_name),
       project_name: String(row.project_name ?? '').trim() || findProjectNameById(p.projectOptions, row.project_id) || '',
-      config_name: row.config_name ?? '',
+      config_mode: row.config_mode ?? '',
       database_name: row.database_name ?? '0',
       variable_name: row.variable_name ?? '',
       expr: row.expr ?? '',
@@ -539,7 +539,8 @@ const {
   removeOp,
   duplicateOp,
   onProjectChange,
-  onConfigNameChange,
+  onConfigModeChange,
+  renderConfigModeLabel,
 } = useOperatesListEditor({
   props,
   form,
@@ -550,7 +551,7 @@ const {
     name: '',
     project_id: null,
     project_name: '',
-    config_name: '',
+    config_mode: '',
     database_name: '0',
     variable_name: '',
     expr: '',
@@ -753,27 +754,33 @@ const validatorColumns = [
 
 const envOptions = ref([])
 const envLoading = ref(false)
-/** 调试所选环境名称（与后端 /redis_debugging schema 的 env_name 对齐） */
-const selectedDebugEnvName = ref(null)
+/** 调试所选环境绑定ID（与后端 /redis_debugging schema 的 env_id 对齐，必须是 REDIS 节点环境） */
+const selectedDebugEnvId = ref(null)
 const debugModalVisible = ref(false)
 
 const loadEnvNames = async () => {
   envLoading.value = true
   try {
-    // { project_id: { app|file|database|redis: env_name[] } }：与HTTP/TCP控制器同源，类型键摊平去重
+    // 顶层 env_id 必须是 REDIS 节点绑定（后端据此反查环境名称再按各操作所属应用解析）；同名环境跨应用只保留一条
     const res = await api.listEnvNames({ project_id: [] })
     const byProject = res?.data || {}
-    const names = new Set()
+    const options = []
+    const seen = new Set()
     Object.values(byProject).forEach((byType) => {
       if (!byType || typeof byType !== 'object') return
-      Object.values(byType).forEach((arr) => {
-        if (Array.isArray(arr)) arr.forEach((n) => { if (n != null && String(n).trim() !== '') names.add(String(n)) })
+      const redisEnvs = byType.redis
+      if (!Array.isArray(redisEnvs)) return
+      redisEnvs.forEach((item) => {
+        const id = Number(item?.env_id)
+        const name = String(item?.env_name ?? '').trim()
+        if (!Number.isInteger(id) || id <= 0 || !name || seen.has(name)) return
+        seen.add(name)
+        options.push({ label: name, value: id })
       })
     })
-    const sorted = [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
-    envOptions.value = sorted.map((n) => ({ label: n, value: n }))
-    if (envOptions.value.length > 0 && selectedDebugEnvName.value == null) {
-      selectedDebugEnvName.value = envOptions.value[0].value
+    envOptions.value = options.sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'))
+    if (envOptions.value.length > 0 && selectedDebugEnvId.value == null) {
+      selectedDebugEnvId.value = envOptions.value[0].value
     }
   } catch (e) {
     console.error('加载环境列表失败', e)
@@ -798,8 +805,8 @@ const validateBeforeDebug = () => {
       window.$message?.warning?.('请选择所属应用')
       return false
     }
-    if (!String(row.config_name ?? '').trim()) {
-      window.$message?.warning?.('请填写配置名称')
+    if (!String(row.config_mode ?? '').trim()) {
+      window.$message?.warning?.('请选择配置名称')
       return false
     }
     if (!String(row.expr ?? '').trim()) {
@@ -815,18 +822,19 @@ const validateBeforeDebug = () => {
 }
 
 const openDebugModal = () => {
-  selectedDebugEnvName.value = null
+  selectedDebugEnvId.value = null
   debugModalVisible.value = true
   loadEnvNames()
 }
 
 const confirmDebugModal = () => {
-  if (selectedDebugEnvName.value == null || String(selectedDebugEnvName.value).trim() === '') {
+  const envId = Number(selectedDebugEnvId.value)
+  if (!Number.isInteger(envId) || envId <= 0) {
     window.$message?.warning?.('请选择执行环境')
     return false
   }
   debugModalVisible.value = false
-  doDebugRequest(String(selectedDebugEnvName.value).trim())
+  doDebugRequest(envId)
   return true
 }
 
@@ -835,7 +843,7 @@ const debugging = () => {
   openDebugModal()
 }
 
-const doDebugRequest = async (env_name) => {
+const doDebugRequest = async (env_id) => {
   const ev = buildExtractForBackend()
   const av = buildValidatorsForBackend()
   const extractCheck = validateExtractList(ev)
@@ -855,7 +863,7 @@ const doDebugRequest = async (env_name) => {
     const cfg = buildConfigFromState()
     const original = props.step?.original || {}
     const debugPayload = {
-      env_name: env_name,
+      env_id,
       step_name: state.form.step_name || original.step_name || 'Redis 调试',
       redis_searched: !!cfg.redis_searched,
       redis_operates: cfg.redis_operates || []

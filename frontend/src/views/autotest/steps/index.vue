@@ -1246,7 +1246,7 @@ const handleSaveAll = async () => {
     }
 
     // 公共接口：所属应用/步骤描述/步骤名称兜底同步（用户可能从未点开步骤子页面，watch未覆盖时在此强制对齐）；
-    // 必须在 required 校验之前执行：应用变化需同步清空配置名称，由校验拦截强制用户重新选择
+    // 必须在 required 校验之前执行：应用变化需同步清空配置逻辑标识，由校验拦截强制用户重新选择
     if (isPublicApiCase.value && steps.value.length === 1 && ['http', 'tcp'].includes(steps.value[0]?.type)) {
       const casePid = caseInfoPanelRef.value?.caseForm?.case_project
       const caseDesc = caseInfoPanelRef.value?.caseForm?.case_desc ?? ''
@@ -1255,7 +1255,7 @@ const handleSaveAll = async () => {
       const syncConfig = {}
       if (casePid != null && casePid !== '' && Number(onlyStep.config?.request_project_id) !== Number(casePid)) {
         syncConfig.request_project_id = Number(casePid)
-        syncConfig.request_config_name = null
+        syncConfig.request_config_mode = null
       }
       if ((onlyStep.config?.step_desc ?? '') !== caseDesc) {
         syncConfig.step_desc = caseDesc
@@ -1516,7 +1516,6 @@ const handleDebug = async () => {
     caseId: caseId.value,
     projectOptions: editorProjectOptions.value,
     ensureQuoteStepsLoaded: loadQuoteStepsForAllQuoteStepsAsync,
-    findStep,
     resolveCaseId: resolveNumericCaseIdForExecuteApi,
     buildDebugExecutePayload: (step_exec_config_map, datasetPart) => {
       const stepNoMap = assignStepNumbers(steps.value)
@@ -1815,9 +1814,9 @@ watch(
       const caseName = caseInfoPanelRef.value?.caseForm?.case_name ?? ''
       const syncConfig = {}
       if (casePid != null && casePid !== '' && Number(step.config?.request_project_id) !== Number(casePid)) {
-        // 应用变化后配置名称必然失效（配置按应用隔离），同步清空强制用户重新选择
+        // 应用变化后配置逻辑标识必然失效（配置按应用隔离），同步清空强制用户重新选择
         syncConfig.request_project_id = Number(casePid)
-        syncConfig.request_config_name = null
+        syncConfig.request_config_mode = null
       }
       if ((step.config?.step_desc ?? '') !== caseDesc) {
         syncConfig.step_desc = caseDesc

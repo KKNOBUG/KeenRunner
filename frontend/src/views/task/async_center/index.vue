@@ -60,7 +60,7 @@ import api from '@/api'
 import { useApiPermission, useBatchDeleteGuard } from '@/composables'
 import { useUserStore } from '@/store'
 import { formatDateTime, renderIcon } from '@/utils'
-import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { downloadBlobResponse, handleDownloadError } from '@/utils/common/downloadFile'
 import {
   ASYNC_CENTER_TASK_TYPE_OPTIONS,
   ASYNC_CENTER_TASK_TYPE_VALUES,
@@ -147,7 +147,7 @@ const downloadAttachment = async (row, att) => {
     const res = await api.downloadApiTaskRecordAttachment(recordId, att?.key || 'main')
     await downloadBlobResponse(res, att?.name || 'download.bin')
   } catch (e) {
-    window.$message?.error?.(e?.message || '下载失败')
+    await handleDownloadError(e, '下载失败')
   }
 }
 

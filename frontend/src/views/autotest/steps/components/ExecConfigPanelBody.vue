@@ -137,27 +137,33 @@
                     <div class="col addr">IP/端口</div>
                   </div>
                   <div class="exec-config-table-body overlay-scroll">
-                    <div v-for="(row, idx) in panel.debugApiRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div
+                        v-for="(row, idx) in panel.debugApiRowsForSelected"
+                        :key="row.key"
+                        class="exec-config-table-row"
+                        :class="{ 'is-missing': !!panel.rowMissingReason(row) }"
+                    >
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
                         <n-select
-                            v-model:value="row.env_id"
+                            :value="panel.resolveRowEnvId(row)"
                             :options="panel.getRowEnvOptions(row)"
                             size="small"
-                            :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
-                            placeholder="请先选择全局环境"
+                            :disabled="panel.debugEnvMode === 'single'"
+                            placeholder="请选择环境"
                             clearable
+                            @update:value="(v) => (row.env_id = v)"
                         />
                       </div>
                       <div class="col config">
-                        <n-input :value="row.request_config_name || ''" size="small" disabled placeholder="未填写配置名" />
+                        <n-input :value="panel.getRowConfigName(row)" size="small" disabled placeholder="未选择配置" />
                       </div>
                       <div class="col addr">
                         <n-input
                             :value="panel.getRowAddrPreview(row, 'app')"
                             size="small"
                             disabled
-                            :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                            :placeholder="panel.rowMissingReason(row) || ''"
                         />
                       </div>
                     </div>
@@ -179,27 +185,33 @@
                     <div class="col addr">IP/端口</div>
                   </div>
                   <div class="exec-config-table-body overlay-scroll">
-                    <div v-for="(row, idx) in panel.debugDbRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div
+                        v-for="(row, idx) in panel.debugDbRowsForSelected"
+                        :key="row.key"
+                        class="exec-config-table-row"
+                        :class="{ 'is-missing': !!panel.rowMissingReason(row) }"
+                    >
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
                         <n-select
-                            v-model:value="row.env_id"
+                            :value="panel.resolveRowEnvId(row)"
                             :options="panel.getRowEnvOptions(row)"
                             size="small"
-                            :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
-                            placeholder="请先选择全局环境"
+                            :disabled="panel.debugEnvMode === 'single'"
+                            placeholder="请选择环境"
                             clearable
+                            @update:value="(v) => (row.env_id = v)"
                         />
                       </div>
                       <div class="col config">
-                        <n-input :value="row.config_name || ''" size="small" disabled placeholder="未填写配置名" />
+                        <n-input :value="panel.getRowConfigName(row)" size="small" disabled placeholder="未选择配置" />
                       </div>
                       <div class="col config">
                         <n-input
                             :value="panel.getDbDatabaseDisplay(row)"
                             size="small"
                             disabled
-                            :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                            :placeholder="panel.rowMissingReason(row) || ''"
                         />
                       </div>
                       <div class="col addr">
@@ -207,7 +219,7 @@
                             :value="panel.getRowAddrPreview(row, row.config_bucket || 'database')"
                             size="small"
                             disabled
-                            :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                            :placeholder="panel.rowMissingReason(row) || ''"
                         />
                       </div>
                     </div>
@@ -229,27 +241,33 @@
                     <div class="col addr">IP/端口</div>
                   </div>
                   <div class="exec-config-table-body overlay-scroll">
-                    <div v-for="(row, idx) in panel.debugRedisRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div
+                        v-for="(row, idx) in panel.debugRedisRowsForSelected"
+                        :key="row.key"
+                        class="exec-config-table-row"
+                        :class="{ 'is-missing': !!panel.rowMissingReason(row) }"
+                    >
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
                         <n-select
-                            v-model:value="row.env_id"
+                            :value="panel.resolveRowEnvId(row)"
                             :options="panel.getRowEnvOptions(row)"
                             size="small"
-                            :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
-                            placeholder="请先选择全局环境"
+                            :disabled="panel.debugEnvMode === 'single'"
+                            placeholder="请选择环境"
                             clearable
+                            @update:value="(v) => (row.env_id = v)"
                         />
                       </div>
                       <div class="col config">
-                        <n-input :value="row.config_name || ''" size="small" disabled placeholder="未填写配置名" />
+                        <n-input :value="panel.getRowConfigName(row)" size="small" disabled placeholder="未选择配置" />
                       </div>
                       <div class="col config">
                         <n-input
                             :value="panel.getDbDatabaseDisplay(row)"
                             size="small"
                             disabled
-                            :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                            :placeholder="panel.rowMissingReason(row) || ''"
                         />
                       </div>
                       <div class="col addr">
@@ -257,7 +275,7 @@
                             :value="panel.getRowAddrPreview(row, 'redis')"
                             size="small"
                             disabled
-                            :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                            :placeholder="panel.rowMissingReason(row) || ''"
                         />
                       </div>
                     </div>
@@ -278,27 +296,33 @@
                     <div class="col addr">IP/端口</div>
                   </div>
                   <div class="exec-config-table-body overlay-scroll">
-                    <div v-for="(row, idx) in panel.debugFileRowsForSelected" :key="row.key" class="exec-config-table-row">
+                    <div
+                        v-for="(row, idx) in panel.debugFileRowsForSelected"
+                        :key="row.key"
+                        class="exec-config-table-row"
+                        :class="{ 'is-missing': !!panel.rowMissingReason(row) }"
+                    >
                       <div class="col idx">{{ idx + 1 }}</div>
                       <div class="col env">
                         <n-select
-                            v-model:value="row.env_id"
+                            :value="panel.resolveRowEnvId(row)"
                             :options="panel.getRowEnvOptions(row)"
                             size="small"
-                            :disabled="!panel.debugGlobalEnvId || panel.debugEnvMode === 'single'"
-                            placeholder="请先选择全局环境"
+                            :disabled="panel.debugEnvMode === 'single'"
+                            placeholder="请选择环境"
                             clearable
+                            @update:value="(v) => (row.env_id = v)"
                         />
                       </div>
                       <div class="col config">
-                        <n-input :value="row.config_name || ''" size="small" disabled placeholder="未填写配置名" />
+                        <n-input :value="panel.getRowConfigName(row)" size="small" disabled placeholder="未选择配置" />
                       </div>
                       <div class="col addr">
                         <n-input
                             :value="panel.getRowAddrPreview(row, 'file')"
                             size="small"
                             disabled
-                            :placeholder="panel.debugGlobalEnvId ? '' : '请先选择全局环境'"
+                            :placeholder="panel.rowMissingReason(row) || ''"
                         />
                       </div>
                     </div>
@@ -453,5 +477,15 @@ if (!panel) {
 
 .exec-config-collapse--flat :deep(.n-collapse-item__content-inner) {
   padding-top: 0 !important;
+}
+
+/* 行级缺失标红（Q15）：环境未选/当前环境未配置该逻辑标识时仍展示绑定配置名 */
+.exec-config-table-row.is-missing {
+  box-shadow: inset 3px 0 0 #d03050;
+}
+
+.exec-config-table-row.is-missing :deep(.n-input .n-input__input-el),
+.exec-config-table-row.is-missing :deep(.n-input .n-input__placeholder) {
+  color: #d03050;
 }
 </style>

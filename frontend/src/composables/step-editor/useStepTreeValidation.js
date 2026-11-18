@@ -98,12 +98,10 @@ const validateDatabaseSteps = (stepList) => {
                 if (!hasApp) {
                     return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择所属应用` }
                 }
-                if (!String(o.config_name ?? '').trim()) {
-                    return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写配置名称` }
+                if (!String(o.config_mode ?? '').trim()) {
+                    return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择配置名称` }
                 }
-                if (!String(o.database_name ?? '').trim()) {
-                    return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写数据库名称` }
-                }
+                // 库名由 config_mode 引用的环境配置实时解析；config_id 仅展示引用，不做校验
                 if (!String(o.expr ?? '').trim()) {
                     return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写SQL语句` }
                 }
@@ -160,8 +158,8 @@ const validateRedisSteps = (stepList) => {
                 if (!hasApp) {
                     return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择所属应用` }
                 }
-                if (!String(o.config_name ?? '').trim()) {
-                    return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写配置名称` }
+                if (!String(o.config_mode ?? '').trim()) {
+                    return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请选择配置名称` }
                 }
                 if (!String(o.database_name ?? '').trim()) {
                     return { valid: false, message: `步骤：${stepName}，${idxLabel}请求配置未完成：请填写库编号` }
@@ -207,11 +205,11 @@ const validateHttpTcpStepsRequired = (stepList) => {
                 const projectId = config.request_project_id ?? original.request_project_id ?? null
                 const emptyProject = projectId === null || projectId === undefined || projectId === ''
 
-                let cfgName = ''
-                if (config.request_config_name !== undefined) {
-                    cfgName = config.request_config_name == null ? '' : String(config.request_config_name).trim()
+                let cfgMode = ''
+                if (config.request_config_mode !== undefined) {
+                    cfgMode = config.request_config_mode == null ? '' : String(config.request_config_mode).trim()
                 } else {
-                    cfgName = String(original.request_config_name ?? '').trim()
+                    cfgMode = String(original.request_config_mode ?? '').trim()
                 }
 
                 const url = String(config.url ?? original.request_url ?? '').trim()
@@ -219,8 +217,8 @@ const validateHttpTcpStepsRequired = (stepList) => {
                 if (emptyProject) {
                     return { valid: false, message: `步骤：${stepLabel}，请选择所属应用后再保存` }
                 }
-                if (!cfgName) {
-                    return { valid: false, message: `步骤：${stepLabel}，请填写配置名称后再保存` }
+                if (!cfgMode) {
+                    return { valid: false, message: `步骤：${stepLabel}，请选择配置名称后再保存` }
                 }
                 if (!url) {
                     return { valid: false, message: `步骤：${stepLabel}，请填写请求地址后再保存` }
@@ -231,18 +229,18 @@ const validateHttpTcpStepsRequired = (stepList) => {
                 const projectId = config.request_project_id ?? original.request_project_id ?? null
                 const emptyProject = projectId === null || projectId === undefined || projectId === ''
 
-                let cfgName = ''
-                if (config.request_config_name !== undefined) {
-                    cfgName = config.request_config_name == null ? '' : String(config.request_config_name).trim()
+                let cfgMode = ''
+                if (config.request_config_mode !== undefined) {
+                    cfgMode = config.request_config_mode == null ? '' : String(config.request_config_mode).trim()
                 } else {
-                    cfgName = String(original.request_config_name ?? '').trim()
+                    cfgMode = String(original.request_config_mode ?? '').trim()
                 }
 
                 if (emptyProject) {
                     return { valid: false, message: `步骤：${stepLabel}，请选择所属应用后再保存` }
                 }
-                if (!cfgName) {
-                    return { valid: false, message: `步骤：${stepLabel}，请填写配置名称后再保存` }
+                if (!cfgMode) {
+                    return { valid: false, message: `步骤：${stepLabel}，请选择配置名称后再保存` }
                 }
             }
 

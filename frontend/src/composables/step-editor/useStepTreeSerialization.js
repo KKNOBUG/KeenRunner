@@ -172,9 +172,9 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
 
         if (step.type === 'tcp') {
             backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
-            backendStep.request_config_name = config.request_config_name !== undefined
-                ? (config.request_config_name || null)
-                : (original.request_config_name || null)
+            backendStep.request_config_mode = config.request_config_mode !== undefined
+                ? (config.request_config_mode || null)
+                : (original.request_config_mode || null)
             backendStep.request_url = null
             backendStep.request_port = null
 
@@ -221,9 +221,9 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.request_args_type = config.request_args_type ?? original.request_args_type ?? 'none'
             backendStep.request_text = config.request_text ?? original.request_text ?? null
             backendStep.request_project_id = config.request_project_id ?? original.request_project_id ?? null
-            backendStep.request_config_name = config.request_config_name !== undefined
-                ? (config.request_config_name || null)
-                : (original.request_config_name || null)
+            backendStep.request_config_mode = config.request_config_mode !== undefined
+                ? (config.request_config_mode || null)
+                : (original.request_config_mode || null)
             backendStep.request_header = filterKeyValueList(Array.isArray(config.headers) ? config.headers : (Array.isArray(original.request_header) ? original.request_header : []))
             backendStep.request_params = filterKeyValueList(Array.isArray(config.params) ? config.params : (Array.isArray(original.request_params) ? original.request_params : []))
             backendStep.request_form_data = filterKeyValueList(Array.isArray(config.form_data) ? config.form_data : (Array.isArray(original.request_form_data) ? original.request_form_data : []))
@@ -374,7 +374,19 @@ export function useStepTreeSerialization({ steps, caseId, caseCode, appliedCaseM
             backendStep.step_desc = config.step_desc !== undefined ? config.step_desc : (original.step_desc ?? null)
             backendStep.database_searched = !!(config.database_searched ?? original.database_searched)
             const ops = config.database_operates ?? original.database_operates
-            backendStep.database_operates = Array.isArray(ops) && ops.length > 0 ? ops : null
+            // 库名由 config_mode 引用的环境配置解析；config_id 仅作前端展示引用，旧 database_name 快照不再接受
+            backendStep.database_operates = Array.isArray(ops) && ops.length > 0
+                ? ops.map((op) => ({
+                    name: op?.name ?? '',
+                    desc: op?.desc ?? '',
+                    project_id: op?.project_id ?? null,
+                    project_name: op?.project_name ?? '',
+                    config_mode: op?.config_mode ?? '',
+                    config_id: op?.config_id ?? null,
+                    expr: op?.expr ?? '',
+                    variable_name: op?.variable_name ?? '',
+                }))
+                : null
             backendStep.extract_variables = resolveArrayField(config, original, 'extract_variables')
             backendStep.assert_validators = resolveArrayField(config, original, 'assert_validators')
         } else if (step.type === 'redis') {

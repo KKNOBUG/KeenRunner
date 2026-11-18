@@ -116,7 +116,7 @@ import TheIcon from '@/components/icon/TheIcon.vue'
 import Luckysheet from '@/components/common/Luckysheet.vue'
 import api from '@/api'
 import { trackDataSourceSave } from '@/composables/step-editor/pendingDataSourceSaves'
-import { downloadBlobResponse } from '@/utils/common/downloadFile'
+import { downloadBlobResponse, handleDownloadError } from '@/utils/common/downloadFile'
 
 const props = defineProps({
   step: { type: Object, default: () => ({}) },
@@ -621,7 +621,7 @@ const dataSourceExport = async () => {
     await downloadBlobResponse(res, `${stepName}_数据源.xlsx`)
     $message.success('导出成功')
   } catch (e) {
-    $message.error(`导出失败：${e?.message || e}`)
+    await handleDownloadError(e, '导出失败')
   } finally {
     exportLoading.value = false
   }
@@ -684,7 +684,7 @@ const downloadStepTemplate = async () => {
     await downloadBlobResponse(res, '数据源导出模板.xlsx')
     $message.success('下载成功')
   } catch (e) {
-    $message.error(`下载失败：${e?.message || e}`)
+    await handleDownloadError(e, '下载失败')
   } finally {
     templateDownloadLoading.value = false
   }

@@ -582,9 +582,12 @@ async function loadEnvNames(projectId) {
   if (!projectId) { envOptions.value = []; return }
   envLoading.value = true
   try {
+    // 响应为 [{env_id, env_name}]；负载预设按 D 级契约仍存环境名称，选项值保持名称
     const res = await api.queryAssignConfigEnvs({ project_id: projectId, env_type: 'app' })
-    const names = Array.isArray(res?.data) ? res.data : []
-    envOptions.value = names.map((name) => ({ label: name, value: name }))
+    const rows = Array.isArray(res?.data) ? res.data : []
+    envOptions.value = rows
+      .filter((item) => item && item.env_name)
+      .map((item) => ({ label: item.env_name, value: item.env_name }))
   } catch (e) {
     envOptions.value = []
   } finally {
