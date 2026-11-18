@@ -14,25 +14,22 @@ from backend.applications.autotest.schemas.autotest_step_schema import AutoTestS
 
 
 class ExecutorFieldsValidation:
-    """
-    按步骤类型校验执行器必填字段组合（validate_tree的第3层深度校验：树结构→执行器字段→变量引用链）。
+    """按步骤类型校验执行器必填字段组合，为步骤树校验的最深层。"""
 
-    递归覆盖children、branch_items.branch_children与quote_steps；step_type非法同样记为错误，
-    保证保存前能一次性给出完整缺失清单。
-    """
+    # validate_tree第3层深度校验：树结构 → 执行器字段 → 变量引用链；
+    # 递归覆盖children、branch_items.branch_children与quote_steps；step_type非法同样记为错误，
+    # 保证保存前能一次性给出完整缺失清单
 
     @classmethod
     def validate_executor_fields(cls, steps: List[AutoTestStepTreeUpdateItem]) -> List[Dict[str, Any]]:
         """
-        根据步骤类型校验各执行器的必填字段组合（validate_tree的第3层深度校验）。
-
-        字段口径：HTTP/TCP校验请求目标与报文；DATABASE/REDIS校验每个操作项；
-        LOOP按模式校验迭代源；IF校验分支条件；ASSERT/EXTRACT校验每项规则；
-        非法step_type直接记为错误。
+        根据步骤类型校验各执行器的必填字段组合。
 
         :param steps: 根步骤列表
         :return: 错误项列表，每项含step_code、step_name、step_type、missing（缺失字段名列表）、message
         """
+        # 字段口径：HTTP/TCP校验请求目标与报文；DATABASE/REDIS校验每个操作项；
+        # LOOP按模式校验迭代源；IF校验分支条件；ASSERT/EXTRACT校验每项规则；非法step_type直接记为错误
         from backend.enums import AutoTestStepType, AutoTestBranchType, AutoTestLoopMode
 
         errors: List[Dict[str, Any]] = []
@@ -73,18 +70,15 @@ class ExecutorFieldsValidation:
                     missing.append("request_method")
                 if not step.request_project_id:
                     missing.append("request_project_id")
-                if not step.request_config_name:
-                    missing.append("request_config_name")
+                if not step.request_config_mode:
+                    missing.append("request_config_mode")
 
             elif step_type == AutoTestStepType.TCP:
-                if not step.request_url:
-                    missing.append("request_url")
-                if not step.request_port:
-                    missing.append("request_port")
+                # 目标主机/端口由执行配置（配置逻辑标识）在执行期解析，步骤不再存地址
                 if not step.request_project_id:
                     missing.append("request_project_id")
-                if not step.request_config_name:
-                    missing.append("request_config_name")
+                if not step.request_config_mode:
+                    missing.append("request_config_mode")
                 if not (step.request_text or step.request_body):
                     missing.append("request_text|request_body")
 
@@ -98,10 +92,9 @@ class ExecutorFieldsValidation:
                             missing.append(f"{op_label}.expr")
                         if not getattr(op, "variable_name", None):
                             missing.append(f"{op_label}.variable_name")
-                        if not getattr(op, "config_name", None):
-                            missing.append(f"{op_label}.config_name")
-                        if not getattr(op, "database_name", None):
-                            missing.append(f"{op_label}.database_name")
+                        # 库名由 config_mode 引用的环境配置在执行期解析，步骤不再要求 database_name 快照
+                        if not getattr(op, "config_mode", None):
+                            missing.append(f"{op_label}.config_mode")
                         if not getattr(op, "project_name", None) and not getattr(op, "project_id", None):
                             missing.append(f"{op_label}.project_name|project_id")
 
@@ -115,8 +108,8 @@ class ExecutorFieldsValidation:
                             missing.append(f"{op_label}.expr")
                         if not getattr(op, "variable_name", None):
                             missing.append(f"{op_label}.variable_name")
-                        if not getattr(op, "config_name", None):
-                            missing.append(f"{op_label}.config_name")
+                        if not getattr(op, "config_mode", None):
+                            missing.append(f"{op_label}.config_mode")
                         if not getattr(op, "database_name", None):
                             missing.append(f"{op_label}.database_name")
                         if not getattr(op, "project_name", None) and not getattr(op, "project_id", None):

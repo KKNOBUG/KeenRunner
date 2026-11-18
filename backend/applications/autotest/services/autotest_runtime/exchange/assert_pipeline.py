@@ -18,11 +18,9 @@ from backend.applications.autotest.services.autotest_runtime.placeholders.resolv
 
 
 class AssertPipeline:
-    """
-    断言验证实现：批量执行步骤级断言规则，并为数据驱动场景追加assert_head/assert_body断言。
+    """断言验证实现：批量执行步骤级断言规则，并为数据驱动场景追加assert_head/assert_body断言。"""
 
-    两条路径都只记录逐项结果而不抛出业务异常，是否因失败中止由调用方（ExtractAssertPipeline）统一判定。
-    """
+    # 两条路径都只记录逐项结果而不抛出业务异常，是否因失败中止由调用方（ExtractAssertPipeline）统一判定
 
     @classmethod
     def run_assert_validators(
@@ -46,10 +44,6 @@ class AssertPipeline:
         """
         根据断言规则列表取实际值并与期望值比较。
 
-        规则不完整（name/expr/operation/source任一为空）时跳过且不产生结果项；
-        取实际值异常直接记失败（不再解析期望值）；比较为False或比较异常同样记失败，
-        但均继续执行后续规则，失败明细由调用方汇总。
-
         :param assert_validators: 断言规则列表
         :param response_text: 响应正文
         :param response_json: 响应JSON，或DB/Redis操作结果列表
@@ -67,6 +61,9 @@ class AssertPipeline:
         :return: 每项断言结果dict列表；success为False时error非空
         :raises TypeError: assert_validators或其子项类型不合法
         """
+        # 规则不完整（name/expr/operation/source任一为空）时跳过且不产生结果项；
+        # 取实际值异常直接记失败（不再解析期望值）；比较为False或比较异常同样记失败，
+        # 但均继续执行后续规则，失败明细由调用方汇总
         validator_results: List[Dict[str, Any]] = []
         if not assert_validators:
             return validator_results
@@ -204,10 +201,6 @@ class AssertPipeline:
         """
         将数据驱动场景的assert_head/assert_body追加到validator_results。
 
-        断言操作符固定为「等于」：assert_head逐项按response headers提取；assert_body按表达式前缀
-        自动判断来源（$.→JSON、./或//→XML、其他→Text）。response_headers为None（如TCP）时跳过head断言；
-        来源前置条件不足（非JSON却断言JSON等）或提取/比较异常时记录失败项而不抛出。
-
         :param step_struct: 含assert_head/assert_body的数据驱动结构
         :param validator_results: 断言结果列表（原地追加）
         :param response_text: 响应正文
@@ -221,6 +214,9 @@ class AssertPipeline:
         :param log_callback: 可选日志回调
         :return: None
         """
+        # 断言操作符固定为「等于」：assert_head逐项按response headers提取；assert_body按表达式前缀自动判断
+        # 来源（$.→JSON、./或//→XML、其他→Text）。response_headers为None（如TCP）时跳过head断言；
+        # 来源前置条件不足（非JSON却断言JSON等）或提取/比较异常时记录失败项而不抛出
         if not isinstance(step_struct, dict):
             return
 

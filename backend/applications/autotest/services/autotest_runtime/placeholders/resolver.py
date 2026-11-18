@@ -25,19 +25,15 @@ from backend.common.xml_utils import XmlUtils
 
 
 class PlaceholderResolver:
-    """
-    占位符解析器：递归处理 str/dict/list/XML 中的 ${...}。
+    """占位符解析器：递归处理 str/dict/list/XML 中的 ${...}。"""
 
-    单个占位符支持变量名与 GenerateUtils 辅助函数两种形态；全部占位符解析成功且骨架为合法算式时
-    走安全算术求值，否则按字符串拼接/JSON 序列化输出；解析失败的占位符保留原文。
-    """
+    # 单个占位符支持变量名与 GenerateUtils 辅助函数两种形态；全部占位符解析成功且骨架为合法算式时
+    # 走安全算术求值，否则按字符串拼接/JSON 序列化输出；解析失败的占位符保留原文
 
     @classmethod
     def _resolve_placeholder_inner(cls, inner: str, is_core_engine: bool, finished_variables: Optional[Any]) -> Any:
         """
         解析单个${...}花括号内的文本：含括号视为GenerateUtils函数, 否则根据变量名解析。
-
-        只要同时含左右括号即按函数调用处理，不校验是否为合法调用形态（非法形态由函数执行器拒绝）。
 
         :param inner: 占位符花括号内文本(如\"a\"或\"generate_uuid()\")会进行strip
         :param is_core_engine: True时finished_variables需提供get_variable(name)
@@ -47,6 +43,7 @@ class PlaceholderResolver:
         :raises AttributeError: 辅助函数调用失败（未定义/参数不匹配/执行异常）
         """
         inner = inner.strip()
+        # 只要同时含左右括号即按函数调用处理，不校验是否为合法调用形态，非法形态由函数执行器拒绝
         if "(" in inner and ")" in inner:
             return PlaceholderFunctions.execute_func_string_single(inner)
         resolver = coerce_variable_resolver(
@@ -68,15 +65,14 @@ class PlaceholderResolver:
         """
         解析str内所有${...}：先占位符求值；失败则保留原${...}；全成功则视情况整式算术或拼接。
 
-        失败按占位符粒度降级：未定义变量/非法函数调用记录日志后保留原文，空占位符同样保留；
-        全成功时仅当骨架满足算术条件且全部值可数值化才求值，否则逐段拼接（dict/list 以 JSON 输出，None 为空串）。
-
         :param content: 待解析的str内容
         :param logger_object: 日志回调, 签名为(str) -> None
         :param is_core_engine: True时finished_variables需提供get_variable
         :param finished_variables: 核心引擎上下文或变量列表
         :return: 占位符替换后的字符串
         """
+        # 失败按占位符粒度降级：未定义变量/非法函数调用记录日志后保留原文，空占位符同样保留；
+        # 全成功时仅当骨架满足算术条件且全部值可数值化才求值，否则逐段拼接（dict/list 以 JSON 输出，None 为空串）
         if "${" not in content:
             return content
         regularly_matched: List[re.Match[str]] = list(UserCodeSandbox.RE_PLACEHOLDER.finditer(content))
@@ -154,7 +150,7 @@ class PlaceholderResolver:
             finished_variables: Optional[Any],
     ) -> Optional[str]:
         """
-        对XML文本片段（元素text/tail或属性值）解析占位符。
+        对XML文本片段即元素text、tail或属性值解析占位符。
 
         :param segment: 待处理文本；None时原样返回
         :param logger_object: 日志回调, 签名为(str) -> None
@@ -180,7 +176,7 @@ class PlaceholderResolver:
             finished_variables: Optional[Any],
     ) -> None:
         """
-        原地解析单个元素及其子树中的占位符（text、attrib、子元素tail）。
+        原地解析单个元素及其子树中的占位符，覆盖text、attrib与子元素tail。
 
         :param element: 当前XML元素节点
         :param logger_object: 日志回调, 签名为(str) -> None
@@ -225,10 +221,7 @@ class PlaceholderResolver:
             finished_variables: Optional[Any] = None,
     ) -> str:
         """
-        解析XML报文中各文本节点与属性内的${...}占位符（含算术表达式）。
-
-        根据元素text/tail/attrib粒度调用_resolve_string_placeholders，与JSON字段级行为对齐。
-        无效XML时回退为整串_resolve_string_placeholders。
+        解析XML报文中各文本节点与属性内的${...}占位符，支持算术表达式。
 
         :param xml_text: XML报文字符串
         :param logger_object: 日志回调, 签名为(str) -> None
@@ -236,6 +229,8 @@ class PlaceholderResolver:
         :param finished_variables: 核心引擎上下文或变量列表
         :return: 占位符替换后的XML字符串
         """
+        # 按元素text/tail/attrib粒度调用_resolve_string_placeholders，与JSON字段级行为对齐；
+        # 无效XML时回退为整串替换
         if not xml_text or not isinstance(xml_text, str):
             return xml_text
         if "${" not in xml_text:
@@ -286,18 +281,16 @@ class PlaceholderResolver:
         """
         递归解析str/dict/list中的${...}占位符，全部占位符可数值化且骨架合法时安全求值，否则字符串拼接。
 
-        特殊分支：
-        - 以 "{" / "[" 开头且含占位符的 str 先按 JSON 解析：成功则逐字段解析后重新序列化为紧凑 JSON
-          （结构不变、原空白排版不保留）；解析失败则原串返回、不做占位符替换；
-        - list 中的 StepVariablesBase 按项 model_copy 后仅替换 value，入参对象不被修改；
-        - dict/list 递归异常或整体异常时记录日志并返回原值，不向上抛异常。
-
         :param value: 待解析对象
         :param logger_object: 日志回调，签名(str) -> None
         :param is_core_engine: True时finished_variables需提供get_variable
         :param finished_variables: 引擎上下文或StepVariablesBase列表
         :return: 结构形状不变；dict/list/StepVariablesBase为新建对象
         """
+        # 特殊分支：以 "{" / "[" 开头且含占位符的 str 先按 JSON 解析——成功则逐字段解析后重新序列化为紧凑 JSON
+        # （结构不变、原空白排版不保留），解析失败则原串返回、不做占位符替换；
+        # list 中的 StepVariablesBase 按项 model_copy 后仅替换 value，入参对象不被修改；
+        # dict/list 递归异常或整体异常时记录日志并返回原值，不向上抛异常
         try:
             if isinstance(value, str):
                 if "${" in value and value.startswith(("{", "[")):

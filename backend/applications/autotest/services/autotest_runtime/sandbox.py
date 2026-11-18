@@ -32,14 +32,11 @@ _builtin_import = _builtins_module.__import__
 
 
 class ReadonlyModuleProxy:
-    """
-    白名单模块的只读代理。
+    """白名单模块的只读代理。"""
 
-    - 阻断改写/删除共享模块属性（如把 json.dumps 置空会污染同进程后续执行）；
-    - 按模块封禁"以字符串间接取属性"的工厂（operator.attrgetter/methodcaller）：
-      这类能力可绕过 AST 对下划线属性的封禁，串起 __base__/__subclasses__ 反射链逃逸沙箱。
-    """
-
+    # 防护要点：阻断改写/删除共享模块属性（如把 json.dumps 置空会污染同进程后续执行）；
+    # 按模块封禁"以字符串间接取属性"的工厂（operator.attrgetter/methodcaller）：
+    # 这类能力可绕过 AST 对下划线属性的封禁，串起 __base__/__subclasses__ 反射链逃逸沙箱
     # 限定实例只有两个槽位，避免代理被挂载额外属性
     __slots__ = ("_target", "_blocked")
 
@@ -61,7 +58,7 @@ class ReadonlyModuleProxy:
         return getattr(self._target, item)
 
     def __setattr__(self, key: str, value: Any) -> None:
-        """禁止改写模块属性（初始化写槽位经 object.__setattr__ 绕过本方法）。"""
+        """禁止改写模块属性，初始化写槽位经 object.__setattr__ 绕过本方法。"""
         raise AttributeError(f"代码请求(Python)步骤中禁止改写模块属性: {key}")
 
     def __delattr__(self, item: str) -> None:
@@ -75,18 +72,18 @@ class ReadonlyModuleProxy:
 
 class UserCodeSandbox:
     """
-    代码请求(Python)步骤沙箱：策略常量与执行上下文工厂（无实例状态，请勿实例化）。
-
-    防护策略总览（与引擎_validate_user_python_restricted/run_python_code协同）：
-    1. 源码长度上限 MAX_CODE_LENGTH —— 防超大输入撑爆AST解析与编译；
-    2. AST静态校验（引擎消费本类ALLOWED_IMPORT_ROOTS/FORBIDDEN_ATTRS/ALLOWED_PRIVATE_ATTRS）：
-       import白名单、下划线属性封禁（namedtuple只读方法例外）、帧自省属性封禁、禁class/async def；
-    3. 受限builtins SAFE_BUILTINS —— 剔除open/input/eval/exec/compile/getattr/setattr等危险内建；
-    4. 白名单模块只读代理 MODULE_PROXIES —— 防改写共享模块属性；operator封attrgetter/methodcaller；
-    5. 受限导入钩子 _restricted_import —— 仅放行白名单根模块及其惰性私有依赖，白名单返回代理；
-    6. 执行上下文隔离 new_exec_context —— builtins逐次浅拷贝防写穿，剥离namespace的__builtins__注入；
-    7. 启动自验 _startup_selftest —— 进程导入期经工厂构建的完整沙箱路径执行特性探针，拦截缺陷启动期暴露。
+    代码请求的Python步骤沙箱：策略常量与执行上下文工厂，无实例状态，请勿实例化。
     """
+
+    # 防护策略总览（与引擎_validate_user_python_restricted/run_python_code协同）：
+    # 1. 源码长度上限 MAX_CODE_LENGTH —— 防超大输入撑爆AST解析与编译；
+    # 2. AST静态校验（引擎消费本类ALLOWED_IMPORT_ROOTS/FORBIDDEN_ATTRS/ALLOWED_PRIVATE_ATTRS）：
+    #    import白名单、下划线属性封禁（namedtuple只读方法例外）、帧自省属性封禁、禁class/async def；
+    # 3. 受限builtins SAFE_BUILTINS —— 剔除open/input/eval/exec/compile/getattr/setattr等危险内建；
+    # 4. 白名单模块只读代理 MODULE_PROXIES —— 防改写共享模块属性；operator封attrgetter/methodcaller；
+    # 5. 受限导入钩子 _restricted_import —— 仅放行白名单根模块及其惰性私有依赖，白名单返回代理；
+    # 6. 执行上下文隔离 new_exec_context —— builtins逐次浅拷贝防写穿，剥离namespace的__builtins__注入；
+    # 7. 启动自验 _startup_selftest —— 进程导入期经工厂构建的完整沙箱路径执行特性探针，拦截缺陷启动期暴露。
 
     # 匹配裸占位符: ${xxx}
     RE_PLACEHOLDER = re.compile(r"\$\{([^}]+)}")
@@ -151,7 +148,6 @@ class UserCodeSandbox:
         """
         受限导入，仅加载白名单根模块及其惰性私有依赖，禁止相对导入。
 
-        作为沙箱__builtins__.__import__钩子，用户代码及白名单模块运行期触发的一切import均经此拦截。
         :param name: 模块名
         :param globals: 全局命名空间
         :param locals: 局部命名空间
@@ -159,6 +155,7 @@ class UserCodeSandbox:
         :param level: 相对导入层级，非0则拒绝
         :return: 导入的模块对象（白名单返回只读代理）
         """
+        # 作为沙箱__builtins__.__import__钩子，用户代码及白名单模块运行期触发的一切import均经此拦截
         if level != 0:
             raise ImportError("代码请求(Python)步骤中不允许使用相对路径导入模块")
 
@@ -252,13 +249,12 @@ class UserCodeSandbox:
         """
         构建单次执行的隔离上下文，可直接传入exec。
 
-        builtins逐次浅拷贝（防用户代码写穿共享常量）；namespace剥离__builtins__注入后并入同一字典——
-        单命名空间使def函数的__globals__即该字典，函数体内可见namespace变量且支持递归
-        （若globals/locals分离，函数__globals__仅含builtins，函数体引用namespace会NameError）。
-
         :param namespace: 执行时的局部命名空间（如变量字典），可选；不改动调用方字典
         :return: exec上下文字典
         """
+        # builtins逐次浅拷贝（防用户代码写穿共享常量）；namespace剥离__builtins__注入后并入同一字典——
+        # 单命名空间使def函数的__globals__即该字典，函数体内可见namespace变量且支持递归
+        # （若globals/locals分离，函数__globals__仅含builtins，函数体引用namespace会NameError）
         context: Dict[str, Any] = {"__builtins__": dict(cls.SAFE_BUILTINS)}
         if namespace:
             context.update({key: value for key, value in namespace.items() if key != "__builtins__"})
@@ -267,16 +263,15 @@ class UserCodeSandbox:
     @classmethod
     def _startup_selftest(cls) -> None:
         """
-        启动期自验：经new_exec_context构建的完整沙箱环境（受限builtins+导入钩子）执行各白名单特性的代表性探针。
-
-        将拦截缺陷从用户运行期提前到进程启动期暴露：白名单模块若在运行期惰性加载私有实现模块
-        （如datetime.strptime调用时才触发import _strptime），自验失败会在启动报错中指名待加入
-        _LAZY_IMPORT_ROOTS的根模块；同时兼作惰性模块预热与Python版本升级回归哨兵。
-        新增白名单模块时必须在此追加代表性探针。
+        启动期自验：经 new_exec_context 构建的完整沙箱环境，以受限builtins与导入钩子执行各白名单特性的代表性探针。
 
         :return: None
         :raises RuntimeError: 探针结果与预期不符（白名单能力被阻断或惰性依赖未放行）
         """
+        # 将拦截缺陷从用户运行期提前到进程启动期暴露：白名单模块若在运行期惰性加载私有实现模块
+        # （如datetime.strptime调用时才触发import _strptime），自验失败会在启动报错中指名待加入
+        # _LAZY_IMPORT_ROOTS的根模块；同时兼作惰性模块预热与Python版本升级回归哨兵。
+        # 新增白名单模块时必须在此追加代表性探针。
         probe_context = cls.new_exec_context()
         exec(
             "result = datetime.strptime('2000-01-01', '%Y-%m-%d').year"

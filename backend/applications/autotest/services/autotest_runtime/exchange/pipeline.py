@@ -22,12 +22,10 @@ from backend.applications.autotest.services.autotest_runtime.exchange.extract_pi
 
 
 class ExtractAssertPipeline:
-    """
-    提取与断言管线的统一编排入口，供步骤引擎与步骤调试共用。
+    """提取与断言管线的统一编排入口，供步骤引擎与步骤调试共用。"""
 
-    执行顺序固定：变量提取 → 提取失败判定 → 提取结果回写变量池 → 断言验证 →
-    追加数据驱动断言 → 断言失败判定，保证同一步内断言可引用本步刚提取的变量。
-    """
+    # 执行顺序固定：变量提取 → 提取失败判定 → 提取结果回写变量池 → 断言验证 →
+    # 追加数据驱动断言 → 断言失败判定，保证同一步内断言可引用本步刚提取的变量
 
     @classmethod
     def run_extract_and_assert(
@@ -54,11 +52,6 @@ class ExtractAssertPipeline:
         """
         统一执行变量提取与断言验证。
 
-        执行顺序：按extract_variables提取 → 回写变量池 → 按assert_validators断言 →
-        step_struct非空时追加数据驱动断言 → 统一判定失败。
-        raise_on_failure为True时：提取存在失败项立即抛ValueError（断言不执行，成功项也不会写入变量池）；
-        断言在本批（含数据驱动追加项）全部执行完后才统一抛ValueError。
-
         :param extract_variables: 提取规则；None视为空列表
         :param assert_validators: 断言规则；None视为空列表
         :param response_text: 响应正文
@@ -79,6 +72,8 @@ class ExtractAssertPipeline:
         :return: (提取逐项结果列表, 断言逐项结果列表)
         :raises ValueError: 提取或断言存在失败项（raise_on_failure为True时）
         """
+        # 顺序固定：提取 → 回写变量池 → 断言 → 追加数据驱动断言 → 统一判定失败；
+        # raise_on_failure时提取存在失败项立即抛（断言不执行），断言在本批全部执行完后统一抛
         extract_results_dict, extract_results_list = ExtractPipeline.run_extract_variables(
             extract_variables=extract_variables or [],
             response_text=response_text,

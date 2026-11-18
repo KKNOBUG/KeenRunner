@@ -57,11 +57,8 @@ class _FieldLine:
 
 
 def _strip_length_prefix(text: str) -> str:
-    """
-    剥离TCP类报文常见的长度前缀，支持三种形态：行内紧贴XML声明、行内紧贴普通标签、独立整行。
-
-    长度前缀固定按 4-10 位连续数字识别；未命中任何形态时返回去除首尾空白后的原文。
-    """
+    """剥离TCP类报文常见的长度前缀，支持三种形态：行内紧贴XML声明、行内紧贴普通标签、独立整行。"""
+    # 长度前缀固定按 4-10 位连续数字识别；未命中任何形态时返回去除首尾空白后的原文
     stripped = text.strip()
     inline_xml = LENGTH_INLINE_XML_RE.match(stripped)
     if inline_xml:
@@ -76,16 +73,13 @@ def _strip_length_prefix(text: str) -> str:
 
 
 def _is_length_header_line(line: str) -> bool:
-    """判断整行是否为纯长度前缀行（4-10位数字）。"""
+    """判断整行是否为纯长度前缀行，即4到10位数字。"""
     return bool(LENGTH_HEADER_LINE_RE.match(line.strip()))
 
 
 def _detect_format(left_text: str, right_text: str) -> str:
-    """
-    识别报文格式：依次尝试左、右报文，首个命中的格式生效；均不命中按text逐行比对。
-
-    JSON 直接解析原文；XML 会先剥离长度前缀再解析（兼容TCP长度前缀报文）。
-    """
+    """识别报文格式：依次尝试左、右报文，首个命中的格式生效；均不命中按text逐行比对。"""
+    # JSON 直接解析原文；XML 会先剥离长度前缀再解析（兼容TCP长度前缀报文）
     for text in (left_text, right_text):
         stripped = text.strip()
         if not stripped:
@@ -104,7 +98,7 @@ def _detect_format(left_text: str, right_text: str) -> str:
 
 
 def _parse_json_field(line: str) -> Optional[Tuple[str, str]]:
-    """解析单行JSON字段（行首引号包裹的key），返回(字段名, 字段值)；不匹配返回None。"""
+    """解析单行JSON字段即行首引号包裹的key，返回字段名与字段值，不匹配返回None。"""
     matched = JSON_FIELD_RE.match(line)
     if not matched:
         return None
@@ -114,7 +108,7 @@ def _parse_json_field(line: str) -> Optional[Tuple[str, str]]:
 
 
 def _parse_xml_field(line: str) -> Optional[Tuple[str, str]]:
-    """解析单行XML开始标签，返回(标签名, 整行文本)；闭合标签与非标签行返回None。"""
+    """解析单行XML开始标签，返回标签名与整行文本，闭合标签与非标签行返回None。"""
     matched = XML_TAG_RE.match(line.strip())
     if not matched:
         return None
@@ -135,9 +129,7 @@ def _parse_field_line(line: str, format_type: str) -> Optional[Tuple[str, str]]:
 
 
 def _make_match_key(tag: str, counters: Dict[str, int], format_type: str) -> Tuple[str, str]:
-    """
-    生成展示键与对齐键：JSON直接用键名（同名键会互相覆盖）；XML对同名标签追加出现序号区分多节点。
-    """
+    """生成展示键与对齐键：JSON直接用键名，同名键会互相覆盖；XML对同名标签追加出现序号区分多节点。"""
     if format_type != "xml":
         return tag, tag
     idx = counters.get(tag, 0)
@@ -160,7 +152,7 @@ def _extract_field_lines(lines: List[str], format_type: str) -> List[_FieldLine]
 
 
 def _extract_structural_lines(lines: List[str], format_type: str) -> List[Tuple[int, str]]:
-    """提取非字段的非空行（JSON括号/逗号行、XML闭合标签等），保留原始行号。"""
+    """提取非字段的非空行如JSON括号与逗号行、XML闭合标签等，保留原始行号。"""
     structural: List[Tuple[int, str]] = []
     for index, line in enumerate(lines, start=1):
         if _parse_field_line(line, format_type):
@@ -171,7 +163,7 @@ def _extract_structural_lines(lines: List[str], format_type: str) -> List[Tuple[
 
 
 def _normalize_value(value: str) -> str:
-    """归一字段值：去首尾空白并去掉成对的外层引号（单/双），不做转义还原。"""
+    """归一字段值：去首尾空白并去掉成对的外层引号单双均可，不做转义还原。"""
     text = value.strip()
     if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'"}:
         return text[1:-1]
@@ -179,7 +171,7 @@ def _normalize_value(value: str) -> str:
 
 
 def _char_highlights(left: str, right: str) -> Tuple[List[CharHighlight], List[CharHighlight]]:
-    """基于 SequenceMatcher 计算两侧行内差异字符区间（左侧取 replace/delete，右侧取 replace/insert）。"""
+    """基于 SequenceMatcher 计算两侧行内差异字符区间，左侧取 replace/delete，右侧取 replace/insert。"""
     matcher = SequenceMatcher(None, left, right)
     left_highlights: List[CharHighlight] = []
     right_highlights: List[CharHighlight] = []
@@ -192,7 +184,7 @@ def _char_highlights(left: str, right: str) -> Tuple[List[CharHighlight], List[C
 
 
 def _empty_item() -> DiffLineItem:
-    """生成对齐占位行（内容为空、diff_type=empty）。"""
+    """生成对齐占位行，内容为空、diff_type为empty。"""
     return DiffLineItem(source_line_no=None, content="", diff_type="empty")
 
 
@@ -204,7 +196,7 @@ def _build_line_item(
         key: Optional[str] = None,
         highlights: Optional[List[CharHighlight]] = None,
 ) -> DiffLineItem:
-    """构造单侧差异行模型（高亮缺省为空列表）。"""
+    """构造单侧差异行模型，高亮缺省为空列表。"""
     return DiffLineItem(
         source_line_no=source_line_no,
         content=content,
@@ -232,7 +224,7 @@ def _classify_pair(left_line: str, right_line: str, format_type: str) -> str:
 
 
 def _is_different_field_pair(left_line: str, right_line: str, format_type: str) -> bool:
-    """判断两侧是否均为字段行且键名不同（供 replace 段判定为左右独有）。"""
+    """判断两侧是否均为字段行且键名不同，供 replace 段判定为左右独有。"""
     left_field = _parse_field_line(left_line, format_type)
     right_field = _parse_field_line(right_line, format_type)
     return bool(left_field and right_field and left_field[0] != right_field[0])
@@ -326,11 +318,8 @@ def _append_row(
 
 
 def _build_line_tokens(lines: List[str], format_type: str) -> List[Tuple[str, str]]:
-    """
-    为SequenceMatcher生成稳定token：字段用match_key，结构行用去空白文本。
-
-    仅XML把长度前缀行作为独立token，避免被当成结构行错位对齐。
-    """
+    """为SequenceMatcher生成稳定token：字段用match_key，结构行用去空白文本。"""
+    # 仅XML把长度前缀行作为独立token，避免被当成结构行错位对齐
     counters: Dict[str, int] = {}
     tokens: List[Tuple[str, str]] = []
     for line in lines:
@@ -351,11 +340,8 @@ def _diff_lines_positional(
         right_lines: List[str],
         format_type: str,
 ) -> List[AlignedDiffRow]:
-    """
-    按行序对齐比对；json/xml用字段token提升同名字段对齐质量。
-
-    equal 段仍逐行做字段级分类（同token但值不同判为modified）；replace 段按位置配对，键名不同判为conflict。
-    """
+    """按行序对齐比对；json/xml用字段token提升同名字段对齐质量。"""
+    # equal 段仍逐行做字段级分类（同token但值不同判为modified）；replace 段按位置配对，键名不同判为conflict
     rows: List[AlignedDiffRow] = []
     if format_type in {"json", "xml"}:
         left_tokens = _build_line_tokens(left_lines, format_type)
@@ -450,11 +436,8 @@ def _diff_lines_by_key(
         right_lines: List[str],
         format_type: str,
 ) -> List[AlignedDiffRow]:
-    """
-    忽略字段顺序：结构行仍按序比对，字段按match_key聚合。
-
-    行顺序为：左字段出现顺序 + 右独有字段顺序；JSON 同名键后者覆盖前者（last-wins）。
-    """
+    """忽略字段顺序：结构行仍按序比对，字段按match_key聚合。"""
+    # 行顺序为：左字段出现顺序 + 右独有字段顺序；JSON 同名键后者覆盖前者（last-wins）
     left_fields = _extract_field_lines(left_lines, format_type)
     right_fields = _extract_field_lines(right_lines, format_type)
     left_map = {item.match_key: item for item in left_fields}
@@ -549,14 +532,13 @@ def compare_messages(left_text: str, right_text: str, order_control: int) -> Rep
     """
     比对左右报文并生成对齐行结果。
 
-    order_control=1时按行序比对并检查字段顺序（顺序不一致即使内容相同也判为不相等）；
-    0及其他值：json/xml按字段名聚合忽略顺序，text始终按行序比对。
-
     :param left_text: 左侧报文文本
     :param right_text: 右侧报文文本
     :param order_control: 0忽略顺序，1控制顺序
     :return: 比对结果
     """
+    # order_control=1时按行序比对并检查字段顺序（顺序不一致即使内容相同也判为不相等）；
+    # 0及其他值：json/xml按字段名聚合忽略顺序，text始终按行序比对
     format_type = _detect_format(left_text, right_text)
     left_lines = left_text.splitlines()
     right_lines = right_text.splitlines()

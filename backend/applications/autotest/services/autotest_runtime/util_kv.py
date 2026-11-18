@@ -26,15 +26,15 @@ class KvUtils:
     @classmethod
     def list_to_dict(cls, variable_list: Sequence[StepVariablesBase]) -> Dict[str, Any]:
         """
-        将StepVariablesBase列表转为name -> value字典（供Python代码命名空间、提取断言查找表使用）。
-
-        value=None的变量必须保留：null是合法提取结果，查找表丢失null值会导致
-        提取器/断言/Python命名空间将已定义变量误判为未定义。
+        将StepVariablesBase列表转为name -> value字典。
 
         :param variable_list: 变量模型列表
         :return: 键为变量名、值为变量值的字典
         :raises TypeError: 列表项不是 StepVariablesBase
         """
+        # 供Python代码命名空间、提取断言查找表使用
+        # value=None的变量必须保留：null是合法提取结果，查找表丢失null值会导致
+        # 提取器/断言/Python命名空间将已定义变量误判为未定义
         items = list(variable_list) if variable_list is not None else []
         if not items:
             return {}
@@ -51,14 +51,13 @@ class KvUtils:
     @classmethod
     def convert_list_to_dict_for_http(cls, data: Any) -> Dict[str, Any]:
         """
-        将HTTP步骤中的键值列表转为字典（供请求头/参数/表单等落库字段使用）。
+        将HTTP步骤中的键值列表转为字典，供请求头、参数、表单等落库字段使用。
 
-        兼容 StepVariablesBase 与 {"key": ..., "value": ...} 两种列表项；key 去空白后为空视为无效项跳过；
-        非列表或空值返回空字典。
-        
         :param data: 键值列表或空
         :return: 请求参数字典
         """
+        # 兼容 StepVariablesBase 与 {"key": ..., "value": ...} 两种列表项；key 去空白后为空视为无效项跳过；
+        # 非列表或空值返回空字典
         if not data or not isinstance(data, list):
             return {}
         result: Dict[str, Any] = {}
@@ -92,12 +91,11 @@ class KvUtils:
         """
         从StepVariablesBase列表中取key为name的项本身，同名key取最后一次出现的项。
 
-        返回项本身可区分"未定义"与"已定义但值为null"，供 get_variable 等需要按存在性判断的消费方使用。
-
         :param variables: 变量列表
         :param name: 变量名
         :return: 命中的StepVariablesBase项；未找到时返回None
         """
+        # 返回项本身可区分"未定义"与"已定义但值为null"，供 get_variable 等需要按存在性判断的消费方使用
         if variables is None:
             return None
         for variable in reversed(variables):
@@ -110,11 +108,10 @@ class KvUtils:
         """
         规范化request_body: JSON字符串尽量解析为对象，否则保持原样。
 
-        空白字符串按空对象 {} 处理；合法 JSON 标量（数字/字符串等）按解析结果返回；非法 JSON 返回原串。
-        
         :param raw: 原始request_body
         :return: 解析后的对象或原值
         """
+        # 空白字符串按空对象 {} 处理；合法 JSON 标量（数字/字符串等）按解析结果返回；非法 JSON 返回原串
         if isinstance(raw, str):
             try:
                 return orjson.loads(raw) if raw.strip() else {}
@@ -133,14 +130,13 @@ class KvUtils:
         """
         格式化步骤执行失败信息, 供步骤引擎中各类执行器统一使用。
 
-        必须在 except 块内调用：错误回溯依赖 traceback.format_exc() 读取当前异常栈。
-
         :param step: 步骤模型
         :param exception: 捕获的异常
         :param is_child_step: 是否为子步骤失败
         :param offset_message: 附加偏移说明（如数据库第N条操作）
         :return: 格式化后的多行错误字符串
         """
+        # 必须在 except 块内调用：错误回溯依赖 traceback.format_exc() 读取当前异常栈
         message: str = "【子步骤】" if is_child_step else "【根步骤】"
         offset_message: str = f", {offset_message}" if offset_message else ""
         case_id = step.case_id
@@ -168,12 +164,11 @@ class KvUtils:
         """
         从请求头Cookie字段解析name -> value字典。
 
-        支持两种来源：Cookie 头为字符串时按 ";" 分段解析（无 "=" 的片段跳过，同名后写覆盖）；
-        为字典时直接转为 name -> 字符串值（None 转空串）。
-
         :param headers: 请求头映射；键名大小写不敏感匹配Cookie
         :return: Cookie名到值的字典；无Cookie或非法输入时返回空字典
         """
+        # 支持两种来源：Cookie 头为字符串时按 ";" 分段解析（无 "=" 的片段跳过，同名后写覆盖）；
+        # 为字典时直接转为 name -> 字符串值（None 转空串）
         if not headers or not isinstance(headers, dict):
             return {}
         cookie_raw: Any = None
@@ -206,7 +201,7 @@ class KvUtils:
             session_variables: Optional[Sequence[StepVariablesBase]] = None,
     ) -> Dict[str, Any]:
         """
-        合并defined / session变量为提取与断言用的查找字典（session覆盖同名defined）。
+        合并defined与session变量为提取、断言用的查找字典，session覆盖同名defined。
 
         :param defined_variables: 用例/步骤定义变量
         :param session_variables: 会话变量（优先级更高）

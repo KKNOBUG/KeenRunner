@@ -34,12 +34,11 @@ def expand_dataset_special_value(value: Any) -> Any:
     """
     将数据源单元格中的特殊值占位文本展开为具体值。
 
-    匹配前先 strip（允许单元格前后带空白）：#空字符串→空串、#NULL→None（大小写不敏感）、#单个空格→单个空格；
-    非字符串或未命中时原样返回，并可通过返回值与入参的 is 判断是否发生替换。
-
     :param value: 注入数据
     :return: 展开后的值
     """
+    # 匹配前先 strip（允许单元格前后带空白）：#空字符串→空串、#NULL→None（大小写不敏感）、#单个空格→单个空格；
+    # 非字符串或未命中时原样返回，并可通过返回值与入参的 is 判断是否发生替换
     if isinstance(value, str):
         crt_value = (value or "").strip()
         if crt_value == DATASET_EMPTY_TEXT:
@@ -53,7 +52,7 @@ def expand_dataset_special_value(value: Any) -> Any:
 
 def expand_dataset_general_value(value: Any) -> str:
     """
-    将注入数据转为协议文本（字符串通道直写用）：None→空串，bool→"true"/"false"，其余 str()。
+    将注入数据转为协议文本供字符串通道直写：None转空串，bool转true或false，其余str化。
 
     :param value: 注入数据
     :return: 协议文本
@@ -66,27 +65,24 @@ def expand_dataset_general_value(value: Any) -> str:
 
 
 class DatasetValueAdapter:
-    """按报文原字段类型适配数据集注入值（仅在类型可贴合时转换，否则原样接受）。"""
+    """按报文原字段类型适配数据集注入值，仅在类型可贴合时转换，否则原样接受。"""
 
     @staticmethod
     def _accept_raw(raw_value: str, target_value: Any) -> Any:
-        """
-        原样接受线路。
-
-        适用：str字段；null字段与查询哨兵（类型参考不可用，由用户负责）；
-        未注册类型兜底（容器值等无贴合语义场景，由用户负责）。
-        """
+        """原样接受线路。"""
+        # 适用：str字段；null字段与查询哨兵（类型参考不可用，由用户负责）；
+        # 未注册类型兜底（容器值等无贴合语义场景，由用户负责）
         return raw_value
 
     @staticmethod
     def _route_bool(raw_value: str, target_value: Any) -> Any:
-        """布尔字段线路：true/false文本(大小写不敏感)转布尔，其余原样接受(由用户负责)。"""
+        """布尔字段线路：true/false文本大小写不敏感转布尔，其余原样接受由用户负责。"""
         converted = {"true": True, "false": False}.get(raw_value.strip().lower())
         return converted if converted is not None else raw_value
 
     @staticmethod
     def _convert_float(raw_value: str) -> Any:
-        """浮点文本转换：可转float则返回数值；无法转换或inf/nan原样接受(转出inf会破坏orjson序列化)。"""
+        """浮点文本转换：可转float则返回数值，无法转换或inf/nan原样接受，避免inf破坏orjson序列化。"""
         try:
             number = float(raw_value.strip())
         except (ValueError, OverflowError):
@@ -95,7 +91,7 @@ class DatasetValueAdapter:
 
     @staticmethod
     def _route_int(raw_value: str, target_value: Any) -> Any:
-        """整数字段线路：整数文本转int、浮点文本转float(保留数值语义)，其余原样接受(由用户负责)。"""
+        """整数字段线路：整数文本转int、浮点文本转float保留数值语义，其余原样接受由用户负责。"""
         try:
             return int(raw_value.strip())
         except ValueError:
@@ -103,7 +99,7 @@ class DatasetValueAdapter:
 
     @staticmethod
     def _route_float(raw_value: str, target_value: Any) -> Any:
-        """浮点字段线路：整数/浮点文本转float，其余原样接受(由用户负责)。"""
+        """浮点字段线路：整数或浮点文本转float，其余原样接受由用户负责。"""
         return DatasetValueAdapter._convert_float(raw_value)
 
     # 按报文原字段的精确类型分派转换线路；子类未单独注册时回落 _accept_raw（不做 isinstance 匹配）
@@ -121,7 +117,7 @@ class DatasetValueAdapter:
     @classmethod
     def adapt(cls, raw_value: Any, target_value: Any) -> Any:
         """
-        数据源(AutoTestDataSourceModel.dataset)命中字段对应的注入数据按报文原字段类型适配入口。
+        数据源 dataset 命中字段对应的注入数据，按报文原字段类型适配的入口。
 
         :param raw_value: 注入数据
         :param target_value: 目标数据(报文原字段值，作为类型转换参考)

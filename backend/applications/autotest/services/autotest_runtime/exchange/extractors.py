@@ -20,12 +20,10 @@ from backend.common.xpath_utils import XPathUtils
 
 
 class Extractors:
-    """
-    提取值实现与统一入口：JSON/XML/Text/Headers/Cookies/Form-Data/变量池。
+    """提取值实现与统一入口：JSON/XML/Text/Headers/Cookies/Form-Data/变量池。"""
 
-    extract_from_source 先按规范化source查EXTRACTORS注册表，未命中时回退到DB/Redis
-    操作结果（source为请求中配置的variable_name）提取。
-    """
+    # extract_from_source先按规范化source查EXTRACTORS注册表，未命中时回退到DB/Redis
+    # 操作结果（source为请求中配置的variable_name）提取
 
     @classmethod
     def _extract_json_payload(
@@ -41,9 +39,6 @@ class Extractors:
         """
         从JSON对象根据ALL/SOME与可选index提取。
 
-        index仅校验上界（index >= 长度抛ValueError）；负数按Python下标语义取倒数元素；
-        提取值不是list时忽略index。
-
         :param data: 响应或请求JSON（dict/list）
         :param expr: JSONPath；SOME模式必填
         :param range_type: all或some（已小写）
@@ -52,6 +47,8 @@ class Extractors:
         :param empty_message: data为空时的错误文案
         :return: 提取值
         """
+        # index仅校验上界（index >= 长度抛ValueError）；负数按Python下标语义取倒数元素；
+        # 提取值不是list时忽略index
         if data is None:
             raise ValueError(empty_message)
         if range_type == "all":
@@ -90,8 +87,6 @@ class Extractors:
         """
         从XML文本根据XPath与可选index提取元素文本或序列化片段。
 
-        index缺省时取最后一个匹配（兼容按最新节点取值的使用习惯）；负数按Python下标语义取倒数元素。
-
         :param text: XML字符串
         :param expr: XPath；SOME模式必填
         :param range_type: all或some
@@ -101,6 +96,7 @@ class Extractors:
         :param invalid_xml_message: 解析失败时的错误文案前缀
         :return: 叶子元素返回text；有子节点时返回整元素序列化；ALL时返回原文
         """
+        # index缺省时取最后一个匹配（兼容按最新节点取值的使用习惯）；负数按Python下标语义取倒数元素
         if not text:
             raise ValueError(empty_message)
         if range_type == "all":
@@ -145,17 +141,15 @@ class Extractors:
         """
         从纯文本根据正则提取匹配串，可选指定分组。
 
-        使用re.search（取首个匹配）并开启re.S，使`.`可跨行匹配。
-
         :param text: 请求或响应正文
         :param expr: 正则表达式；SOME模式必填
         :param range_type: all或some
-        :param index: 分组编号；None或0取整个匹配串(group(0))，正整数N取第N个捕获分组(group(N))，
-            负数-1取最后一个分组、-2取倒数第二个分组，以此类推（与JSON/XML负索引语义一致）
+        :param index: 分组编号；None或0取整个匹配串(group(0))，正整数N取第N个捕获分组(group(N))，负数-1取最后一个分组、-2取倒数第二个分组，以此类推（与JSON/XML负索引语义一致）
         :param operation_type: 错误信息前缀
         :param empty_message: 正文为空时的错误文案
         :return: 匹配到的分组值；ALL时返回原文
         """
+        # 使用re.search（取首个匹配）并开启re.S，使.可跨行匹配
         if not text:
             raise ValueError(empty_message)
         if range_type == "all":
@@ -222,15 +216,14 @@ class Extractors:
     @classmethod
     def _quote_non_ascii_identifiers(cls, expr: str) -> str:
         """
-        将点号子段中的非ASCII键名改写为['键名']括号字符串形式。
-
-        jsonpath-ng词法器的标识符规则仅接受ASCII字母/下划线，中文等键名（如 $.部门名称）
-        在词法阶段即被拒绝；括号字符串形式为标准JSONPath写法且可正常解析。
-        字符串字面量（如过滤器中的比较值）不参与改写，避免破坏原语义。
+        将点号子段中的非ASCII键名改写为括号字符串形式。
 
         :param expr: 原始JSONPath表达式
         :return: 改写后的表达式
         """
+        # jsonpath-ng词法器的标识符规则仅接受ASCII字母/下划线，中文等键名（如 $.部门名称）
+        # 在词法阶段即被拒绝；括号字符串形式为标准JSONPath写法且可正常解析；字符串字面量
+        # （如过滤器中的比较值）不参与改写，避免破坏原语义
         parts = re.split(r"('(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")", expr)
         for i in range(0, len(parts), 2):
             parts[i] = re.sub(
@@ -245,15 +238,14 @@ class Extractors:
     @classmethod
     def _resolve_json_path(cls, data: Any, expr: str) -> Any:
         """
-        使用JSONPath表达式从data中取值，支持标准JSONPath(如$.data[0].id、$.list[*].name)。
-
-        表达式必须以$开头；单匹配返回该值，多匹配返回值的列表；中文等非ASCII键名会被
-        改写为['键名']后重试解析。
+        使用JSONPath表达式从data中取值，支持标准JSONPath。
 
         :param data: 待取值的对象(dict/list或嵌套结构)
         :param expr: 非空字符串，合法JSONPath表达式(如$.a.b、$.data[0].id、$.items[*].id)
         :return: 单匹配时返回该值，多匹配时返回值的列表
         """
+        # 表达式必须以$开头；单匹配返回该值，多匹配返回值的列表；中文等非ASCII键名
+        # 会被改写为['键名']后重试解析
         expr = str(expr).strip()
         if not expr:
             raise ValueError(f"【JSONPath表达式】必须是非空字符串")
@@ -301,13 +293,6 @@ class Extractors:
         """
         从source指定来源根据表达式提取值，未命中注册表时回退DB/Redis逻辑。
 
-        取数顺序：
-        1. source去空白+小写后查EXTRACTORS注册表；
-        2. request_cookies缺失时从request_headers的Cookie头解析补齐；
-        3. 未命中注册表且response_json为DB/Redis操作结果列表时，按source匹配操作项的
-           variable_name（列表成员判定）取sql_data/redis_data，同名以最后一项有效数据为准；
-        4. 均不匹配时抛ValueError，错误文案区分「存储变量未找到」与「数据源类型不允许」。
-
         :param source: 来源类型或DB/Redis的variable_name
         :param expr: 提取表达式（JSONPath/XPath/正则）
         :param range_type: ALL返回整段数据，SOME根据expr取值
@@ -326,6 +311,8 @@ class Extractors:
         :return: 提取得到的值
         :raises ValueError: 来源不被允许、表达式未匹配或索引越界
         """
+        # 取数顺序：注册表查表 → Cookie头补齐 → DB/Redis操作结果回退；均不匹配时抛
+        # ValueError，错误文案区分「存储变量未找到」与「数据源类型不允许」
         # source键统一去空白+小写后查注册表，兼容调用方传入大小写/空白差异
         range_type_n: str = (range_type or "SOME").strip().lower()
         source_key: str = (source or "").strip().lower()
@@ -402,7 +389,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
     E = Extractors
 
     def json_side(side: str) -> Callable[..., Any]:
-        """注册JSON侧（request/response）提取器；返回的_run根据侧从ctx取JSON并提取。"""
+        """注册JSON侧请求/响应提取器；返回的_run根据侧从ctx取JSON并提取。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
             """从请求或响应JSON根据表达式提取。"""
@@ -417,7 +404,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def xml_side(side: str) -> Callable[..., Any]:
-        """注册XML侧（request/response）提取器；返回的_run根据侧从ctx取文本并提取。"""
+        """注册XML侧请求/响应提取器；返回的_run根据侧从ctx取文本并提取。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
             """从请求或响应XML文本根据表达式提取。"""
@@ -433,7 +420,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         return _run
 
     def text_side(side: str) -> Callable[..., Any]:
-        """注册Text侧（request/response）提取器；返回的_run根据侧从ctx取文本并提取。"""
+        """注册Text侧请求/响应提取器；返回的_run根据侧从ctx取文本并提取。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
             """从请求或响应纯文本根据表达式提取，index指定正则分组编号。"""
@@ -454,7 +441,7 @@ def _register_extractors() -> Dict[str, Callable[..., Any]]:
         """注册Headers/Cookies等映射字段提取器；返回的_run从ctx.attr取值。"""
 
         def _run(ctx: ExchangeContext, expr: Optional[str], range_type: str, index: Any, operation_type: str) -> Any:
-            """从映射字段（Headers/Cookies等）根据表达式提取。"""
+            """从映射字段根据表达式提取。"""
             data = getattr(ctx, attr)
             return E._extract_mapping_payload(
                 data=data, expr=expr, range_type=range_type,

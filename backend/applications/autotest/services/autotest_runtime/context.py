@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Sequence
 
 from backend.applications.autotest.schemas.autotest_step_schema import StepVariablesBase
+from backend.applications.autotest.services.autotest_runtime.util_kv import KvUtils
 
 
 @dataclass
@@ -34,7 +35,7 @@ class ExchangeContext:
 
 
 class ListVariableResolver:
-    """把变量列表适配成 get_variable(name) 取值接口，供非引擎上下文（调试/校验等）复用占位符解析。"""
+    """把变量列表适配成 get_variable 取值接口，供非引擎上下文如调试与校验复用占位符解析。"""
 
     def __init__(self, variables: Optional[Sequence[StepVariablesBase]]) -> None:
         """
@@ -52,8 +53,6 @@ class ListVariableResolver:
         :param name: 变量名
         :return: 对应value；null是合法变量值，仅在key不存在时抛KeyError
         """
-        from backend.applications.autotest.services.autotest_runtime.util_kv import KvUtils
-
         item = KvUtils.get_item_from_list(self._variables, name)
         if item is None:
             raise KeyError(f"必须是已定义的变量: {name!r}")
@@ -66,15 +65,14 @@ def coerce_variable_resolver(
         is_core_engine: bool,
 ) -> Any:
     """
-    把变量源统一成实现 get_variable(name) 的解析对象，供占位符解析复用。
-
-    引擎上下文（is_core_engine=True）原样透传；变量列表包装为 ListVariableResolver；
-    无变量源返回 None，调用方需自行判空并按"变量未定义"处理。
+    把变量源统一成实现 get_variable 取值接口的解析对象，供占位符解析复用。
 
     :param finished_variables: 引擎上下文或变量列表；None 表示无变量源
     :param is_core_engine: True 时表示调用方已确认传入的是引擎上下文
     :return: 实现 get_variable 的兼容对象；无变量源时返回 None
     """
+    # 引擎上下文原样透传；变量列表包装为 ListVariableResolver；
+    # 无变量源返回 None，调用方需自行判空并按“变量未定义”处理
     if finished_variables is None:
         return None
     if is_core_engine:

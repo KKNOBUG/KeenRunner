@@ -17,7 +17,7 @@ from backend.enums import AutoTestReqArgsType
 
 @dataclass
 class HttpBodyPayloads:
-    """HTTP请求体装配结果（与httpx参数一一对应，None表示该通道未使用）。"""
+    """HTTP请求体装配结果：与httpx参数一一对应，None 表示该通道未使用。"""
     # JSON 请求体（httpx json=）
     json_payload: Optional[Any] = None
     # 非 JSON 请求体：RAW 文本 / form-data / urlencoded（httpx data=）
@@ -43,15 +43,6 @@ def assemble_http_body_payloads(
     """
     按 request_args_type 装配 HTTP 请求体，返回与 httpx 参数对应的载荷。
 
-    类型口径：
-    - None：按 raw(request_text) → form-data(form_data/form_files) → urlencoded → json(request_body) 顺序推断；
-    - NONE/PARAMS：不产生 body（PARAMS 走查询参数）；
-    - RAW → data_payload；JSON → json_payload；XML → content_payload；
-      FORM_DATA → data+files；X_WWW_FORM_URLENCODED → data_payload。
-
-    XML 分支在缺少 Content-Type 时补 application/xml; charset=utf-8：headers 为 None 时新建字典，
-    否则在传入字典上就地追加（返回值与入参可能是同一对象）。
-
     :param request_args_type: 请求体类型枚举，None时走兼容推断
     :param request_text: 文本/XML/RAW请求体
     :param request_body: JSON请求体
@@ -61,6 +52,10 @@ def assemble_http_body_payloads(
     :param headers: 请求头（XML分支可能就地补Content-Type）
     :return: 装配后的载荷与（可能更新后的）headers
     """
+    # 类型口径：None 按 raw(request_text)→form-data(form_data/form_files)→urlencoded→json(request_body) 顺序推断；
+    # NONE/PARAMS 不产生 body（PARAMS 走查询参数）；RAW→data_payload；JSON→json_payload；XML→content_payload；
+    # FORM_DATA→data+files；X_WWW_FORM_URLENCODED→data_payload；
+    # XML 分支在缺少 Content-Type 时补 application/xml; charset=utf-8：headers 为 None 时新建字典，否则就地追加（返回值与入参可能是同一对象）
     json_payload: Optional[Any] = None
     data_payload: Optional[Any] = None
     content_payload: Optional[Any] = None
@@ -110,11 +105,10 @@ def encode_http_header_values(headers: Optional[Dict[str, Any]]) -> Optional[Dic
     """
     对请求头字符串值做UTF-8百分号编码，避免中文等非ASCII导致发送失败；同时剔除key为空的项。
 
-    非字符串值原样保留；safe 集合保留 URL 保留字符与 %，避免已编码内容被二次编码。
-
     :param headers: 原始请求头
     :return: 编码后的请求头；入参为空则原样返回
     """
+    # 非字符串值原样保留；safe 集合保留 URL 保留字符与 %，避免已编码内容被二次编码
     if not headers:
         return headers
     return {
@@ -178,9 +172,6 @@ def infer_http_actual_body(
     """
     推断调试回显用的实际请求体类型与内容。
 
-    判定优先级 json → content(xml) → data；data 的 body_type 按 request_args_type 细化，
-    类型缺失时按 form_data/form_files 是否存在判定；文件载荷以 __files 键并入 body。
-
     :param request_args_type: 请求体类型
     :param json_payload: JSON载荷
     :param content_payload: XML等content载荷
@@ -190,6 +181,8 @@ def infer_http_actual_body(
     :param form_files: form文件字典（兼容推断用）
     :return: (body_type, body)
     """
+    # 判定优先级 json → content(xml) → data；data 的 body_type 按 request_args_type 细化，
+    # 类型缺失时按 form_data/form_files 是否存在判定；文件载荷以 __files 键并入 body
     actual_body_type = "none"
     actual_body: Any = None
     if json_payload is not None:
@@ -217,7 +210,7 @@ def infer_http_actual_body(
 
 def format_byte_size(size: int) -> str:
     """
-    将字节数格式化为可读字符串，仅在大于1024字节时换算KB（1024B仍显示为B）。
+    将字节数格式化为可读字符串，仅在大于1024字节时换算KB，1024B仍显示为B。
 
     :param size: 字节数
     :return: 如12.34KB或512B

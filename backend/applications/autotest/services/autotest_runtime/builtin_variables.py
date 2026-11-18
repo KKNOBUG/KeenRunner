@@ -16,11 +16,12 @@ from backend.configure.project_config import PROJECT_CONFIG
 
 def strip_host_scheme(host: Optional[str]) -> Optional[str]:
     """
-    清理主机地址：去掉首尾空白，并移除字符串中出现的 http:// 与 https://（按子串替换，不校验前缀位置）。
+    清理主机地址：去掉首尾空白，并移除字符串中出现的 http:// 与 https:// 协议前缀。
 
     :param host: 原始主机地址；None 原样返回
     :return: 清理后的主机地址
     """
+    # 按子串替换，不校验前缀位置
     if host is None:
         return None
     return str(host).strip().replace("http://", "").replace("https://", "")
@@ -32,16 +33,15 @@ def builtin_variable_entries(
         target_path: Optional[str] = None,
 ) -> List[Dict[str, Optional[str]]]:
     """
-    内置变量注册表：固定顺序给出 SERVER_*（平台配置）与 TARGET_*（调用方传入的执行配置）。
-
-    仅描述注册项、不做注入与日志：值为 None 表示该项获取失败，由 collect_builtin_step_variables
-    决定跳过并记录；TARGET_HOST 会剥离协议前缀，TARGET_PORT 统一转为字符串。
+    内置变量注册表：固定顺序给出 SERVER_* 与 TARGET_* 两组变量。
 
     :param target_host: 目标应用主机；None 表示未解析到执行配置
     :param target_port: 目标应用端口；None 表示未解析到执行配置
     :param target_path: 目标应用地址；HTTP 传 request_url 原值，TCP 传空字符串
     :return: [{"name": 变量名, "desc": 说明, "value": 字符串或 None}, ...]，顺序即注入顺序
     """
+    # 仅描述注册项、不做注入与日志：值为 None 表示该项获取失败，由 collect_builtin_step_variables 决定跳过并记录；
+    # TARGET_HOST 剥离协议前缀，TARGET_PORT 统一转为字符串；SERVER_* 取值平台配置，TARGET_* 取值调用方执行配置
     return [
         {"name": "SERVER_HOST", "desc": "Toolbox工具箱服务主机", "value": str(PROJECT_CONFIG.SERVER_HOST)},
         {"name": "SERVER_PORT", "desc": "Toolbox工具箱服务端口", "value": str(PROJECT_CONFIG.SERVER_PORT)},
@@ -60,13 +60,7 @@ def collect_builtin_step_variables(
         log: Optional[Callable[[str], None]] = None,
 ) -> List[StepVariablesBase]:
     """
-    遍历注册表装配HTTP/TCP步骤的内置变量列表，注册项统一经过以下约定。
-
-    约定：
-        - 与用户已定义变量同名时跳过，内置变量永不覆盖用户主动定义的变量。
-        - 值为None视为内置数据获取失败，不注入并记录日志由前端反馈；
-          空字符串为合法值，如TCP步骤的TARGET_PATH。
-        - 值统一转为字符串。
+    遍历注册表装配HTTP/TCP步骤的内置变量列表。
 
     :param target_host: 目标应用主机
     :param target_port: 目标应用端口
@@ -75,6 +69,7 @@ def collect_builtin_step_variables(
     :param log: 日志回调
     :return: 可注入变量池的StepVariablesBase列表
     """
+    # 约定：同名跳过且永不覆盖用户变量；值为None视为获取失败不注入并记录日志，空字符串为合法值（如TCP步骤的TARGET_PATH）
     existing_keys = existing_keys or set()
 
     result: List[StepVariablesBase] = []
@@ -86,7 +81,7 @@ def collect_builtin_step_variables(
         value = entry["value"]
         if value is None:
             if log:
-                log(f"【内置变量】内置数据获取失败: \n\t变量名: {name}, 请检查执行配置是否完整")
+                log(f"【内置变量】内置数据获取失败: \n\t变量名: {name}")
             continue
         result.append(StepVariablesBase(key=name, value=str(value), desc="内置环境变量(运行时注入, 不落库)"))
     return result

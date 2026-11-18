@@ -26,7 +26,7 @@ _QUERY_UNRESOLVED = object()
 
 
 class JsonDatagram:
-    """按JSONPath映射更新JSON请求报文（请求头、body、form/urlencoded/query参数四类通道）。"""
+    """按JSONPath映射更新JSON请求报文，覆盖请求头、body、form/urlencoded与query参数四类通道。"""
 
     @staticmethod
     def _jsonpath_hits(json_path: str, *candidates: Any) -> bool:
@@ -68,13 +68,12 @@ class JsonDatagram:
         """
         查询JSONPath在报文中的当前字段值，作为dataset值类型适配参考。
 
-        未命中返回空列表、多命中或容器值返回列表本身，二者经适配器原样接受(不做类型转换，由用户负责)；
-        查询异常返回 _QUERY_UNRESOLVED 哨兵，同样走原样接受线路，与字段值为 null 的语义区分开。
-
         :param datagram: 报文字典
         :param json_path: JSONPath表达式
         :return: 当前字段值；未命中返回空列表；异常返回哨兵对象
         """
+        # 未命中返回空列表、多命中或容器值返回列表本身，两者经适配器原样接受不做类型转换由用户负责；
+        # 查询异常返回 _QUERY_UNRESOLVED 哨兵同样走原样接受线路，与字段值为 null 的语义区分开
         try:
             return JSONPathUtils.query(datagram, json_path)
         except Exception:
@@ -83,8 +82,8 @@ class JsonDatagram:
     @staticmethod
     def _adapt_json_value(json_value: Any, datagram: Dict[str, Any], query_path: str, type_adapted: bool) -> Any:
         """
-        解析注入值：body通道按报文原字段类型适配(可转换则转换，无法转换原样接受由用户负责)；
-        字符串通道(type_adapted=False)wire文本直写，不做贴合判断也不做类型参考查询。
+        解析注入值：body通道按报文原字段类型适配，可转换则转换、无法转换原样接受由用户负责；
+        字符串通道即type_adapted为False时wire文本直写，不做贴合判断也不做类型参考查询。
 
         :param json_value: dataset字段值(字符串通道调用前已转wire文本)
         :param datagram: 类型参考查询的数据容器(body通道为报文字典或两段式inner子文档)
@@ -113,19 +112,15 @@ class JsonDatagram:
         """
         根据两段内嵌JSONPath定位并更新字段值，无@JSON@分隔符时退化为普通单段JSONPath更新。
 
-        约定第一段JSONPath定位到一个字符串JSON或dict字段，第二段JSONPath在该字段值所代表的JSON内部继续定位并更新，
-        最后把更新结果回写到第一段JSONPath对应的字段，形如：$.escape_field@JSON@$.name。
-
-        边界：无分隔符时按单段正常适配更新；分隔符出现次数非2时原值直接写入不拆段（通常不会命中）；
-        外层命中多个值、外层非字符串/dict、外层JSON解析失败、内层未命中时均跳过该路径（不报错）。
-
         :param datagram: 待更新的JSON报文字典
         :param json_path: 形如'outer@JSON@inner'的两段JSONPath，无分隔符时根据单段处理
         :param json_value: 要写入的目标值(dataset值，按报文原字段类型适配后写入)
         :param split_symbol: 两段路径的分隔符，默认'@JSON@'
-        :param type_adapted: 是否按报文原字段类型适配dataset值；JSON body通道为True，
-                             header/form/urlencoded等字符串通道传False(wire文本直接写入不做贴合判断)
+        :param type_adapted: 是否按报文原字段类型适配dataset值；JSON body通道为True，header/form/urlencoded等字符串通道传False即wire文本直接写入不做贴合判断
         """
+        # 两段式语义：第一段定位字符串JSON或dict字段，第二段在其内部JSON继续定位更新，最后回写第一段字段
+        # （如 $.escape_field@JSON@$.name）；边界：分隔符非2次时原值直接写入不拆段；
+        # 外层多命中/非字符串或dict/JSON解析失败/内层未命中时均跳过该路径不报错
         if not json_path or not isinstance(json_path, str):
             return
         if not split_symbol or split_symbol not in json_path:
@@ -202,11 +197,10 @@ class JsonDatagram:
         """
         从JSONPath提取HTTP请求头字段名。
 
-        例如$.Content-Type -> Content-Type
-
         :param json_path: JSONPath字符串
         :return: 头字段名；无效时返回空串
         """
+        # 例如$.Content-Type -> Content-Type
         if not json_path or not isinstance(json_path, str):
             return ""
         parts = json_path.strip().split("$.", 1)
@@ -236,13 +230,12 @@ class JsonDatagram:
         """
         将JSONPath映射批量写入一个映射容器，统一JSON body与form/urlencoded/params的注入差异。
 
-        字符串通道（type_adapted=False）先展开特殊值再转wire文本，直接写入不做类型贴合。
-
         :param datagram: 目标映射，原地修改
         :param path_map: JSONPath->值
         :param type_adapted: True按原字段类型适配（JSON body）；False使用wire文本（字符串通道）
         :return: None
         """
+        # 字符串通道（type_adapted=False）先展开特殊值再转wire文本，直接写入不做类型贴合
         for json_path, json_value in path_map.items():
             if not json_path:
                 continue
@@ -267,8 +260,6 @@ class JsonDatagram:
         """
         将JSONPath映射写入body/form/urlencoded/query params，原地修改dict，找不到路径则忽略。
 
-        body 为JSON字符串且解析成功时返回解析后的dict（原字符串不保留）；解析失败或无映射时原样返回入参。
-
         :param path_map: JSONPath->值的映射
         :param request_body: 原始body（dict或可解析为dict的JSON字符串）
         :param form_data: form-data字典，原地修改；可为None
@@ -276,6 +267,7 @@ class JsonDatagram:
         :param params: URL查询参数字典，原地修改；可为None
         :return: 写入后的request_body
         """
+        # body 为JSON字符串且解析成功时返回解析后的dict（原字符串不保留）；解析失败或无映射时原样返回入参
         if not path_map:
             return request_body
 
@@ -314,14 +306,6 @@ class JsonDatagram:
         数据驱动报文替换：根据head_map/body_map将JSONPath应用到请求头、body/form/urlencoded/query参数；
         路径在所有通道均未命中时汇总告警跳过。
 
-        通道约定：
-        - head_map 只写请求头，禁止跨通道写 body/form/urlencoded；
-        - body_map 写 body/form/urlencoded/query params；
-        - 请求头匹配大小写不敏感，写回时保留原始键名。
-
-        告警口径：先统一收集未命中路径（head_map 按头是否存在判定，body_map 按任一通道是否命中判定），
-        再写入并输出一条汇总告警；返回值中的 headers/form_data/urlencoded/params 与入参同对象。
-
         :param head_map: 请求头JSONPath->值
         :param body_map: 报文体JSONPath->值
         :param request_body: 原始body（dict或可解析为dict的JSON字符串）
@@ -332,6 +316,10 @@ class JsonDatagram:
         :param logger_object: 可选的步骤日志回调
         :return: 含headers/request_body/form_data/urlencoded/params的字典
         """
+        # 通道约定：head_map 只写请求头，禁止跨通道写 body/form/urlencoded；body_map 写 body/form/urlencoded/query params；
+        # 请求头匹配大小写不敏感，写回时保留原始键名。
+        # 告警口径：先统一收集未命中路径（head_map 按头是否存在判定，body_map 按任一通道是否命中判定），
+        # 再写入并输出一条汇总告警；返回值中的 headers/form_data/urlencoded/params 与入参同对象
         head_map = head_map or {}
         body_map = body_map or {}
         body_channels = (request_body, form_data, urlencoded, params)

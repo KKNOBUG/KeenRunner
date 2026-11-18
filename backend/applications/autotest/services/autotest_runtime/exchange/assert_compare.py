@@ -16,12 +16,10 @@ from backend.enums.autotest_enum import AutoTestAssertionOperation
 
 
 class AssertionCompare:
-    """
-    断言比较实现：将操作符映射到具体比较函数，统一处理类型感知相等与大小比较。
+    """断言比较实现：将操作符映射到具体比较函数，统一处理类型感知相等与大小比较。"""
 
-    核心口径：bool 与数值不宽松相等（True != 1）；数字串/true/false/null 先标准化再比；
-    带前导零的整数串保留字符串形态（如响应码 000000）；集合类断言支持 []、{}、() 字面量。
-    """
+    # 核心口径：bool 与数值不宽松相等（True != 1）；数字串/true/false/null 先标准化再比；
+    # 带前导零的整数串保留字符串形态（如响应码 000000）；集合类断言支持 []、{}、() 字面量
 
     @classmethod
     def _is_leading_zero_digit_string(cls, value: str) -> bool:
@@ -43,13 +41,12 @@ class AssertionCompare:
         """
         将值标准化为便于比较的类型：数字字符串转int/float，true/false/null文本转bool/None，前导零串保留原串。
 
-        不做strip：仅当整串自身是数字形态时才转换，避免把带空白的普通文本当数字。
-        仅含小数点的字符串才尝试float，避免"1e3"、"inf"等被意外转换。
-        null文本归一用于数据源dataset字符串化存储后的兼容：期望值"null"与响应null字段可判定相等。
-
         :param value: 任意值
         :return: 标准化后的值或原值
         """
+        # 不做strip：仅当整串自身是数字形态时才转换，避免把带空白的普通文本当数字；
+        # 仅含小数点的字符串才尝试float，避免"1e3"、"inf"等被意外转换；
+        # null文本归一用于数据源dataset字符串化存储后的兼容：期望值"null"与响应null字段可判定相等
         if value is None:
             return None
         if isinstance(value, bool):
@@ -82,11 +79,10 @@ class AssertionCompare:
         """
         大小比较专用数值化：允许带前导零的数字串按数值参与比较；无法转换则返回原值。
 
-        与_normalize_value的区别：此处先strip、不保留前导零语义，仅服务于大于/小于等排序比较。
-
         :param value: 任意值
         :return: int/float 或原值
         """
+        # 与_normalize_value的区别：此处先strip、不保留前导零语义，仅服务于大于/小于等排序比较
         if isinstance(value, bool):
             return value
         if isinstance(value, (int, float)):
@@ -107,7 +103,7 @@ class AssertionCompare:
     @classmethod
     def _is_bool_vs_number(cls, left: Any, right: Any) -> bool:
         """
-        判断是否一侧为bool、另一侧为非bool的数值（Python中True==1为真，断言中禁止此类宽松相等）。
+        判断是否一侧为bool、另一侧为非bool的数值，Python中True等于1但断言禁止此类宽松相等。
 
         :param left: 左值
         :param right: 右值
@@ -146,15 +142,14 @@ class AssertionCompare:
             comparator: Callable[[Any, Any], bool],
     ) -> bool:
         """
-        类型感知的大小比较：优先按数值比较（含前导零数字串），否则回落字符串比较。
-
-        仅当两侧均可数值化且均非bool时走数值比较；bool与数值的交叉组合退化为字符串比较。
+        类型感知的大小比较：优先按数值比较，含前导零数字串，否则回落字符串比较。
 
         :param actual: 实际值
         :param expected: 期望值
         :param comparator: 二元谓词(左, 右) -> bool, 例如operator.gt
         :return: 比较结果
         """
+        # 仅当两侧均可数值化且均非bool时走数值比较；bool与数值的交叉组合退化为字符串比较
         num_actual = cls._coerce_number_for_ordering(actual)
         num_expected = cls._coerce_number_for_ordering(expected)
         if (
@@ -171,12 +166,11 @@ class AssertionCompare:
         """
         比较实际值长度是否等于期望长度，无__len__的类型取str长度。
 
-        期望值经标准化后必须可int()；无法转整型时抛出ValueError，由compare_assertion统一包装。
-
         :param actual: 实际值
         :param expected: 期望长度
         :return: 长度是否相等
         """
+        # 期望值经标准化后必须可int()；无法转整型时抛出ValueError，由compare_assertion统一包装
         nb = cls._normalize_value(expected)
         if nb is None or actual is None:
             return False
@@ -191,12 +185,11 @@ class AssertionCompare:
         """
         比较数组长度是否等于期望值。仅list/tuple视为数组；字符串、字典等返回False。
 
-        与长度等于的区别：非数组或期望值无法转整型时直接返回False，不抛异常。
-
         :param actual: 实际值
         :param expected: 期望长度（数字字符串会经_normalize_value转换）
         :return: 是否为数组且长度相等
         """
+        # 与长度等于的区别：非数组或期望值无法转整型时直接返回False，不抛异常
         if not isinstance(actual, (list, tuple)):
             return False
         nb = cls._normalize_value(expected)
@@ -210,7 +203,7 @@ class AssertionCompare:
     @classmethod
     def _assertion_is_empty(cls, actual: Any, expected: Any) -> bool:
         """
-        判断实际值是否为空：None、空串、空容器均为空；空白串（如空格）不算空。
+        判断实际值是否为空：None、空串、空容器均为空，空白串如空格不算空。
 
         :param actual: 实际值
         :param expected: 期望值（忽略）
@@ -258,15 +251,13 @@ class AssertionCompare:
     @classmethod
     def _coerce_to_collection(cls, expected: Any) -> List[Any]:
         """
-        将期望值规范为成员判断用的列表，支持原生容器及[]、{}、()包裹的字面量。
-
-        规则：原生容器直接展开（Dict拒绝）；字符串必须带成对包裹符；[]内优先按JSON数组解析
-        （合法JSON保留元素原始类型），失败回落逗号分割；{}内为JSON对象时拒绝；
-        其余非法格式统一抛ValueError。
+        将期望值规范为成员判断用的列表，支持原生容器及方括号/花括号/圆括号包裹的字面量。
 
         :param expected: 用户给定的集合或可解析为集合的值
         :return: 元素列表
         """
+        # 规则：原生容器直接展开（Dict拒绝）；字符串必须带成对包裹符；[]内优先按JSON数组解析
+        # （合法JSON保留元素原始类型），失败回落逗号分割；{}内为JSON对象时拒绝；其余非法格式统一抛ValueError
         if expected is None:
             raise ValueError("集合期望值不允许为[None | Null]")
         if isinstance(expected, (list, tuple, set, frozenset)):
@@ -312,7 +303,7 @@ class AssertionCompare:
     @classmethod
     def _assertion_in_set(cls, actual: Any, expected: Any) -> bool:
         """
-        判断实际值是否属于期望集合（类型感知相等）。
+        判断实际值是否属于期望集合，按类型感知相等判定。
 
         :param actual: 实际值
         :param expected: 集合（list/set，或[]、{}、()字面量）
@@ -325,14 +316,13 @@ class AssertionCompare:
         """
         根据操作符对实际值与期望值做断言比较；operation须为AutoTestAssertionOperation枚举值。
 
-        操作符非法、未绑定实现或比较过程异常时统一抛ValueError，由断言管线记为失败项。
-
         :param actual: 实际值
         :param operation: 操作符(与AutoTestAssertionOperation一致)
         :param expected: 期望值(部分操作符可忽略)
         :return: 断言是否通过
         :raises ValueError: 操作符不被允许或比较过程异常
         """
+        # 操作符非法、未绑定实现或比较过程异常时统一抛ValueError，由断言管线记为失败项
         try:
             op = AutoTestAssertionOperation(operation)
         except ValueError as exc:

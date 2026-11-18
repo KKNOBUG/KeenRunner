@@ -16,7 +16,7 @@ import orjson
 
 
 class PlaceholderArithmetic:
-    """占位符场景下的数值判定、表达式拼接与安全算术（AST 白名单，仅数字常量与四则运算）。"""
+    """占位符场景下的数值判定、表达式拼接与安全算术，基于AST白名单仅数字常量与四则运算。"""
 
     # 多占位符算术路径的骨架白名单：骨架只允许数字、四则运算符、括号与空白（变量名内的符号不计入骨架）
     _RE_ARITHMETIC_ONLY = re.compile(r"^[\d+\-*/().\s]+$")
@@ -28,11 +28,10 @@ class PlaceholderArithmetic:
         """
         判断 value 能否作为数值参与算术计算，返回 float 可参与计算，None 则回退字符串拼接。
 
-        仅接受 int/float 与可转 float 的字符串；bool 虽为 int 子类也刻意排除（布尔语义不应参与加减）。
-
         :param value: 目标值
         :return: 可参与算术的float；否则None
         """
+        # 仅 int/float 与可转 float 的字符串计入算术；bool 虽为 int 子类也刻意排除，布尔语义不应参与加减
         if value is None:
             return None
         if isinstance(value, bool):
@@ -58,14 +57,12 @@ class PlaceholderArithmetic:
         """
         判断占位符模板是否应进入纯算术计算路径。
 
-        单占位符：骨架必须含 + - * / 之一，且该占位符的值可转为 float（如 "${n}+1"）；
-        多占位符：骨架只允许数字、四则运算符、括号与空白（如 "${a}+${b}"）。
-        骨架指模板去除占位符后剩余的文本，变量名内的 -/+ 等字符不属于骨架。
-
         :param content: 待解析的占位符模板字符串
         :param regularly_slots: 占位符匹配与解析结果三元组列表（match, value, failed_content）
         :return: 是否应进入纯算术计算路径
         """
+        # 单占位符：骨架必须含 + - * / 之一，且该占位符的值可转为 float，如 "${n}+1"；
+        # 多占位符：骨架只允许数字、四则运算符、括号与空白，如 "${a}+${b}"
         if len(regularly_slots) == 1:
             match, value, failed_content = regularly_slots[0]
             # 运算符只在占位符之外的骨架文本上判定, 变量名内的-/+等字符不属于算术
@@ -135,7 +132,7 @@ class PlaceholderArithmetic:
             to_string: Callable[[Any], str],
     ) -> str:
         """
-        根据占位符顺序拼接content，解析失败插入原文，成功插入to_string(value)。
+        根据占位符顺序拼接content，解析失败插入原文，成功插入 to_string 格式化后的值。
 
         :param content: 待解析对象
         :param regularly_slots: 占位符匹配与解析结果列表
