@@ -34,24 +34,19 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     task_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="任务标识代码")
     task_execute_mode = fields.CharEnumField(AutoTestTaskExecuteMode, default=AutoTestTaskExecuteMode.PARALLEL, description="任务执行模式")
     task_type = fields.CharEnumField(AutoTestTaskType, default=AutoTestTaskType.MULTIPLE_CASE_EXECUTE, index=True, description="任务业务类型")
-    # cases_execute_config 存储为Dict[str, Any]格式, 如下：
+    # cases_execute_config 存储为Dict[str, Any]格式, 如下（执行配置只存引用键，名称/地址由执行期解析）：
     # {
     #     "env_mode": "single/multiple",
-    #     "env_name": "SIT1",
+    #     "env_id": 12,              # 全局环境绑定ID
+    #     "env_ids": [12, 13],       # 多环境模式涉及的环境绑定ID列表
     #     "<case_id>": {
     #         "execute_count": 1,
-    #         "involve_envs": [
-    #             "SIT1",
-    #             "..."
-    #         ],
+    #         "involve_env_ids": [12],   # 用例级涉及环境绑定ID
     #         "steps_execute_config": {
     #             "<step_id> | <step_name>_@@<op_index>": {
-    #                 "env_name": "",
-    #                 "config_type": "",
-    #                 "config_name": "",
-    #                 "config_host": "",
-    #                 "config_port": "",
-    #                 "database_name": ""
+    #                 "env_id": 12,
+    #                 "config_type": "app/file/database/redis",
+    #                 "config_mode": "<环境配置逻辑标识>"
     #             }
     #         }
     #     }
@@ -67,8 +62,11 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
         null=True,
         description="周期表达式",
     )
-    # task_involve_envs: 任务级涉及环境名称列表(去重)，累积绑定的各个用例下的涉及环境(cases_execute_config.{case_id}.involve_envs)；
+    # task_involve_envs: 任务级涉及环境名称快照(去重)，保存时由 task_involve_env_ids 反查绑定生成，供列表展示与按环境筛选；
+    # 回填前的存量任务仍为名称累积结果
     task_involve_envs = fields.JSONField(default=list, null=True, description="涉及环境名称列表")
+    # task_involve_env_ids: 任务级涉及环境绑定ID列表(krun_autotest_env_bind.id)，供环境删除精确校验与筛选
+    task_involve_env_ids = fields.JSONField(default=list, null=True, description="涉及环境绑定ID列表")
     last_execute_time = fields.DatetimeField(default=None, null=True, description="最后执行时间")
     last_execute_state = fields.CharEnumField(AutoTestTaskStatus, default=None, null=True, description="最后执行状态")
     # last_execute_user与updated_user语义分离：updated_user记录最后修改人(配置修改与启停调度均刷新)，

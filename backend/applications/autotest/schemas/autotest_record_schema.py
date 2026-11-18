@@ -25,11 +25,11 @@ class AutoTestRecordBase(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    task_id: Optional[int] = Field(None, description="任务ID")
+    task_id: Optional[int] = Field(None, ge=1, description="任务ID")
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
     task_type: Optional[AutoTestTaskType] = Field(None, description="任务所属类型")
-    task_project: Optional[int] = Field(None, description="任务所属应用")
+    task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
     trigger_type: Optional[AutoTestTaskTriggerType] = Field(None, description="任务触发类型")
     report_type: Optional[AutoTestReportType] = Field(None, description="报告所属类型")
     batch_code: Optional[str] = Field(None, max_length=64, description="批次标识代码")
@@ -63,7 +63,7 @@ class AutoTestRecordCreate(AutoTestRecordBase):
 
 
 class AutoTestRecordUpdate(AutoTestRecordBase):
-    """更新任务执行记录入参（根据celery_id部分更新）。"""
+    """更新任务执行记录入参：根据celery_id部分更新。"""
 
     celery_id: Optional[str] = Field(None, max_length=255, description="Celery调度ID")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
@@ -84,8 +84,8 @@ class AutoTestRecordSelect(BaseModel):
     page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-celery_start_time", "-id"], description="排序字段")
 
-    task_id: Optional[int] = Field(None, description="任务ID")
-    task_project: Optional[int] = Field(None, description="任务所属应用")
+    task_id: Optional[int] = Field(None, ge=1, description="任务ID")
+    task_project: Optional[int] = Field(None, ge=1, description="任务所属应用")
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
     task_type: Optional[AutoTestTaskType] = Field(None, description="任务所属类型")

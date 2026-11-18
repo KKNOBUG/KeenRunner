@@ -54,7 +54,7 @@ class AutoTestReportCreate(AutoTestReportBase):
 class AutoTestReportUpdate(AutoTestReportBase):
     """更新报告信息入参。"""
 
-    report_id: Optional[int] = Field(None, description="报告ID")
+    report_id: Optional[int] = Field(None, ge=1, description="报告ID")
     report_code: Optional[str] = Field(None, max_length=64, description="报告标识代码")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
@@ -65,12 +65,12 @@ class AutoTestReportSelect(BaseModel):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=5, le=99999, description="每页数量")
 
-    case_id: Optional[int] = Field(None, description="用例ID")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     case_code: Optional[str] = Field(None, description="用例标识代码")
     case_name: Optional[str] = Field(None, description="用例名称")
     case_state: Optional[bool] = Field(None, description="用例执行状态")
 
-    report_id: Optional[int] = Field(None, description="报告ID")
+    report_id: Optional[int] = Field(None, ge=1, description="报告ID")
     report_code: Optional[str] = Field(None, description="报告标识代码")
     report_type: Optional[AutoTestReportType] = Field(default=None, description="报告类型")
 
@@ -85,7 +85,7 @@ class AutoTestReportSelect(BaseModel):
 
 
 class AutoTestReportBatchSelect(BaseModel):
-    """按批次聚合查询任务执行历史入参（分页粒度=批次）。"""
+    """按批次聚合查询任务执行历史入参：分页粒度等于批次。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=200, description="每页数量")
@@ -94,7 +94,7 @@ class AutoTestReportBatchSelect(BaseModel):
 
 
 class AutoTestReportBatchDetailSelect(BaseModel):
-    """按批次标识分页查询同批次执行报告入参（报告维度，分页粒度=报告）。"""
+    """按批次标识分页查询同批次执行报告入参：报告维度，分页粒度等于报告。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=200, description="每页数量")
@@ -106,7 +106,7 @@ class AutoTestReportBatchDetailSelect(BaseModel):
 
 
 class AutoTestReportBatchScriptSelect(BaseModel):
-    """按批次标识分页查询批次内脚本维度执行信息入参（脚本维度，分页粒度=脚本）。"""
+    """按批次标识分页查询批次内脚本维度执行信息入参：脚本维度，分页粒度等于脚本。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=200, description="每页数量")
@@ -115,7 +115,7 @@ class AutoTestReportBatchScriptSelect(BaseModel):
 
 
 class AutoTestReportBatchScriptItem(BaseModel):
-    """批次内单个脚本（用例）的执行信息汇总行。"""
+    """批次内单个脚本用例的执行信息汇总行。"""
 
     case_id: Optional[int] = Field(None, description="用例ID")
     case_name: str = Field(default="", description="脚本(用例)名称")
@@ -133,7 +133,7 @@ class AutoTestReportBatchScriptItem(BaseModel):
 
 
 class AutoTestReportScriptReportSelect(BaseModel):
-    """按批次标识+用例ID分页查询脚本执行明细入参（报告维度，一行记录代表一次场景执行）。"""
+    """按批次标识加用例ID分页查询脚本执行明细入参：报告维度，一行记录代表一次场景执行。"""
 
     batch_code: str = Field(..., min_length=1, max_length=64, description="批次标识代码")
     case_id: int = Field(..., ge=1, description="用例ID")
@@ -144,7 +144,7 @@ class AutoTestReportScriptReportSelect(BaseModel):
 
 
 class AutoTestReportBatchItem(BaseModel):
-    """单次任务执行（一个 batch_code）的汇总行。"""
+    """单次任务执行的汇总行，数据粒度为一个batch_code。"""
 
     batch_code: Optional[str] = Field(None, description="批次标识")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")

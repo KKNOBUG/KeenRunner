@@ -24,10 +24,10 @@ from backend.enums import (
 
 class AutoTestTaskSchedule(BaseModel):
     """
-    结构化定时表达式：
-    ONLY_ONCE(执行1次)模式: {"trigger_dates": ["YYYY-MM-DD HH:MM:SS", ...], "trigger_month": [1-31], "trigger_times": ["HH:MM:SS", 最多3个]}
-    UNBOUNDED(执行N次)模式: {"trigger_cycle": "daily/weekly/monthly", "trigger_weeks": [1-7, 周必输], "trigger_month": [1-31, 月必输], "trigger_times": ["HH:MM:SS", 最多3个]}
+    结构化定时表达式，支持ONLY_ONCE单次执行与UNBOUNDED多次执行两种模式。
     """
+    # ONLY_ONCE(执行1次)模式键组：trigger_dates(YYYY-MM-DD HH:MM:SS可多值) / trigger_month(月内日1-31) / trigger_times(HH:MM:SS最多3个)
+    # UNBOUNDED(执行N次)模式键组：trigger_cycle(daily|weekly|monthly) / trigger_weeks(周内日1-7周周期必输) / trigger_month(月内日1-31月周期必输) / trigger_times(HH:MM:SS最多3个)
 
     trigger_dates: Optional[List[str]] = Field(None, min_length=1, description="触发日期时间列表(YYYY-MM-DD HH:MM:SS)")
     trigger_cycle: Optional[AutoTestTaskCycleType] = Field(None, description="调度周期(daily｜weekly｜monthly)")
@@ -47,18 +47,19 @@ class AutoTestTaskCaseExecuteConfig(BaseModel):
     """用例级执行配置：cases_execute_config中case_id键对应对象结构。"""
 
     execute_count: int = Field(1, ge=1, le=9999, description="执行次数")
-    involve_envs: List[str] = Field(default_factory=list, description="涉及环境名称列表")
+    involve_env_ids: List[int] = Field(default_factory=list, description="涉及环境绑定ID列表")
     # KEY：step_id 优先，否则@@step_name；DB/Redis多操作再拼_@@{index}
     steps_execute_config: Dict[str, StepsExecuteConfigBase] = Field(default_factory=dict, description="步骤执行环境配置")
 
 
 class AutoTestTaskCasesExecuteConfig(BaseModel):
-    """任务级用例执行配置：顶层环境配置(env_mode/env_name) + 动态case_id键(指向AutoTestTaskCaseExecuteConfig)。"""
+    """任务级用例执行配置：顶层环境配置env_mode/env_id/env_ids，加上指向AutoTestTaskCaseExecuteConfig的动态case_id键。"""
 
     model_config = ConfigDict(extra="allow")
 
     env_mode: AutoTestEnvMode = Field(AutoTestEnvMode.SINGLE, description="环境模式")
-    env_name: Optional[str] = Field(None, max_length=128, description="全局环境名称")
+    env_id: Optional[int] = Field(None, ge=1, description="全局环境绑定ID")
+    env_ids: Optional[List[int]] = Field(None, description="多环境模式涉及的环境绑定ID列表")
 
     @model_validator(mode="after")
     def _validate_case_configs(self):
@@ -96,7 +97,7 @@ class AutoTestTaskCreate(BaseModel):
 class AutoTestTaskUpdate(BaseModel):
     """更新自动化测试任务入参。"""
 
-    task_id: Optional[int] = Field(None, description="任务ID")
+    task_id: Optional[int] = Field(None, ge=1, description="任务ID")
     task_name: Optional[str] = Field(None, max_length=255, description="任务名称")
     task_desc: Optional[str] = Field(None, max_length=2048, description="任务描述")
     task_code: Optional[str] = Field(None, max_length=64, description="任务标识代码")

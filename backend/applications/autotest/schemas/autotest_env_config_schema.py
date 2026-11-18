@@ -131,7 +131,7 @@ class AutoTestEnvConfigQueryByProjectsIn(BaseModel):
     """根据应用ID列表查询环境配置并分类的请求体。"""
 
     project_ids: List[int] = Field(..., min_length=1, description="环境绑定应用ID列表")
-    config_names: Optional[List[str]] = Field(None, description="配置名称列表")
+    config_modes: Optional[List[str]] = Field(None, description="配置逻辑标识列表")
 
 
 class TestDBConnectionRequest(BaseModel):
@@ -162,7 +162,7 @@ class APPEnvConfigUpdate(AutoTestEnvConfigUpdate):
 
 
 class DBEnvConfigCreate(AutoTestEnvConfigCreate):
-    """新增DB(database)类型环境配置入参。"""
+    """新增DB/database类型环境配置入参。"""
 
     env_type: AutoTestConfigNodeType = Field(default=AutoTestConfigNodeType.DB, description="环境绑定节点类型")
     database_name: str = Field(..., max_length=128, description="数据库名称")
@@ -172,7 +172,7 @@ class DBEnvConfigCreate(AutoTestEnvConfigCreate):
 
 
 class DBEnvConfigUpdate(AutoTestEnvConfigUpdate):
-    """修改DB(database)类型环境配置入参。"""
+    """修改DB/database类型环境配置入参。"""
 
     env_name: Optional[str] = Field(None, max_length=64, description="环境名称")
     project_id: int = Field(..., ge=1, description="环境绑定应用ID")
@@ -233,8 +233,8 @@ class RedisEnvConfigUpdate(AutoTestEnvConfigUpdate):
 
 
 class QueryAssignConfigEnv(BaseModel):
-    """按应用+配置名称+节点类型查询环境名称列表入参。"""
+    """按应用+配置逻辑标识+节点类型查询环境列表入参。"""
 
-    project_id: Optional[int] = Field(None, description="环境绑定应用ID")
-    config_name: Optional[str] = Field(None, description="配置名称")
+    project_id: Optional[int] = Field(None, ge=1, description="环境绑定应用ID")
+    config_mode: Optional[str] = Field(None, description="配置逻辑标识")
     env_type: Optional[AutoTestConfigNodeType] = Field(None, description="环境绑定节点类型")

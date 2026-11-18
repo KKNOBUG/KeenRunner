@@ -41,8 +41,9 @@ class DataBaseOperates(BaseModel):
     project_id: Optional[int] = Field(None, ge=1, description="所属应用ID")
     project_name: str = Field(..., max_length=128, description="所属应用名称")
     variable_name: str = Field(..., max_length=128, description="存储变量名称")
-    config_name: str = Field(..., max_length=128, description="所属环境配置名称")
-    database_name: str = Field(..., max_length=128, description="所属数据库名称")
+    config_mode: str = Field(..., max_length=64, description="所属环境配置逻辑标识")
+    # 展示引用：指向 krun_autotest_env_config 行，仅用于前端反显库名；执行期库名一律取 config_mode 的解析结果
+    config_id: Optional[int] = Field(None, ge=1, description="数据库名称展示引用(环境配置行ID)")
     desc: Optional[str] = Field(None, max_length=2048, description="数据库操作描述")
 
 
@@ -54,7 +55,7 @@ class RedisOperates(BaseModel):
     project_id: Optional[int] = Field(None, ge=1, description="所属应用ID")
     project_name: str = Field(..., max_length=128, description="所属应用名称")
     variable_name: str = Field(..., max_length=128, description="存储变量名称")
-    config_name: str = Field(..., max_length=128, description="所属环境配置名称")
+    config_mode: str = Field(..., max_length=64, description="所属环境配置逻辑标识")
     database_name: str = Field(..., max_length=128, description="Redis库编号")
     desc: Optional[str] = Field(None, max_length=2048, description="Redis操作描述")
 
@@ -127,14 +128,13 @@ class StepVariablesBase(BaseModel):
 
 
 class StepsExecuteConfigBase(BaseModel):
-    """步骤执行时环境配置覆盖基础字段模型。"""
+    """步骤执行时环境配置引用键模型。"""
 
-    env_name: str = Field(..., max_length=128, description="环境名称")
+    # 只保留定位键（环境绑定ID + 节点类型 + 逻辑标识），名称/主机/端口由执行引擎按引用键实时解析，
+    # 避免前端传递过期副本导致执行使用旧地址
+    env_id: int = Field(..., ge=1, description="环境绑定ID")
     config_type: AutoTestConfigNodeType = Field(..., description="配置类型")
-    config_name: str = Field(..., max_length=128, description="配置名称")
-    config_host: str = Field(..., max_length=128, description="配置主机")
-    config_port: str = Field(..., max_length=8, description="配置端口")
-    database_name: Optional[str] = Field(None, max_length=128, description="数据库名称")
+    config_mode: str = Field(..., min_length=1, max_length=64, description="环境配置逻辑标识")
 
 
 class StepExtractVariableItem(BaseModel):
@@ -185,7 +185,7 @@ class AutoTestStepReqBase(BaseModel):
     request_form_file: NON_LIST_DICT_TYPE = Field(None, description="请求文件路径")
     request_project_id: Optional[int] = Field(None, ge=1, description="请求应用ID")
     request_args_type: Optional[AutoTestReqArgsType] = Field(None, description="请求参数类型")
-    request_config_name: Optional[str] = Field(None, max_length=128, description="请求环境配置名称")
+    request_config_mode: Optional[str] = Field(None, max_length=64, description="请求环境配置逻辑标识")
 
     # 进制数≠不使用 → 长度前缀（结束符字段保留但不参与成帧计算）；进制数=不使用且配置了结束符 → 结束符；均未配置 → RAW
     tcp_radix: Optional[AutoTestTcpRadix] = Field(None, description="TCP报文头进制数")
@@ -298,16 +298,16 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
 
     model_config = ConfigDict(extra="ignore")
 
-    step_id: Optional[int] = Field(None, description="步骤ID")
+    step_id: Optional[int] = Field(None, ge=1, description="步骤ID")
     step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_name: Optional[str] = Field(None, max_length=255, description="步骤名称")
     step_desc: Optional[str] = Field(None, description="步骤描述")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤所属类型")
 
-    case_id: Optional[int] = Field(None, description="步骤所属用例")
-    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/接口ID")
-    parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
+    case_id: Optional[int] = Field(None, ge=1, description="步骤所属用例")
+    quote_case_id: Optional[int] = Field(None, ge=1, description="引用公共脚本/接口ID")
+    parent_step_id: Optional[int] = Field(None, ge=1, description="父级步骤ID")
     step_is_skipped: Optional[bool] = Field(False, description="是否跳过执行")
 
     code: Optional[str] = Field(None, description="执行代码(Python)")
@@ -414,7 +414,7 @@ class AutoTestStepBase(AutoTestStepReqBase, AutoTestStepDbBase, AutoTestStepRedi
     @classmethod
     def _branch_items_must_be_list_or_none(cls, v: Any) -> Any:
         """
-        校验branch_items为数组或null；空数组归一为null（条件分支至少存在一个分支）。
+        校验branch_items为数组或null：空数组归一为null，条件分支至少存在一个分支。
 
         :param v: 原始值
         :return: 原值（合法且非空时），空数组返回None
@@ -470,14 +470,14 @@ class AutoTestStepSelect(BaseModel):
     page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["case_id", "step_no"], description="排序字段")
 
-    step_id: Optional[int] = Field(None, description="步骤ID")
-    step_no: Optional[int] = Field(None, description="步骤序号")
+    step_id: Optional[int] = Field(None, ge=1, description="步骤ID")
+    step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
     step_name: Optional[str] = Field(None, max_length=255, description="步骤名称")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
 
-    case_id: Optional[int] = Field(None, description="用例ID")
-    parent_step_id: Optional[int] = Field(None, description="父级步骤ID")
-    quote_case_id: Optional[int] = Field(None, description="引用公共脚本/接口ID")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
+    parent_step_id: Optional[int] = Field(None, ge=1, description="父级步骤ID")
+    quote_case_id: Optional[int] = Field(None, ge=1, description="引用公共脚本/接口ID")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态")
@@ -520,22 +520,22 @@ class AutoTestStepTreeUpdateList(BaseModel):
 class AutoTestHttpDebugRequest(AutoTestStepVarBase, AutoTestStepReqBase):
     """HTTP 步骤调试入参。"""
 
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_id: Optional[int] = Field(None, ge=1, description="环境绑定ID(相对地址时必填)")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_url: str = Field(..., max_length=2048, description="请求地址")
     request_method: HTTPMethod = Field(..., description="请求方法")
     request_project_id: int = Field(..., ge=1, description="请求应用ID")
-    request_config_name: str = Field(..., max_length=128, description="请求环境配置名称")
+    request_config_mode: Optional[str] = Field(None, max_length=64, description="环境配置逻辑标识(相对地址时必填)")
 
 
 class AutoTestTcpDebugRequest(AutoTestStepVarBase, AutoTestStepReqBase):
-    """TCP 步骤调试入参。"""
+    """TCP 步骤调试入参：必须解析环境配置得到目标主机与端口。"""
 
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    env_id: Optional[int] = Field(None, ge=1, description="环境绑定ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
     request_text: Optional[str] = Field(None, description="请求体数据(Text格式)")
     request_project_id: int = Field(..., ge=1, description="请求应用ID")
-    request_config_name: str = Field(..., max_length=128, description="请求环境配置名称")
+    request_config_mode: Optional[str] = Field(None, max_length=64, description="环境配置逻辑标识")
 
 
 class AutoTestPythonCodeDebugRequest(AutoTestStepVarBase):
@@ -548,7 +548,9 @@ class AutoTestPythonCodeDebugRequest(AutoTestStepVarBase):
 class AutoTestRedisDebugRequest(AutoTestStepVarBase, AutoTestStepRedisBase):
     """Redis 步骤调试入参。"""
 
-    env_name: str = Field(..., max_length=64, description="环境名称")
+    # 每条操作可来自不同应用（project_id），顶层 env_id 用于反查逻辑环境名称，
+    # 后端按「操作所属应用 + 环境名称 + 操作 config_mode」逐一解析实际绑定与配置
+    env_id: int = Field(..., ge=1, description="环境绑定ID")
     step_name: str = Field(..., max_length=255, description="步骤名称")
 
     @model_validator(mode="after")
@@ -573,7 +575,7 @@ class AutoTestCaseRunInfo(BaseModel):
 class AutoTestStepTreeExecute(BaseModel):
     """步骤树执行/调试入参。"""
 
-    case_id: int = Field(..., description="用例ID(运行模式和调试模式都必填)")
+    case_id: int = Field(..., ge=1, description="用例ID(运行模式和调试模式都必填)")
     steps: Optional[List[AutoTestStepTreeUpdateItem]] = Field(None, description="步骤树数据(调试模式必填, 运行模式不填)")
     initial_variables: Optional[List[StepVariablesBase]] = Field(None, description="会话变量(初始变量池)")
     steps_execute_config: Optional[Dict[str, StepsExecuteConfigBase]] = Field(default=None, description="脚本执行配置作用环境")
@@ -583,7 +585,7 @@ class AutoTestStepTreeExecute(BaseModel):
 class AutoTestBatchExecuteCases(BaseModel):
     """批量执行用例入参。"""
 
-    env_name: Optional[str] = Field(None, description="执行环境名称")
+    env_id: Optional[int] = Field(None, ge=1, description="执行环境绑定ID")
     case_ids: List[int] = Field(..., min_length=1, description="用例ID列表")
     initial_variables: Optional[List[StepVariablesBase]] = Field(default=None, description="会话变量(初始变量池)")
 
@@ -639,7 +641,7 @@ def step_tree_item_from_storage(data: Any) -> "AutoTestStepTreeUpdateItem":
 
 
 def prepare_step_tree_item_for_execution(step: AutoTestStepTreeUpdateItem) -> AutoTestStepTreeUpdateItem:
-    """执行前在模型上去除case/quote_case数据，并递归子树（不做model_dump往返）。"""
+    """执行前在模型上去除case/quote_case数据并递归子树，不做model_dump往返。"""
     children = [prepare_step_tree_item_for_execution(c) for c in (step.children or [])]
     quotes = [prepare_step_tree_item_for_execution(q) for q in (step.quote_steps or [])]
     update: Dict[str, Any] = {

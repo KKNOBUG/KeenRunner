@@ -65,7 +65,7 @@ class AutoTestEnvListQuery(BaseModel):
 
 
 class AutoTestEnvPageSelect(BaseModel):
-    """环境绑定分页列表查询入参(按应用/环境/节点类型/子配置过滤)。"""
+    """环境绑定分页列表查询入参：按应用、环境、节点类型、子配置过滤。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=100, description="每页条数")

@@ -62,6 +62,7 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
     request_project_id = fields.BigIntField(null=True, description="请求应用ID")
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
     request_config_name = fields.CharField(max_length=128, null=True, description="请求环境配置名称")
+    request_config_mode = fields.CharField(max_length=64, null=True, description="请求环境配置逻辑标识")
     request_env_name = fields.CharField(max_length=128, null=True, description="请求环境名称")
 
     # 响应相关(实际得到的响应快照)
@@ -135,6 +136,7 @@ class AutoTestDetailModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateMod
             ("case_id", "report_code", "state", "step_st_time"),
             ("report_code", "step_st_time"),
             ("case_id", "report_code", "step_st_time"),
+            ("request_config_mode",),
         )
         ordering = ["-updated_time"]
 

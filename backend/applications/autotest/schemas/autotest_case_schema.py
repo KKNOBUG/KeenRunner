@@ -23,7 +23,7 @@ from backend.enums import (
 class AutoTestCaseMeta(BaseModel):
     """用例公共字段。"""
 
-    case_id: Optional[int] = Field(None, description="用例ID")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     case_types: Optional[List[AutoTestCaseType]] = Field(None, description="用例所属类型列表")
     case_steps: Optional[int] = Field(None, ge=0, description="用例步骤数量")

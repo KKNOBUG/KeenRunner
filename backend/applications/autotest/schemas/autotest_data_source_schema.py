@@ -143,7 +143,7 @@ class AutoTestDataSourceSelect(BaseModel):
 
 
 class AutoTestDataSourceBuild(BaseModel):
-    """数据源矩阵构建定位入参(优先按数据源定位，否则按用例+步骤定位)。"""
+    """数据源矩阵构建定位入参：优先按数据源定位，否则按用例与步骤定位。"""
 
     data_source_id: Optional[int] = Field(None, ge=1, description="数据源主键ID")
     data_source_code: Optional[str] = Field(None, max_length=64, description="数据驱动文件标识代码")

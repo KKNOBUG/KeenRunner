@@ -27,7 +27,7 @@ class AutoTestTagCreate(BaseModel):
 class AutoTestTagUpdate(BaseModel):
     """更新标签入参。"""
 
-    tag_id: Optional[int] = Field(None, description="标签ID")
+    tag_id: Optional[int] = Field(None, ge=1, description="标签ID")
     tag_code: Optional[str] = Field(None, max_length=64, description="标签标识代码")
     tag_project: Optional[int] = Field(None, ge=1, description="标签所属应用")
     tag_mode: Optional[str] = Field(None, max_length=64, description="标签大类")

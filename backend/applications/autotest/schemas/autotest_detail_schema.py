@@ -80,6 +80,7 @@ class AutoTestDetailReqBase(BaseModel):
     request_project_id: Optional[int] = Field(default=None, ge=1, description="请求应用ID")
     request_args_type: Optional[AutoTestReqArgsType] = Field(default=None, description="请求参数类型")
     request_config_name: Optional[str] = Field(default=None, max_length=128, description="请求环境配置名称")
+    request_config_mode: Optional[str] = Field(default=None, max_length=64, description="请求环境配置逻辑标识")
     request_env_name: Optional[str] = Field(default=None, max_length=128, description="请求环境名称")
 
     request_header: NON_DICT_TYPE = Field(default=None, description="请求头信息")
@@ -326,7 +327,7 @@ class AutoTestDetailUpdate(AutoTestDetailBase):
     case_id: int = Field(..., ge=1, description="用例ID")
     case_code: str = Field(..., max_length=64, description="用例标识代码")
     report_code: str = Field(..., max_length=64, description="报告标识代码")
-    detail_id: Optional[int] = Field(None, description="明细ID")
+    detail_id: Optional[int] = Field(None, ge=1, description="明细ID")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     step_state: Optional[bool] = Field(None, description="步骤执行状态")
@@ -334,33 +335,33 @@ class AutoTestDetailUpdate(AutoTestDetailBase):
 
 
 class AutoTestDetailSelect(BaseModel):
-    """分页查询步骤执行明细入参(平铺列表)。"""
+    """分页查询步骤执行明细入参，返回平铺列表。"""
 
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["step_st_time", "id"], description="排序字段")
 
-    case_id: Optional[int] = Field(None, description="用例ID")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     report_code: Optional[str] = Field(None, description="报告标识代码")
 
-    step_id: Optional[int] = Field(None, description="步骤ID")
-    step_no: Optional[int] = Field(None, description="步骤序号")
+    step_id: Optional[int] = Field(None, ge=1, description="步骤ID")
+    step_no: Optional[int] = Field(None, ge=1, description="步骤序号")
     step_code: Optional[str] = Field(None, max_length=64, description="步骤标识代码")
     step_type: Optional[AutoTestStepType] = Field(None, description="步骤类型")
     step_state: Optional[bool] = Field(None, description="步骤执行状态")
 
-    detail_id: Optional[int] = Field(None, description="明细ID")
+    detail_id: Optional[int] = Field(None, ge=1, description="明细ID")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     state: Optional[int] = Field(default=0, description="状态")
 
 
 class AutoTestDetailTreeSelect(BaseModel):
-    """报告明细树查询入参(不分页, 按执行时间线组装为嵌套children树)。"""
+    """报告明细树查询入参：不分页，按执行时间线组装为嵌套children树。"""
 
     report_code: str = Field(..., description="报告标识代码")
-    case_id: Optional[int] = Field(None, description="用例ID")
+    case_id: Optional[int] = Field(None, ge=1, description="用例ID")
     only_failed: bool = Field(default=False, description="仅保留失败步骤及其祖先链")
     case_code: Optional[str] = Field(None, max_length=64, description="用例标识代码")
     state: Optional[int] = Field(default=0, description="状态")

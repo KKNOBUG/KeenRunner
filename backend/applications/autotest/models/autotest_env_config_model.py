@@ -60,6 +60,11 @@ class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, State
         index=True,
         description="环境绑定枚举",
     )
+    # config_mode: 相同应用 + 相同节点 + 相同配置名称的记录跨环境共享同一逻辑标识
+    config_mode = fields.CharField(max_length=64, description="配置逻辑标识")
+    # project_id、env_type: 冗余绑定维度，执行期批量预加载与创建判重不再回查绑定表
+    project_id = fields.BigIntField(ge=1, description="应用ID")
+    env_type = fields.CharEnumField(AutoTestConfigNodeType, description="节点类型")
     config_name = fields.CharField(max_length=128, description="配置名称")
     config_desc = fields.CharField(max_length=2048, null=True, description="配置描述")
     config_code = fields.CharField(max_length=64, default=unique_identify, unique=True, description="配置标识代码")
@@ -80,13 +85,17 @@ class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, State
         table_description = "自动化测试-环境配置表"
         unique_together = (
             ("env_bind", "config_name"),
+            ("env_bind", "config_mode"),
         )
         indexes = (
             ("env_bind", "state"),
             ("config_code", "state"),
             ("config_host", "config_port"),
+            ("project_id", "env_type", "config_name"),
+            ("project_id", "env_type", "config_mode"),
+            ("config_mode",),
         )
         ordering = ["-updated_time"]
 
     def __str__(self):
-        return f"AutoTestEnvConfigModel(env_bind={self.env_bind}, config_name={self.config_name}, config_code={self.config_code})"
+        return f"AutoTestEnvConfigModel(env_bind={self.env_bind}, config_name={self.config_name}, config_mode={self.config_mode}, config_code={self.config_code})"

@@ -71,7 +71,7 @@ class AutoTestProjectCreate(AutoTestProjectBase):
 class AutoTestProjectUpdate(AutoTestProjectBase):
     """更新应用信息入参。"""
 
-    project_id: Optional[int] = Field(None, description="应用ID")
+    project_id: Optional[int] = Field(None, ge=1, description="应用ID")
     project_code: Optional[str] = Field(None, max_length=64, description="应用标识代码")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
 
@@ -100,7 +100,7 @@ class AutoTestProjectSelect(AutoTestProjectBase):
     page_size: int = Field(default=10, ge=10, le=99999, description="每页数量")
     order: List[str] = Field(default_factory=lambda: ["-updated_time"], description="排序字段")
 
-    project_id: Optional[int] = Field(None, description="应用ID")
+    project_id: Optional[int] = Field(None, ge=1, description="应用ID")
     updated_user: Optional[UpperStr] = Field(None, max_length=16, description="更新人员")
     created_user: Optional[UpperStr] = Field(None, max_length=16, description="创建人员")
     state: Optional[int] = Field(default=0, description="状态")

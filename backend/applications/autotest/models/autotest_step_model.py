@@ -61,7 +61,7 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     # 请求元数据字段
     request_project_id = fields.BigIntField(null=True, description="请求应用ID")
     request_args_type = fields.CharEnumField(AutoTestReqArgsType, default=None, null=True, description="请求参数类型")
-    request_config_name = fields.CharField(max_length=128, null=True, description="请求环境配置名称")
+    request_config_mode = fields.CharField(max_length=64, null=True, description="请求环境配置逻辑标识")
 
     # TCP请求帧配置（仅TCP步骤使用）；全为null时引擎按默认值执行：10进制/8位/不包含长度位/无结束符/短连接/utf-8
     tcp_radix = fields.CharEnumField(AutoTestTcpRadix, default=None, null=True, description="TCP报文头进制数")
@@ -111,12 +111,13 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     data_source_desc = fields.CharField(max_length=2048, null=True, description="数据源描述")
 
     # 数据库相关
-    # database_operates 存储为List[Dict[str, Any]]格式, 每个元素包含name、desc、project_name、config_name、database_name、expr、variable_name项
+    # database_operates 存储为List[Dict[str, Any]]格式, 每个元素包含name、desc、project_id、project_name、config_mode、config_id、expr、variable_name项;
+    # config_id 仅作前端库名展示引用(环境配置行ID), 执行期库名以config_mode引用的环境配置为准
     database_operates = fields.JSONField(null=True, description="数据库请求操作列表")
     database_searched = fields.BooleanField(null=True, description="数据库请求查到即止开关(多个配置时, 某一配置查询成功且存在数据时停止后续请求)")
 
     # Redis相关
-    # redis_operates 存储为List[Dict[str, Any]]格式, 每个元素包含name、desc、project_id、project_name、config_name、database_name、expr、variable_name项
+    # redis_operates 存储为List[Dict[str, Any]]格式, 每个元素包含name、desc、project_id、project_name、config_mode、database_name、expr、variable_name项
     redis_operates = fields.JSONField(null=True, description="Redis请求操作列表")
     redis_searched = fields.BooleanField(null=True, description="Redis请求查到即止开关(多个配置时, 某一配置返回有效结果时停止后续请求)")
 
@@ -135,6 +136,7 @@ class AutoTestStepModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
             ("case_id", "state", "step_no"),
             ("case_id", "step_type"),
             ("step_name", "state"),
+            ("request_config_mode",),
         )
         ordering = ["case_id", "step_no"]
 
