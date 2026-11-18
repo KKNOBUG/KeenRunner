@@ -38,20 +38,10 @@ class CeleryConfig(BaseSettings):
     @model_validator(mode="after")
     def assemble_celery_settings(self) -> Self:
         project = PROJECT_CONFIG
-        if project.SERVER_DEBUG:
-            # 开发环境
-            broker_db = project.DEV_CELERY_BROKER_DB
-            backend_db = project.DEV_CELERY_BACKEND_DB
-            redbeat_db = project.DEV_CELERY_REDBEAT_DB
-        else:
-            # 生产环境
-            broker_db = project.CELERY_BROKER_DB
-            backend_db = project.CELERY_BACKEND_DB
-            redbeat_db = project.CELERY_REDBEAT_DB
-
-        self.CELERY_BROKER_URL = project.build_redis_url(db=broker_db)
-        self.CELERY_RESULT_BACKEND = project.build_redis_url(db=backend_db)
-        self.CELERY_REDBEAT_REDIS_URL = project.build_redis_url(db=redbeat_db)
+        # 三环境库号直接取当前环境文件（开发7/8/9、测试10/11/12、生产13/14/15），不再按调试开关分叉选配置
+        self.CELERY_BROKER_URL = project.build_redis_url(db=project.CELERY_BROKER_DB)
+        self.CELERY_RESULT_BACKEND = project.build_redis_url(db=project.CELERY_BACKEND_DB)
+        self.CELERY_REDBEAT_REDIS_URL = project.build_redis_url(db=project.CELERY_REDBEAT_DB)
 
         # 队列名使用端口号拼接，确保多项目隔离
         server_port = project.SERVER_PORT
@@ -61,9 +51,10 @@ class CeleryConfig(BaseSettings):
 
         self.CELERY_LOG_DIR = os.path.join(project.OUTPUT_LOGS_DIR, "celery_logs")
         os.makedirs(self.CELERY_LOG_DIR, exist_ok=True)
-        self.CELERY_WORKER_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_worker.log")
-        self.CELERY_BEAT_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_beat.log")
-        self.CELERY_TASK_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, "celery_task.log")
+        # 日志文件名携带 SERVER_PORT：与部署脚本 --logfile、worker setup_loggers 默认口径一致，同机多环境实例互不混写
+        self.CELERY_WORKER_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, f"celery_worker_{server_port}.log")
+        self.CELERY_BEAT_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, f"celery_beat_{server_port}.log")
+        self.CELERY_TASK_LOG_FILE = os.path.join(self.CELERY_LOG_DIR, f"celery_task_{server_port}.log")
 
         task_imports = FileUtils.get_all_files(
             abspath=os.path.join(project.CELERY_SCHEDULER_DIR, "tasks"),

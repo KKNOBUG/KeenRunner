@@ -14,7 +14,6 @@ import os
 import sys
 import traceback
 from abc import ABC
-from contextlib import suppress
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -62,10 +61,8 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     """
     AsyncEventLoopContextIOPool.reset_process_state()
     reset_tortoise_orm_state()
-    # prefork 子进程继承父进程 Loguru 文件句柄，需重建 Sink 以免多进程共写/轮转失败
-    from backend.configure.logging_config import loguru_logging
-
-    loguru_logging()
+    # prefork 子进程继承父进程 Loguru 文件句柄，需重建 Sink 以免多进程共写/轮转失败；
+    # setup_loggers 内部会先清空全部 sink 再重建，落到当天复用的 Worker 日志文件（不触发应用日志）
     setup_loggers(logfile=os.environ.get("CELERY_LOGFILE") or None)
     LOGGER.debug(f"{_LOG_PREFIX}worker_process_init: 已重置异步池、Tortoise 与日志 Sink")
 
@@ -379,8 +376,10 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     """
     接管Celery日志，将stdlib经InterceptHandler接入Loguru。
 
-    日志文件优先级：--logfile 参数 > CELERY_LOGFILE 环境变量 > 按 argv 区分的默认 worker/beat 日志；
-    重复调用时先移除旧 sink 再重建；前台（非 --detach 且 stderr 为终端）额外追加终端 sink。
+    日志文件优先级：--logfile 参数 > CELERY_LOGFILE 环境变量 > 按天复用的默认 worker/beat 日志；
+    默认文件携带 SERVER_PORT 与创建时刻（{YYYYmmdd}-{HHMMSS}-{Worker|Beat}-{port}.log），
+    当天已存在则复用，同机多环境实例互不混写；重复调用时先清空再重建 sink；
+    前台（非 --detach 且 stderr 为终端）额外追加终端 sink。
 
     :param loglevel: 日志级别(int或Celery传入值)
     :param logfile: Celery --logfile路径
@@ -390,7 +389,12 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     global _celery_logfile_sink_id, _celery_console_sink_id
     from loguru import logger as loguru_logger
 
-    from backend.configure.logging_config import LOG_FORMAT
+    from backend.configure.logging_config import (
+        LOG_FORMAT,
+        _inject_trace_context,
+        cleanup_expired_log_files,
+        resolve_daily_log_path,
+    )
 
     level = loglevel if isinstance(loglevel, int) else logging.INFO
     try:
@@ -400,23 +404,30 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
         root.handlers = [InterceptHandler()]
         root.setLevel(level)
 
+    # 清空进程内全部既有 sink 后重建（prefork 子进程继承父进程句柄，重建前必须先移除）
+    loguru_logger.remove()
+    _celery_logfile_sink_id = None
+    _celery_console_sink_id = None
+    loguru_logger.configure(patcher=_inject_trace_context)
+
     # 依argv区分worker/beat默认日志文件；显式--logfile或CELERY_LOGFILE环境变量优先
     # beat 作为独立 argv token 出现即判为 beat（含 `celery beat` 子命令）；否则仅当整条命令含 beat 且不含 worker 时按 beat 处理
     argv_tokens = [t.lower() for t in sys.argv]
     is_beat = "beat" in argv_tokens or ("beat" in " ".join(argv_tokens) and "worker" not in argv_tokens)
-    default_logfile = os.path.join(
-        PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs", f"celery_{'beat' if is_beat else 'worker'}.log"
-    )
-    target = (logfile or "").strip() or (os.environ.get("CELERY_LOGFILE") or "").strip() or default_logfile
+    target = (logfile or "").strip() or (os.environ.get("CELERY_LOGFILE") or "").strip()
+    if not target:
+        # 默认路径按天复用：{celery_logs}/{YYYYmmdd}-{HHMMSS}-{Worker|Beat}-{port}.log（携带端口，同机多环境互不混写）
+        target = resolve_daily_log_path(
+            os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs"),
+            f"{'Beat' if is_beat else 'Worker'}-{PROJECT_CONFIG.SERVER_PORT}",
+        )
+    # 过期 Celery 日志（含滚动备份与历史固定名文件）按保留天数清理
+    cleanup_expired_log_files()
 
     if target:
         log_dir = os.path.dirname(target)
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
-        if _celery_logfile_sink_id is not None:
-            with suppress(ValueError):
-                loguru_logger.remove(_celery_logfile_sink_id)
-            _celery_logfile_sink_id = None
         _celery_logfile_sink_id = loguru_logger.add(
             target,
             level="INFO",
@@ -433,13 +444,9 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
         os.environ["CELERY_LOGFILE"] = target
         LOGGER.info(f"{_LOG_PREFIX}Celery 日志已写入文件: {target}")
 
-    # 本地前台（非 --detach）保证终端可见
+    # 本地前台（非 --detach）保证终端可见（sink 已在函数前段整体清空，直接追加）
     is_detached = "--detach" in sys.argv or "-D" in sys.argv
     if not is_detached and sys.stderr and getattr(sys.stderr, "isatty", lambda: False)():
-        if _celery_console_sink_id is not None:
-            with suppress(ValueError):
-                loguru_logger.remove(_celery_console_sink_id)
-            _celery_console_sink_id = None
         _celery_console_sink_id = loguru_logger.add(
             sys.stderr,
             level="INFO",
@@ -681,11 +688,12 @@ celery = create_celery()
 
 # ========== 启动命令（在仓库根目录执行）==========
 # Worker：队列名必须与celery_config.py的端口前缀队列一致: {port}_default,{port}_autotest
-#   celery -A backend.celery_scheduler.celery_worker worker -Q 8518_default,8518_autotest -c 4 -l INFO
+#   celery -A backend.celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO --hostname=worker_8520@%h
 # Beat：
 #   celery -A backend.celery_scheduler.celery_worker beat -l INFO
-# 日志默认写入：backend/output/logs/celery_logs/celery_worker.log | celery_beat.log
+# 日志默认写入：backend/output/logs/celery_logs/celery_worker_{port}.log | celery_beat_{port}.log
 # 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
+# 同机多环境共存：节点名/日志/PID 均携带 SERVER_PORT，互不干扰
 
 if __name__ == '__main__':
     celery.start(argv=sys.argv[1:])

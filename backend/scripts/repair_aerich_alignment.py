@@ -47,6 +47,10 @@ DEFAULT_APP: str = "models"
 DEFAULT_FAKE_MAX: str = "auto"
 
 
+def resolve_env_file() -> Path:
+    return BACKEND_DIR / ".env"
+
+
 def list_migration_files() -> list[tuple[int, str]]:
     """按序号从小到大列出磁盘上的迁移文件名。"""
     out: list[tuple[int, str]] = []
@@ -103,12 +107,12 @@ def print_repair_plan(
 
 
 async def open_db_connection() -> aiomysql.Connection:
-    """读取.env里的数据库配置, 创建一个数据库连接。"""
-    cfg = dotenv_values(BACKEND_DIR / ".env")
+    """读取当前环境文件里的数据库配置, 创建一个数据库连接。"""
+    cfg = dotenv_values(resolve_env_file())
     required_keys = ("DATABASE_HOST", "DATABASE_PORT", "DATABASE_USERNAME", "DATABASE_PASSWORD", "DATABASE_NAME")
     missing_keys = [key for key in required_keys if not cfg.get(key)]
     if missing_keys:
-        raise RuntimeError(f".env缺少数据库配置项: {missing_keys}")
+        raise RuntimeError(f"环境文件缺少数据库配置项: {missing_keys}")
     return await aiomysql.connect(
         host=cfg["DATABASE_HOST"],
         port=int(cfg["DATABASE_PORT"]),

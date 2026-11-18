@@ -40,6 +40,7 @@ VERB_ACTIONS: Dict[str, str] = {
     "duplicate": ACTION_CREATE,
     "generate": ACTION_CREATE,
     "register": ACTION_CREATE,
+    "sync": ACTION_CREATE,
     # 更新
     "update": ACTION_UPDATE,
     "save": ACTION_UPDATE,

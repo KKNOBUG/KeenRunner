@@ -46,7 +46,7 @@ class AutoTestProjectSyncService:
         try:
             app_response: httpx.Response = await client.request(
                 method="POST",
-                url=PROJECT_CONFIG.ATPM_SYNC_API_URL,
+                url=PROJECT_CONFIG.THIRD_PARTY_SYNC_APPS_URL,
             )
             return app_response.json()
         except Exception as e:

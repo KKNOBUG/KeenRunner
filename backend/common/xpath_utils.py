@@ -763,5 +763,113 @@ if __name__ == '__main__':
     </Body>
 </BOSFXIII>"""
 
-    print(XPathUtils.query(mock_xml2, "./Head/SvcCd"))
+    # print(XPathUtils.query(mock_xml2, "./Head/SvcCd"))
+    # print("-" * 100)
+
+    xml_str = """<?xml version="1.0" encoding="UTF-8"?>
+    <BOSFXIII>
+        <Head>
+            <MsgVerNo>4.0</MsgVerNo>
+            <SvcCd>1635003</SvcCd>
+            <ScnCd>28</ScnCd>
+            <CnsmrSysId>EBIP</CnsmrSysId>
+            <CnsmrSrlNo>05fa38a8-caae-489a-b2ae-0b20420ee94f</CnsmrSrlNo>
+            <GlblSrlNo>2026111830010309432700609050</GlblSrlNo>
+            <TxnDt>20261118</TxnDt>
+            <TxnTm>094327</TxnTm>
+            <PvdrSysId>CBC</PvdrSysId>
+            <RetCd>000000</RetCd>
+            <RetMsg>成功</RetMsg>
+            <InttCnlCd>NCS</InttCnlCd>
+            <CnlTxnCd>1723101886493</CnlTxnCd>
+            <PvdrSvcNo>10.208.119.103</PvdrSvcNo>
+        </Head>
+        <Body>
+            <page>1</page>
+            <rows>10</rows>
+            <total>12</total>
+            <totalPage>2</totalPage>
+            <dataArry>
+                <organizationNumber>0491</organizationNumber>
+                <ecifNumber>3131649184</ecifNumber>
+                <accountManagementId>00000000000006418891</accountManagementId>
+                <cardNumber>6251939008162747</cardNumber>
+                <pointAccountTypeCode>TYJF01</pointAccountTypeCode>
+                <pointAccountTypeDesc>通用积分账户</pointAccountTypeDesc>
+                <lastStatementDate>20300708</lastStatementDate>
+                <statementDate>20300808</statementDate>
+                <beginBalancePoints>16971</beginBalancePoints>
+                <rewardsPoints>0</rewardsPoints>
+                <adjustPoints>0</adjustPoints>
+                <exchangPoints>0</exchangPoints>
+                <overduePoints>0</overduePoints>
+                <pointsBalance>16971</pointsBalance>
+            </dataArry>
+            <dataArry>
+                <organizationNumber>0491</organizationNumber>
+                <ecifNumber>3131649184</ecifNumber>
+                <accountManagementId>00000000000006418891</accountManagementId>
+                <cardNumber>6251939008162747</cardNumber>
+                <pointAccountTypeCode>TYJF01</pointAccountTypeCode>
+                <pointAccountTypeDesc>通用积分账户</pointAccountTypeDesc>
+                <lastStatementDate>20300608</lastStatementDate>
+                <statementDate>20300708</statementDate>
+                <beginBalancePoints>16971</beginBalancePoints>
+                <rewardsPoints>0</rewardsPoints>
+                <adjustPoints>0</adjustPoints>
+                <exchangPoints>0</exchangPoints>
+                <overduePoints>0</overduePoints>
+                <pointsBalance>16971</pointsBalance>
+            </dataArry>
+            <dataArry>
+                <organizationNumber>0491</organizationNumber>
+                <ecifNumber>3131649184</ecifNumber>
+                <accountManagementId>00000000000006418891</accountManagementId>
+                <cardNumber>6251939008162747</cardNumber>
+                <pointAccountTypeCode>TYJF01</pointAccountTypeCode>
+                <pointAccountTypeDesc>通用积分账户</pointAccountTypeDesc>
+                <lastStatementDate>20300508</lastStatementDate>
+                <statementDate>20300608</statementDate>
+                <beginBalancePoints>16971</beginBalancePoints>
+                <rewardsPoints>0</rewardsPoints>
+                <adjustPoints>0</adjustPoints>
+                <exchangPoints>0</exchangPoints>
+                <overduePoints>0</overduePoints>
+                <pointsBalance>16971</pointsBalance>
+            </dataArry>
+            <dataArry>
+                <organizationNumber>0491</organizationNumber>
+                <ecifNumber>3131649184</ecifNumber>
+                <accountManagementId>00000000000006418891</accountManagementId>
+                <cardNumber>6251939008162747</cardNumber>
+                <pointAccountTypeCode>TYJF01</pointAccountTypeCode>
+                <pointAccountTypeDesc>通用积分账户</pointAccountTypeDesc>
+                <lastStatementDate>20300408</lastStatementDate>
+                <statementDate>20300508</statementDate>
+                <beginBalancePoints>16971</beginBalancePoints>
+                <rewardsPoints>0</rewardsPoints>
+                <adjustPoints>0</adjustPoints>
+                <exchangPoints>0</exchangPoints>
+                <overduePoints>0</overduePoints>
+                <pointsBalance>16971</pointsBalance>
+            </dataArry>
+            <dataArry>
+                <organizationNumber>0491</organizationNumber>
+                <ecifNumber>3131649184</ecifNumber>
+                <accountManagementId>00000000000006418891</accountManagementId>
+                <cardNumber>6251939008162747</cardNumber>
+                <pointAccountTypeCode>TYJF01</pointAccountTypeCode>
+                <pointAccountTypeDesc>通用积分账户</pointAccountTypeDesc>
+                <lastStatementDate>20300308</lastStatementDate>
+                <statementDate>20300408</statementDate>
+                <beginBalancePoints>16971</beginBalancePoints>
+                <rewardsPoints>0</rewardsPoints>
+                <adjustPoints>0</adjustPoints>
+                <exchangPoints>0</exchangPoints>
+                <overduePoints>0</overduePoints>
+                <pointsBalance>16971</pointsBalance>
+            </dataArry>
+        </Body>
+    </BOSFXIII>"""
+    print(XPathUtils.query_all(xml_str, "./Body/dataArry/accountManagementId"))
     print("-" * 100)

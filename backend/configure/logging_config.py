@@ -11,7 +11,7 @@ import os
 import re
 import sys
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from concurrent_log_handler import ConcurrentRotatingFileHandler
@@ -75,36 +75,88 @@ def rotation_to_max_bytes(rotation: str) -> int:
     return int(value * {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}[unit])
 
 
+def resolve_daily_log_path(log_dir: str, body: str) -> str:
+    """
+    按天复用的日志文件路径：{log_dir}/{YYYYmmdd}-{HHMMSS}-{body}.log
+
+    - 先扫描目录中今日已创建的匹配文件（如前次进程重启残留），命中即复用最新一个；
+    - 未命中则以当前时刻 O_CREAT|O_EXCL 抢占创建，输掉同秒竞态的进程重新扫描复用赢家文件。
+
+    滚动备份（*.log.1）与锁文件（.__*.lock）不以 .log 结尾，天然不会命中复用。
+
+    :param log_dir: 日志目录
+    :param body: 文件名主体（如 执行日志 / Worker-8520 / Beat-8520）
+    :return: 完整日志文件路径
+    """
+    os.makedirs(log_dir, exist_ok=True)
+    now = datetime.now()
+    today = now.strftime("%Y%m%d")
+    suffix = f"-{body}.log"
+    existing = [
+        name for name in os.listdir(log_dir)
+        if name.startswith(f"{today}-") and name.endswith(suffix)
+    ]
+    if existing:
+        return os.path.join(log_dir, sorted(existing)[-1])
+    candidate = os.path.join(log_dir, f"{now.strftime('%Y%m%d-%H%M%S')}-{body}.log")
+    try:
+        fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        os.close(fd)
+        return candidate
+    except FileExistsError:
+        pass
+    existing = [
+        name for name in os.listdir(log_dir)
+        if name.startswith(f"{today}-") and name.endswith(suffix)
+    ]
+    if existing:
+        return os.path.join(log_dir, sorted(existing)[-1])
+    return candidate
+
+
 def build_log_path() -> str:
     """
-    根据启动时刻生成日志文件路径：年月日-时分秒-执行日志.log
+    应用日志路径：{OUTPUT_LOGS_DIR}/{年月日}-{时分秒}-执行日志.log
+
+    按天复用：当天已存在则继续使用（gunicorn master 与各 worker 落在同一文件），
+    不存在则按当前时刻创建，每天至多一个文件。
     """
-    prefix = PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, f"{stamp}-{prefix}.log")
+    return resolve_daily_log_path(PROJECT_CONFIG.OUTPUT_LOGS_DIR, PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX)
 
 
-def cleanup_stale_log_lock_files() -> None:
+def cleanup_expired_log_files() -> None:
     """
-    删除日志目录中非今日的ConcurrentRotatingFileHandler锁文件。
+    按 LOGGER_RETENTION_DAYS 清理过期的应用与 Celery 日志（含滚动备份与孤儿锁文件）。
+
+    判定用文件最后修改时间（mtime）：按天复用模式下文件名日期可能落后于内容日期
+    （服务跨天仍写原文件），按文件名日期判定会误删仍活跃的日志。
     """
-    logs_dir = PROJECT_CONFIG.OUTPUT_LOGS_DIR
-    if not os.path.isdir(logs_dir):
+    retention_days = PROJECT_CONFIG.LOGGER_RETENTION_DAYS
+    if retention_days <= 0:
         return
-    today = datetime.now().strftime("%Y%m%d")
-    suffix = f"-{PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX}.lock"
-    for name in os.listdir(logs_dir):
-        if not name.startswith(".__") or not name.endswith(suffix):
+    celery_logs_dir = os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs")
+    targets = (
+        (PROJECT_CONFIG.OUTPUT_LOGS_DIR, (f"-{PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX}.log",)),
+        (celery_logs_dir, ("-Worker-", "-Beat-", "celery_worker_", "celery_beat_")),
+    )
+    deadline = datetime.now() - timedelta(days=retention_days)
+    for log_dir, markers in targets:
+        if not os.path.isdir(log_dir):
             continue
-        inner = name[3:-len(suffix)]
-        date_part = inner[:8]
-        if len(date_part) == 8 and date_part.isdigit() and date_part == today:
-            continue
-        lock_path = os.path.join(logs_dir, name)
-        try:
-            os.remove(lock_path)
-        except OSError:
-            pass
+        for name in os.listdir(log_dir):
+            if not any(marker in name for marker in markers):
+                continue
+            path = os.path.join(log_dir, name)
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if datetime.fromtimestamp(st.st_mtime) >= deadline:
+                continue
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
 
 def registry_file_handler() -> None:
@@ -233,7 +285,7 @@ def loguru_logging() -> logging.Logger:
     - SERVER_DEBUG=False：仅写文件（生产常见）。
     """
     logger.remove()
-    cleanup_stale_log_lock_files()
+    cleanup_expired_log_files()
     registry_file_handler()
 
     if PROJECT_CONFIG.SERVER_DEBUG:
@@ -251,5 +303,4 @@ def loguru_logging() -> logging.Logger:
     return logger
 
 
-# 模块加载时完成一次性配置；各 Gunicorn worker 为独立进程，会各自 import 一次
-LOGGER = loguru_logging()
+LOGGER = logger

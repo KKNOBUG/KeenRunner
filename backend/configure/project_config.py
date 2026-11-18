@@ -19,6 +19,7 @@ from typing_extensions import Self
 from backend.common import FileUtils, ShellUtils
 
 _PROJECT_ROOT: str = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+# 环境配置：全环境共用唯一配置文件（内容由环境部署负责人手动修改）
 _PROJECT_CONF: str = os.path.join(_PROJECT_ROOT, ".env")
 
 
@@ -94,16 +95,19 @@ class ProjectConfig(BaseSettings):
     SERVER_APP: str = "backend_main:app"
     SERVER_HOST: str = ShellUtils.acquire_localhost()
     SERVER_SYSTEM: str = platform.system()
-    SERVER_PORT: int = 8518
-    SERVER_DEBUG: bool = SERVER_SYSTEM != "Linux"  # Windows | Linux | Darwin
-    SERVER_DELAY: int = 5
+    # 服务启动端口：开发8520 / 测试8522 / 生产8521，由各环境文件提供
+    SERVER_PORT: int = Field(..., ge=1, le=65535, description="服务启动端口")
+    # 调试开关：开发true，测试/生产false，由各环境文件提供
+    SERVER_DEBUG: bool = Field(..., description="调试开关")
 
     # 安全认证配置
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 2
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥")
-    # 第三方迁移登录的用户真实性校验地址
-    THIRD_PARTY_USER_AUTH_URL: str = Field(..., description="第三方用户真实性校验地址")
+    # 第三方迁移用户的校验地址
+    THIRD_PARTY_USER_AUTH_URL: str = Field(..., description="第三方迁移用户的校验地址")
+    # 第三方应用信息的同步地址
+    THIRD_PARTY_SYNC_APPS_URL: str = Field(..., description="第三方应用信息的同步地址")
 
     # 日志相关参数配置
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"
@@ -113,6 +117,8 @@ class ProjectConfig(BaseSettings):
     LOGGER_ROTATION: str = "100 MB"
     # 大小轮转后保留的备份文件个数（单文件多进程模式）
     LOGGER_ROTATION_BACKUP_COUNT: int = 30
+    # 历史日志保留天数：启动时按最后修改时间清理超过该天数的应用/Celery 日志及其滚动备份、孤儿锁（0=不清理）
+    LOGGER_RETENTION_DAYS: int = 30
 
     # 项目路径相关配置
     APPLICATIONS_DIR: str = os.path.abspath(os.path.join(_PROJECT_ROOT, "applications"))
@@ -248,26 +254,18 @@ class ProjectConfig(BaseSettings):
     DATABASE_NAME: str = Field(..., description="数据库名称")
     DATABASE_USERNAME: str = Field(..., description="数据库账户")
     DATABASE_PASSWORD: str = Field(..., description="数据库密码")
-    DEV_DATABASE_HOST: str = Field(..., description="数据库主机(开发环境)")
-    DEV_DATABASE_PORT: str = Field(..., description="数据库端口(开发环境)")
-    DEV_DATABASE_NAME: str = Field(..., description="数据库名称(开发环境)")
-    DEV_DATABASE_USERNAME: str = Field(..., description="数据库账户(开发环境)")
-    DEV_DATABASE_PASSWORD: str = Field(..., description="数据库密码(开发环境)")
 
-    # Redis 配置（仅 requirepass 时用户名留空；密码含 @/: 等会在连接 URL 中做编码）
-    REDIS_URL: str = Field("", description="Redis地址(开发/测试)")
-    REDIS_HOST: str = Field(..., description="Redis主机(开发/测试)")
-    REDIS_PORT: str = Field(..., description="Redis端口(开发/测试)")
-    REDIS_USERNAME: str = Field("", description="Redis账户(开发/测试)")
-    REDIS_PASSWORD: str = Field(..., description="Redis密码(开发/测试)")
+    # Redis配置
+    REDIS_URL: str = Field("", description="Redis地址")
+    REDIS_HOST: str = Field(..., description="Redis主机")
+    REDIS_PORT: str = Field(..., description="Redis端口")
+    REDIS_USERNAME: str = Field("", description="Redis账户")
+    REDIS_PASSWORD: str = Field(..., description="Redis密码")
 
     # Celery Redis 数据库编号配置
-    CELERY_BROKER_DB: int = Field(..., description="消息代理")
-    CELERY_BACKEND_DB: int = Field(..., description="结果存储")
-    CELERY_REDBEAT_DB: int = Field(..., description="任务持久")
-    DEV_CELERY_BROKER_DB: int = Field(..., description="消息代理(开发环境)")
-    DEV_CELERY_BACKEND_DB: int = Field(..., description="结果存储(开发环境)")
-    DEV_CELERY_REDBEAT_DB: int = Field(..., description="任务持久(开发环境)")
+    CELERY_BROKER_DB: int = Field(..., description="消息代理库号")
+    CELERY_BACKEND_DB: int = Field(..., description="结果存储库号")
+    CELERY_REDBEAT_DB: int = Field(..., description="任务持久库号")
 
     # 自动化模块：数据库操作中Oracle连接模式，空值按thick；thin不兼容11g/部分12.1
     ORACLE_CLIENT_MODE: str = Field(default="", description="Oracle Instant 连接模式，仅允许：thick/thin")
@@ -291,12 +289,10 @@ class ProjectConfig(BaseSettings):
             raise ValueError("配置[AUTH_SECRET_KEY]不允许为空或少于64位")
 
         for field_name in (
-                "THIRD_PARTY_USER_AUTH_URL",
+                "THIRD_PARTY_USER_AUTH_URL", "THIRD_PARTY_SYNC_APPS_URL",
                 "DATABASE_HOST", "DATABASE_PORT", "DATABASE_NAME", "DATABASE_USERNAME", "DATABASE_PASSWORD",
-                "DEV_DATABASE_HOST", "DEV_DATABASE_PORT", "DEV_DATABASE_NAME", "DEV_DATABASE_USERNAME", "DEV_DATABASE_PASSWORD",
                 "REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD",
                 "CELERY_BROKER_DB", "CELERY_BACKEND_DB", "CELERY_REDBEAT_DB",
-                "DEV_CELERY_BROKER_DB", "DEV_CELERY_BACKEND_DB", "DEV_CELERY_REDBEAT_DB",
         ):
             value = getattr(self, field_name)
             if value is None or (isinstance(value, str) and not value):
@@ -305,25 +301,10 @@ class ProjectConfig(BaseSettings):
         return self.assemble_connection_urls()
 
     def assemble_connection_urls(self) -> Self:
-        # 根据环境选择数据库配置
-        if self.SERVER_DEBUG:
-            # 开发环境
-            database_username = self.DEV_DATABASE_USERNAME
-            database_password = self.DEV_DATABASE_PASSWORD
-            database_host = self.DEV_DATABASE_HOST
-            database_port = self.DEV_DATABASE_PORT
-            database_name = self.DEV_DATABASE_NAME
-        else:
-            # 生产环境
-            database_username = self.DATABASE_USERNAME
-            database_password = self.DATABASE_PASSWORD
-            database_host = self.DATABASE_HOST
-            database_port = self.DATABASE_PORT
-            database_name = self.DATABASE_NAME
-
+        # 各环境文件提供当前环境的数据库与Redis地址，直接组装，不再按调试开关分叉选配置
         self.DATABASE_URL = (
-            f"mysql://{database_username}:{database_password}@{database_host}:"
-            f"{database_port}/{database_name}"
+            f"mysql://{self.DATABASE_USERNAME}:{self.DATABASE_PASSWORD}@{self.DATABASE_HOST}:"
+            f"{self.DATABASE_PORT}/{self.DATABASE_NAME}"
             f"?charset=utf8mb4&time_zone=+08:00"
         )
         self.DATABASE_CONNECTIONS = {
@@ -331,11 +312,11 @@ class ProjectConfig(BaseSettings):
                 "engine": "tortoise.backends.mysql",
                 "db_url": self.DATABASE_URL,
                 "credentials": {
-                    "host": database_host,
-                    "port": database_port,
-                    "user": database_username,
-                    "password": database_password,
-                    "database": database_name,
+                    "host": self.DATABASE_HOST,
+                    "port": self.DATABASE_PORT,
+                    "user": self.DATABASE_USERNAME,
+                    "password": self.DATABASE_PASSWORD,
+                    "database": self.DATABASE_NAME,
                     "minsize": 10,
                     "maxsize": 40,
                     "pool_recycle": 3600,
@@ -369,7 +350,7 @@ class ProjectConfig(BaseSettings):
         )
 
     # Aerich：是否在应用启动时执行 init_db / migrate / upgrade 指令
-    # - 生产(Linux 且 SERVER_DEBUG=False)：始终执行迁移（不提供关闭选项）
+    # - 测试/生产(SERVER_DEBUG=False 且 Linux)：始终执行迁移（不提供关闭选项）
     # - 开发(SERVER_DEBUG=True)：默认不迁移；需要时由开发者手动把 DATABASE_AUTO_MIGRATION 改为 True
     @property
     def aerich_should_run_on_startup(self) -> bool:
