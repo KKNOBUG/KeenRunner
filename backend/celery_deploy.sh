@@ -70,9 +70,15 @@ is_running() {
     return 1
 }
 
+# 校验 PID 对应进程确为 Celery，防 PID 复用误杀无关进程
+pid_is_service() {
+    ps -p "$1" -o args= 2>/dev/null | grep -q "$2"
+}
+
 stop_process() {
     local pid_file=$1
     local process_name=$2
+    local service_keyword=$3
 
     if ! is_running "$pid_file"; then
         print_info "${process_name} 未运行(跳过)..."
@@ -81,6 +87,13 @@ stop_process() {
 
     local pid
     pid=$(cat "$pid_file")
+
+    if ! pid_is_service "$pid" "$service_keyword"; then
+        print_warn "PID $pid 已被无关进程复用, 不执行终止, 仅清理过期PID文件"
+        rm -f "$pid_file"
+        return 1
+    fi
+
     print_info "停止 ${process_name}(PID: $pid)..."
 
     kill -TERM "$pid" 2>/dev/null || true
@@ -182,11 +195,11 @@ start_celery_beat() {
 }
 
 stop_celery_worker() {
-    stop_process "$CELERY_WORKER_PID" "Celery Worker"
+    stop_process "$CELERY_WORKER_PID" "Celery Worker" "celery"
 }
 
 stop_celery_beat() {
-    stop_process "$CELERY_BEAT_PID" "Celery Beat"
+    stop_process "$CELERY_BEAT_PID" "Celery Beat" "celery"
 }
 
 celery_status() {

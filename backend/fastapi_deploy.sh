@@ -5,12 +5,17 @@
 # 同机多实例: 各部署目录 .env 的 SERVER_PORT 错开
 
 # 脚本所在目录
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="${PROJECT_ROOT:-$SCRIPT_DIR}"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 保证能 import backend.*
-export PYTHONPATH="${PROJECT_ROOT}/..:${PYTHONPATH:-}"
 cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
+export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+
+# 自动激活虚拟环境（已激活则跳过）
+if [ -z "${VIRTUAL_ENV:-}" ] && [ -f "${PROJECT_ROOT}/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "${PROJECT_ROOT}/.venv/bin/activate"
+fi
 
 # 服务端口从 .env 读取：PID/日志/进程名均以端口区分
 SERVER_PORT="$(grep -E '^SERVER_PORT=' "${PROJECT_ROOT}/.env" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r')"
@@ -23,7 +28,7 @@ fi
 GUNICORN_APP="backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
 GUNICORN_PID_FILE="${PROJECT_ROOT}/gunicorn_${SERVER_PORT}.pid"
-FASTAPI_LOG="${PROJECT_ROOT}/backend_main_${SERVER_PORT}.log"
+FASTAPI_LOG_FILE="${PROJECT_ROOT}/backend_main_${SERVER_PORT}.log"
 
 # 配置Git服务
 GIT_BRANCH="发布分支"
@@ -74,9 +79,15 @@ is_running() {
     return 1
 }
 
+# 校验 PID 对应进程确为目标服务，防 PID 复用误杀无关进程
+pid_is_service() {
+    ps -p "$1" -o args= 2>/dev/null | grep -q "$2"
+}
+
 stop_process() {
     local pid_file=$1
     local process_name=$2
+    local service_keyword=$3
 
     if ! is_running "$pid_file"; then
         print_info "${process_name} 未运行(跳过)..."
@@ -84,6 +95,13 @@ stop_process() {
     fi
 
     local pid=$(cat "$pid_file")
+
+    if ! pid_is_service "$pid" "$service_keyword"; then
+        print_warn "PID $pid 已被无关进程复用, 不执行终止, 仅清理过期PID文件"
+        rm -f "$pid_file"
+        return 1
+    fi
+
     print_info "停止 ${process_name}(PID: $pid)..."
 
     kill -TERM "$pid" 2>/dev/null
@@ -107,7 +125,7 @@ stop_process() {
 # 步骤1: 停止旧服务
 stop_services() {
     print_step "步骤1: 停止旧服务"
-    stop_process "$GUNICORN_PID_FILE" "Gunicorn"
+    stop_process "$GUNICORN_PID_FILE" "Gunicorn" "gunicorn"
     sleep 2
 }
 
@@ -171,17 +189,17 @@ start_fastapi() {
     nohup gunicorn -c "$GUNICORN_CONFIG_FILE" "$GUNICORN_APP" \
         --pid="$GUNICORN_PID_FILE" \
         --name="gunicorn_${SERVER_PORT}" \
-        > "$FASTAPI_LOG" 2>&1 &
+        > "$FASTAPI_LOG_FILE" 2>&1 &
 
-    sleep 5
+    sleep 10
 
     if is_running "$GUNICORN_PID_FILE"; then
         local pid=$(cat "$GUNICORN_PID_FILE")
         print_info "Gunicorn服务启动成功 (PID: $pid)"
         print_info "PID文件: $GUNICORN_PID_FILE"
-        print_info "日志文件: $FASTAPI_LOG"
+        print_info "日志文件: $FASTAPI_LOG_FILE"
     else
-        print_error "Gunicorn服务启动失败, 请检查日志: tail -n 50 $FASTAPI_LOG"
+        print_error "Gunicorn服务启动失败, 请检查日志: tail -n 50 $FASTAPI_LOG_FILE"
         exit 1
     fi
 }
