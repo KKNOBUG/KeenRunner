@@ -179,6 +179,8 @@ views (/http_debugging, /tcp_debugging, /redis_debugging)
   → inject_builtin_variables_for_debug → resolve_env_config_by_mode(env_id + config_mode) → 占位符替换 → 发请求返回
 ```
 
+**TCP 测试服务器管理**（/autotest/tcp_test/*）：视图 `views/autotest_tcp_test_view.py` 仅薄路由层，实现下沉 `services/autotest_tcp_test_service.py`（`TcpTestServerService` 静态门面 + `TcpTestServerManager` 声明式端口编排 + mock/帧诊断服务器），内置端口组合与启动入参在 `schemas/autotest_tcp_test_schema.py`；挂在独立的 `autotest_public` 蓝图（`applications/autotest/views/__init__.py`），不并入 `autotest`、不挂权限依赖，启动契约判定为 public 不参与 RBAC 路由收集；认证由 `auth_middleware` 白名单 `* /autotest/tcp_test/*` 放行，无需用户认证；审计仍按行为分类落库（无 Token 时 user_id=0）。
+
 ### 3.2 performance — 性能压测
 
 **四层数据模型**：
@@ -270,16 +272,16 @@ views (/http_debugging, /tcp_debugging, /redis_debugging)
 ### 4.3 中间件（core/middlewares/）
 
 - `app_middleware.py`：应用级日志与审计；仅 `AUDITED_ACTIONS`/`unknown` 落库，查询透传；取用户复用认证缓存，不再重复查库。
-- `auth_middleware.py`：非白名单请求统一先认证，**不做 RBAC**（RBAC 在路由依赖 `DependPermission`）；Token 认证失败返回真实 HTTP 401，响应体仍保留统一业务码与明细，其余异常记录 `LOGGER.error` 后返回 500（不能用 401，否则前端会误登出）；白名单仅登录、根路径、docs 与 static，`POST /user/logout` 单独使用可选认证白名单，失效凭证仅幂等放行登出，不能访问其他业务接口。
+- `auth_middleware.py`：非白名单请求统一先认证，**不做 RBAC**（RBAC 在路由依赖 `DependPermission`）；Token 认证失败返回真实 HTTP 401，响应体仍保留统一业务码与明细，其余异常记录 `LOGGER.error` 后返回 500（不能用 401，否则前端会误登出）；白名单仅登录、根路径、docs、static 与 TCP 测试服务器管理（`* /autotest/tcp_test/*`），`POST /user/logout` 单独使用可选认证白名单，失效凭证仅幂等放行登出，不能访问其他业务接口。
 - `request_context_middleware.py`：请求上下文（用户/租户注入）
 - 认证结果请求级缓存：`AuthControl.is_authed` 命中 `request.state.current_user` 时只重建 `CTX_USER_ID`/`CTX_USERNAME` 不查库；Starlette `BaseHTTPMiddleware` 与端点共享同一 `scope["state"]`，中间件 → 路由依赖 → 审计三处调用只查一次用户表。
 - 令牌校验：`is_authed` 只接受登录签发的 JWT，`jwt.decode` 以 `options={"require": ["exp","user_id","token_version"]}` 强制校验，缺任一声明或签名/过期/版本不符一律 401；不存在开发阶段临时令牌旁路。
 
 ### 4.4 初始化（core/initializations/）
 
-- `app_initialization.py`：`register_database` / `register_exceptions` / `register_middlewares` / `register_routers` / `init_database_table`
+- `app_initialization.py`：`register_database` / `register_exceptions` / `register_middlewares` / `register_routers`
 - `permission_contract.py`：启动时为每个路由绑定一次权限元数据（资源族/行为/认证模式/管理员专属），运行期只读，详见 4.6
-- `data_initialization.py`：初始数据灌入（角色种子含数据范围：管理员 ALL/ALL/ALL，标准用户与宾客 DEPT_AND_CHILD/SELF/SELF；存量库启动时校正管理员三范围为 ALL）
+- `data_initialization.py`：启动时自动初始化系统必需种子（菜单/路由/角色/部门/用户及绑定表，已有数据则跳过；角色种子含数据范围：管理员 ALL/ALL/ALL，标准用户与宾客 DEPT_AND_CHILD/SELF/SELF，存量库启动时校正管理员三范围为 ALL）；业务种子（应用/标签/环境）不随启动灌入，由使用方按需手动执行 `scripts/data_initialization.sql`（5 分类、自然键幂等），口径变更后由 `scripts/generate_data_initialization.py` 重新生成，详见 backend/README.md 第 3 章
 
 ### 4.5 数据权限（services/data_scope.py）
 
@@ -476,7 +478,7 @@ models → schemas → services → views(router)
 - 跨表引用优先 `*_code`，表内定位用 `id`
 - 除环境链外均为 BigInt **逻辑关联**、无物理外键，业务层校验；**禁止擅自补外键**
 - 新增字段走 Tortoise Model + aerich 迁移；**禁止裸写原生 SQL**
-- 配置逻辑标识迁移链（历史，已完成）：29 占位 → 30 回填 mode → 31 收紧 NOT NULL + 索引 → 32 删除 step/perf_api 旧名称列；配套维护脚本（apply_pending_migrations/backfill_config_mode_operates/merge_config_mode_duplicates）已完成使命并删除，存量 operates/任务结构均已回填；今后迁移一律走 aerich migrate + aerich upgrade
+- 配置逻辑标识迁移链（历史，已完成）：29 占位 → 30 回填列级 request_config_mode → 31 收紧 NOT NULL + 索引 → 32 删除 step/perf_api 旧名称列；迁移不覆盖的存量缺口（任务 cases_execute_config 引用键化、步骤 operates 键化（DB 的 database_name 按 mode+旧库名唯一命中回填 config_id 展示引用，同 mode 多环境库名不同不猜测）、明细 request_config_mode 回填、空 config_mode 生成等）由 `scripts/repair_legacy_config_data.py` 统一纠正：krun/tbx 两端通用（读各自 backend/.env，表前缀按 {prefix}_autotest_task 自动探测，缺表自动降级），默认 dry-run，--apply 单事务+写前备份，幂等；无法解析的引用不猜测，任务整体排除待人工；明细 operates 为独立快照契约（index/env_name/config_name/database_name 必填，与步骤定义 schema 不同），不在键化改造范围；今后迁移一律走 aerich migrate + aerich upgrade
 - 报告 `report_code` 全局唯一；明细 `unique_together=(report_code, case_code, step_code, loop_cycles)`
 - `krun_autotest_details` 只追加执行快照，禁止用明细数据回改步骤定义
 
@@ -494,6 +496,7 @@ models → schemas → services → views(router)
 | 一键部署 | `bash backend/full_deploy.sh`（PID/日志/队列/进程名按 .env 端口区分） |
 | 依赖安装 | `uv sync`（或 `pip install -r requirements.txt`） |
 | 迁移 | 在 `backend/` 下 `aerich migrate` 生成迁移文件 + `aerich upgrade` 应用；对齐/登记问题用 `scripts/repair_aerich_alignment.py`（`--help` 查看用法） |
+| 存量配置数据纠正（krun/tbx 通用） | `python -m backend.scripts.repair_legacy_config_data`（读 backend/.env，前缀自动探测，默认 dry-run，确认后加 `--apply`；第三方同构项目直接复用） |
 
 ---
 
@@ -513,7 +516,9 @@ models → schemas → services → views(router)
 | autotest 数据源解析 | `applications/autotest/services/autotest_data_source_parser.py` |
 | autotest 数据源装载 | `applications/autotest/services/autotest_dataset_loader.py` |
 | autotest Excel 导入导出 | `applications/autotest/services/autotest_case_excel_service.py` |
-| 初始菜单/路由灌入 | `core/initializations/data_initialization.py` |
+| 系统必需种子（启动自动） | `core/initializations/data_initialization.py` |
+| 业务示例种子（可选执行） | `scripts/data_initialization.sql`（生成器 `scripts/generate_data_initialization.py`） |
+| 存量配置数据纠正 | `scripts/repair_legacy_config_data.py`（krun/tbx 两端通用，前缀自动探测） |
 | 权限规则 | `applications/base/services/permission_rule.py` |
 | 数据权限范围 | `services/data_scope.py`、`enums/permission_enum.py` |
 | 当前用户菜单/路由 | `applications/user/views/user_view.py` |

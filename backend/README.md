@@ -23,6 +23,8 @@ cd backend && uv sync                          # 安装依赖
 # 首次上线：数据库迁移（在 backend 目录下，先预检再应用）
 aerich migrate --name init
 aerich upgrade
+# 可选：灌入业务示例种子（应用/标签/环境，详见第 3 章；不执行不影响启动与登录）
+mysql -h <host> -P <port> -u <user> -p <database> < scripts/data_initialization.sql
 # 一键部署（停旧→拉取分支代码→启动 Celery Worker+Beat→启动 Gunicorn）
 bash full_deploy.sh start
 bash full_deploy.sh status    # 查看状态
@@ -53,7 +55,39 @@ cd ../frontend && pnpm install && pnpm dev
 
 Windows：命令一致，差异仅在 PYTHONPATH 写法——PowerShell `$env:PYTHONPATH="..;$env:PYTHONPATH"`，CMD `set PYTHONPATH=..;%PYTHONPATH%`；无需设置其他环境变量。
 
-## 3. 同机双环境部署（可选）
+## 3. 种子数据初始化
+
+### 3.1 系统必需种子（启动自动初始化，无需手动）
+
+应用启动时由 `core/initializations/data_initialization.py` 自动初始化系统启动与前后端交互的必需项（已有数据则跳过，幂等）：
+
+| 分类 | 表 | 内容 |
+|------|-----|------|
+| 菜单 | `krun_menu` | 7 目录 + 33 子菜单 + 1 一级菜单 |
+| 路由 | `krun_router` | 与 FastAPI 应用 RBAC 路由同源 |
+| 角色 | `krun_role` + `krun_role_menus` + `krun_role_routers` | 内置三角色（含数据范围）与菜单/路由绑定 |
+| 部门 | `krun_dept` + `krun_dept_nest` | 两个初始部门与闭包表 |
+| 用户 | `krun_user` + `krun_user_role` | admin/tester/guest，初始密码 `KFuser01@!`，首次登录后请立即修改 |
+
+除上述表外无其他启动必需种子：审计/角色标签范围等表空值即可正常运行（标签范围为空时按角色默认范围生效）。
+
+### 3.2 业务示例种子（可选，由使用方自行决定）
+
+应用/标签/环境等业务种子**不随启动灌入**，需要时手动执行 `backend/scripts/data_initialization.sql`：
+
+```shell
+# 仓库根目录或 backend 目录均可（路径按实际位置调整）
+mysql -h <host> -P <port> -u <user> -p <database> < backend/scripts/data_initialization.sql
+```
+
+- **内容**：按 5 个分类组织——应用/标签/环境字典/环境绑定/环境配置，分类编号即依赖顺序，新增种子按分类追加即可；
+- **前提**：表结构已由 aerich 迁移创建，且应用至少启动过一次（负责人 admin/tester/guest 等账号由启动初始化创建）；
+- **幂等**：全部语句按自然键 `NOT EXISTS` 防重，可重复执行，不覆盖已有数据；
+- **不执行的影响**：仅无默认应用/标签/环境示例数据，不影响系统启动、登录与权限；
+- **占位配置**：环境配置种子（UAT1-UAT3 × APP/DB/FILE）的地址/端口/凭据为占位值，执行后请按真实环境修正；
+- **维护**：种子口径变更后，在仓库根目录执行 `backend/.venv/bin/python -m backend.scripts.generate_data_initialization` 重新生成 SQL。
+
+## 4. 同机双环境部署（可选）
 
 同机跑两个环境（如测试+生产）时，部署为**两份独立后端目录**（如 `/xxx1/project1` 与 `/xxx2/project2`，各自一套完整代码 + 各自的 `.env`）——单目录只有一份 `.env`，无法同时加载两套配置：
 
@@ -74,7 +108,7 @@ vi /xxx2/project2/backend/.env        # 按下方清单与第一份错开
 
 然后分别在各自目录执行 `bash full_deploy.sh start`（或 celery_deploy.sh + fastapi_deploy.sh），命令完全一致。
 
-## 4. 日志文件位置（按天生成，启动复用当天）
+## 5. 日志文件位置（按天生成，启动复用当天）
 
 | 服务 | 位置 / 格式 |
 |------|-------------|

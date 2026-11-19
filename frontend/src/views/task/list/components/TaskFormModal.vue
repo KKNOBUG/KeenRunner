@@ -108,8 +108,8 @@ watch(selectedCaseIds, (ids) => {
   const cfg = { ...casesExecuteConfig.value }
   const idSet = new Set(ids.map(String))
   for (const key of Object.keys(cfg)) {
-    // 顶层全局配置(env_mode/env_id/env_ids)不属于用例键，清理时必须跳过，否则编辑回显与保存均丢失全局环境
-    if (key === 'env_mode' || key === 'env_id' || key === 'env_ids') continue
+    // 顶层全局配置(env_mode/env_id)不属于用例键，清理时必须跳过，否则编辑回显与保存均丢失全局环境
+    if (key === 'env_mode' || key === 'env_id') continue
     if (!idSet.has(key)) delete cfg[key]
   }
   casesExecuteConfig.value = cfg
@@ -211,10 +211,14 @@ function validateStep2() {
   if (execConfigRef.value?.validateConfigPayload && !execConfigRef.value.validateConfigPayload({ actionLabel: '保存' })) {
     return false
   }
-  // 新结构：顶层携带全局环境绑定ID(env_id/env_ids)，各用例仅含 execute_count/involve_env_ids/steps_execute_config
+  // 新结构：顶层携带全局环境绑定ID(env_id)，各用例仅含 execute_count/involve_env_ids/steps_execute_config
   const cfgRoot = casesExecuteConfig.value || {}
-  const hasGlobalEnv = !!cfgRoot.env_id || (Array.isArray(cfgRoot.env_ids) && cfgRoot.env_ids.length > 0)
-  if (!hasGlobalEnv) {
+  // 多环境模式下全局 env_id 可空：任一用例已选步骤环境即视为环境配置完备
+  const hasCaseEnv = selectedCaseIds.value.some((cid) => {
+    const ids = cfgRoot[String(cid)]?.involve_env_ids
+    return Array.isArray(ids) && ids.length > 0
+  })
+  if (!cfgRoot.env_id && !hasCaseEnv) {
     window.$message?.warning?.('请完善环境与数据源配置（全局环境与步骤配置）')
     return false
   }
@@ -244,19 +248,18 @@ function goPrev() {
 function onCasesExecConfigsUpdate(configsMap) {
   if (!configsMap || typeof configsMap !== 'object') return
   
-  // 新结构：configsMap 顶层包含环境配置(env_mode/env_id/env_ids)；数据源开关为任务表独立字段
+  // 新结构：configsMap 顶层包含环境配置(env_mode/env_id)；数据源开关为任务表独立字段
   const next = { ...casesExecuteConfig.value }
   
-  // 保存顶层的全局配置：env_mode/env_id/env_ids；数据源开关为任务表独立字段，不在 cases_execute_config 中
+  // 保存顶层的全局配置：env_mode/env_id；数据源开关为任务表独立字段，不在 cases_execute_config 中
   if (configsMap.env_mode) next.env_mode = configsMap.env_mode
   // 显式处理 null：多环境模式下全局环境可被清空，必须同步置空，避免提交旧绑定的残留值
   if ('env_id' in configsMap) next.env_id = configsMap.env_id ?? null
-  next.env_ids = Array.isArray(configsMap.env_ids) ? configsMap.env_ids : []
   
   // 处理每个用例的配置
   for (const [key, cfg] of Object.entries(configsMap)) {
     // 跳过顶层字段
-    if (key === 'env_mode' || key === 'env_id' || key === 'env_ids') continue
+    if (key === 'env_mode' || key === 'env_id') continue
     
     const prev = next[key] || {}
     const script = selectedScripts.value.find((r) => Number(r.case_id) === Number(key))
@@ -474,12 +477,11 @@ async function handleSubmit() {
   const caseIds = selectedCaseIds.value
   const casesCfgPayload = {}
   
-  // 新结构：顶层包含全局配置 env_mode/env_id/env_ids（只存绑定ID）；数据源开关为任务表独立字段 dataset_enabled
+  // 新结构：顶层包含全局配置 env_mode/env_id（只存绑定ID）；数据源开关为任务表独立字段 dataset_enabled
   const cfgRoot = casesExecuteConfig.value || {}
   casesCfgPayload.env_mode = cfgRoot.env_mode || 'single'
   const globalEnvId = Number(cfgRoot.env_id)
   casesCfgPayload.env_id = Number.isFinite(globalEnvId) && globalEnvId > 0 ? globalEnvId : null
-  const envIdSet = new Set(Number.isFinite(globalEnvId) && globalEnvId > 0 ? [globalEnvId] : [])
   
   // 每个用例的配置：只提交引用键（involve_env_ids + steps_execute_config），involve_envs 仅前端展示用
   for (const cid of caseIds) {
@@ -492,14 +494,12 @@ async function handleSubmit() {
         .map((stepCfg) => Number(stepCfg?.env_id))
         .filter((n) => Number.isFinite(n) && n > 0),
     )].sort((a, b) => a - b)
-    involveIds.forEach((id) => envIdSet.add(id))
     casesCfgPayload[key] = {
       execute_count: normalizeExecuteCount(script?.execute_count ?? base?.execute_count ?? 1),
       involve_env_ids: involveIds,
       steps_execute_config: stepsConfig,
     }
   }
-  casesCfgPayload.env_ids = [...envIdSet].sort((a, b) => a - b)
 
   modalLoading.value = true
   try {

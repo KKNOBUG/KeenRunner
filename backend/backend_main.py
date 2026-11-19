@@ -13,11 +13,11 @@ from tortoise import Tortoise
 from tortoise.exceptions import DBConnectionError
 
 from backend.core.initializations import (
+    init_database_table,
     register_database,
     register_exceptions,
     register_middlewares,
     register_routers,
-    init_database_table,
 )
 from backend.core.initializations.permission_contract import bind_route_contracts, validate_route_contracts
 from backend.core.responses import SuccessResponse

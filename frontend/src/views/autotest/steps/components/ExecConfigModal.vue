@@ -61,7 +61,7 @@
  *
  * 嵌入式（任务向导）：传 caseIds + savedConfigs，聚合多脚本步骤环境行，
  * 统一全局环境与数据源开关，通过 update:configs 回传
- * { env_mode, env_id, env_ids, [caseId]: { execute_count, involve_env_ids, steps_execute_config } }（只含引用键）
+ * { env_mode, env_id, [caseId]: { execute_count, involve_env_ids, steps_execute_config } }（只含引用键）
  */
 import { computed, provide, reactive, ref, watch } from 'vue'
 import {
@@ -1042,7 +1042,7 @@ const applySavedStepsEnv = () => {
   // key: `${case_id}|${步骤配置键}` → 环境绑定ID；步骤配置键与 buildStepExecConfigMap 保持同一规则
   const envByTarget = new Map()
   Object.entries(map).forEach(([caseKey, cfg]) => {
-    if (caseKey === 'env_mode' || caseKey === 'env_id' || caseKey === 'env_ids') return
+    if (caseKey === 'env_mode' || caseKey === 'env_id') return
     const steps = cfg?.steps_execute_config
     if (!steps || typeof steps !== 'object') return
     Object.entries(steps).forEach(([stepKey, sc]) => {
@@ -1082,14 +1082,13 @@ const applySavedStepsEnv = () => {
   applyTo(debugRows.value.fileRows, 'file')
 }
 
-/** 多脚本回显：顶层环境配置(env_mode/env_id/env_ids) + 首个匹配脚本的用例级配置 */
+/** 多脚本回显：顶层环境配置(env_mode/env_id) + 首个匹配脚本的用例级配置 */
 const pickSavedConfigForCases = (ids) => {
   const map = props.savedConfigs && typeof props.savedConfigs === 'object' ? props.savedConfigs : null
   if (map) {
     const topLevelConfig = {
       env_mode: map.env_mode,
       env_id: map.env_id,
-      env_ids: map.env_ids,
     }
     for (const cid of ids) {
       const cfg = map[String(cid)]
@@ -1109,13 +1108,12 @@ const collectInvolveEnvIds = (stepsConfig) => [...new Set(
     .filter((n) => Number.isFinite(n) && n > 0),
 )].sort((a, b) => a - b)
 
-/** 单脚本嵌入式回传：只含引用键（env_mode/env_id/env_ids + steps_execute_config），数据源由任务表字段独立承载 */
+/** 单脚本嵌入式回传：只含引用键（env_mode/env_id + steps_execute_config），数据源由任务表字段独立承载 */
 const buildConfigPayload = () => {
   const stepsConfig = buildStepExecConfigMap()
   const payload = {
     env_mode: debugEnvMode.value === 'multi' ? 'multiple' : 'single',
     env_id: debugGlobalEnvId.value ?? null,
-    env_ids: collectInvolveEnvIds(stepsConfig),
     steps_execute_config: stepsConfig,
   }
   if (debugExecDataSourceEnabled.value && debugExecDatasetSelectedIds.value.length) {
@@ -1130,13 +1128,10 @@ const buildConfigsPayload = () => {
   const out = {
     env_mode: debugEnvMode.value === 'multi' ? 'multiple' : 'single',
     env_id: debugGlobalEnvId.value ?? null,
-    env_ids: [],
   }
-  const allEnvIds = new Set()
   for (const cid of ids) {
     const stepsConfig = buildStepExecConfigMap(cid)
     const involveIds = collectInvolveEnvIds(stepsConfig)
-    involveIds.forEach((id) => allEnvIds.add(id))
     out[String(cid)] = {
       execute_count: 1,  // 默认执行次数，后续由 TaskFormModal 覆盖
       involve_env_ids: involveIds,
@@ -1144,7 +1139,6 @@ const buildConfigsPayload = () => {
       steps_execute_config: stepsConfig,
     }
   }
-  out.env_ids = [...allEnvIds].sort((a, b) => a - b)
   return out
 }
 
@@ -1197,8 +1191,8 @@ const initEmbeddedCases = async () => {
     
     // 遍历保存的配置，提取每个步骤的环境信息
     Object.entries(savedConfigsMap).forEach(([key, cfg]) => {
-      // 跳过顶层字段（env_mode/env_id/env_ids）
-      if (key === 'env_mode' || key === 'env_id' || key === 'env_ids') return
+      // 跳过顶层字段（env_mode/env_id）
+      if (key === 'env_mode' || key === 'env_id') return
       
       if (!cfg || typeof cfg !== 'object') return
       const stepsConfig = cfg.steps_execute_config || {}
