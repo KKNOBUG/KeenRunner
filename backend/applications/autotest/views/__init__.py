@@ -9,7 +9,6 @@
 from fastapi import APIRouter
 
 from backend.enums import ResourceTag
-
 from .autotest_case_transfer_view import autotest_case_transfer
 from .autotest_case_view import autotest_case
 from .autotest_data_source_view import autotest_data_source
@@ -41,6 +40,9 @@ autotest.include_router(autotest_tag, prefix="/tag", tags=[ResourceTag.TAG.desc]
 autotest.include_router(autotest_task, prefix="/task", tags=[ResourceTag.TASK.desc])
 autotest.include_router(autotest_tool, prefix="/tool", tags=[ResourceTag.TOOL.desc])
 autotest.include_router(autotest_data_source, prefix="/data_source", tags=[ResourceTag.DATASET.desc])
-autotest.include_router(autotest_tcp_test, prefix="/tcp_test", tags=[ResourceTag.DEBUG.desc])
 autotest.include_router(autotest_http_xml_test, prefix="/http_xml_test", tags=[ResourceTag.DEBUG.desc])
 autotest.include_router(datagram_diff_router, prefix="/datagram_diff", tags=[ResourceTag.HTTP_COMPARE.desc])
+
+# 公开路由蓝图：TCP 测试服务器管理无需用户认证（配套 auth_middleware 白名单放行），
+autotest_public = APIRouter()
+autotest_public.include_router(autotest_tcp_test, prefix="/tcp_test", tags=[ResourceTag.DEBUG.desc])

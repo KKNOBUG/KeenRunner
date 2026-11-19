@@ -95,7 +95,7 @@ class ProjectConfig(BaseSettings):
     SERVER_APP: str = "backend_main:app"
     SERVER_HOST: str = ShellUtils.acquire_localhost()
     SERVER_SYSTEM: str = platform.system()
-    # 服务启动端口：开发8520 / 测试8522 / 生产8521，由各环境文件提供
+    # 服务启动端口：开发8518 / 测试8519 / 生产8520，由各环境文件提供
     SERVER_PORT: int = Field(..., ge=1, le=65535, description="服务启动端口")
     # 调试开关：开发true，测试/生产false，由各环境文件提供
     SERVER_DEBUG: bool = Field(..., description="调试开关")
