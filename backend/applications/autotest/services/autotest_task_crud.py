@@ -39,7 +39,7 @@ from backend.services import DataScope
 
 
 # cases_execute_config 顶层全局键：累积用例级环境字段时必须跳过，避免把全局值误当用例配置
-TASK_CASE_CONFIG_TOP_LEVEL_KEYS: Tuple[str, ...] = ("env_mode", "env_id", "env_ids")
+TASK_CASE_CONFIG_TOP_LEVEL_KEYS: Tuple[str, ...] = ("env_mode", "env_id")
 
 
 def _coerce_env_bind_id(raw: Any) -> Optional[int]:
@@ -72,7 +72,7 @@ def extract_task_involve_env_ids(cases_execute_config: Any) -> List[int]:
         return []
     env_ids: Set[int] = set()
     for case_key, case_cfg in cases_execute_config.items():
-        # 跳过顶层全局键(env_mode/env_id/env_ids)，仅累积case_id配置的involve_env_ids
+        # 跳过顶层全局键(env_mode/env_id)，仅累积case_id配置的involve_env_ids
         if case_key in TASK_CASE_CONFIG_TOP_LEVEL_KEYS:
             continue
         raw_ids = case_cfg.get("involve_env_ids") if isinstance(case_cfg, dict) else None
@@ -119,7 +119,7 @@ def extract_steps_execute_envs(cases_execute_config: Any) -> Dict[str, Any]:
         return {}
     step_envs: Dict[str, Any] = {}
     for case_key, case_cfg in cases_execute_config.items():
-        # 跳过顶层全局键(env_mode/env_id/env_ids)，仅累积case_id配置的步骤执行环境
+        # 跳过顶层全局键(env_mode/env_id)，仅累积case_id配置的步骤执行环境
         if case_key in TASK_CASE_CONFIG_TOP_LEVEL_KEYS:
             continue
         if not isinstance(case_cfg, dict):

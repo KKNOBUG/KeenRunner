@@ -772,8 +772,6 @@ async def debug_python_code(
     :param debug_in: 步骤调试入参
     :return: 统一HTTP响应
     """
-    # 该端点只执行沙箱代码，不读取应用/环境/配置，不存在可按 project_id+env_name+config_name
-    # 访问他人凭据的数据范围入口；沙箱隔离由 UserCodeSandbox 承担
     try:
         data = await StepDebugService.debug_python(debug_in)
         return SuccessResponse(message="Python代码调试成功", data=data, total=1)

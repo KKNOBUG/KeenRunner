@@ -38,7 +38,6 @@ class AutoTestTaskModel(ScaffoldModel, MaintainMixin, TimestampMixin, StateModel
     # {
     #     "env_mode": "single/multiple",
     #     "env_id": 12,              # 全局环境绑定ID
-    #     "env_ids": [12, 13],       # 多环境模式涉及的环境绑定ID列表
     #     "<case_id>": {
     #         "execute_count": 1,
     #         "involve_env_ids": [12],   # 用例级涉及环境绑定ID

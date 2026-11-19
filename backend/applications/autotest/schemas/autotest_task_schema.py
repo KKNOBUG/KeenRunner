@@ -53,13 +53,12 @@ class AutoTestTaskCaseExecuteConfig(BaseModel):
 
 
 class AutoTestTaskCasesExecuteConfig(BaseModel):
-    """任务级用例执行配置：顶层环境配置env_mode/env_id/env_ids，加上指向AutoTestTaskCaseExecuteConfig的动态case_id键。"""
+    """任务级用例执行配置：顶层环境配置env_mode/env_id，加上指向AutoTestTaskCaseExecuteConfig的动态case_id键。"""
 
     model_config = ConfigDict(extra="allow")
 
     env_mode: AutoTestEnvMode = Field(AutoTestEnvMode.SINGLE, description="环境模式")
     env_id: Optional[int] = Field(None, ge=1, description="全局环境绑定ID")
-    env_ids: Optional[List[int]] = Field(None, description="多环境模式涉及的环境绑定ID列表")
 
     @model_validator(mode="after")
     def _validate_case_configs(self):
