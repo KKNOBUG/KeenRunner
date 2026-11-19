@@ -32,9 +32,8 @@
 backend/
 ├─ backend_main.py          # FastAPI 应用入口（lifespan/路由注册/中间件/异常）
 ├─ gunicorn.conf.py         # gunicorn 部署配置
-├─ celery_deploy.sh         # Celery worker + beat 启动脚本
-├─ fastapi_deploy.sh        # FastAPI 服务启动脚本
-├─ full_deploy.sh           # 一键全量部署脚本
+├─ celery_deploy.sh         # Celery worker + beat 启停脚本（只管 Celery）
+├─ fastapi_deploy.sh        # FastAPI 部署脚本（只管 Gunicorn：start 含强制拉取 GIT_BRANCH，restart 不拉取）
 ├─ pyproject.toml           # uv 依赖与项目元数据
 ├─ requirements.txt         # pip 兼容依赖清单
 ├─ uv.lock                  # uv 锁定文件
@@ -493,7 +492,7 @@ models → schemas → services → views(router)
 | 后端直启 | `PYTHONPATH=. python backend/backend_main.py`（从仓库根目录执行） |
 | Celery worker | `bash backend/celery_deploy.sh`（PID/日志/节点名按 .env 端口隔离） |
 | Celery 队列 | worker `-Q` 需覆盖 `{port}_default,{port}_autotest,{port}_perf` |
-| 一键部署 | `bash backend/full_deploy.sh`（PID/日志/队列/进程名按 .env 端口区分） |
+| FastAPI 部署 | `bash backend/fastapi_deploy.sh start`（停止 → fetch+reset 强制拉取 GIT_BRANCH → 启动 Gunicorn；restart 不拉取；Celery 另由 celery_deploy.sh 启动） |
 | 依赖安装 | `uv sync`（或 `pip install -r requirements.txt`） |
 | 迁移 | 在 `backend/` 下 `aerich migrate` 生成迁移文件 + `aerich upgrade` 应用；对齐/登记问题用 `scripts/repair_aerich_alignment.py`（`--help` 查看用法） |
 | 存量配置数据纠正（krun/tbx 通用） | `python -m backend.scripts.repair_legacy_config_data`（读 backend/.env，前缀自动探测，默认 dry-run，确认后加 `--apply`；第三方同构项目直接复用） |

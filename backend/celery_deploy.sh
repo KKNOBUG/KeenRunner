@@ -1,12 +1,11 @@
 #!/bin/bash
-#
 # Celery Worker / Beat 部署脚本
 # 用法: ./celery_deploy.sh start|stop|restart|status ...
-#
+# 同机多实例: 各部署目录 .env 的 SERVER_PORT 错开；共用 Redis 时 CELERY_REDBEAT_DB 必须不同
 
 set -euo pipefail
 
-# 脚本所在目录即 backend 根目录（勿再手写占位路径）
+# 脚本所在目录即 backend 根目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-$SCRIPT_DIR}"
 
@@ -16,17 +15,30 @@ cd "$PROJECT_ROOT" || exit 1
 
 CELERY_APP="backend.celery_scheduler.celery_worker:celery"
 CELERY_WORKER_CONCURRENCY="${CELERY_WORKER_CONCURRENCY:-4}"
-# 队列名与 celery_config.py 端口前缀隔离保持一致（{port}_default,{port}_autotest,{port}_perf），从.env读取端口避免漂移
-SERVER_PORT="$(grep -E '^SERVER_PORT=' .env 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r')"
-SERVER_PORT="${SERVER_PORT:-8519}"
+# 队列名按端口隔离，与 celery_config.py 一致
+SERVER_PORT="$(grep -E '^SERVER_PORT=' "${PROJECT_ROOT}/.env" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r')"
+if [ -z "$SERVER_PORT" ]; then
+    echo "[ERROR] 环境配置文件 .env 缺少 SERVER_PORT 配置" >&2
+    exit 1
+fi
 CELERY_WORKER_QUEUES="${CELERY_WORKER_QUEUES:-${SERVER_PORT}_default,${SERVER_PORT}_autotest,${SERVER_PORT}_perf}"
 CELERY_BEAT_SCHEDULER="${CELERY_BEAT_SCHEDULER:-redbeat.schedulers:RedBeatScheduler}"
 CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 mkdir -p "$CELERY_LOG_DIR"
-CELERY_WORKER_LOG="${CELERY_LOG_DIR}/celery_worker.log"
-CELERY_BEAT_LOG="${CELERY_LOG_DIR}/celery_beat.log"
-CELERY_WORKER_PID="${PROJECT_ROOT}/celery_worker.pid"
-CELERY_BEAT_PID="${PROJECT_ROOT}/celery_beat.pid"
+# 日志文件名按天复用，与 celery_worker.py setup_loggers 同口径
+resolve_daily_log() {
+    local dir=$1 body=$2 today file
+    today=$(date +%Y%m%d)
+    file=$(find "$dir" -maxdepth 1 -name "${today}-*-${body}.log" -type f 2>/dev/null | sort | tail -n1)
+    if [ -z "$file" ]; then
+        file="${dir}/${today}-$(date +%H%M%S)-${body}.log"
+    fi
+    printf '%s' "$file"
+}
+CELERY_WORKER_LOG="$(resolve_daily_log "$CELERY_LOG_DIR" "Worker-${SERVER_PORT}")"
+CELERY_BEAT_LOG="$(resolve_daily_log "$CELERY_LOG_DIR" "Beat-${SERVER_PORT}")"
+CELERY_WORKER_PID="${PROJECT_ROOT}/celery_worker_${SERVER_PORT}.pid"
+CELERY_BEAT_PID="${PROJECT_ROOT}/celery_beat_${SERVER_PORT}.pid"
 
 # 供 setup_logging / worker_process_init 在接管 logging 后仍能挂到同一文件
 export CELERY_WORKER_LOGFILE="${CELERY_WORKER_LOG}"
@@ -100,11 +112,12 @@ start_celery_worker() {
     print_info "启动 Celery Worker (并发数: ${CELERY_WORKER_CONCURRENCY}, 队列: ${CELERY_WORKER_QUEUES})..."
     print_info "日志文件: ${CELERY_WORKER_LOG}"
 
-    # --logfile 会传入 setup_logging(logfile=...)；同时导出环境变量供 fork 后重建 sink
+    # --logfile 传入 setup_logging；环境变量供 fork 后重建 sink
     export CELERY_LOGFILE="${CELERY_WORKER_LOG}"
     celery -A "$CELERY_APP" worker \
         --loglevel=INFO \
         --concurrency="${CELERY_WORKER_CONCURRENCY}" \
+        --hostname="worker_${SERVER_PORT}@%h" \
         --queues="${CELERY_WORKER_QUEUES}" \
         --logfile="${CELERY_WORKER_LOG}" \
         --pidfile="${CELERY_WORKER_PID}" \
@@ -118,7 +131,6 @@ start_celery_worker() {
         pid=$(cat "$CELERY_WORKER_PID")
         print_info "Celery Worker 启动成功(PID: $pid)"
         print_info "日志文件: $CELERY_WORKER_LOG"
-        # 若自定义 logging 未生效，至少保证文件存在且可写
         touch "$CELERY_WORKER_LOG" 2>/dev/null || true
         return 0
     else
@@ -215,12 +227,13 @@ main() {
             start_celery_beat
             ;;
         stop)
-            stop_celery_worker
-            stop_celery_beat
+            # 未运行返回非零，|| true 避免 set -e 中断后续停止
+            stop_celery_worker || true
+            stop_celery_beat || true
             ;;
         restart)
-            stop_celery_worker
-            stop_celery_beat
+            stop_celery_worker || true
+            stop_celery_beat || true
             sleep 2
             if [ -n "${2:-}" ]; then
                 CELERY_WORKER_CONCURRENCY=$2
@@ -238,13 +251,13 @@ main() {
             start_celery_worker
             ;;
         stop-worker)
-            stop_celery_worker
+            stop_celery_worker || true
             ;;
         start-beat)
             start_celery_beat
             ;;
         stop-beat)
-            stop_celery_beat
+            stop_celery_beat || true
             ;;
         *)
             echo "==================== Celery 启动脚本说明 ===================="
