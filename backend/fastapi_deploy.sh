@@ -7,9 +7,9 @@
 # 脚本所在目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 保证能 import backend.*
+# 保证能 import backend.*（代码以 backend 包前缀导入，PYTHONPATH 须指向仓库根，与 celery_deploy.sh 同口径）
 cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
-export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
+export PYTHONPATH="${PROJECT_ROOT}/..${PYTHONPATH:+:${PYTHONPATH}}"
 
 # 自动激活虚拟环境（已激活则跳过）
 if [ -z "${VIRTUAL_ENV:-}" ] && [ -f "${PROJECT_ROOT}/.venv/bin/activate" ]; then
@@ -25,7 +25,7 @@ if [ -z "$SERVER_PORT" ]; then
 fi
 
 # 配置Gunicorn服务
-GUNICORN_APP="backend_main:app"
+GUNICORN_APP="backend.backend_main:app"
 GUNICORN_CONFIG_FILE="${PROJECT_ROOT}/gunicorn.conf.py"
 GUNICORN_PID_FILE="${PROJECT_ROOT}/gunicorn_${SERVER_PORT}.pid"
 FASTAPI_LOG_FILE="${PROJECT_ROOT}/backend_main_${SERVER_PORT}.log"

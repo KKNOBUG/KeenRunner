@@ -111,11 +111,7 @@ class ProjectConfig(BaseSettings):
 
     # 日志相关参数配置
     LOGGER_FILE_NAME_PREFIX: str = "执行日志"
-    # 大小轮转："200 MB"
-    # 日期轮转："1 day"、"1 week"、"1 month"
-    # 时间轮转："HH:MM:SS"、"00:00"、"00:00:00"
-    LOGGER_ROTATION: str = "100 MB"
-    # 大小轮转后保留的备份文件个数（单文件多进程模式）
+    # 应用日志每天零点轮转（一天一个完整文件，不做大小截断），此处为零点轮转后保留的归档文件个数
     LOGGER_ROTATION_BACKUP_COUNT: int = 30
     # 历史日志保留天数：启动时按最后修改时间清理超过该天数的应用/Celery 日志及其滚动备份、孤儿锁（0=不清理）
     LOGGER_RETENTION_DAYS: int = 30

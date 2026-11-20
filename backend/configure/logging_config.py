@@ -8,13 +8,12 @@
 """
 import logging
 import os
-import re
 import sys
 import threading
 from datetime import datetime, timedelta
 from typing import Optional
 
-from concurrent_log_handler import ConcurrentRotatingFileHandler
+from concurrent_log_handler import ConcurrentTimedRotatingFileHandler
 from loguru import logger
 
 from backend.common.request_context import get_parent_span_id, get_span_id, get_trace_id
@@ -43,36 +42,20 @@ def _inject_trace_context(record: dict) -> None:
         extra["parent_span_id"] = parent
 
 
-# 写入 ConcurrentRotatingFileHandler 时只落纯文本 message，格式由 Loguru format= 负责
+# 写入 ConcurrentTimedRotatingFileHandler 时只落纯文本 message，格式由 Loguru format= 负责
 _HANDLER_PASSTHROUGH = logging.Formatter("%(message)s")
 
 # 部署在 Gunicorn + Uvicorn 下需要接管的 logger 名称（与 wire_standard_loggers 一致）
+# gunicorn/gunicorn.error 不接管：gunicorn 自身运行日志按设计丢弃，HTTP 请求日志由 uvicorn.access 记录
 _WIRED_STD_LOGGER_NAMES = (
     "uvicorn",
     "uvicorn.error",
     "uvicorn.access",
-    "gunicorn",
-    "gunicorn.error",
     "gunicorn.access",
 )
 
 _intercept_handler: Optional["InterceptHandler"] = None
 _intercept_guard = threading.local()
-
-
-def rotation_to_max_bytes(rotation: str) -> int:
-    """
-    将project_config中的LOGGER_ROTATION字符串转为ConcurrentRotatingFileHandler的maxBytes
-    :param rotation: 文件大小
-    :return:
-    """
-    text = rotation.strip().upper()
-    match = re.match(r"^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)?$", text)
-    if not match:
-        raise ValueError(f"无法解析 LOGGER_ROTATION: {rotation!r}，示例: 200 MB")
-    value = float(match.group(1))
-    unit = (match.group(2) or "B").upper()
-    return int(value * {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}[unit])
 
 
 def resolve_daily_log_path(log_dir: str, body: str) -> str:
@@ -82,10 +65,10 @@ def resolve_daily_log_path(log_dir: str, body: str) -> str:
     - 先扫描目录中今日已创建的匹配文件（如前次进程重启残留），命中即复用最新一个；
     - 未命中则以当前时刻 O_CREAT|O_EXCL 抢占创建，输掉同秒竞态的进程重新扫描复用赢家文件。
 
-    滚动备份（*.log.1）与锁文件（.__*.lock）不以 .log 结尾，天然不会命中复用。
+    滚动备份（*.log.1、*.log.YYYY-MM-DD）与锁文件（.__*.lock）不以 .log 结尾，天然不会命中复用。
 
     :param log_dir: 日志目录
-    :param body: 文件名主体（如 执行日志 / Worker-8520 / Beat-8520）
+    :param body: 文件名主体（如 Worker-8520 / Beat-8520，Celery 专用；应用日志已改固定名不走此函数）
     :return: 完整日志文件路径
     """
     os.makedirs(log_dir, exist_ok=True)
@@ -116,12 +99,12 @@ def resolve_daily_log_path(log_dir: str, body: str) -> str:
 
 def build_log_path() -> str:
     """
-    应用日志路径：{OUTPUT_LOGS_DIR}/{年月日}-{时分秒}-执行日志.log
+    应用日志路径：{OUTPUT_LOGS_DIR}/执行日志.log（固定名，不带日期前缀）
 
-    按天复用：当天已存在则继续使用（gunicorn master 与各 worker 落在同一文件），
-    不存在则按当前时刻创建，每天至多一个文件。
+    日期由零点轮转拼接到归档后缀（执行日志.log.YYYY-MM-DD）；
+    gunicorn master 与各 worker 共写同一文件，重启后继续复用。
     """
-    return resolve_daily_log_path(PROJECT_CONFIG.OUTPUT_LOGS_DIR, PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX)
+    return os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, f"{PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX}.log")
 
 
 def cleanup_expired_log_files() -> None:
@@ -136,7 +119,7 @@ def cleanup_expired_log_files() -> None:
         return
     celery_logs_dir = os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs")
     targets = (
-        (PROJECT_CONFIG.OUTPUT_LOGS_DIR, (f"-{PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX}.log",)),
+        (PROJECT_CONFIG.OUTPUT_LOGS_DIR, (f"{PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX}.log",)),
         (celery_logs_dir, ("-Worker-", "-Beat-", "celery_worker_", "celery_beat_")),
     )
     deadline = datetime.now() - timedelta(days=retention_days)
@@ -162,11 +145,14 @@ def cleanup_expired_log_files() -> None:
 def registry_file_handler() -> None:
     """
     注册文件处理器：INFO及以上全部写入同一日志文件。
+
+    每天零点轮转（一天一个完整文件，不做大小截断），旧内容归档为 *.log.YYYY-MM-DD；
+    跨进程轮转由 ConcurrentTimedRotatingFileHandler 的文件锁协调，多 worker 共写安全。
     """
     os.makedirs(PROJECT_CONFIG.OUTPUT_LOGS_DIR, exist_ok=True)
-    handler = ConcurrentRotatingFileHandler(
+    handler = ConcurrentTimedRotatingFileHandler(
         filename=build_log_path(),
-        maxBytes=rotation_to_max_bytes(PROJECT_CONFIG.LOGGER_ROTATION),
+        when="midnight",
         backupCount=PROJECT_CONFIG.LOGGER_ROTATION_BACKUP_COUNT,
         encoding="utf-8",
     )

@@ -16,18 +16,21 @@ from backend.configure import PROJECT_CONFIG
 
 class InterceptGunicornLogger(Logger):
     """
-    替换 Gunicorn 默认的 error/access 输出格式，统一走 Loguru
+    Gunicorn 日志策略：自身运行日志（启动/worker管理）丢弃，只保留 HTTP 请求日志。
+
+    UvicornWorker 下 HTTP 访问实际由 uvicorn.access 发出（经 InterceptHandler 落应用日志），
+    gunicorn.access 不会触发；gunicorn.error 置 NullHandler 避免混入业务日志。
     """
 
     def setup(self, cfg) -> None:
         super().setup(cfg)
         from backend.configure.logging_config import InterceptHandler
 
-        intercept = InterceptHandler()
-        for stdlog in (self.error_log, self.access_log):
-            stdlog.handlers = [intercept]
-            stdlog.propagate = False
-            stdlog.setLevel(logging.INFO)
+        self.error_log.handlers = [logging.NullHandler()]
+        self.error_log.propagate = False
+        self.access_log.handlers = [InterceptHandler()]
+        self.access_log.propagate = False
+        self.access_log.setLevel(logging.INFO)
 
 
 class UvicornWorker(_BaseUvicornWorker):
@@ -58,7 +61,7 @@ preload_app = False
 max_requests = 1000
 max_requests_jitter = 200
 
-# 仍输出到 stdout/stderr，但经 InterceptGunicornLogger 已是 Loguru 格式
+# 输出目标由 InterceptGunicornLogger.setup 接管：error 丢弃、access 走 Loguru（实际 HTTP 访问由 uvicorn.access 记录）
 accesslog = "-"
 errorlog = "-"
 loglevel = "info"
