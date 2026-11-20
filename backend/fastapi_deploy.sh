@@ -1,13 +1,12 @@
 #!/bin/bash
-# FastAPI 部署脚本（只管 FastAPI 服务，Celery 由 celery_deploy.sh 管理）
+# FastAPI 部署脚本
 # 用法: ./fastapi_deploy.sh start|restart|stop|status
-# start: 停止 -> 强制拉取 GIT_BRANCH 覆盖本地 -> 启动 FastAPI；restart 不拉取代码
 # 同机多实例: 各部署目录 .env 的 SERVER_PORT 错开
 
 # 脚本所在目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 保证能 import backend.*（代码以 backend 包前缀导入，PYTHONPATH 须指向仓库根，与 celery_deploy.sh 同口径）
+# 保证能 import backend.*（代码以 backend 包前缀导入，PYTHONPATH 须指向仓库根）
 cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
 export PYTHONPATH="${PROJECT_ROOT}/..${PYTHONPATH:+:${PYTHONPATH}}"
 

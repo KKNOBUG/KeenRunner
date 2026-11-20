@@ -5,44 +5,37 @@
 
 set -euo pipefail
 
-# 脚本所在目录即 backend 根目录
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="${PROJECT_ROOT:-$SCRIPT_DIR}"
+# 脚本所在目录
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 保证能 import backend.*
-export PYTHONPATH="${PROJECT_ROOT}/..:${PYTHONPATH:-}"
-cd "$PROJECT_ROOT" || exit 1
+# 保证能 import backend.*（代码以 backend 包前缀导入，PYTHONPATH 须指向仓库根）
+cd "$PROJECT_ROOT" || { echo "无法进入项目目录: $PROJECT_ROOT"; exit 1; }
+export PYTHONPATH="${PROJECT_ROOT}/..${PYTHONPATH:+:${PYTHONPATH}}"
 
-CELERY_APP="backend.celery_scheduler.celery_worker:celery"
-CELERY_WORKER_CONCURRENCY="${CELERY_WORKER_CONCURRENCY:-4}"
-# 队列名按端口隔离，与 celery_config.py 一致
+# 自动激活虚拟环境（已激活则跳过）
+if [ -z "${VIRTUAL_ENV:-}" ] && [ -f "${PROJECT_ROOT}/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "${PROJECT_ROOT}/.venv/bin/activate"
+fi
+
+# 服务端口从 .env 读取：PID/日志/进程名均以端口区分
 SERVER_PORT="$(grep -E '^SERVER_PORT=' "${PROJECT_ROOT}/.env" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r')"
 if [ -z "$SERVER_PORT" ]; then
     echo "[ERROR] 环境配置文件 .env 缺少 SERVER_PORT 配置" >&2
     exit 1
 fi
+
+# 配置Celery服务
+CELERY_APP="backend.celery_scheduler.celery_worker:celery"
+CELERY_WORKER_CONCURRENCY="${CELERY_WORKER_CONCURRENCY:-4}"
 CELERY_WORKER_QUEUES="${CELERY_WORKER_QUEUES:-${SERVER_PORT}_default,${SERVER_PORT}_autotest,${SERVER_PORT}_perf}"
 CELERY_BEAT_SCHEDULER="${CELERY_BEAT_SCHEDULER:-redbeat.schedulers:RedBeatScheduler}"
 CELERY_LOG_DIR="${PROJECT_ROOT}/output/logs/celery_logs"
 mkdir -p "$CELERY_LOG_DIR"
-# 日志文件名按天复用，与 celery_worker.py setup_loggers 同口径
-resolve_daily_log() {
-    local dir=$1 body=$2 today file
-    today=$(date +%Y%m%d)
-    file=$(find "$dir" -maxdepth 1 -name "${today}-*-${body}.log" -type f 2>/dev/null | sort | tail -n1)
-    if [ -z "$file" ]; then
-        file="${dir}/${today}-$(date +%H%M%S)-${body}.log"
-    fi
-    printf '%s' "$file"
-}
-CELERY_WORKER_LOG="$(resolve_daily_log "$CELERY_LOG_DIR" "Worker-${SERVER_PORT}")"
-CELERY_BEAT_LOG="$(resolve_daily_log "$CELERY_LOG_DIR" "Beat-${SERVER_PORT}")"
+CELERY_WORKER_LOG="${CELERY_LOG_DIR}/Worker-${SERVER_PORT}.log"
+CELERY_BEAT_LOG="${CELERY_LOG_DIR}/Beat-${SERVER_PORT}.log"
 CELERY_WORKER_PID="${PROJECT_ROOT}/celery_worker_${SERVER_PORT}.pid"
 CELERY_BEAT_PID="${PROJECT_ROOT}/celery_beat_${SERVER_PORT}.pid"
-
-# 供 setup_logging / worker_process_init 在接管 logging 后仍能挂到同一文件
-export CELERY_WORKER_LOGFILE="${CELERY_WORKER_LOG}"
-export CELERY_BEAT_LOGFILE="${CELERY_BEAT_LOG}"
 
 print_info() {
     echo -e "\033[32m[INFO]\033[0m $1"
@@ -125,7 +118,7 @@ start_celery_worker() {
     print_info "启动 Celery Worker (并发数: ${CELERY_WORKER_CONCURRENCY}, 队列: ${CELERY_WORKER_QUEUES})..."
     print_info "日志文件: ${CELERY_WORKER_LOG}"
 
-    # --logfile 传入 setup_logging；环境变量供 fork 后重建 sink
+    # --logfile 传入 setup_loggers；CELERY_LOGFILE 供 prefork 子进程重建 sink 时挂到同一文件
     export CELERY_LOGFILE="${CELERY_WORKER_LOG}"
     celery -A "$CELERY_APP" worker \
         --loglevel=INFO \
@@ -286,7 +279,7 @@ main() {
             echo "  stop-beat             # 仅停止 Beat"
             echo ""
             echo "日志目录: $CELERY_LOG_DIR"
-            echo "提示: 自定义 logging 时必须由 setup_logging 接收 --logfile 并挂文件 sink"
+            echo "提示: 自定义 logging 时必须由 setup_loggers 接收 --logfile 并挂文件 sink"
             echo "==================== Celery 启动脚本说明 ===================="
             exit 1
             ;;
