@@ -80,14 +80,14 @@ def _ensure_oracle_client_mode() -> None:
         try:
             oracledb.init_oracle_client(**init_kwargs)
             _oracle_client_inited = True
-            logger.info(f"[ORACLE]数据库使用thin模式连接成功[PATH={oracle_client_path or "使用系统库搜索路径"}]")
+            logger.info(f"[ORACLE]数据库使用thick模式连接成功[PATH={oracle_client_path or "使用系统库搜索路径"}]")
         except Exception as exc:
             message: str = str(exc)
             if "DPI-2015" in message or "already been initialized" in message.lower():
                 _oracle_client_inited = True
                 return
             raise RuntimeError(
-                f"[ORACLE]数据库使用thick模式连接失败，当前操作系统: {system_name}, {exc}"
+                f"[ORACLE]数据库使用thick模式连接失败，当前操作系统: {system_name}, {exc}；"
                 "请安装Oracle Instant Client并配置ORACLE_CLIENT_PATH(Linux可将库目录加入LD_LIBRARY_PATH); "
                 "连接11g需使用Instant Client 19；Client 21仅支持DB12.1+，Client 23仅支持DB19+。"
             ) from exc
@@ -138,6 +138,24 @@ class DBConnPoolFromConfig:
         self.config_model: Optional[Type[Any]] = config_model
         self.pools: Dict[int, Dict[str, Dict[str, Dict[str, Any]]]] = {}
         self.errors: Dict[int, Dict[str, Dict[str, Dict[str, str]]]] = {}
+        # 建池串行锁：懒创建并绑定当前事件循环，Celery prefork换新loop后自动重建
+        self._create_lock: Optional[asyncio.Lock] = None
+        self._create_lock_loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def _get_create_lock(self) -> asyncio.Lock:
+        """
+        获取建池串行锁；事件循环变化时重建，避免跨loop使用旧锁。
+
+        Celery worker_process_init会重置IO池换新loop，沿用旧loop的Lock会报
+        "attached to a different loop"；按当前running loop判定重建。
+
+        :return: 绑定当前事件循环的asyncio.Lock
+        """
+        current_loop = asyncio.get_running_loop()
+        if self._create_lock is None or self._create_lock_loop is not current_loop:
+            self._create_lock = asyncio.Lock()
+            self._create_lock_loop = current_loop
+        return self._create_lock
 
     @staticmethod
     def _normalize_cache_key(
@@ -624,7 +642,11 @@ class DBConnPoolFromConfig:
             self._set_error(*cache_key, error_message)
             raise RuntimeError(error_message) from e
 
-        return await self._build_pool_from_config_row(cache_key, config_row, max_retries)
+        created = await self._build_pool_from_config_row(cache_key, config_row, max_retries)
+        if created:
+            # 改地址后旧键池不再被命中，空闲时非阻塞淘汰，避免连接泄漏
+            await self._evict_superseded_mode_pools(cache_key)
+        return created
 
     async def execute_sql(self, pool: Any, sql: str, result_as_dict: bool = True) -> Dict[str, Any]:
         """
@@ -746,23 +768,87 @@ class DBConnPoolFromConfig:
             return str(obj)
         raise TypeError(f"数据{obj}类型[{type(obj)}]无法完成序列化")
 
-    async def _close_pool(self, pool: Any) -> None:
-        """关闭单个连接池(aiomysql异步关闭；Oracle同步关闭)。"""
+    async def _close_pool(self, pool: Any, wait: bool = True) -> None:
+        """
+        关闭单个连接池(aiomysql异步关闭；Oracle同步关闭)。
+
+        :param pool: aiomysql.Pool或oracledb.ConnectionPool
+        :param wait: aiomysql是否等待在用连接归还；空闲淘汰场景传False非阻塞关闭
+        """
         if isinstance(pool, aiomysql.Pool):
             pool.close()
-            await pool.wait_closed()
+            if wait:
+                await pool.wait_closed()
             return
         if isinstance(pool, oracledb.ConnectionPool):
             await asyncio.get_running_loop().run_in_executor(None, pool.close)
             return
         raise TypeError(f"不支持的连接池类型: {type(pool).__name__}")
 
+    @staticmethod
+    def _pool_busy(pool: Any) -> bool:
+        """
+        判定连接池是否有在用连接；无法判定时保守视为忙，跳过淘汰。
+
+        :param pool: aiomysql.Pool或oracledb.ConnectionPool
+        :return: 存在在用连接为True
+        """
+        if isinstance(pool, aiomysql.Pool):
+            return pool.size - pool.freesize > 0
+        if isinstance(pool, oracledb.ConnectionPool):
+            busy = getattr(pool, "busy", None)
+            if busy is not None:
+                return busy > 0
+            opened = getattr(pool, "opened", None)
+            if opened is not None:
+                return opened > 0
+        return True
+
+    async def _evict_superseded_mode_pools(self, cache_key: Tuple[int, str, str, str]) -> None:
+        """
+        淘汰同绑定同mode同库名下被新地址取代的旧池（仅空闲时关闭）。
+
+        缓存第二层为env{env_id}@{host}:{port}，配置改地址后新键建池成功，
+        同env_id前缀的旧键池不再被命中；忙池保留待下次建池或关停时回收，
+        避免关闭在用连接中断执行。淘汰失败不影响新建池的可用性。
+
+        :param cache_key: 新建池的规范化四层缓存坐标
+        """
+        project_id, env_key, config_mode, database_name = cache_key
+        env_id_prefix = env_key.split("@", 1)[0]
+        try:
+            config_map = self.pools.get(project_id, {})
+            for cached_env_key in list(config_map.keys()):
+                if not cached_env_key.startswith(env_id_prefix + "@") or cached_env_key == env_key:
+                    continue
+                database_map = config_map.get(cached_env_key, {}).get(config_mode, {})
+                old_pool = database_map.get(database_name)
+                if not old_pool or self._pool_busy(old_pool):
+                    continue
+                del database_map[database_name]
+                self.errors.get(project_id, {}).get(cached_env_key, {}).get(config_mode, {}).pop(
+                    database_name, None
+                )
+                await self._close_pool(old_pool, wait=False)
+                self.logger.info(
+                    f"配置地址变更，旧连接池已淘汰: "
+                    f"[project_id={project_id}/{cached_env_key}/{config_mode}/{database_name}]"
+                )
+        except Exception as e:
+            self.logger.warning(f"旧连接池淘汰失败(不影响新池使用): {e}")
+
     async def _close_project_pools(self, project_id: int) -> None:
-        """关闭指定应用下全部连接池。"""
+        """关闭指定应用下全部连接池；单池关闭失败不阻断其余池回收。"""
         for env_name in list(self.pools.get(project_id, {}).keys()):
             for config_name in list(self.pools[project_id][env_name].keys()):
                 for database_name, pool in list(self.pools[project_id][env_name][config_name].items()):
-                    await self._close_pool(pool)
+                    try:
+                        await self._close_pool(pool)
+                    except Exception as e:
+                        self.logger.warning(
+                            f"连接池关闭失败: [project_id={project_id}/{env_name}/{config_name}/{database_name}], {e}"
+                        )
+                        continue
                     self.logger.info(
                         f"连接池已关闭: [project_id={project_id}/{env_name}/{config_name}/{database_name}]"
                     )
@@ -790,6 +876,35 @@ class DBConnPoolFromConfig:
         self.pools.clear()
         self.errors.clear()
 
+    async def close_coordinate(
+            self,
+            project_id: Union[int, str],
+            env_name: str,
+            config_name: str,
+            database_name: str,
+    ) -> None:
+        """
+        关闭单个四层坐标的连接池并清理缓存与错误记录（测试连接即用即关）。
+
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: 数据库名
+        """
+        cache_key = self._normalize_cache_key(project_id, env_name, config_name, database_name)
+        pool = self._get_pool(*cache_key)
+        if not pool:
+            return
+        try:
+            del self.pools[cache_key[0]][cache_key[1]][cache_key[2]][cache_key[3]]
+        except KeyError:
+            pass
+        self._clear_error(*cache_key)
+        await self._close_pool(pool)
+        self.logger.info(
+            f"连接池已关闭: [project_id={cache_key[0]}/{cache_key[1]}/{cache_key[2]}/{cache_key[3]}]"
+        )
+
     async def get_or_create_pool(
             self,
             project_id: Union[int, str],
@@ -815,9 +930,16 @@ class DBConnPoolFromConfig:
         if pool:
             return pool
 
-        await self.create_pool(
-            cache_project_id, cache_env_name, cache_config_name, cache_database_name
-        )
+        # 串行建池：并发请求下check-then-create会重复建池互相覆盖，锁内double-check兜底
+        async with self._get_create_lock():
+            pool = self._get_pool(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name
+            )
+            if pool:
+                return pool
+            await self.create_pool(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name
+            )
         pool = self._get_pool(
             cache_project_id, cache_env_name, cache_config_name, cache_database_name
         )
@@ -860,9 +982,14 @@ class DBConnPoolFromConfig:
         if pool:
             return pool
 
-        await self.create_pool_by_mode(
-            project_id, env_id, config_mode, database_name, config_host, config_port
-        )
+        # 串行建池：并发请求下check-then-create会重复建池互相覆盖，锁内double-check兜底
+        async with self._get_create_lock():
+            pool = self._get_pool(*cache_key)
+            if pool:
+                return pool
+            await self.create_pool_by_mode(
+                project_id, env_id, config_mode, database_name, config_host, config_port
+            )
         pool = self._get_pool(*cache_key)
         if pool:
             return pool

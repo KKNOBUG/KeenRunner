@@ -19,7 +19,7 @@ from typing import Dict, Any, Optional
 
 from celery import Celery
 from celery import Task
-from celery.signals import setup_logging, task_prerun, worker_process_init
+from celery.signals import setup_logging, task_prerun, worker_process_init, worker_process_shutdown
 from celery.worker.request import Request
 
 from backend.common import AsyncEventLoopContextIOPool
@@ -62,9 +62,38 @@ def _reset_async_pool_and_tortoise_after_fork(**kwargs):
     AsyncEventLoopContextIOPool.reset_process_state()
     reset_tortoise_orm_state()
     # prefork 子进程继承父进程 Loguru 文件句柄，需重建 Sink 以免多进程共写/轮转失败；
-    # setup_loggers 内部会先清空全部 sink 再重建，落到当天复用的 Worker 日志文件（不触发应用日志）
+    # setup_loggers 内部会先清空全部 sink 再重建，落到固定名 Worker 日志文件（不触发应用日志）
     setup_loggers(logfile=os.environ.get("CELERY_LOGFILE") or None)
     LOGGER.debug(f"{_LOG_PREFIX}worker_process_init: 已重置异步池、Tortoise 与日志 Sink")
+
+
+@worker_process_shutdown.connect
+def _release_connection_pools_before_exit(**kwargs):
+    """
+    prefork子进程退出前best-effort释放业务DB/Redis连接池。
+
+    仅在子进程已创建过IO池时经其loop关闭，避免退出阶段新建loop；
+    释放失败不阻断worker退出（进程终止后服务端也会回收连接）。
+
+    :param kwargs: Celery signal透传参数
+    :return: None
+    """
+    io_pool = AsyncEventLoopContextIOPool.singleton
+    if io_pool is None:
+        return
+
+    async def _close_pools():
+        from backend.common.cache.redis_connection_pool import get_app_redis_pool
+        from backend.common.database.database_connection_pool import get_app_database_pool
+
+        await get_app_database_pool().close()
+        await get_app_redis_pool().close()
+
+    try:
+        io_pool.run(_close_pools())
+        LOGGER.debug(f"{_LOG_PREFIX}worker_process_shutdown: 已释放业务DB/Redis连接池")
+    except Exception as e:
+        LOGGER.warning(f"{_LOG_PREFIX}worker_process_shutdown: 连接池释放失败(不阻断退出): {e}")
 
 
 def _resolve_trigger_and_report(task: Task):
@@ -376,9 +405,10 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     """
     接管Celery日志，将stdlib经InterceptHandler接入Loguru。
 
-    日志文件优先级：--logfile 参数 > CELERY_LOGFILE 环境变量 > 按天复用的默认 worker/beat 日志；
-    默认文件携带 SERVER_PORT 与创建时刻（{YYYYmmdd}-{HHMMSS}-{Worker|Beat}-{port}.log），
-    当天已存在则复用，同机多环境实例互不混写；重复调用时先清空再重建 sink；
+    日志文件优先级：--logfile 参数 > CELERY_LOGFILE 环境变量 > 固定名 Worker/Beat 日志；
+    默认文件固定名携带 SERVER_PORT（Worker-{port}.log / Beat-{port}.log，与应用日志口径一致），
+    每天零点轮转、日期拼接到归档后缀（*.log.YYYY-MM-DD），跨进程轮转由文件锁协调（prefork 也安全）；
+    同机多环境实例互不混写；重复调用时先清空再重建 sink；
     前台（非 --detach 且 stderr 为终端）额外追加终端 sink。
 
     :param loglevel: 日志级别(int或Celery传入值)
@@ -391,9 +421,10 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
 
     from backend.configure.logging_config import (
         LOG_FORMAT,
+        _HANDLER_PASSTHROUGH,
         _inject_trace_context,
         cleanup_expired_log_files,
-        resolve_daily_log_path,
+        ConcurrentTimedRotatingFileHandler,
     )
 
     level = loglevel if isinstance(loglevel, int) else logging.INFO
@@ -416,10 +447,11 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
     is_beat = "beat" in argv_tokens or ("beat" in " ".join(argv_tokens) and "worker" not in argv_tokens)
     target = (logfile or "").strip() or (os.environ.get("CELERY_LOGFILE") or "").strip()
     if not target:
-        # 默认路径按天复用：{celery_logs}/{YYYYmmdd}-{HHMMSS}-{Worker|Beat}-{port}.log（携带端口，同机多环境互不混写）
-        target = resolve_daily_log_path(
-            os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs"),
-            f"{'Beat' if is_beat else 'Worker'}-{PROJECT_CONFIG.SERVER_PORT}",
+        # 固定名（与应用日志口径一致）：日期由零点轮转拼接到归档后缀，携带端口同机多环境互不混写
+        target = os.path.join(
+            PROJECT_CONFIG.OUTPUT_LOGS_DIR,
+            "celery_logs",
+            f"{'Beat' if is_beat else 'Worker'}-{PROJECT_CONFIG.SERVER_PORT}.log",
         )
     # 过期 Celery 日志（含滚动备份与历史固定名文件）按保留天数清理
     cleanup_expired_log_files()
@@ -428,18 +460,23 @@ def setup_loggers(loglevel=None, logfile=None, **kwargs):
         log_dir = os.path.dirname(target)
         if log_dir:
             os.makedirs(log_dir, exist_ok=True)
+        # 与应用日志同款跨进程时间轮转 handler：零点切新文件，多进程共写/轮转由文件锁协调
+        handler = ConcurrentTimedRotatingFileHandler(
+            filename=target,
+            when="midnight",
+            backupCount=PROJECT_CONFIG.LOGGER_ROTATION_BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        handler.setFormatter(_HANDLER_PASSTHROUGH)
         _celery_logfile_sink_id = loguru_logger.add(
-            target,
+            sink=handler,
             level="INFO",
             format=LOG_FORMAT,
-            encoding="utf-8",
-            # enqueue=True 让多进程/多线程经队列串行写入；diagnose=False 避免异常时打印局部变量泄露敏感数据
+            # enqueue=True 让多线程经队列串行写入；diagnose=False 避免异常时打印局部变量泄露敏感数据
             enqueue=True,
             backtrace=True,
             diagnose=False,
             colorize=False,
-            rotation="200 MB",
-            retention=10,
         )
         os.environ["CELERY_LOGFILE"] = target
         LOGGER.info(f"{_LOG_PREFIX}Celery 日志已写入文件: {target}")
@@ -691,7 +728,7 @@ celery = create_celery()
 #   celery -A backend.celery_scheduler.celery_worker worker -Q 8520_default,8520_autotest -c 4 -l INFO --hostname=worker_8520@%h
 # Beat：
 #   celery -A backend.celery_scheduler.celery_worker beat -l INFO
-# 日志默认写入：backend/output/logs/celery_logs/celery_worker_{port}.log | celery_beat_{port}.log
+# 日志默认写入：backend/output/logs/celery_logs/Worker-{port}.log | Beat-{port}.log（零点轮转归档 *.log.YYYY-MM-DD）
 # 也可显式指定：--logfile=/path/to/xxx.log  或  export CELERY_LOGFILE=/path/to/xxx.log
 # 同机多环境共存：节点名/日志/PID 均携带 SERVER_PORT，互不干扰
 

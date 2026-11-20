@@ -1147,6 +1147,17 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                 f"{traceback.format_exc()}"
             )
             raise DataBaseStorageException(message=error_message) from e
+        finally:
+            # 测试连接即用即关：只关本坐标测试池，不影响执行期按mode缓存的池
+            try:
+                await get_app_database_pool().close_coordinate(
+                    project_id=project_id,
+                    env_name=env_name,
+                    config_name=config_name,
+                    database_name=database_name,
+                )
+            except Exception as close_error:
+                LOGGER.warning(f"测试连接池释放失败(不影响测试结果): {close_error}")
 
         return {
             "config_id": config_id,

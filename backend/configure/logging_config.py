@@ -58,45 +58,6 @@ _intercept_handler: Optional["InterceptHandler"] = None
 _intercept_guard = threading.local()
 
 
-def resolve_daily_log_path(log_dir: str, body: str) -> str:
-    """
-    按天复用的日志文件路径：{log_dir}/{YYYYmmdd}-{HHMMSS}-{body}.log
-
-    - 先扫描目录中今日已创建的匹配文件（如前次进程重启残留），命中即复用最新一个；
-    - 未命中则以当前时刻 O_CREAT|O_EXCL 抢占创建，输掉同秒竞态的进程重新扫描复用赢家文件。
-
-    滚动备份（*.log.1、*.log.YYYY-MM-DD）与锁文件（.__*.lock）不以 .log 结尾，天然不会命中复用。
-
-    :param log_dir: 日志目录
-    :param body: 文件名主体（如 Worker-8520 / Beat-8520，Celery 专用；应用日志已改固定名不走此函数）
-    :return: 完整日志文件路径
-    """
-    os.makedirs(log_dir, exist_ok=True)
-    now = datetime.now()
-    today = now.strftime("%Y%m%d")
-    suffix = f"-{body}.log"
-    existing = [
-        name for name in os.listdir(log_dir)
-        if name.startswith(f"{today}-") and name.endswith(suffix)
-    ]
-    if existing:
-        return os.path.join(log_dir, sorted(existing)[-1])
-    candidate = os.path.join(log_dir, f"{now.strftime('%Y%m%d-%H%M%S')}-{body}.log")
-    try:
-        fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-        os.close(fd)
-        return candidate
-    except FileExistsError:
-        pass
-    existing = [
-        name for name in os.listdir(log_dir)
-        if name.startswith(f"{today}-") and name.endswith(suffix)
-    ]
-    if existing:
-        return os.path.join(log_dir, sorted(existing)[-1])
-    return candidate
-
-
 def build_log_path() -> str:
     """
     应用日志路径：{OUTPUT_LOGS_DIR}/执行日志.log（固定名，不带日期前缀）
@@ -109,10 +70,13 @@ def build_log_path() -> str:
 
 def cleanup_expired_log_files() -> None:
     """
-    按 LOGGER_RETENTION_DAYS 清理过期的应用与 Celery 日志（含滚动备份与孤儿锁文件）。
+    按 LOGGER_RETENTION_DAYS 清理过期的应用与 Celery 日志（含滚动备份与旧命名存量文件）。
 
     判定用文件最后修改时间（mtime）：按天复用模式下文件名日期可能落后于内容日期
     （服务跨天仍写原文件），按文件名日期判定会误删仍活跃的日志。
+    与 handler 的 backupCount 互补：后者仅在轮转时按个数裁剪，本函数按天数清理，
+    并覆盖旧命名存量（celery_worker_/celery_beat_ 等）与长期闲置的活跃日志。
+    轮转锁文件（*.lock）显式跳过，避免破坏跨进程轮转协调。
     """
     retention_days = PROJECT_CONFIG.LOGGER_RETENTION_DAYS
     if retention_days <= 0:
@@ -120,13 +84,16 @@ def cleanup_expired_log_files() -> None:
     celery_logs_dir = os.path.join(PROJECT_CONFIG.OUTPUT_LOGS_DIR, "celery_logs")
     targets = (
         (PROJECT_CONFIG.OUTPUT_LOGS_DIR, (f"{PROJECT_CONFIG.LOGGER_FILE_NAME_PREFIX}.log",)),
-        (celery_logs_dir, ("-Worker-", "-Beat-", "celery_worker_", "celery_beat_")),
+        (celery_logs_dir, ("Worker-", "Beat-", "celery_worker_", "celery_beat_")),
     )
     deadline = datetime.now() - timedelta(days=retention_days)
     for log_dir, markers in targets:
         if not os.path.isdir(log_dir):
             continue
         for name in os.listdir(log_dir):
+            # 轮转锁文件可能命中名称marker（如.__Worker-*.lock），删除会破坏跨进程协调
+            if name.endswith(".lock"):
+                continue
             if not any(marker in name for marker in markers):
                 continue
             path = os.path.join(log_dir, name)

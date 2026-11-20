@@ -360,6 +360,7 @@ views (/http_debugging, /tcp_debugging, /redis_debugging)
 
 - `cache/`：Redis 连接池（`redis_connection_pool` 异步 / `redis_sync_pool` 同步）
 - `database/`：MySQL 连接池（异步/同步/原生 SQL 操作）
+- 配置驱动池管理器（`DBConnPoolFromConfig`/`RedisConnPoolFromConfig`，进程单例）生命周期契约：`get_or_create_*` 经 loop 感知异步锁串行建池（锁内 double-check，Celery 换 loop 自动重建锁）；`*_by_mode` 四层缓存键含 host/port，改地址命中新键后旧键池/客户端空闲时自动淘汰、忙时保留待回收；测试连接 `close_coordinate` 即用即关（不波及执行期 mode 池）；FastAPI lifespan 关停与 Celery `worker_process_shutdown` 统一 `close()` 释放
 - `excel/`：openpyxl + pandas 读写
 - `xml_utils.py`：XML 命名空间/声明保留解析与序列化（数据驱动替换、占位符解析共用）
 - `request/`：HTTP（`request_async_utils`/`request_sync_utils`）+ TCP（`tcp_async_utils`）

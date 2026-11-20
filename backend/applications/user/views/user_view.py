@@ -470,6 +470,7 @@ async def logout(
             exclude_fields=["password"],
             replace_fields={"id": "user_id"}
         )
+        LOGGER.info(f"用户[{current_user.username}]登出成功")
         return SuccessResponse(message="登出成功", data=data, total=1)
     except Exception:
         error_message: str = "暂时无法注销访问令牌，请稍后重试"
@@ -555,6 +556,7 @@ async def login(
             await user_crud.update_last_login(user_id=user.id)
         except (ParameterException, NotFoundException):
             return FailureResponse(message="登录失败，请稍后重试")
+        LOGGER.info(f"用户[{credentials.username}]登录成功")
         return SuccessResponse(message="登录成功", data=_build_login_payload(user))
     except Exception:
         # 原始异常与口令信息只进日志，对外统一为可重试提示

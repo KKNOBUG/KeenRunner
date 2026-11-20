@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import api from '@/api'
+import { TASK_RECORD_TASK_TYPE_VALUES } from '@/constants/autotestTaskType'
 
 /**
  * 任务列表「执行记录」弹框：按任务分页加载执行记录（/autotest/task/record/search）
@@ -22,6 +23,8 @@ export function useTaskRecordLogModal() {
     try {
       const res = await api.getApiTaskRecordList({
         task_id: id,
+        // 与执行记录页同口径：显式指定任务执行类型，缺省时后端按异步中心口径排除执行记录
+        task_type_in: TASK_RECORD_TASK_TYPE_VALUES,
         page: logPage.value,
         page_size: logPageSize.value,
         order: ['-celery_start_time', '-id']

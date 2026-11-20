@@ -46,6 +46,24 @@ class RedisConnPoolFromConfig:
         self.config_model: Optional[Type[Any]] = config_model
         self.clients: Dict[int, Dict[str, Dict[str, Dict[str, Any]]]] = {}
         self.errors: Dict[int, Dict[str, Dict[str, Dict[str, str]]]] = {}
+        # 建连串行锁：懒创建并绑定当前事件循环，Celery prefork换新loop后自动重建
+        self._create_lock: Optional[asyncio.Lock] = None
+        self._create_lock_loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def _get_create_lock(self) -> asyncio.Lock:
+        """
+        获取建连串行锁；事件循环变化时重建，避免跨loop使用旧锁。
+
+        Celery worker_process_init会重置IO池换新loop，沿用旧loop的Lock会报
+        "attached to a different loop"；按当前running loop判定重建。
+
+        :return: 绑定当前事件循环的asyncio.Lock
+        """
+        current_loop = asyncio.get_running_loop()
+        if self._create_lock is None or self._create_lock_loop is not current_loop:
+            self._create_lock = asyncio.Lock()
+            self._create_lock_loop = current_loop
+        return self._create_lock
 
     @staticmethod
     def _normalize_cache_key(
@@ -487,7 +505,11 @@ class RedisConnPoolFromConfig:
             self._set_error(*cache_key, error_message)
             raise RuntimeError(error_message) from e
 
-        return await self._build_client_from_config_row(cache_key, redis_db, config_row, max_retries)
+        created = await self._build_client_from_config_row(cache_key, redis_db, config_row, max_retries)
+        if created:
+            # 改地址后旧键客户端不再被命中，空闲时淘汰，避免连接泄漏
+            await self._evict_superseded_mode_clients(cache_key)
+        return created
 
     async def get_or_create_client(
             self,
@@ -514,9 +536,16 @@ class RedisConnPoolFromConfig:
         if client:
             return client
 
-        await self.create_client(
-            cache_project_id, cache_env_name, cache_config_name, cache_database_name
-        )
+        # 串行建连：并发请求下check-then-create会重复建连互相覆盖，锁内double-check兜底
+        async with self._get_create_lock():
+            client = self._get_client(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name
+            )
+            if client:
+                return client
+            await self.create_client(
+                cache_project_id, cache_env_name, cache_config_name, cache_database_name
+            )
         client = self._get_client(
             cache_project_id, cache_env_name, cache_config_name, cache_database_name
         )
@@ -559,9 +588,14 @@ class RedisConnPoolFromConfig:
         if client:
             return client
 
-        await self.create_client_by_mode(
-            project_id, env_id, config_mode, database_name, config_host, config_port
-        )
+        # 串行建连：并发请求下check-then-create会重复建连互相覆盖，锁内double-check兜底
+        async with self._get_create_lock():
+            client = self._get_client(*cache_key)
+            if client:
+                return client
+            await self.create_client_by_mode(
+                project_id, env_id, config_mode, database_name, config_host, config_port
+            )
         client = self._get_client(*cache_key)
         if client:
             return client
@@ -574,6 +608,125 @@ class RedisConnPoolFromConfig:
                 or "未知错误"
         )
         raise ConnectionError(f"Redis连接创建失败：{error_message}")
+
+    async def _close_client(self, client: Any) -> None:
+        """关闭单个Redis客户端，释放底层连接池。"""
+        await client.aclose()
+
+    @staticmethod
+    def _client_busy(client: Any) -> bool:
+        """
+        判定客户端是否有在用连接；无法判定时保守视为忙，跳过淘汰。
+
+        :param client: redis.asyncio客户端实例
+        :return: 存在在用连接为True
+        """
+        connection_pool = getattr(client, "connection_pool", None)
+        in_use = getattr(connection_pool, "_in_use_connections", None)
+        if in_use is not None:
+            return len(in_use) > 0
+        return True
+
+    async def _evict_superseded_mode_clients(self, cache_key: Tuple[int, str, str, str]) -> None:
+        """
+        淘汰同绑定同mode同库编号下被新地址取代的旧客户端（仅空闲时关闭）。
+
+        缓存第二层为env{env_id}@{host}:{port}，配置改地址后新键建连成功，
+        同env_id前缀的旧键客户端不再被命中；忙客户端保留待下次建连或关停时回收。
+        淘汰失败不影响新客户端的可用性。
+
+        :param cache_key: 新建客户端的规范化四层缓存坐标
+        """
+        project_id, env_key, config_mode, database_name = cache_key
+        env_id_prefix = env_key.split("@", 1)[0]
+        try:
+            config_map = self.clients.get(project_id, {})
+            for cached_env_key in list(config_map.keys()):
+                if not cached_env_key.startswith(env_id_prefix + "@") or cached_env_key == env_key:
+                    continue
+                database_map = config_map.get(cached_env_key, {}).get(config_mode, {})
+                old_client = database_map.get(database_name)
+                if not old_client or self._client_busy(old_client):
+                    continue
+                del database_map[database_name]
+                self.errors.get(project_id, {}).get(cached_env_key, {}).get(config_mode, {}).pop(
+                    database_name, None
+                )
+                await self._close_client(old_client)
+                self.logger.info(
+                    f"配置地址变更，旧Redis客户端已淘汰: "
+                    f"[project_id={project_id}/{cached_env_key}/{config_mode}/{database_name}]"
+                )
+        except Exception as e:
+            self.logger.warning(f"旧Redis客户端淘汰失败(不影响新客户端使用): {e}")
+
+    async def _close_project_clients(self, project_id: int) -> None:
+        """关闭指定应用下全部Redis客户端；单客户端关闭失败不阻断其余回收。"""
+        for env_name in list(self.clients.get(project_id, {}).keys()):
+            for config_name in list(self.clients[project_id][env_name].keys()):
+                for database_name, client in list(self.clients[project_id][env_name][config_name].items()):
+                    try:
+                        await self._close_client(client)
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Redis客户端关闭失败: [project_id={project_id}/{env_name}/{config_name}/{database_name}], {e}"
+                        )
+                        continue
+                    self.logger.info(
+                        f"Redis客户端已关闭: [project_id={project_id}/{env_name}/{config_name}/{database_name}]"
+                    )
+
+    async def close(self, project_id: Optional[Union[int, str]] = None) -> None:
+        """
+        关闭指定应用或全部Redis客户端，并清理对应错误记录。
+
+        :param project_id: 应用主键ID；为空则关闭全部
+        """
+        if project_id is not None:
+            try:
+                project_id = int(str(project_id).strip())
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"应用ID不合法: {project_id!r}") from e
+            if project_id not in self.clients:
+                return
+            await self._close_project_clients(project_id)
+            del self.clients[project_id]
+            self.errors.pop(project_id, None)
+            return
+
+        for cached_project_id in list(self.clients.keys()):
+            await self._close_project_clients(cached_project_id)
+        self.clients.clear()
+        self.errors.clear()
+
+    async def close_coordinate(
+            self,
+            project_id: Union[int, str],
+            env_name: str,
+            config_name: str,
+            database_name: str,
+    ) -> None:
+        """
+        关闭单个四层坐标的Redis客户端并清理缓存与错误记录（测试连接即用即关）。
+
+        :param project_id: 应用主键ID
+        :param env_name: 环境名称
+        :param config_name: 配置名称
+        :param database_name: Redis库编号
+        """
+        cache_key = self._normalize_cache_key(project_id, env_name, config_name, database_name)
+        client = self._get_client(*cache_key)
+        if not client:
+            return
+        try:
+            del self.clients[cache_key[0]][cache_key[1]][cache_key[2]][cache_key[3]]
+        except KeyError:
+            pass
+        self._clear_error(*cache_key)
+        await self._close_client(client)
+        self.logger.info(
+            f"Redis客户端已关闭: [project_id={cache_key[0]}/{cache_key[1]}/{cache_key[2]}/{cache_key[3]}]"
+        )
 
     @staticmethod
     def _parse_redis_commands(expr: str) -> List[List[str]]:
