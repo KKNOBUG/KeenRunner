@@ -270,9 +270,9 @@ main() {
         *)
             echo "==================== FastAPI 部署脚本 ===================="
             echo "命令说明:"
-            echo "  start         # 完整部署(停止服务 -> 拉取 $GIT_BRANCH 分支代码 -> 启动FastAPI服务)"
+            echo "  start         # 完整部署(停止服务 -> 拉取 $GIT_BRANCH 分支代码 -> 启动 FastAPI 服务)"
             echo "  restart       # 仅重启服务(不拉取代码)"
-            echo "  stop          # 停止FastAPI服务"
+            echo "  stop          # 停止 FastAPI 服务"
             echo "  status        # 查看服务运行状态"
             echo ""
             echo "使用提示:"
