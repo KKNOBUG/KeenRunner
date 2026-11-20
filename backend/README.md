@@ -124,19 +124,19 @@ vi /xxx2/project2/backend/.env        # 按下方清单与第一份错开
 
 | 技术                 | 版本       | 作用                                                       |   
 |---------------------|------------|-----------------------------------------------------------|
-| Python              | 3.8.7      | 主要编程语言(Windos 7 最高支持Python 3.8.10)                  |  
-| fastapi             | 0.115.4    | 基于Starlette+Pydantic且支持OpenAPI文档的高性能异步Web开发框架   |
-| gunicorn            | 23.0.0     | WSGI进程管理器(用来管理Uvicorn工作进程，实现并发+协程组合)         |
-| uvicorn             | 0.32.0     | ASGI异步处理器(专门运行FastAPI&Starlette应用)                  |
-| aerich              | 0.7.2      | 数据库模型迁移工具(目前是自动迁移,请了解机制后决定)                 |
-| aiomysql            | 0.2.0      | MySQL异步客户端(Tortoise-ORM的异步引擎)                        | 
-| tortoise-ORM        | 0.23.0     | 异步ORM框架(纯异步实现,在查询和新增操作时性能较高于SQLAlchemy框架)  |
-| pypika-tortoise     | 0.3.2      | 基于Pypika的SQL构建器(为Tortoise-ORM补充复杂的SQL语法支持)       |
-| aiohttp             | 3.9.5      | 异步HTTP客户端(支持大量并发)                                   | 
+| Python              | 3.12.13    | 主要编程语言(项目要求 ≥3.12)                                  |
+| fastapi             | 0.115.6    | 基于Starlette+Pydantic且支持OpenAPI文档的高性能异步Web开发框架   |
+| gunicorn            | 26.0.0     | WSGI进程管理器(用来管理Uvicorn工作进程，实现并发+协程组合)         |
+| uvicorn             | 0.33.0     | ASGI异步处理器(专门运行FastAPI&Starlette应用)                  |
+| aerich              | 0.9.0      | 数据库模型迁移工具(目前是自动迁移,请了解机制后决定)                 |
+| aiomysql            | 0.3.2      | MySQL异步客户端(Tortoise-ORM的异步引擎)                        |
+| tortoise-ORM        | 0.25.1     | 异步ORM框架(纯异步实现,在查询和新增操作时性能较高于SQLAlchemy框架)  |
+| pypika-tortoise     | 0.6.5      | 基于Pypika的SQL构建器(为Tortoise-ORM补充复杂的SQL语法支持)       |
+| aiohttp             | 3.13.3     | 异步HTTP客户端(支持大量并发)                                   |
 | Celery              | 5.4.0      | 分布式任务队列框架(支持异步/定时/重试任务执行)                     |
-| redis               | 5.0.8      | 缓存数据库(本项目中主要用于非重要数据关联和Celery消息管理)          |      
+| redis               | 5.2.1      | 缓存数据库(本项目中主要用于非重要数据关联和Celery消息管理)          |
 | flower              | 2.0.1      | 监控Celery异步任务执行                                        |
-| loguru              | 0.7.2      | 简化的日志收集器(替代内置的logging模块)                          |
+| loguru              | 0.7.3      | 简化的日志收集器(替代内置的logging模块)                          |
 
 
 --------------------
