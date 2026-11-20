@@ -18,6 +18,7 @@ from starlette.datastructures import FormData
 from backend.applications.base.models.audit_model import Audit
 from backend.applications.user.models.user_model import User
 from backend.common.permission_action import ACTION_UNKNOWN, AUDITED_ACTIONS, derive_action
+from backend.common.request_context import get_span_id, get_trace_id
 from backend.configure import PROJECT_CONFIG, GLOBAL_CONFIG, LOGGER
 from backend.enums import ResourceTag
 from backend.services import AuthControl
@@ -300,6 +301,7 @@ async def logging_middleware(request: Request, call_next):
             f"\n> > > > > > > > > > > > > > > > > > > >\n"
             f"请求时间：{audit_log.get('request_time')}\n"
             f"请求模块：{ResourceTag.label_of(request_tags)}\n"
+            f"请求标识：{get_trace_id()}:{get_span_id()}\n"
             f"请求接口：{audit_log.get('request_summary')}\n"
             f"请求方式：{audit_log.get('request_method')}\n"
             f"请求路由：{audit_log.get('request_router')}\n"
