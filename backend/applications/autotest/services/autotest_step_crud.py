@@ -1671,6 +1671,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             preloaded_case: Optional[AutoTestCaseModel] = None,
             preloaded_tree: Optional[AutoTestCaseStepTreeLoadResult] = None,
             inherited_variables: Optional[List[StepVariablesBase]] = None,
+            update_case_state: bool = True,
     ) -> Dict[str, Any]:
         """
         执行单个用例：引擎执行不持事务，报告、明细与用例状态单事务落库。
@@ -1686,7 +1687,8 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :param preloaded_case: 调用方已查询的用例实例，传入时跳过用例查询(多轮执行复用)
         :param preloaded_tree: 调用方已加载的步骤树数据，传入时跳过步骤树查询(多轮执行复用)
         :param inherited_variables: 变量池传递模式下上一条数据源执行后的累积变量池，合并优先级最高(后者同名覆盖)
-        :return: 含 success、total_steps/success_steps/failed_steps/passed_ratio、report_code、saved_to_database、case_id/case_code/case_name、session_variables、session_transfer 的字典
+        :param update_case_state: 本轮事务内是否回写用例状态；多轮(执行次数×数据场景)调用方传False，待全部轮次结束后由调用方通过 finalize_case_execute_state 按全部轮次成功才成功的规则统一回写，防止最后一个数据场景覆盖中间失败结果
+        :return: 含 success、total_steps/success_steps/failed_steps/passed_ratio、report_code、saved_to_database、case_id/case_code/case_name、case_ed_time、session_variables、session_transfer 的字典
         :raises ParameterException: 步骤树无任何可执行步骤
         :raises NotFoundException: 用例不存在（未预载时）
         :raises DataBaseStorageException: 报告或明细落库失败（整事务回滚）
@@ -1774,14 +1776,13 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             # 报告 → 明细 → 用例状态三段同事务：任一步失败整体回滚，避免出现“有报告无明细”或状态错位
             report_instance = await AutoTestReportCrud().create_report(report_in=defer_create_report)
             await AutoTestDetailCrud().create_details(details_in=list(pending_create_details or []))
-            # 用例状态取步级统计：无失败步骤即成功；最近执行时间取报告快照中的用例最晚结束时间
-            case_state = statistics.get("failed_steps", 0) == 0
-            case_last_time = defer_create_report.case_ed_time
-            await case_crud.update_case(AutoTestCaseUpdate(
-                case_id=case_id,
-                case_state=case_state,
-                case_last_time=case_last_time,
-            ), scope=DataScope.system())
+            # 单次执行本轮直接回写用例状态；多轮执行(update_case_state=False)延迟到调用方聚合回写
+            if update_case_state:
+                await self.finalize_case_execute_state(
+                    case_id=case_id,
+                    success=statistics.get("failed_steps", 0) == 0,
+                    case_last_time=defer_create_report.case_ed_time,
+                )
         return {
             "success": statistics.get("failed_steps", 0) == 0,
             "total_steps": statistics.get("total_steps", 0),
@@ -1793,11 +1794,30 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
             "case_id": case_id,
             "case_code": case_dict.get("case_code"),
             "case_name": case_dict.get("case_name"),
+            # 用例结束时间：供多轮调用方聚合回写 case_last_time 取最后一轮快照
+            "case_ed_time": defer_create_report.case_ed_time,
             # 执行后变量池(字典列表)：供变量池传递模式下串联下一条数据源；调用方消费后应剔除以免膨胀批量结果
             "session_variables": [v.model_dump() for v in (engine_session_variables or [])],
             # 用例级变量池传递开关：调用方据此决定是否将本条累积池串联给下一条数据源
             "session_transfer": session_transfer_enabled,
         }
+
+    @classmethod
+    async def finalize_case_execute_state(cls, case_id: int, success: bool, case_last_time: Optional[str] = None) -> None:
+        """
+        回写用例执行状态与最近执行时间（多轮执行的聚合口径）。
+
+        :param case_id: 用例主键ID
+        :param success: 本次执行是否成功（跨全部轮次聚合）
+        :param case_last_time: 用例结束时间（取最后一轮报告快照）；为空取当前时间
+        """
+        datetime_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        case_update_schema = AutoTestCaseUpdate(
+            case_id=case_id,
+            case_state=success,
+            case_last_time=case_last_time or datetime_now,
+        )
+        await AutoTestCaseCrud().update_case(case_update_schema, scope=DataScope.system())
 
     @staticmethod
     def _aggregate_case_runs(
@@ -1961,11 +1981,6 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
         :param dataset_enabled: 任务级数据源全局开关
         :return: 单用例聚合结果字典（含 execute_runs 实际轮次）
         """
-        # 分支口径：有数据场景时外层按执行次数、内层按场景执行（round_no=执行次数序号）；
-        # 无场景且次数>1 时按次数逐轮执行（round_no 从 1 递增）；其余单次执行（round_no=1）；
-        # execute_count 非法时回落 1，并裁剪到 [1, 9999]。
-        # 用例与步骤树仅预载一次供多轮复用；单用例异常兜底为失败结果（空轮次），不中断批次内其他用例；
-        # 变量池传递开启时累积范围仅限同一轮次内的多条数据源，跨轮次重置回初始池，已串联的变量从结果中剔除
         try:
             # 用例级配置：键兼容 str/int 两种 case_id 写法；非 dict 视为未配置
             case_cfg = (cases_cfg_map.get(str(case_id)) or cases_cfg_map.get(case_id) or {})
@@ -2019,6 +2034,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                             preloaded_case=preloaded_case,
                             preloaded_tree=preloaded_tree,
                             inherited_variables=inherited_variables or None,
+                            update_case_state=False,
                         )
                         # 串联决策读取本条执行返回的用例级开关，避免额外查询用例表
                         inherited_variables = (
@@ -2045,6 +2061,7 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                         round_no=run_idx + 1,
                         preloaded_case=preloaded_case,
                         preloaded_tree=preloaded_tree,
+                        update_case_state=False,
                     )
                     case_results.append(one)
                     LOGGER.info(
@@ -2063,12 +2080,22 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                     round_no=1,
                     preloaded_case=preloaded_case,
                     preloaded_tree=preloaded_tree,
+                    update_case_state=False,
                 ))
                 empty_error = "未执行"
 
             case_ok = bool(case_results) and all(r.get("success") for r in case_results)
+            # 聚合回写：全部轮次成功才成功；case_last_time 取最后一轮报告快照
+            await self.finalize_case_execute_state(
+                case_id=case_id,
+                success=case_ok,
+                case_last_time=case_results[-1].get("case_ed_time") if case_results else None,
+            )
             result = self._aggregate_case_runs(
-                case_id, case_results, case_ok=case_ok, empty_error=empty_error,
+                case_id=case_id,
+                case_results=case_results,
+                case_ok=case_ok,
+                empty_error=empty_error,
             )
         except Exception as e:
             error_message: str = "执行用例失败, 请稍后重试"
@@ -2079,5 +2106,10 @@ class AutoTestStepCrud(ScaffoldCrud[AutoTestStepModel, AutoTestStepCreate, AutoT
                 case_ok=False,
                 empty_error=error_message,
             )
+            # 异常兜底同样回写失败状态，避免用例停留在上一次的成功状态
+            try:
+                await self.finalize_case_execute_state(case_id=case_id, success=False)
+            except Exception as finalize_error:
+                LOGGER.error(f"用例[id={case_id}]异常兜底状态回写失败: {finalize_error}")
         LOGGER.info(f"==> 执行用例[id={case_id}]结束")
         return result

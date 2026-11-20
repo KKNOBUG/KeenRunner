@@ -118,6 +118,8 @@ views/autotest_task_view.py (/autotest/task/run)
   → 写 report + details、回填 case/task 状态；执行观测写 record(task_summary)
 ```
 
+**用例执行状态回写口径（case_state）**：`execute_single_case` 仅负责单场景报告/明细落库，是否回写用例状态由 `update_case_state` 控制（默认 True）。多轮调用方（`_execute_one_case` 的执行次数×数据场景、`task_execute_assign_case._execute_step_tree_impl` 的参数化逐场景）一律传 `update_case_state=False`，全部轮次结束后经 `finalize_case_execute_state` 按「全部轮次成功才成功」一次聚合回写 `case_state` 与 `case_last_time`（取最后一轮报告快照），避免最后一个成功数据场景覆盖中间失败场景的状态（last-write-wins 缺陷）；单用例异常兜底同样回写失败。单次执行（view 直跑、参数化单场景、`perf_job_service` fail-fast）保持默认 True 在事务内直接回写。每条数据场景仍各自生成独立报告，报告级 `case_state` 只反映本场景成败，与用例级聚合状态互不覆盖。
+
 **步骤引擎**（`services/autotest_step_engine.py`）：
 - `StepExecutionContext`：变量池、占位符解析（`${}`/函数）、日志、Python 受限执行
 - `StepExecutorFactory` 按 `step_type` 路由

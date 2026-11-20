@@ -128,6 +128,7 @@ async def _execute_step_tree_impl(
             dataset_name=dataset_name,
             round_no=1,
             inherited_variables=inherited_variables or None,
+            update_case_state=False,
         )
         single_data["dataset_name"] = dataset_name
         # 串联决策读取本条执行返回的用例级开关(session_transfer)，避免额外查询用例表
@@ -141,6 +142,12 @@ async def _execute_step_tree_impl(
     execute_runs = len(details)
     success_runs = sum(1 for r in details if r.get("success"))
     case_ok = 0 < execute_runs == success_runs
+    # 多轮执行聚合回写：全部轮次成功才成功，避免最后一个成功场景覆盖中间失败场景；case_last_time 取最后一轮报告快照
+    await step_crud.finalize_case_execute_state(
+        case_id=case_id,
+        success=case_ok,
+        case_last_time=details[-1].get("case_ed_time") if details else None,
+    )
     return {
         "parameterized": True,
         "batch_code": batch_code,
