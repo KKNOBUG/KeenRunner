@@ -254,9 +254,9 @@ class StepExecutionContext:
         # 会话变量池：跨步骤累积，初始池在下一行求值
         self.session_variables: List[StepVariablesBase] = []
         self.initialize_session_variables(initial_variables)
-        # 默认HTTP客户端超时配置（秒）：请求总超时与建连超时
+        # 默认请求超时配置（秒）：timeout为HTTP请求总超时，connect为建连超时（HTTP客户端与TCP执行器共用）
         self.timeout: float = 30.0
-        self.connect: float = 10.0
+        self.connect: float = 15.0
 
     async def __aenter__(self) -> "StepExecutionContext":
         """
@@ -3033,8 +3033,8 @@ class TcpStepExecutor(BaseStepExecutor):
     # - XML 请求（request_args_type=XML 或以 '<' 开头）走 resolve_xml_placeholders，其余走 resolve_placeholders。
     # - TCP 帧配置由 resolve_tcp_frame_config 统一推导，帧字段相互独立不互斥，优先级：进制数非不使用即长度前缀；
     #   否则配置了请求或响应结束符即结束符；均未配置即 RAW。
-    # - 读取超时取 tcp_response_timeout（未配置时缺省10秒），连接超时未单独暴露，
-    #   由 AioTcpClient 缺省为读取超时；单次响应读取上限 TCP_MAX_RESPONSE_BYTES（10MB）。
+    # - 读取超时取 tcp_response_timeout（未配置时缺省30秒），连接超时取上下文 connect（与HTTP建连同源，当前15秒）；
+    #   单次响应读取上限 TCP_MAX_RESPONSE_BYTES（10MB）。
     # - tcp_connect_type=LONG 尚未实现，会按短连接降级执行；SEND_ONLY 只发不收，响应文本为空且 response_bytes=0
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
@@ -3164,7 +3164,7 @@ class TcpStepExecutor(BaseStepExecutor):
 
             frame_config = resolve_tcp_frame_config(self.step)
             max_response_bytes = TCP_MAX_RESPONSE_BYTES
-            connect_td, read_td = parse_tcp_timeouts(None, self.step.tcp_response_timeout)
+            connect_td, read_td = parse_tcp_timeouts(self.context.connect, self.step.tcp_response_timeout)
 
             # 发送前先落请求快照（含帧配置与最终 payload），便于落库与排障
             result.request = {
@@ -3195,7 +3195,7 @@ class TcpStepExecutor(BaseStepExecutor):
 
             start = time.perf_counter()
             async with AioTcpClient(
-                    timeout=read_td or timedelta(seconds=10),
+                    timeout=read_td or timedelta(seconds=self.context.timeout),
                     connect_timeout=connect_td,
                     length_field_size=frame_config.radix_length,
                     max_response_bytes=max_response_bytes,

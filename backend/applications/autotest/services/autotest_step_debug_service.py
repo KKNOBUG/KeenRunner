@@ -78,22 +78,22 @@ class StepDebugException(Exception):
 class EnvEndpoint:
     """环境配置解析结果：APP与REDIS等节点类型共用。"""
 
-    env_id: int                          # 环境绑定记录ID
-    env_name: str                        # 环境名称
-    project_id: int                      # 应用ID
-    config_name: str                     # 配置名称
+    env_id: int  # 环境绑定记录ID
+    env_name: str  # 环境名称
+    project_id: int  # 应用ID
+    config_name: str  # 配置名称
     config_type: AutoTestConfigNodeType  # 节点类型，与绑定表/配置表的env_type一致
-    config_host: Optional[str]           # 主机地址；调用方需自行判空
-    config_port: Optional[str]           # 端口（统一转为字符串）
+    config_host: Optional[str]  # 主机地址；调用方需自行判空
+    config_port: Optional[str]  # 端口（统一转为字符串）
     database_name: Optional[str] = None  # 数据库名/Redis库编号，仅DB/REDIS等节点使用
-    config_mode: Optional[str] = None    # 配置逻辑标识（mode链路回显使用）
+    config_mode: Optional[str] = None  # 配置逻辑标识（mode链路回显使用）
 
 
 @dataclass
 class DebugLogger:
     """带时间戳与步骤名的调试日志收集器。"""
 
-    step_name: str   # 日志前缀使用的步骤名称
+    step_name: str  # 日志前缀使用的步骤名称
     logs: List[str]  # 已格式化日志行，按追加顺序返回前端
 
     def append(self, message: str) -> None:
@@ -110,8 +110,8 @@ class DebugLogger:
 class StepDebugService:
     """步骤调试服务：HTTP/TCP/Python/Redis四类步骤的同步调试入口。"""
 
-    # 与执行引擎共用autotest_runtime实现（占位符、协议、提取/断言、内置变量），差异仅在于
-    # 变量池来源、is_core_engine=False与返回日志/请求回显，保证调试结果与执行口径一致
+    TIMEOUT: float = 30.0
+    CONNECT: float = 15.0
 
     @staticmethod
     def make_debug_logger(step_name: str) -> DebugLogger:
@@ -461,7 +461,7 @@ class StepDebugService:
         :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
         # 流程：合并变量池 → 相对URL按env_id+config_mode解析环境配置并注入内置变量 → 解析占位符 →
-        # 组装报文 → httpx请求（10秒超时、不读系统代理）→ 回显响应并按执行口径提取/断言
+        # 组装报文 → httpx请求（响应30秒/建连15秒超时、不读系统代理）→ 回显响应并按执行口径提取/断言
         step_name = debug_in.step_name
         request_project_id = debug_in.request_project_id
         request_env_id: Optional[int] = debug_in.env_id
@@ -594,7 +594,7 @@ class StepDebugService:
 
         start_time = time.time()
         # trust_env=False：不读系统代理，避免调试请求被本机代理环境变量劫持
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=10.0), trust_env=False) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(cls.TIMEOUT, connect=cls.CONNECT), trust_env=False) as client:
             try:
                 response = await client.request(method=request_method, url=request_url, **request_kwargs)
             except httpx.TimeoutException as e:
@@ -813,8 +813,8 @@ class StepDebugService:
             request_args_type, request_text=request_text, request_body=request_body, serialize_json=True
         )
         frame_config = resolve_tcp_frame_config(debug_in)
-        # 请求超时未配置，仅指定响应超时；read_td为空时由AioTcpClient回落30秒
-        connect_td, read_td = parse_tcp_timeouts(None, debug_in.tcp_response_timeout)
+        # 连接超时固定15秒；响应超时取 tcp_response_timeout，read_td为空时回落30秒
+        connect_td, read_td = parse_tcp_timeouts(cls.CONNECT, debug_in.tcp_response_timeout)
         log(
             f"TCP帧配置: 帧模式={frame_config.frame_mode.value}, 进制={frame_config.radix}, "
             f"长度位宽度={frame_config.radix_length}, 总长度口径={'包含长度位' if frame_config.include_length_prefix else '不包含长度位'}, "
@@ -827,7 +827,7 @@ class StepDebugService:
 
         start_time = time.time()
         async with AioTcpClient(
-                timeout=read_td or timedelta(seconds=30),
+                timeout=read_td or timedelta(seconds=cls.TIMEOUT),
                 connect_timeout=connect_td,
                 length_field_size=frame_config.radix_length,
                 max_response_bytes=TCP_MAX_RESPONSE_BYTES,
