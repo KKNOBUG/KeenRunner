@@ -140,7 +140,7 @@ pull_code() {
     # 交互认证拉取远端分支
     expect <<EOF
 set timeout 60
-spawn git fetch origin "$GIT_BRANCH"
+spawn git pull origin "$GIT_BRANCH"
 expect {
     "Username" {
         send "${GIT_USERNAME}\r"
@@ -157,13 +157,15 @@ EOF
     pull_rc=$?
 
     if [ "$pull_rc" -ne 0 ]; then
-        handle_error "git fetch 失败, 请检查网络/凭证/远端分支后重试"
+        handle_error "git pull 失败(可能存在未提交改动或网络问题), 尝试强制对齐远端..."
     fi
 
-    # 放弃本地改动, 由远端 GIT_BRANCH 最新代码覆盖
-    if ! git reset --hard FETCH_HEAD; then
-        handle_error "git reset --hard FETCH_HEAD 失败"
+    # 与手动部署一致: 放弃本地改动, 由 origin/$GIT_BRANCH 分支代码覆盖
+    if ! git reset --hard "origin/${GIT_BRANCH}"; then
+        handle_error "git reset --hard origin/${GIT_BRANCH} 失败, 请检查远端分支是否存在"
+        return 1
     fi
+    [ "$pull_rc" -ne 0 ] && print_warn "已强制对齐本地仓库到 origin/${GIT_BRANCH}(如拉取失败请检查网络/凭证后重试)"
     print_info "代码更新成功(${GIT_BRANCH} 分支)"
 }
 

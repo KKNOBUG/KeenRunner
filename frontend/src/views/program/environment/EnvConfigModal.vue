@@ -2,31 +2,39 @@
   <NModal
       :show="show"
       preset="card"
-      style="width: 860px"
+      class="env-config-modal"
+      style="width: 560px; max-width: calc(100vw - 32px)"
       :title="modalTitle"
       @update:show="(v) => emit('update:show', v)"
   >
     <NForm ref="formRef" :model="form" label-placement="left" label-align="left" :label-width="100">
-      <div class="config-grid">
+      <NCard tag="section" size="small" bordered class="config-section linked-section">
+        <template #header>
+          <NAlert type="info" :bordered="false" :show-icon="false" class="section-hint">
+            <div class="section-hint-content">
+              <span class="section-hint-title">联动字段</span>
+              <span class="section-hint-desc">其他环境下的同名配置也会被同步修改</span>
+            </div>
+          </NAlert>
+        </template>
         <NFormItem
             label="配置名称"
             path="config_name"
             :rule="{ required: true, message: '请输入配置名称', trigger: ['input', 'blur'] }"
         >
-          <div class="config-name-field">
-            <NInput v-model:value="form.config_name" maxlength="128"/>
-            <NText v-if="mode === 'edit'" depth="3" class="config-name-hint">
-              修改名称将同步该应用、该节点类型下所有环境的同名配置
-            </NText>
-          </div>
+          <NInput v-model:value="form.config_name" maxlength="128"/>
         </NFormItem>
-        <NFormItem
-            label="环境"
-            path="env_name"
-            :rule="{ required: true, message: '请输入环境名称', trigger: ['input', 'blur'] }"
-        >
-          <NInput v-model:value="form.env_name" maxlength="64" placeholder="如 SIT、UAT" :disabled="true"/>
-        </NFormItem>
+      </NCard>
+
+      <NCard tag="section" size="small" bordered class="config-section non-linked-section">
+        <template #header>
+          <NAlert type="info" :bordered="false" :show-icon="false" class="section-hint">
+            <div class="section-hint-content">
+              <span class="section-hint-title">非联动字段</span>
+              <span class="section-hint-desc">其他环境下的具体配置不会被同步修改</span>
+            </div>
+          </NAlert>
+        </template>
 
         <template v-if="configType === ENV_TYPE.APP">
           <NFormItem
@@ -37,9 +45,9 @@
             <NInput v-model:value="form.config_host" maxlength="128"/>
           </NFormItem>
           <NFormItem
-              label="端口"
+              label="主机端口"
               path="config_port"
-              :rule="{ required: true, message: '请输入端口', trigger: ['input', 'blur'] }"
+              :rule="{ required: true, message: '请输入主机端口', trigger: ['input', 'blur'] }"
           >
             <NInput v-model:value="form.config_port" maxlength="8"/>
           </NFormItem>
@@ -47,9 +55,9 @@
 
         <template v-else-if="configType === ENV_TYPE.FILE">
           <NFormItem
-              label="服务器IP"
+              label="服务器地址"
               path="config_host"
-              :rule="{ required: true, message: '请输入服务器IP', trigger: ['input', 'blur'] }"
+              :rule="{ required: true, message: '请输入服务器地址', trigger: ['input', 'blur'] }"
           >
             <NInput v-model:value="form.config_host" maxlength="128"/>
           </NFormItem>
@@ -90,9 +98,9 @@
             <NInput v-model:value="form.database_name" maxlength="128"/>
           </NFormItem>
           <NFormItem
-              label="数据库IP"
+              label="数据库地址"
               path="config_host"
-              :rule="{ required: true, message: '请输入数据库IP', trigger: ['input', 'blur'] }"
+              :rule="{ required: true, message: '请输入数据库地址', trigger: ['input', 'blur'] }"
           >
             <NInput v-model:value="form.config_host" maxlength="128"/>
           </NFormItem>
@@ -134,21 +142,21 @@
           >
             <NInput v-model:value="form.config_port" maxlength="8"/>
           </NFormItem>
-          <NFormItem label="库编号" path="database_name">
-            <NInput v-model:value="form.database_name" maxlength="128" placeholder="可选，如 0"/>
+          <NFormItem label="Redis库号" path="database_name">
+            <NInput v-model:value="form.database_name" maxlength="128" placeholder="请输入Redis库号"/>
           </NFormItem>
-          <NFormItem label="用户名" path="config_username">
-            <NInput v-model:value="form.config_username" maxlength="128" placeholder="可选"/>
+          <NFormItem label="Redis账号" path="config_username">
+            <NInput v-model:value="form.config_username" maxlength="128" placeholder="请输入Redis账号"/>
           </NFormItem>
-          <NFormItem label="密码" path="config_password">
-            <NInput v-model:value="form.config_password" type="password" show-password-on="click" maxlength="128" placeholder="可选"/>
+          <NFormItem label="Redis密码" path="config_password">
+            <NInput v-model:value="form.config_password" type="password" show-password-on="click" maxlength="128" placeholder="请输入Redis密码"/>
           </NFormItem>
         </template>
 
-        <NFormItem label="备注" path="config_desc" class="full-row">
-          <NInput v-model:value="form.config_desc" type="textarea" :rows="2" maxlength="2048"/>
+        <NFormItem label="备注" path="config_desc">
+          <NInput v-model:value="form.config_desc" type="textarea" :rows="2" maxlength="2048" placeholder="请输入备注"/>
         </NFormItem>
-      </div>
+      </NCard>
     </NForm>
     <template #footer>
       <NSpace justify="end">
@@ -164,7 +172,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { NButton, NForm, NFormItem, NInput, NModal, NSelect, NSpace, NText } from 'naive-ui'
+import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NModal, NSelect, NSpace } from 'naive-ui'
 import api from '@/api'
 import { useUserStore } from '@/store'
 import { ENV_TYPE, ENV_TYPE_LABEL } from './envType'
@@ -348,24 +356,109 @@ watch(
 </script>
 
 <style scoped>
-.config-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 18px;
+:global(.env-config-modal.n-card) {
+  --env-config-modal-radius: 26px;
+  --env-config-card-radius: 16px;
+  border-radius: var(--env-config-modal-radius, 26px);
+  corner-shape: squircle;
+  overflow: hidden;
 }
 
-.full-row {
-  grid-column: 1 / -1;
+.env-config-modal > :deep(.n-card__content) {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
 }
 
-.config-name-field {
+.config-section {
+  border-radius: var(--env-config-card-radius, 16px);
+  corner-shape: squircle;
+  overflow: hidden;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--n-border-color) 18%, transparent);
+}
+
+.linked-section {
+  --env-linked-color: color-mix(in srgb, var(--primary-color, #F4511E) 10%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color, #F4511E) 22%, var(--n-border-color));
+}
+
+.non-linked-section {
+  --env-non-linked-color: var(--info-color, #2080F0);
+  border-color: color-mix(in srgb, var(--env-non-linked-color) 22%, var(--n-border-color));
+}
+
+.config-section + .config-section {
+  margin-top: 8px;
+}
+
+.config-section :deep(.n-card-header) {
+  padding: 0;
+  /* 栏头自身保持直角，顶部由卡片的 squircle 溢出裁剪统一塑形 */
+  border-radius: 0;
+}
+
+.linked-section :deep(.n-card-header) {
+  background: var(--env-linked-color);
+}
+
+.linked-section .section-hint {
+  background-color: transparent;
+}
+
+.linked-section .section-hint-title {
+  color: var(--primary-color, #F4511E);
+}
+
+.non-linked-section .section-hint-title {
+  color: var(--env-non-linked-color);
+}
+
+.config-section :deep(.n-card__content) {
+  padding: 14px 16px 8px;
+}
+
+.section-hint {
+  border-radius: 0;
+}
+
+.section-hint :deep(.n-alert-body) {
+  padding: 10px 14px;
+}
+
+.section-hint-content {
   display: flex;
-  flex-direction: column;
-  width: 100%;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
 }
 
-.config-name-hint {
-  margin-top: 2px;
-  font-size: 12px;
+.section-hint-title {
+  font-weight: 600;
+}
+
+.section-hint-desc {
+  color: color-mix(in srgb, var(--n-content-text-color) 62%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.config-section :deep(.n-form-item) {
+  margin-bottom: 8px;
+}
+
+.config-section :deep(.n-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+html.dark .linked-section {
+  --env-linked-color: color-mix(in srgb, var(--primary-color, #F4511E) 15%, transparent);
+}
+
+html.dark .non-linked-section {
+  --env-non-linked-color: var(--info-color-suppl, #4098FC);
+}
+
+html.dark .config-section {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
 }
 </style>

@@ -608,6 +608,8 @@ models → schemas → services → views(router)
 - 接口权限显隐统一用 `composables/useApiPermission` 的 `hasApiPermission(method, path)`（或 `v-permission` 指令）；受限角色不应看到必然 403 的新增/批量删除/导入导出/下载按钮。角色表单的范围选项复用 `src/constants/dataScope.js`。
 - 请求统一走 `src/api/index.js` 与现有 request 工具，禁止新封装 axios 实例。成功判定为 `code === '000000' && status === 'success'`；HTTP 401 或认证业务码触发 `clearSession` 本地清理并跳转登录页，不能再调用 `/logout` 形成循环请求；主动退出调用 `/logout` 后在 `finally` 清理本地会话。文件下载用裸 axios（带 token）+ `downloadBlobResponse`，不要套默认响应拦截器。
 - 弹层/表格/表单等复用现有通用组件与 Naive UI 组件，不重复造轮子。
+- 模态框视觉基线：`NModal preset="card"` 根节点用 `:global(.modal-class.n-card)` 声明圆角令牌、`corner-shape: squircle` 与 `overflow: hidden`（Teleport 后根节点无 scoped 属性）；嵌套卡片栏头自身保持 `border-radius: 0`，顶部由父卡片统一裁切，左下/右下保持直角，禁止再叠 `clip-path` 或独立圆角。
+- 模态框颜色与排版：颜色使用 Naive UI 主题变量并适配深色（info 色系深色用 `--info-color-suppl`）；标题用强调色，说明文字用 11px 主题灰，卡片内容底部留白与表单项间距保持一致（8px）。结构调整后同步删除无用 import、模板类、选择器与变量。
 - 样式治理：`views/autotest` 是统一样式基准；基础 UI 样式优先复用 `styles/autotest-theme.scss` 全局类（`.step-editor-card`、`.log-item`、`.debug-loading` 等）；禁止在 scoped 样式里重复定义全局已有样式；多页面相似样式必须上收到全局基线并加作用域前缀。
 - 注释为中文、简短说明意图。
 

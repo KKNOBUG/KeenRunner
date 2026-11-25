@@ -104,6 +104,8 @@ def print_repair_plan(
     if any(num > fake_max for num, _ in missing_files):
         print("[提示] 标记为\"真实应用\"的文件会真的修改业务表结构; 如果这些SQL其实早就执行过,")
         print("       真跑会报\"列已存在\"这类错误, 届时把查漏补缺范围改成<已执行过的最大序号>重跑即可。")
+        print("[提示] 启动时自动生成的auto_migrate文件可能混着\"已生效\"和\"未生效\"的语句, 整文件补记录或整文件执行都不对,")
+        print("       报错后按提示核实数据库真实结构, 在当前环境删改文件里的语句再重跑(不要动代码仓库)。")
 
 
 async def open_db_connection() -> aiomysql.Connection:
@@ -219,6 +221,7 @@ async def apply_pending_migrations(app: str) -> None:
     from aerich import Command
     from backend.configure import PROJECT_CONFIG
 
+    print("[真实应用] 注意: MySQL的改表语句(DDL)逐条立即生效、无法回滚, 中途报错时前面的语句可能已经改了表结构。")
     command = Command(app=app, tortoise_config=build_tortoise_config(PROJECT_CONFIG, app), location=str(MIGRATION_DIR.parent))
     await command.init()
     try:
@@ -228,17 +231,34 @@ async def apply_pending_migrations(app: str) -> None:
     print(f"[真实应用] SQL执行完成, 已应用文件: {migrated}")
 
 
-async def apply_pending_migrations_with_hint(app: str, pending_real: list[tuple[int, str]]) -> None:
-    """执行漏记文件的SQL, 失败时告诉用户怎么换一种方式重跑。"""
+async def apply_pending_migrations_with_hint(app: str, pending_real: list[tuple[int, str]]) -> bool:
+    """执行漏记文件的SQL, 失败时按错误类型给出处置指引, 返回是否执行成功(失败不中断菜单)。"""
     pending_names = [name for _, name in pending_real]
     print(f"\n[真实应用] 开始执行 {len(pending_names)} 个漏记文件的SQL: {pending_names}")
     try:
         await apply_pending_migrations(app)
+        return True
     except Exception as exc:
+        err_msg = str(exc)
+        err_code = exc.args[0] if exc.args and isinstance(exc.args[0], int) else None
         print(f"\n[真实应用] 执行失败: {exc}")
-        print("[提示] 如果错误是\"列已存在/表已存在\", 说明这些文件的SQL早就执行过了,")
-        print("       重新选择[2]登记修复, 查漏补缺范围输入<已执行过的最大序号>再跑一遍即可。")
-        raise
+        print("[提示] 报错不代表数据库没动: 改表语句(DDL)无法回滚, 失败文件里排在前面的语句可能已经生效,")
+        print("       请先逐条核对哪些已生效、哪些没生效, 再决定下一步, 不要盲目原样重跑。")
+        if err_code == 1091 or "check that column/key exists" in err_msg:
+            print("[提示] 这个错误是\"要删的列/索引在数据库里根本不存在\"(幽灵语句), 换查漏补缺范围没用:")
+            print("       1. 用 SHOW CREATE TABLE 或 information_schema 核实相关表的真实结构;")
+            print("       2. 把文件里目标已不存在的语句删掉(只改当前环境的迁移文件, 不要动代码仓库);")
+            print("       3. 文件里若混着已生效的语句(如ADD已存在的列/索引), 一并删掉, 只留真正没执行的;")
+            print("       4. 改完后重新选择[0]一键修复。")
+        elif err_code in (1050, 1060, 1061) or any(
+                key in err_msg for key in ("already exists", "Duplicate column name", "Duplicate key name")):
+            print("[提示] 这个错误是\"列/表/索引已存在\", 说明文件里的SQL(至少一部分)早就执行过了:")
+            print("       整个文件都已执行过 -> 重新选择[2]登记修复, 查漏补缺范围输入<已执行过的最大序号>再跑一遍;")
+            print("       文件混着已生效和未生效的语句(常见于启动时自动生成的auto_migrate) -> 换范围会把没执行的也跳过,")
+            print("       应核实真实结构后, 在当前环境的文件里删掉已生效的语句, 再重新选择[0]真实执行剩下的。")
+        else:
+            print("[提示] 请先核对数据库真实结构和迁移文件内容, 处理后再重新选择[0]一键修复。")
+        return False
 
 
 def preview_next_migrate(app: str) -> None:
@@ -449,7 +469,9 @@ async def capability_full_fix(app: str, fake_max: str) -> None:
     if planned_changes == 0:
         print("[一键修复] 数据库本来就是对齐的, 跳过修复这一步。")
     if pending_real:
-        await apply_pending_migrations_with_hint(app, pending_real)
+        if not await apply_pending_migrations_with_hint(app, pending_real):
+            print("\n[一键修复] 执行SQL失败, 后面的步骤先不做了; 按上面的提示处理后重新选择[0]。")
+            return
     baseline_ok = await check_baseline_and_preview(app, rebuild=True, preview_enabled=True)
     verify_ok = await verify_repair(app)
     print("\n[一键修复] 全部完成。" if baseline_ok and verify_ok else "\n[一键修复] 有失败项, 请看上面的说明处理!")
