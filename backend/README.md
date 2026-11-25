@@ -8,7 +8,7 @@
 # 首次部署：以 .env.example 为模板复制，并按目标机器填写实际值
 cd backend
 cp .env.example .env
-vi .env   # 至少核对 SERVER_PORT / SERVER_DEBUG / DATABASE_* / REDIS_* / CELERY_*_DB / AUTH_SECRET_KEY
+vi .env   # 至少核对 SERVER_PORT / SERVER_DEBUG / DATABASE_* / REDIS_* / CELERY_*_DB / AUTH_SECRET_KEY / SECURITY_RSA_PRIVATE_KEY
 ```
 
 - 开发（Mac/Windows）与测试/生产（Linux）都使用同一份 `.env`，仅字段值随机器不同；
@@ -117,6 +117,26 @@ vi /xxx2/project2/backend/.env        # 按下方清单与第一份错开
 | Gunicorn nohup | `backend_main_{端口}.log`（backend 根目录） |
 
 历史日志按 `LOGGER_RETENTION_DAYS`（`.env` 可配置，默认 30 天，0=不清理）在启动时自动清理。
+
+## 6. 环境配置密码传输加密（config_password）
+
+环境管理 DB/Redis/File 配置的 `config_password` 采用 RSA-2048 + PKCS1 v1.5 密文传输与存储（密文即存储态，保存/查询零加解密，仅执行期建连接池时解密），契约详见 AGENTS.md 3.1。
+
+```shell
+# 1. 生成密钥对（每台部署机器独立生成，私钥不入 git）
+openssl genrsa -out private.pem 2048
+# PEM 转单行 base64 填入 .env 的 SECURITY_RSA_PRIVATE_KEY（与 AUTH_SECRET_KEY 隔离）
+base64 -w0 private.pem          # Linux
+base64 -i private.pem | tr -d '\n'   # macOS
+# 公钥无需配置：后端由私钥推导，经 POST /base/security/get_public_key 下发前端
+
+# 2. 存量明文刷库（仓库根目录；先完成扩列迁移，脚本启动会校验列宽≥512）
+backend/.venv/bin/python -m backend.scripts.encrypt_env_config_passwords          # dry-run 仅打印计划
+backend/.venv/bin/python -m backend.scripts.encrypt_env_config_passwords --apply  # 单事务写库，写前自动备份到 output/
+# 幂等：已是密文的行跳过，可重跑；超 245 字节的明文无法单块加密，按行跳过并列入清单
+```
+
+发布顺序硬约束：后端上线（含迁移 34 扩列 128→512）→ 低峰执行刷库 → 前端上线；密钥轮换需同步重刷存量（旧私钥密文无法用新私钥解密）。
 
 ---
 

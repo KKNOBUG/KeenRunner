@@ -44,7 +44,7 @@ const props = defineProps({
 const vPermission = resolveDirective('permission')
 const userStore = useUserStore()
 const envType = props.envRow.env_type || ENV_TYPE.APP
-/** 配置改名会同步所有环境的同名配置，需上抛父级刷新其他已展开子表 */
+/** 配置改名可能同步其他环境同名配置或并入既有同名组，需上抛父级刷新其他已展开子表 */
 const emit = defineEmits(['saved'])
 
 const EDIT_PERM = UPDATE_CONFIG_PERM

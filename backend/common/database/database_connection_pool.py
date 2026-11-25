@@ -478,6 +478,19 @@ class DBConnPoolFromConfig:
         config_password: str = config_row.config_password or ""
         database_name: str = (config_row.database_name or "").strip()
 
+        # 密码以RSA密文落库，建池前解密还原明文；惰性导入避免common层启动期循环依赖
+        if config_password:
+            from backend.services.transport_crypto import decrypt_password
+            try:
+                config_password = decrypt_password(config_password)
+            except ValueError as e:
+                error_message = f"数据库密码解密失败：{e}"
+                self.logger.error(error_message)
+                self._set_error(
+                    cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+                )
+                raise
+
         database_type_value: Any = config_row.database_type
         if database_type_value is not None and hasattr(database_type_value, "value"):
             database_type_value = database_type_value.value

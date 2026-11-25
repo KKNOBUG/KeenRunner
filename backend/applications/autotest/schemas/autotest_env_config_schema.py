@@ -14,16 +14,22 @@ from backend.applications.base.services.scaffold import UpperStr
 from backend.enums import AutoTestDataBaseType, AutoTestConfigNodeType
 
 
-def _validate_database_required_fields(database_name: Any, database_type: Any, config_username: Any, config_password: Any) -> None:
-    """校验DB类型必填字段。"""
-    missing = [
-        name for name, val in (
-            ("database_name", database_name),
-            ("database_type", database_type),
-            ("config_username", config_username),
-            ("config_password", config_password),
-        ) if val in (None, "")
+def _validate_database_required_fields(
+        database_name: Any,
+        database_type: Any,
+        config_username: Any,
+        config_password: Any,
+        require_password: bool = True
+) -> None:
+    """校验DB类型必填字段；更新时密码可缺省表示不修改，由require_password控制。"""
+    required_fields = [
+        ("database_name", database_name),
+        ("database_type", database_type),
+        ("config_username", config_username),
     ]
+    if require_password:
+        required_fields.append(("config_password", config_password))
+    missing = [name for name, val in required_fields if val in (None, "")]
     if missing:
         raise ValueError(f"节点类型[DB]配置缺少必填字段: [{', '.join(missing)}]")
 
@@ -44,7 +50,7 @@ class AutoTestEnvConfigBase(BaseModel):
     config_group: Optional[str] = Field(None, max_length=128, description="数据库/服务器分组")
     config_params: Optional[Dict[str, Any]] = Field(None, description="数据库/服务器参数")
     config_username: Optional[str] = Field(None, max_length=128, description="数据库/服务器用户名")
-    config_password: Optional[str] = Field(None, max_length=128, description="数据库/服务器密码")
+    config_password: Optional[str] = Field(None, max_length=512, description="数据库/服务器密码(RSA密文)")
     config_kwargs: Optional[List[Dict[str, Any]]] = Field(None, description="通用环境变量配置")
     config_header: Optional[List[Dict[str, Any]]] = Field(None, description="通用请求头配置")
     is_no_password: Optional[bool] = Field(None, description="是否免密")
@@ -94,6 +100,8 @@ class AutoTestEnvConfigUpdate(AutoTestEnvConfigBase):
                 database_type=self.database_type,
                 config_username=self.config_username,
                 config_password=self.config_password,
+                # 更新未传密码表示不修改，不再强制必填
+                require_password=False,
             )
         return self
 
@@ -168,7 +176,7 @@ class DBEnvConfigCreate(AutoTestEnvConfigCreate):
     database_name: str = Field(..., max_length=128, description="数据库名称")
     database_type: AutoTestDataBaseType = Field(..., description="数据库类型")
     config_username: str = Field(..., max_length=128, description="数据库用户名")
-    config_password: str = Field(..., max_length=128, description="数据库密码")
+    config_password: str = Field(..., max_length=512, description="数据库密码(RSA密文)")
 
 
 class DBEnvConfigUpdate(AutoTestEnvConfigUpdate):
@@ -185,7 +193,8 @@ class DBEnvConfigUpdate(AutoTestEnvConfigUpdate):
     database_name: str = Field(..., max_length=128, description="数据库名称")
     database_type: AutoTestDataBaseType = Field(..., description="数据库类型")
     config_username: str = Field(..., max_length=128, description="数据库用户名")
-    config_password: str = Field(..., max_length=128, description="数据库密码")
+    # 未传/None表示不修改密码；DB密码不允许清空
+    config_password: Optional[str] = Field(None, max_length=512, description="数据库密码(RSA密文)")
 
 
 class FILEEnvConfigCreate(AutoTestEnvConfigCreate):
@@ -213,7 +222,7 @@ class RedisEnvConfigCreate(AutoTestEnvConfigCreate):
     config_port: str = Field(..., max_length=8, description="Redis端口")
     database_name: Optional[str] = Field(None, max_length=128, description="Redis库编号")
     config_username: Optional[str] = Field(None, max_length=128, description="Redis用户名")
-    config_password: Optional[str] = Field(None, max_length=128, description="Redis密码")
+    config_password: Optional[str] = Field(None, max_length=512, description="Redis密码(RSA密文)")
 
 
 class RedisEnvConfigUpdate(AutoTestEnvConfigUpdate):
@@ -229,7 +238,7 @@ class RedisEnvConfigUpdate(AutoTestEnvConfigUpdate):
     config_port: str = Field(..., max_length=8, description="Redis端口")
     database_name: Optional[str] = Field(None, max_length=128, description="Redis库编号")
     config_username: Optional[str] = Field(None, max_length=128, description="Redis用户名")
-    config_password: Optional[str] = Field(None, max_length=128, description="Redis密码")
+    config_password: Optional[str] = Field(None, max_length=512, description="Redis密码(RSA密文)")
 
 
 class QueryAssignConfigEnv(BaseModel):

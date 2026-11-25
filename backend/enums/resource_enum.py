@@ -49,6 +49,7 @@ class ResourceTag(StringEnum):
     AUDIT = ("system.audit", "系统管理:审计", ResourceDomain.SYSTEM)
     FILE = ("system.file", "系统管理:文件", ResourceDomain.SYSTEM)
     DEPT = ("system.dept", "系统管理:部门", ResourceDomain.SYSTEM)
+    SECURITY = ("system.security", "系统管理:安全", ResourceDomain.SYSTEM)
 
     # ==================== 应用管理 ====================
     PROJECT = ("application.project", "应用管理:项目", ResourceDomain.APPLICATION, True)

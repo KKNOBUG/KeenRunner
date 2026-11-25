@@ -13,7 +13,7 @@
           <NAlert type="info" :bordered="false" :show-icon="false" class="section-hint">
             <div class="section-hint-content">
               <span class="section-hint-title">联动字段</span>
-              <span class="section-hint-desc">其他环境下的同名配置也会被同步修改</span>
+              <span class="section-hint-desc">其他环境下的相同配置名称也会被同步修改</span>
             </div>
           </NAlert>
         </template>
@@ -30,8 +30,8 @@
         <template #header>
           <NAlert type="info" :bordered="false" :show-icon="false" class="section-hint">
             <div class="section-hint-content">
-              <span class="section-hint-title">非联动字段</span>
-              <span class="section-hint-desc">其他环境下的具体配置不会被同步修改</span>
+              <span class="section-hint-title">独立字段</span>
+              <span class="section-hint-desc">其他环境下的具体配置信息不会被同步修改</span>
             </div>
           </NAlert>
         </template>
@@ -72,12 +72,21 @@
             <NInput v-model:value="form.config_username" maxlength="128"/>
           </NFormItem>
           <NFormItem label="服务器密码" path="config_password">
-            <NInput v-model:value="form.config_password" type="password" show-password-on="click" maxlength="128"/>
+            <NInput
+                v-model:value="form.config_password"
+                type="password"
+                maxlength="64"
+                :disabled="form.is_no_password"
+                :placeholder="passwordPlaceholder"
+                @focus="handlePasswordFocus"
+                @blur="handlePasswordBlur"
+            />
           </NFormItem>
           <NFormItem label="是否免密" path="is_no_password">
             <NSelect
-                v-model:value="form.is_no_password"
-                :options="[{ label: '免密', value: true }, { label: '非免密', value: false }]"
+                :value="form.is_no_password ? 'yes' : 'no'"
+                :options="[{ label: '免密', value: 'yes' }, { label: '非免密', value: 'no' }]"
+                @update:value="(v) => (form.is_no_password = v === 'yes')"
             />
           </NFormItem>
         </template>
@@ -121,9 +130,16 @@
           <NFormItem
               label="数据库密码"
               path="config_password"
-              :rule="{ required: true, message: '请输入数据库密码', trigger: ['input', 'blur'] }"
+              :rule="{ validator: validateDbPassword, trigger: ['input', 'blur'] }"
           >
-            <NInput v-model:value="form.config_password" type="password" show-password-on="click" maxlength="128"/>
+            <NInput
+                v-model:value="form.config_password"
+                type="password"
+                maxlength="64"
+                :placeholder="passwordPlaceholder"
+                @focus="handlePasswordFocus"
+                @blur="handlePasswordBlur"
+            />
           </NFormItem>
         </template>
 
@@ -149,7 +165,22 @@
             <NInput v-model:value="form.config_username" maxlength="128" placeholder="请输入Redis账号"/>
           </NFormItem>
           <NFormItem label="Redis密码" path="config_password">
-            <NInput v-model:value="form.config_password" type="password" show-password-on="click" maxlength="128" placeholder="请输入Redis密码"/>
+            <NInput
+                v-model:value="form.config_password"
+                type="password"
+                maxlength="64"
+                :disabled="form.is_no_password"
+                :placeholder="passwordPlaceholder"
+                @focus="handlePasswordFocus"
+                @blur="handlePasswordBlur"
+            />
+          </NFormItem>
+          <NFormItem label="是否免密" path="is_no_password">
+            <NSelect
+                :value="form.is_no_password ? 'yes' : 'no'"
+                :options="[{ label: '免密', value: 'yes' }, { label: '非免密', value: 'no' }]"
+                @update:value="(v) => (form.is_no_password = v === 'yes')"
+            />
           </NFormItem>
         </template>
 
@@ -175,6 +206,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { NAlert, NButton, NCard, NForm, NFormItem, NInput, NModal, NSelect, NSpace } from 'naive-ui'
 import api from '@/api'
 import { useUserStore } from '@/store'
+import { clearPublicKeyCache, encryptPassword } from '@/utils/crypto'
 import { ENV_TYPE, ENV_TYPE_LABEL } from './envType'
 
 defineOptions({ name: '环境配置弹窗' })
@@ -217,6 +249,33 @@ const form = reactive({
   config_desc: '',
 })
 
+/** 编辑/复制回填的原始密文快照：真实密文仅存于此，未修改时密码框展示固定8圆点哨兵 */
+const originalCipher = ref('')
+
+/** 固定8圆点展示哨兵：避免整段344字符密文回填导致圆点过长影响视觉 */
+const PASSWORD_MASK = '••••••••'
+
+const passwordPlaceholder = computed(() =>
+    originalCipher.value ? '已保留原密码，输入新密码可覆盖' : '请输入密码（不超过64字符）')
+
+// 聚焦时若框内仍是哨兵则清空供输入；失焦未输入则还原哨兵（固定8圆点展示）
+function handlePasswordFocus() {
+  if (form.config_password === PASSWORD_MASK) {
+    form.config_password = ''
+  }
+}
+
+function handlePasswordBlur() {
+  if (originalCipher.value && !form.config_password) {
+    form.config_password = PASSWORD_MASK
+  }
+}
+
+function validateDbPassword() {
+  if (form.config_password || originalCipher.value) return true
+  return new Error(props.mode === 'edit' ? '请输入新密码或保留原密码' : '请输入数据库密码')
+}
+
 const modalTitle = computed(() => {
   const action = props.mode === 'edit' ? '编辑' : props.mode === 'copy' ? '复制' : '新增'
   return `${action}${ENV_TYPE_LABEL[props.configType] || ''}配置`
@@ -235,11 +294,12 @@ function resetForm() {
     config_port: '',
     config_username: '',
     config_password: '',
-    is_no_password: props.configType === ENV_TYPE.FILE ? true : false,
+    is_no_password: props.configType === ENV_TYPE.FILE || props.configType === ENV_TYPE.REDIS ? true : false,
     database_name: '',
     database_type: 'mysql',
     config_desc: '',
   })
+  originalCipher.value = ''
 }
 
 function fillFromRow(row, { asCopy = false } = {}) {
@@ -250,15 +310,28 @@ function fillFromRow(row, { asCopy = false } = {}) {
     config_host: row.config_host || '',
     config_port: row.config_port || '',
     config_username: row.config_username || '',
-    config_password: row.config_password || '',
+    config_password: row.config_password ? PASSWORD_MASK : '',
     is_no_password: row.is_no_password ?? false,
     database_name: row.database_name || '',
     database_type: row.database_type || 'mysql',
     config_desc: row.config_desc || '',
   })
+  originalCipher.value = row.config_password || ''
 }
 
-function buildPayload() {
+/**
+ * 解析密码提交值：免密→空串；空/哨兵=未修改→透传原始密文（复制零重输）；新输入→RSA加密。
+ * 新输入明文限64字符（输入框maxlength与保存时双重校验）。
+ */
+async function resolvePasswordPayload() {
+  if (form.is_no_password) return ''
+  const value = form.config_password
+  if (!value || value === PASSWORD_MASK) return originalCipher.value
+  if (value.length > 64) throw new Error('密码长度不能超过64字符')
+  return await encryptPassword(value)
+}
+
+async function buildPayload() {
   const isEditMode = props.mode === 'edit'
   const base = {
     config_name: form.config_name,
@@ -281,7 +354,7 @@ function buildPayload() {
   if (t === ENV_TYPE.FILE) {
     Object.assign(base, {
       config_username: form.config_username || '',
-      config_password: form.config_password || '',
+      config_password: await resolvePasswordPayload(),
       is_no_password: !!form.is_no_password,
     })
   } else if (t === ENV_TYPE.DB) {
@@ -289,13 +362,17 @@ function buildPayload() {
       database_name: form.database_name,
       database_type: form.database_type,
       config_username: form.config_username,
-      config_password: form.config_password,
     })
+    const passwordPayload = await resolvePasswordPayload()
+    // 编辑未改密码（空或与原密文快照全等）时不传该字段，后端按“未传=不修改”保留原密文
+    const unchanged = isEditMode && (!passwordPayload || passwordPayload === originalCipher.value)
+    if (!unchanged) base.config_password = passwordPayload
   } else if (t === ENV_TYPE.REDIS) {
     Object.assign(base, {
       database_name: form.database_name || null,
       config_username: form.config_username || null,
-      config_password: form.config_password || null,
+      config_password: await resolvePasswordPayload(),
+      is_no_password: !!form.is_no_password,
     })
   }
   return base
@@ -305,7 +382,7 @@ async function handleSave() {
   try {
     saving.value = true
     await formRef.value?.validate?.()
-    const payload = buildPayload()
+    const payload = await buildPayload()
     const t = props.configType
     const isEditMode = props.mode === 'edit'
     if (t === ENV_TYPE.APP) await (isEditMode ? api.updateAppEnvConfig(payload) : api.createAppEnvConfig(payload))
@@ -316,6 +393,8 @@ async function handleSave() {
     emit('saved')
     emit('update:show', false)
   } catch (e) {
+    // 后端报密文解密失败时清公钥缓存，下次保存重新拉取（应对密钥轮换）
+    if (String(e?.message || '').includes('密文')) clearPublicKeyCache()
     if (!e?.errors) window.$message?.error?.(`保存失败：${e?.message || e}`)
   } finally {
     saving.value = false
@@ -340,6 +419,11 @@ async function handleTestConnection() {
     testing.value = false
   }
 }
+
+// 切到免密时清空密码输入，避免残留值被误提交
+watch(() => form.is_no_password, (v) => {
+  if (v) form.config_password = ''
+})
 
 watch(
     () => props.show,

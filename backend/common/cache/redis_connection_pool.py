@@ -378,6 +378,19 @@ class RedisConnPoolFromConfig:
         config_password: Optional[str] = (config_row.config_password or "").strip() or None
         config_port_text: str = str(config_row.config_port or "").strip()
 
+        # 密码以RSA密文落库，建连前解密还原明文；惰性导入避免common层启动期循环依赖
+        if config_password:
+            from backend.services.transport_crypto import decrypt_password
+            try:
+                config_password = decrypt_password(config_password)
+            except ValueError as e:
+                error_message = f"Redis密码解密失败：{e}"
+                self.logger.error(error_message)
+                self._set_error(
+                    cache_project_id, cache_env_name, cache_config_name, cache_database_name, error_message
+                )
+                raise
+
         missing_fields = [
             field_name
             for field_name, field_value in (

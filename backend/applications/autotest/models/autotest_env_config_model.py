@@ -73,7 +73,7 @@ class AutoTestEnvConfigModel(ScaffoldModel, MaintainMixin, TimestampMixin, State
     database_name = fields.CharField(max_length=128, null=True, description="数据库名称/Redis库编号")
     database_type = fields.CharEnumField(AutoTestDataBaseType, default=None, null=True, description="数据库类型")
     config_username = fields.CharField(max_length=128, null=True, description="数据库/服务器用户名")
-    config_password = fields.CharField(max_length=128, null=True, description="数据库/服务器密码")
+    config_password = fields.CharField(max_length=512, null=True, description="数据库/服务器密码(RSA密文)")
     config_group = fields.CharField(max_length=128, null=True, description="数据库/服务器分组")
     config_params = fields.JSONField(default=None, null=True, description="数据库/服务器参数")
     config_kwargs = fields.JSONField(default=None, null=True, description="通用环境变量配置")

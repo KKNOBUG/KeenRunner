@@ -138,7 +138,7 @@ const columns = computed(() => {
             key: String(row.env_id),
             envRow: row,
             refreshKey,
-            // 配置改名会同步所有环境的同名配置，子表上抛后统一重拉已展开子表
+            // 配置改名可能同步其他环境同名配置或并入既有同名组，子表上抛后统一重拉已展开子表
             onSaved: onConfigSaved,
           }),
     },

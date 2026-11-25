@@ -6,6 +6,8 @@
 @Module  : project_config.py
 @DateTime: 2025/1/15 16:08
 """
+import base64
+import binascii
 import os.path
 import platform
 from functools import lru_cache
@@ -104,6 +106,8 @@ class ProjectConfig(BaseSettings):
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 2
     AUTH_SECRET_KEY: str = Field(..., min_length=64, description="JWT密钥")
+    # 传输加密RSA私钥
+    SECURITY_RSA_PRIVATE_KEY: str = Field(..., min_length=64, description="传输加密RSA私钥(PEM的单行base64)")
     # 第三方迁移用户的校验地址
     THIRD_PARTY_USER_AUTH_URL: str = Field(..., description="第三方迁移用户的校验地址")
     # 第三方应用信息的同步地址
@@ -283,6 +287,14 @@ class ProjectConfig(BaseSettings):
     def validate_env_and_assemble_urls(self) -> Self:
         if not self.AUTH_SECRET_KEY or len(self.AUTH_SECRET_KEY) < 64:
             raise ValueError("配置[AUTH_SECRET_KEY]不允许为空或少于64位")
+
+        # 私钥只做结构校验（base64可解且为PEM），完整解析与位数校验在transport_crypto加载时执行
+        try:
+            pem_bytes = base64.b64decode(self.SECURITY_RSA_PRIVATE_KEY, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("配置[SECURITY_RSA_PRIVATE_KEY]不是合法的base64编码")
+        if not pem_bytes.startswith(b"-----BEGIN"):
+            raise ValueError("配置[SECURITY_RSA_PRIVATE_KEY]不是PEM私钥的base64编码")
 
         for field_name in (
                 "THIRD_PARTY_USER_AUTH_URL", "THIRD_PARTY_SYNC_APPS_URL",

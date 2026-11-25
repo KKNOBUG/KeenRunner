@@ -41,13 +41,11 @@ from backend.core.exceptions import (
 )
 from backend.enums import AutoTestConfigNodeType
 from backend.services import DataScope, get_current_username
+from backend.services.transport_crypto import assert_cipher_format
 
 
 class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConfigCreate, AutoTestEnvConfigUpdate]):
     """环境配置CRUD：环境配置表krun_autotest_env_config的创建、更新、改名同步、删除引用校验、查询分类。"""
-
-    # 核心口径：config_mode 是同应用同节点类型下的跨环境逻辑唯一键；创建/恢复/改名均须持有绑定行锁，
-    # 改名经 _sync_config_mode_group_name 同标识批量同步
 
     def __init__(self):
         """绑定环境配置模型，供基类通用CRUD复用。"""
@@ -106,6 +104,27 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             return raw.args[0] if raw.args else None
         return None
 
+    @staticmethod
+    def _assert_password_payload(config_password: Optional[str], env_type: Union[AutoTestConfigNodeType, str], is_update: bool) -> None:
+        """
+        密码入参校验：非空只接受RSA密文；更新未传/None表示不修改。
+
+        :param config_password: 入参密码值
+        :param env_type: 节点类型，空串清空仅限Redis/File
+        :param is_update: 是否更新场景
+        :raises ParameterException: 明文传递或DB密码清空
+        """
+        if config_password is None:
+            return
+        if config_password == "":
+            # 空串是免密/清空信号；DB密码必填不允许清空
+            if is_update and env_type == AutoTestConfigNodeType.DB:
+                error_message: str = "更新环境配置失败, DB配置密码不允许清空"
+                LOGGER.error(error_message)
+                raise ParameterException(message=error_message)
+            return
+        assert_cipher_format(config_password)
+
     async def create_config(self, config_in: AutoTestEnvConfigCreate, scope: DataScope) -> AutoTestEnvConfigModel:
         """
         创建环境配置；同应用同节点同名配置复用逻辑标识，同名软删记录在写权限内恢复启用。
@@ -127,6 +146,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             error_message: str = "新增环境配置失败, 参数[config_name]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
+        # 密码只接受RSA密文，明文传递在服务层入口拒绝
+        self._assert_password_payload(config_in.config_password, env_type, is_update=False)
         # B级父资源校验：应用必须可读，向后挂载的配置才能被当前用户感知
         await load_readable_project(scope, project_id)
 
@@ -218,11 +239,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                 raise DataBaseStorageException(message=error_message) from e
             raise
 
-    async def update_config(
-            self,
-            config_in: AutoTestEnvConfigUpdate,
-            scope: DataScope,
-    ) -> Tuple[AutoTestEnvConfigModel, str, Dict[str, Any]]:
+    async def update_config(self, config_in: AutoTestEnvConfigUpdate, scope: DataScope, ) -> Tuple[AutoTestEnvConfigModel, str, Dict[str, Any]]:
         """
         更新环境配置：按 config_id 或 config_code 定位，改名时同步该逻辑配置的全部启用实例。
 
@@ -232,7 +249,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :raises ParameterException: 定位参数缺失、应用或节点与绑定不匹配、环境已下线、名称为空
         :raises NotFoundException: 配置或关联环境绑定不存在
         :raises NoPermissionException: 配置归属人不在写范围
-        :raises DataAlreadyExistsException: 同绑定内名称或 host 重复，改名目标名称被同节点的其他环境占用
+        :raises DataAlreadyExistsException: 同绑定内名称或 host 重复，改名目标名称被同环境内的同名配置占用（含软删记录）
         :raises DataBaseStorageException: 落库失败或并发冲突
         """
         # 所属应用、环境与节点类型在创建时确定，更新时不再接受变更；
@@ -265,6 +282,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         # 环境已下线时不再允许修改，避免改动不可见数据
         if bind.state != 0:
             raise ParameterException(message="配置关联的环境已下线, 不允许修改")
+        # 环境名已随绑定 join 取回，改名冲突文案与响应序列化共用，不再重复查库
+        env_name: str = bind.env_enum.env_name if bind.env_enum else ""
         # 所属应用不可变更
         if config_in.project_id is not None and int(config_in.project_id) != int(bind.project_id):
             raise ParameterException(message="配置关联的所属应用不匹配")
@@ -272,6 +291,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         env_type = bind.env_type
         if config_in.env_type is not None and config_in.env_type != env_type:
             raise ParameterException(message="不支持修改配置所属节点")
+        # 密码只接受RSA密文；未传/None不修改，空串仅限Redis/File免密清空
+        self._assert_password_payload(config_in.config_password, env_type, is_update=True)
         # 应用与环境是配置的父资源，更新前仍校验可读
         await load_readable_project(scope, int(bind.project_id))
         await assert_parent_readable(scope, ENV_TAG, bind, "环境")
@@ -281,19 +302,23 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             exclude_unset=True,
             exclude={"config_id", "config_code", "env_name", "project_id", "env_type", "env_id"},
         )
-        # 显式置空的可空字段回补，避免 exclude_none 丢弃导致库内旧值残留
+        # 显式置空的可空字段回补，避免 exclude_none 丢弃导致库内旧值残留；
+        # config_password 不在回补列：未传/None表示不修改，清空只走空串免密信号
         self.explicit_restored_null_fields(
             config_in,
             update_dict,
             (
                 "config_desc", "config_port", "config_group", "config_params",
-                "config_username", "config_password", "config_kwargs", "config_header",
+                "config_username", "config_kwargs", "config_header",
                 "is_no_password", "database_name", "database_type",
             ),
         )
+        # 与创建入口同口径：先 strip 再校验，避免带空白名称绕过同名判定（设计 5.2）
+        if "config_name" in update_dict:
+            update_dict["config_name"] = str(update_dict["config_name"] or "").strip()
         config_name = update_dict.get("config_name", instance.config_name)
         # 空名称会绕过改名判断直接落库，服务层必须兜底
-        if config_name is None or not str(config_name).strip():
+        if not config_name:
             error_message = "更新环境配置失败, 参数[config_name]不允许为空"
             LOGGER.error(error_message)
             raise ParameterException(message=error_message)
@@ -347,6 +372,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                         env_type=env_type,
                         config_mode=config_mode,
                         update_dict=update_dict,
+                        env_name=env_name,
                     )
                 else:
                     updated = await self.update(id=config_id, obj_in=update_dict)
@@ -376,9 +402,8 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             LOGGER.info(
                 f"环境配置改名同步完成, "
                 f"关键字段: [project_id={int(bind.project_id)}, env_type={env_type}, "
-                f"old_config_name={instance.config_name}, new_config_name={config_name}, sync_count={sync_count}]"
+                f"old_config_name={instance.config_name}, new_config_name={updated.config_name}, sync_count={sync_count}]"
             )
-        env_name: str = bind.env_enum.env_name if bind.env_enum else ""
         bind_meta: Dict[str, Any] = {
             "project_id": int(bind.project_id),
             "env_type": bind.env_type.value if hasattr(bind.env_type, "value") else bind.env_type,
@@ -393,29 +418,32 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             env_type: Union[AutoTestConfigNodeType, str],
             config_mode: str,
             update_dict: Dict[str, Any],
+            env_name: str = "",
     ) -> Tuple[AutoTestEnvConfigModel, int]:
         """
-        配置改名时按逻辑标识同步同应用、同节点类型下全部启用实例。
+        配置改名：目标名空闲时按逻辑标识同步同应用、同节点类型下全部启用实例；
+        目标名被其他环境占用时与创建同口径并入既有组（只改主行）；仅同环境内同名占用才拒绝。
 
         :param instance: 待改名的主配置实例
         :param project_id: 配置所属应用ID
         :param env_type: 配置所属节点类型，同步范围限定在该节点
         :param config_mode: 逻辑配置标识，同步范围限定在该标识
         :param update_dict: 已过滤的更新字段，config_name 为新名称
-        :return: (改名后的主配置实例, 同步的其他实例条数)
-        :raises DataAlreadyExistsException: 同节点下任一环境已存在新名称配置，含占用唯一键的软删记录
+        :param env_name: 主行所属环境名，冲突文案用（调用方已 join 取回，避免重复查库）
+        :return: (改名后的主配置实例, 同步的其他实例条数)；并入既有组时只改主行，同步条数为0
+        :raises DataAlreadyExistsException: 同环境内已存在新名称配置，含占用唯一键的软删记录
         :raises DataBaseStorageException: 落库失败或并发冲突
         """
         new_config_name: str = update_dict["config_name"]
-        # 绑定行锁由调用方持有；这里先锁定同标识启用行（按主键升序），再做目标名冲突预检并批量改名，
-        # 保证组内不出现部分环境新名、部分环境旧名的中间态
-        # 锁定同标识启用行：改名期间不允许同组并发改名或删除穿插
+        instance_bind_id: int = int(instance.env_bind_id)
+        # 绑定行锁由调用方持有；这里锁定同标识启用行（主键升序），防止同组并发改名/删除穿插
         group_rows: List[AutoTestEnvConfigModel] = await self.model.filter(
             config_mode=config_mode,
             state__not=1,
         ).select_for_update().order_by("id").only("id")
         group_ids: List[int] = [int(row.id) for row in group_rows] or [int(instance.id)]
-        # 同节点下任一环境被同名配置占用都会撞唯一键；软删行同样占用，必须纳入预检
+        # 唯一键按环境绑定独立：只有同环境内的同名行才真正撞键（软删行同样占用 UNIQUE(env_bind, config_name)），
+        # 其他环境占用目标名不影响当前环境落库，与创建同口径复用逻辑标识并入该组
         bind_ids: List[int] = list(await AutoTestEnvBindModel.filter(
             project_id=project_id,
             env_type=env_type,
@@ -424,28 +452,49 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         conflict_configs: List[Dict[str, Any]] = await self.model.filter(
             env_bind_id__in=bind_ids,
             config_name__iexact=new_config_name,
-        ).exclude(id__in=group_ids).values("env_bind_id", "state")
-        if conflict_configs:
-            # 批量换取冲突环境名，软删记录点明占用唯一键
-            env_crud = AutoTestEnvCrud()
-            conflict_labels: List[str] = []
-            conflict_env_map = await env_crud.get_env_name_map(
-                [int(conflict_config["env_bind_id"]) for conflict_config in conflict_configs]
-            )
-            for conflict_config in conflict_configs:
-                env_label = conflict_env_map.get(int(conflict_config["env_bind_id"])) or f"bind_id={conflict_config['env_bind_id']}"
-                label = f"{env_label}(含已删除记录)" if int(conflict_config["state"]) == 1 else env_label
-                if label not in conflict_labels:
-                    conflict_labels.append(label)
-            # 整体拒绝并点出具体环境，便于定位历史数据
-            error_message: str = f"更新环境配置失败, 环境[{', '.join(conflict_labels)}]下已存在同名配置[{new_config_name}], 无法同步改名"
+        ).exclude(id__in=group_ids).order_by("id").values("env_bind_id", "state", "config_mode")
+        same_bind_conflicts: List[Dict[str, Any]] = [
+            conflict_config for conflict_config in conflict_configs
+            if int(conflict_config["env_bind_id"]) == instance_bind_id
+        ]
+        if same_bind_conflicts:
+            # 同环境启用行撞名称唯一键、软删行占用唯一键，均拒绝并点出环境
+            env_label: str = env_name or f"bind_id={instance_bind_id}"
+            if any(int(conflict_config["state"]) == 1 for conflict_config in same_bind_conflicts):
+                env_label = f"{env_label}(含已删除记录)"
+            error_message: str = f"更新环境配置失败, 环境[{env_label}]下已存在同名配置[{new_config_name}], 无法改名"
             LOGGER.error(error_message)
             raise DataAlreadyExistsException(message=error_message)
-
-        # 主行先写其余字段与名称，再按标识批量同步同组实例
+        foreign_conflicts: List[Dict[str, Any]] = [
+            conflict_config for conflict_config in conflict_configs
+            if int(conflict_config["env_bind_id"]) != instance_bind_id
+        ]
+        # 目标名空闲才同步同组实例；group_ids 可能因空标识自愈而未包含主行，同步范围始终排除主行
+        sync_ids: List[int] = [] if foreign_conflicts else [cid for cid in group_ids if cid != int(instance.id)]
+        if foreign_conflicts:
+            active_conflicts: List[Dict[str, Any]] = [
+                conflict_config for conflict_config in foreign_conflicts if int(conflict_config["state"]) == 0
+            ]
+            if active_conflicts:
+                # 存在启用行：与创建同口径（设计 5.2）复用其标识与组内写法，含空标识自愈；绑定ID复用免重查
+                target_mode, canonical_name = await self._resolve_config_mode(
+                    project_id=project_id,
+                    env_type=env_type,
+                    config_name=new_config_name,
+                    bind_ids=bind_ids,
+                )
+            else:
+                # 仅软删行占用：直接沿用其标识，避免日后恢复时同名分裂出第二组逻辑配置
+                legacy_modes: List[str] = [
+                    str(conflict_config["config_mode"]) for conflict_config in foreign_conflicts
+                    if conflict_config["config_mode"]
+                ]
+                target_mode = legacy_modes[0] if legacy_modes else unique_identify()
+                canonical_name = new_config_name
+            update_dict["config_mode"] = target_mode
+            update_dict["config_name"] = canonical_name
+        # 主行统一写入名称与其余字段，再按标识批量同步同组实例
         updated = await self.update(id=instance.id, obj_in=update_dict)
-        # group_ids 可能因空标识自愈而未包含主行，同步范围始终排除主行
-        sync_ids: List[int] = [cid for cid in group_ids if cid != int(instance.id)]
         if sync_ids:
             await self.model.filter(
                 id__in=sync_ids,
@@ -483,6 +532,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
             project_id: int,
             env_type: Union[AutoTestConfigNodeType, str],
             config_name: str,
+            bind_ids: Optional[List[int]] = None,
     ) -> Tuple[str, str]:
         """
         按同应用+同节点+同名启用配置解析逻辑标识与组内统一写法。
@@ -490,16 +540,18 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :param project_id: 应用ID
         :param env_type: 节点类型
         :param config_name: 用户输入的配置名称
+        :param bind_ids: 可选预取的同维度启用绑定ID，传入时免重复查绑定表
         :return: (config_mode, 组内统一名称)
         """
         # 经绑定表定位同维度全部配置行，不依赖冗余列（兼容批次空隙未回填的存量行）：
         # 命中启用行复用其 config_mode 与名称写法；仅命中空标识行时以新标识就地补齐；
         # 未命中生成新标识；调用方需已持有绑定行锁
-        bind_ids: List[int] = list(await AutoTestEnvBindModel.filter(
-            project_id=project_id,
-            env_type=env_type,
-            state__not=1,
-        ).values_list("id", flat=True))
+        if bind_ids is None:
+            bind_ids = list(await AutoTestEnvBindModel.filter(
+                project_id=project_id,
+                env_type=env_type,
+                state__not=1,
+            ).values_list("id", flat=True))
         rows: List[Dict[str, Any]] = await self.model.filter(
             env_bind_id__in=bind_ids,
             config_name__iexact=config_name,
