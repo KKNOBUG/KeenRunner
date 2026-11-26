@@ -145,6 +145,10 @@ class KvUtils:
         step_code = step.step_code
         step_name = step.step_name
         step_type = step.step_type
+        # BaseExceptions系异常的str()是JSON信封，优先取可读message，避免错误描述再包一层JSON难以阅读
+        error_desc = getattr(exception, "message", None)
+        if not isinstance(error_desc, str) or not error_desc:
+            error_desc = str(exception)
         return (
             f"{message}执行失败{offset_message}: \n\t"
             f"用例ID: {case_id}\n\t"
@@ -153,7 +157,7 @@ class KvUtils:
             f"步骤标识: {step_code}\n\t"
             f"步骤名称: {step_name}\n\t"
             f"步骤类型: {step_type}\n\t"
-            f"错误描述: {exception}\n\t"
+            f"错误描述: {error_desc}\n\t"
             f"错误类型: {type(exception).__name__}\n\t"
             f"错误时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\t"
             f"错误回溯: {traceback.format_exc()}"
