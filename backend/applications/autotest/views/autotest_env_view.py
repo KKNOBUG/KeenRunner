@@ -9,7 +9,7 @@
 import traceback
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Body, Query, Depends
+from fastapi import APIRouter, Body, Query
 from tortoise.expressions import Q
 
 from backend.applications.autotest.dependencies import AutoTestServices, DependAutoTestServices
@@ -20,6 +20,7 @@ from backend.applications.autotest.schemas.autotest_env_schema import (
     AutoTestEnvSelect,
     AutoTestEnvDelete,
     AutoTestEnvListQuery,
+    AutoTestEnvNameSelect,
     AutoTestEnvPageSelect,
 )
 from backend.applications.autotest.services.autotest_scope_guard import PROJECT_TAG
@@ -215,7 +216,7 @@ async def get_environment(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env.get("/get_names", summary="查询环境名称", description="查询去重后的环境名称列表")
+@autotest_env.get("/get_names", summary="查询环境名称列表", description="查询去重后的环境名称列表")
 async def get_environment_names(
         services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
@@ -229,10 +230,31 @@ async def get_environment_names(
     """
     try:
         names: List[str] = await services.env_curd.list_env_names(scope=scope)
-        LOGGER.info(f"查询环境名称(去重)成功, 结果明细: {names}")
         return SuccessResponse(message="查询成功", data=names, total=len(names))
     except Exception as e:
-        LOGGER.error(f"查询环境名称(去重)环境失败，异常描述: {e}\n{traceback.format_exc()}")
+        LOGGER.error(f"查询环境名称失败，异常描述: {e}\n{traceback.format_exc()}")
+        return FailureResponse(message=f"查询失败，异常描述: {e}")
+
+
+@autotest_env.post("/get_names", summary="查询环境名称列表", description="按环境名称列表过滤查询环境名称")
+async def select_env_names(
+        env_in: AutoTestEnvNameSelect = Body(..., description="环境名称列表"),
+        services: AutoTestServices = DependAutoTestServices,
+        scope: DataScope = DependTagScope,
+):
+    """
+    按环境名称列表过滤查询环境名称。
+
+    :param env_in: 可选环境名称列表(精确匹配, 忽略大小写)
+    :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文
+    :return: 统一HTTP响应
+    """
+    try:
+        names: List[str] = await services.env_curd.list_env_names(scope=scope, env_names=env_in.env_names)
+        return SuccessResponse(message="查询成功", data=names, total=len(names))
+    except Exception as e:
+        LOGGER.error(f"查询环境名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
@@ -247,6 +269,7 @@ async def search_environments(
 
     :param env_in: 环境入参
     :param services: 自动化测试CRUD依赖聚合
+    :param scope: 数据权限上下文
     :return: 统一HTTP响应
     """
     try:

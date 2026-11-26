@@ -750,11 +750,12 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def list_env_names(self, scope: Optional[DataScope] = None) -> List[str]:
+    async def list_env_names(self, scope: Optional[DataScope] = None, env_names: Optional[List[str]] = None) -> List[str]:
         """
         查询去重后的环境名称。
 
         :param scope: 数据权限上下文
+        :param env_names: 环境名称列表(精确匹配, 忽略大小写与首尾空白)；为空则不过滤
         :return: 环境名称列表
         """
         # 环境字典是全局共享的纯词典，必须经启用绑定过滤，避免未被任何绑定引用的孤儿字典泄漏；
@@ -766,9 +767,11 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         enum_ids = await stmt.values_list("env_enum_id", flat=True)
         if not enum_ids:
             return []
-        return await AutoTestEnvModel.filter(
-            id__in=list(set(enum_ids))
-        ).order_by("env_name").values_list("env_name", flat=True)
+        dict_stmt = AutoTestEnvModel.filter(id__in=list(set(enum_ids)))
+        names = list({name.strip().upper() for name in (env_names or []) if name and name.strip()})
+        if names:
+            dict_stmt = dict_stmt.filter(env_name__in=names)
+        return await dict_stmt.order_by("env_name").values_list("env_name", flat=True)
 
     async def serialize_env(self, bind: AutoTestEnvBindModel, with_audit: bool = False) -> Dict[str, Any]:
         """
