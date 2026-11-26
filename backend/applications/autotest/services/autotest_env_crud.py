@@ -26,7 +26,11 @@ from backend.applications.autotest.schemas.autotest_env_schema import (
     AutoTestEnvPageSelect,
 )
 from backend.applications.autotest.services.autotest_scope_guard import load_readable_project
-from backend.applications.autotest.services.autotest_task_crud import extract_steps_execute_envs, extract_task_involve_envs
+from backend.applications.autotest.services.autotest_task_crud import (
+    extract_steps_execute_envs,
+    extract_task_involve_env_ids,
+    extract_task_involve_envs,
+)
 from backend.applications.base.services.scaffold import ScaffoldCrud, unique_identify
 from backend.configure import GLOBAL_CONFIG, LOGGER
 from backend.core.exceptions import (
@@ -42,11 +46,6 @@ from backend.services import DataScope, get_current_username
 
 class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, AutoTestEnvUpdate]):
     """环境绑定CRUD：应用维度的环境绑定krun_autotest_env_bind及其全局环境名字典。"""
-
-    # 两层结构：环境字典（AutoTestEnvModel）为全局共享的环境枚举；
-    # 环境绑定 = 应用 + 环境字典 + 节点类型(env_type)，唯一性由三键共同保证
-    # 引用约束：删除/软删前必须确认无环境配置引用，且无任务以环境名称字符串引用该环境
-    # 归属口径：绑定以 created_user 为归属人；环境字典为纯词典，无归属与状态字段
 
     def __init__(self):
         """绑定环境绑定模型krun_autotest_env_bind，供基类通用CRUD复用。"""
@@ -551,15 +550,15 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
 
     async def _assert_envs_not_referenced(self, targets: List[AutoTestEnvBindModel]) -> None:
         """
-        批量校验环境绑定不存在引用关系：环境配置、任务环境引用，ids精确匹配加名称兜底。
+        批量校验环境绑定不存在引用关系：环境配置、任务绑定ID精确匹配，仅无ID引用的存量任务按名称兜底。
 
         :param targets: 待删除的环境绑定实例列表
         :return: None
         :raises DataAlreadyExistsException: 任一绑定存在引用关系时拒绝删除
         """
         # 配置按绑定一次分组统计，任务按绑定所属应用一次取回后在内存匹配，避免逐条扫描；
-        # 环境配置走 env_bind_id 外键；任务优先按 task_involve_env_ids 精确匹配，
-        # 名称（cases_execute_config 的 involve_envs 与步骤级环境）仅作批次 5 之前的存量兜底
+        # 环境配置走 env_bind_id 外键；任务按绑定ID精确匹配（汇总列与 cases_execute_config 引用键并集），
+        # 名称兜底仅适用于没有任何绑定ID引用的批次 5 之前存量任务
         if not targets:
             return
 
@@ -578,7 +577,7 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
-        # 任务引用：ids 精确匹配优先，名称仅作兼容期兜底；按应用一次取回避免逐条查询
+        # 任务引用：绑定ID精确匹配，名称仅兜底无ID引用的存量任务；按应用一次取回避免逐条查询
         dict_names: Dict[int, str] = await self._get_dict_name_map({int(instance.env_enum_id) for instance in targets})
         names_by_project: Dict[int, set] = defaultdict(set)
         bind_name_map: Dict[int, str] = {}
@@ -592,22 +591,32 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             task_project__in=project_ids, state__not=1
         ).values("task_project", "task_name", "cases_execute_config", "task_involve_env_ids", "task_involve_envs")
         for row in task_rows:
-            # ids 精确匹配：新任务直接记录绑定ID，环境改名不影响引用判定
+            # ids 精确匹配：任务汇总ID与 cases_execute_config 引用键取并集，环境改名不影响引用判定
+            referenced_bind_ids: set = set()
             involve_env_ids = row.get("task_involve_env_ids")
             if isinstance(involve_env_ids, list):
                 for raw_env_id in involve_env_ids:
                     try:
-                        env_bind_id = int(raw_env_id)
+                        referenced_bind_ids.add(int(raw_env_id))
                     except (TypeError, ValueError):
                         continue
-                    if env_bind_id in bind_name_map:
-                        hit_env_label: str = bind_name_map[env_bind_id] or f"env_id={env_bind_id}"
-                        error_message: str = f"删除环境绑定信息失败, 环境[{hit_env_label}]被任务[{row.get('task_name')}]引用, 无法直接删除"
-                        LOGGER.error(error_message)
-                        raise DataAlreadyExistsException(message=error_message)
-            # 名称兜底：兼容批次 5 之前仅记录环境名称的任务数据（名称快照 + 存量用例配置名称）
             cases_cfg = row.get("cases_execute_config")
-            if not isinstance(cases_cfg, dict):
+            if isinstance(cases_cfg, dict):
+                referenced_bind_ids.update(extract_task_involve_env_ids(cases_cfg))
+                referenced_bind_ids.update(
+                    value for value in extract_steps_execute_envs(cases_cfg).values() if isinstance(value, int)
+                )
+            hit_bind_id: Optional[int] = next(
+                (bind_id for bind_id in sorted(referenced_bind_ids) if bind_id in bind_name_map), None
+            )
+            if hit_bind_id is not None:
+                hit_env_label: str = bind_name_map[hit_bind_id] or f"env_id={hit_bind_id}"
+                error_message: str = f"删除环境绑定信息失败, 环境[{hit_env_label}]被任务[{row.get('task_name')}]引用, 无法直接删除"
+                LOGGER.error(error_message)
+                raise DataAlreadyExistsException(message=error_message)
+            # 名称兜底仅限无绑定ID引用的存量任务：task_involve_envs 是由ID反查的展示快照，
+            # 同名环境跨多个节点绑定，拿它判定会误拦未被引用的同名兄弟节点
+            if referenced_bind_ids or not isinstance(cases_cfg, dict):
                 continue
             target_names: Optional[set] = names_by_project.get(int(row["task_project"]))
             if not target_names:
