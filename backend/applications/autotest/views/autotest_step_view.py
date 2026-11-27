@@ -748,7 +748,7 @@ async def debug_tcp_request(
     """
     try:
         data = await StepDebugService.debug_tcp(debug_in, services, scope)
-        return SuccessResponse(message="TCP请求调试完成", data=data)
+        return SuccessResponse(message=data.get("notice") or "TCP请求调试完成", data=data)
     except NotFoundException as e:
         return NotFoundResponse(message=str(e.message))
     except ParameterException as e:
@@ -759,7 +759,7 @@ async def debug_tcp_request(
         return FailureResponse(message=e.message, data=e.data)
     except Exception as e:
         LOGGER.error(f"TCP请求调试失败，异常描述: {e}\n{traceback.format_exc()}")
-        return FailureResponse(message=f"TCP请求调试失败，异常描述: {e}")
+        return FailureResponse(message="暂时无法调试TCP请求，请稍后重试")
 
 
 @autotest_step.post("/python_code_debugging", summary="调试Python代码", description="调试Python代码步骤")

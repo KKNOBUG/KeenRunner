@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import codecs
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
@@ -16,6 +17,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import orjson
 
 from backend.common import TcpFrameMode
+from backend.core.exceptions import ParameterException
 from backend.enums import (
     AutoTestReqArgsType,
     AutoTestTcpConnectType,
@@ -131,6 +133,7 @@ def resolve_tcp_frame_config(step: Any) -> TcpFrameConfig:
 
     :param step: 步骤对象（容忍字段缺失，按缺省值处理）
     :return: 帧配置对象
+    :raises ParameterException: 编码不是有效字符集
     """
     radix_value = tcp_enum_value(getattr(step, "tcp_radix", None)) or AutoTestTcpRadix.NONE.value
     datagram_value = tcp_enum_value(getattr(step, "tcp_datagram_length", None)) or AutoTestTcpDatagramLength.EXCLUDE.value
@@ -139,6 +142,11 @@ def resolve_tcp_frame_config(step: Any) -> TcpFrameConfig:
     response_symbol_bytes = parse_response_end_symbol(getattr(step, "tcp_response_end_symbol", None))
     connect_type_value = tcp_enum_value(getattr(step, "tcp_connect_type", None)) or AutoTestTcpConnectType.SHORT.value
     encoding = (getattr(step, "tcp_encoding", None) or "utf-8").strip() or "utf-8"
+    # 编码在推导入口一次性校验，避免收发期LookupError被当作未知异常或静默吞掉
+    try:
+        codecs.lookup(encoding)
+    except LookupError:
+        raise ParameterException(message=f"TCP报文编码[{encoding}]不是有效的字符集, 请检查步骤编码配置")
 
     # 优先级：进制数≠不使用 → 长度前缀（请求结束符保留但不参与成帧）；
     # 否则请求结束符或响应结束符任一配置 → 结束符模式；均未配置 → RAW
@@ -275,15 +283,13 @@ def parse_tcp_response(
     :return: 解析后的文本、JSON与展示用data
     """
     # 启用 hex_string 时直接返回大写HEX且不尝试JSON解析（response_json=None）；
-    # 文本解码使用 errors="ignore"，非法字节被丢弃而不报错；仅当去空白后以 "{"/"[" 开头才尝试JSON解析
+    # 文本解码使用 errors="ignore"，非法字节被丢弃而不报错（编码合法性已由resolve_tcp_frame_config入口校验）；
+    # 仅当去空白后以 "{"/"[" 开头才尝试JSON解析
     if hex_string:
         response_text = raw_bytes.hex().upper() if raw_bytes else ""
         return TcpParsedResponse(response_text=response_text, response_json=None, response_data=response_text)
 
-    try:
-        response_text = raw_bytes.decode(encoding, errors="ignore")
-    except Exception:
-        response_text = ""
+    response_text = raw_bytes.decode(encoding, errors="ignore")
     response_json: Optional[Any] = None
     try:
         response_json = (
@@ -291,7 +297,7 @@ def parse_tcp_response(
             if response_text and response_text.strip().startswith(("{", "["))
             else None
         )
-    except Exception:
+    except ValueError:
         response_json = None
 
     response_data: Optional[Union[str, dict, list]] = (
@@ -329,7 +335,7 @@ def resolve_tcp_request_extract_sources(
             parsed_request = orjson.loads(request_text)
             if isinstance(parsed_request, (dict, list)):
                 request_json_for_extract = parsed_request
-        except Exception:
+        except ValueError:
             request_json_for_extract = None
 
     request_text_for_extract = request_text

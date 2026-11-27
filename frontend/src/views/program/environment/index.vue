@@ -78,7 +78,7 @@ function openAddConfig(row) {
 
 async function onConfigSaved() {
   expandRefreshKey.value += 1
-  // 同步刷新主表行状态（如 is_delete），不重置页码
+  // 同步刷新主表行状态，不重置页码
   await $table.value?.handleQuery?.()
 }
 
@@ -252,14 +252,7 @@ const columns = computed(() => {
                               ),
                               [[vPermission, apiPermissionKey('delete', '/autotest/env/delete')]]
                           ),
-                      default: () =>
-                          h(
-                              'div',
-                              {},
-                              row.is_delete
-                                  ? '该环境下已无子表配置，确定删除吗？'
-                                  : '确定删除该环境绑定吗？'
-                          ),
+                      default: () => h('div', {}, '确定删除该环境绑定吗？'),
                     }
                 )
                 : null,

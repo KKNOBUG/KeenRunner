@@ -25,9 +25,10 @@ from backend.applications.autotest.services.autotest_runtime.protocol_tcp import
 )
 from backend.common import TcpFrameMode
 from backend.configure import LOGGER, PROJECT_CONFIG
+from backend.core.exceptions import ParameterException
 
 # ---------------------------------------------------------------------------
-# 业务 Mock 响应构造（无状态纯函数：JSON请求→银行交易查询XML / XML请求→贷款审批XML）
+# 业务 Mock 响应构造（无状态纯函数：JSON请求→银行交易查询JSON / XML请求→贷款审批XML）
 # ---------------------------------------------------------------------------
 
 _MOCK_ACCOUNT_BALANCE = 125680.50
@@ -186,92 +187,93 @@ def _generate_transactions(count: int) -> List[Dict[str, Any]]:
     return result
 
 
-def _build_json_business_response(text: str) -> str:
+def _build_json_error_payload(message: str) -> Dict[str, Any]:
     """
-    构造JSON端口的银行账户交易查询XML响应报文。
+    构造JSON端口统一错误响应对象。
+
+    :param message: 错误描述
+    :return: 错误响应对象
+    """
+    return {
+        "response_header": {
+            "response_code": "999999",
+            "response_message": message,
+            "response_time": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "processed_by": "TCP_TEST_SERVER",
+        }
+    }
+
+
+def _build_json_business_payload(text: str) -> Dict[str, Any]:
+    """
+    构造JSON端口的银行账户交易查询响应对象：响应头/账户信息嵌套对象 + 交易流水列表 + 汇总对象。
 
     :param text: 请求报文JSON文本
-    :return: 交易查询结果XML文本
+    :return: 交易查询结果对象
     """
     if not text:
-        return _build_error_xml("空请求")
+        return _build_json_error_payload("空请求")
     try:
         req: Dict[str, Any] = orjson.loads(text)
     except orjson.JSONDecodeError as e:
-        return _build_error_xml(f"JSON解析失败: {e}")
+        return _build_json_error_payload(f"JSON解析失败: {e}")
 
     header = req.get("request_header") or req.get("header") or {}
-    request_id = header.get("request_id", "UNKNOWN")
-    channel = header.get("channel", "unknown")
-    institution = header.get("institution", "KRUN_TEST_BANK")
-
     account = req.get("account_info") or req.get("account") or {}
-    account_no = account.get("account_no", "6228480012345678")
-    account_name = account.get("account_name", "张三")
+    query = req.get("query_condition") or req.get("query") or {}
     account_type = account.get("account_type", "savings")
     currency = account.get("currency", "CNY")
-    customer_id = account.get("customer_id", "CUST00001")
-
-    query = req.get("query_condition") or req.get("query") or {}
     page_no = query.get("page_no", 1)
     page_size = query.get("page_size", 5)
 
-    now = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     transactions = _generate_transactions(page_size)
     total_income = sum(float(t["amount"]) for t in transactions if t["type"] == "存入")
     total_expense = sum(float(t["amount"]) for t in transactions if t["type"] == "支出")
-    net = total_income - total_expense
-    current_balance = _MOCK_ACCOUNT_BALANCE
 
-    root = etree.Element("Response")
-    head = etree.SubElement(root, "Head")
-    etree.SubElement(head, "ResponseCode").text = "000000"
-    etree.SubElement(head, "ResponseMessage").text = "查询成功"
-    etree.SubElement(head, "RequestID").text = request_id
-    etree.SubElement(head, "ResponseTime").text = now
-    etree.SubElement(head, "Channel").text = channel
-    etree.SubElement(head, "Institution").text = institution
-    etree.SubElement(head, "ProcessedBy").text = "TCP_TEST_SERVER_JSON"
+    return {
+        "response_header": {
+            "response_code": "000000",
+            "response_message": "查询成功",
+            "request_id": header.get("request_id", "UNKNOWN"),
+            "response_time": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "channel": header.get("channel", "unknown"),
+            "institution": header.get("institution", "KRUN_TEST_BANK"),
+            "processed_by": "TCP_TEST_SERVER_JSON",
+        },
+        "account_info": {
+            "account_no": account.get("account_no", "6228480012345678"),
+            "account_name": account.get("account_name", "张三"),
+            "account_type": "储蓄账户" if account_type == "savings" else account_type,
+            "currency": currency,
+            "customer_id": account.get("customer_id", "CUST00001"),
+            "balance": _MOCK_ACCOUNT_BALANCE,
+            "available_balance": round(_MOCK_ACCOUNT_BALANCE - 5000, 2),
+            "open_date": "2020-03-15",
+            "last_transaction_date": transactions[0]["date"] if transactions else "",
+        },
+        "transaction_list": [
+            {**txn, "currency": currency, "status": "成功"} for txn in transactions
+        ],
+        "summary": {
+            "total_count": len(transactions),
+            "total_income": round(total_income, 2),
+            "total_expense": round(total_expense, 2),
+            "net_amount": round(total_income - total_expense, 2),
+            "page_no": page_no,
+            "page_size": page_size,
+            "has_next_page": False,
+        },
+    }
 
-    body = etree.SubElement(root, "Body")
-    acct = etree.SubElement(body, "AccountInfo")
-    etree.SubElement(acct, "AccountNo").text = account_no
-    etree.SubElement(acct, "AccountName").text = account_name
-    etree.SubElement(acct, "AccountType").text = "储蓄账户" if account_type == "savings" else account_type
-    etree.SubElement(acct, "Currency").text = currency
-    etree.SubElement(acct, "CustomerID").text = customer_id
-    etree.SubElement(acct, "Balance").text = f"{current_balance:.2f}"
-    etree.SubElement(acct, "AvailableBalance").text = f"{current_balance - 5000:.2f}"
-    etree.SubElement(acct, "OpenDate").text = "2020-03-15"
-    etree.SubElement(acct, "LastTransactionDate").text = transactions[0]["date"] if transactions else ""
 
-    txn_list = etree.SubElement(body, "TransactionList")
-    txn_list.set("count", str(len(transactions)))
-    for txn in transactions:
-        elem = etree.SubElement(txn_list, "Transaction")
-        etree.SubElement(elem, "TxnID").text = txn["txn_id"]
-        etree.SubElement(elem, "Date").text = txn["date"]
-        etree.SubElement(elem, "Time").text = txn["time"]
-        etree.SubElement(elem, "Amount").text = f"{txn['amount']:.2f}"
-        etree.SubElement(elem, "Currency").text = currency
-        etree.SubElement(elem, "Type").text = txn["type"]
-        etree.SubElement(elem, "SubType").text = txn["sub_type"]
-        etree.SubElement(elem, "Description").text = txn["description"]
-        etree.SubElement(elem, "Counterparty").text = txn["counterparty"]
-        etree.SubElement(elem, "Balance").text = f"{txn['balance']:.2f}"
-        etree.SubElement(elem, "Channel").text = txn["channel"]
-        etree.SubElement(elem, "Status").text = "成功"
+def _build_json_business_response(text: str) -> str:
+    """
+    将JSON端口响应对象序列化为缩进JSON文本。
 
-    summary = etree.SubElement(body, "Summary")
-    etree.SubElement(summary, "TotalCount").text = str(len(transactions))
-    etree.SubElement(summary, "TotalIncome").text = f"{total_income:.2f}"
-    etree.SubElement(summary, "TotalExpense").text = f"{total_expense:.2f}"
-    etree.SubElement(summary, "NetAmount").text = f"{net:.2f}"
-    etree.SubElement(summary, "PageNo").text = str(page_no)
-    etree.SubElement(summary, "PageSize").text = str(page_size)
-    etree.SubElement(summary, "HasNextPage").text = "false"
-
-    return etree.tostring(root, encoding="unicode", pretty_print=True)
+    :param text: 请求报文JSON文本
+    :return: 交易查询结果JSON文本
+    """
+    return orjson.dumps(_build_json_business_payload(text), option=orjson.OPT_INDENT_2).decode("utf-8")
 
 
 def _build_xml_business_response(text: str) -> str:
@@ -428,7 +430,11 @@ class TcpTestServerBase:
     def __init__(self, label: str) -> None:
         self._label: str = label
         self._server: Optional[asyncio.base_events.Server] = None
-        self._is_running: bool = False
+
+    @property
+    def is_running(self) -> bool:
+        """运行状态以监听套接字存在为唯一事实源。"""
+        return self._server is not None
 
     async def stop(self) -> None:
         """关闭监听套接字，幂等语义：未启动时仅归位状态。"""
@@ -437,7 +443,6 @@ class TcpTestServerBase:
             await self._server.wait_closed()
             self._server = None
             LOGGER.info(f"{self._label}已停止")
-        self._is_running = False
 
     @staticmethod
     async def _close_writer(writer: asyncio.StreamWriter) -> None:
@@ -460,10 +465,10 @@ class TcpMockServer(TcpTestServerBase):
     _READ_TIMEOUT = 10.0
     _IDLE_TIMEOUT = 3.0
 
-    def __init__(self, port: int, mock_type: str) -> None:
-        super().__init__(label=f"TCP mock服务器({mock_type})端口{port}")
-        self._port: int = port
-        self._mock_type: str = mock_type
+    def __init__(self) -> None:
+        super().__init__(label="TCP mock服务器")
+        self._port: int = 0
+        self._mock_type: str = ""
         self._host: str = ""
         self._conn_count: int = 0
 
@@ -471,23 +476,25 @@ class TcpMockServer(TcpTestServerBase):
 
     async def start(self, cfg: AutoTestTcpTestServerStartIn, host: str) -> Dict[str, Any]:
         """
-        启动mock服务器：已运行时先停旧实例。
+        按配置启动mock服务器：已运行时先停旧实例。
 
-        :param cfg: 保持与帧诊断服务器统一签名（端口与mock类型在构造时已确定）
+        :param cfg: 启动入参（取端口与mock类型，与帧诊断服务器统一签名）
         :param host: 监听地址（后端启动地址）
         :return: 服务器状态快照
         """
         await self.stop()
+        self._port = cfg.port
+        self._mock_type = cfg.mock_type
+        self._label = f"TCP mock服务器({cfg.mock_type})端口{cfg.port}"
         self._host = host
         self._conn_count = 0
         self._server = await asyncio.start_server(self._handle_client, host, self._port)
-        self._is_running = True
         LOGGER.info(f"TCP mock服务器启动: {host}:{self._port}, 类型={self._mock_type}")
         return self.status()
 
     def status(self) -> Dict[str, Any]:
         return {
-            "is_running": self._is_running,
+            "is_running": self.is_running,
             "host": self._host,
             "port": self._port,
             "mock_type": self._mock_type,
@@ -505,41 +512,45 @@ class TcpMockServer(TcpTestServerBase):
     async def _process_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         build_response = _TCP_MOCK_RESPONSE_BUILDERS[self._mock_type]
         try:
-            response_xml, is_length_prefixed = await self._read_and_detect(reader, build_response)
-            await self._write_framed(writer, response_xml.encode("utf-8"), is_length_prefixed)
+            body_bytes, is_length_prefixed = await self._read_request(reader)
+            response_text = build_response(body_bytes.decode("utf-8", errors="ignore").strip())
+            await self._write_framed(writer, response_text.encode("utf-8"), is_length_prefixed)
         except Exception as e:
             LOGGER.error(f"TCP mock服务器处理异常({self._port}): {e}\n{traceback.format_exc()}")
-            error_bytes = _build_error_xml(f"服务器内部错误: {e}").encode("utf-8")
+            error_message = f"服务器内部错误: {e}"
+            error_text = (
+                orjson.dumps(_build_json_error_payload(error_message), option=orjson.OPT_INDENT_2).decode("utf-8")
+                if self._mock_type == "json" else _build_error_xml(error_message)
+            )
             try:
                 # 错误响应统一补长度前缀，保证前缀形态客户端可解帧
-                await self._write_framed(writer, error_bytes, True)
+                await self._write_framed(writer, error_text.encode("utf-8"), True)
             except Exception:
                 pass
         finally:
             await self._close_writer(writer)
 
-    async def _read_and_detect(self, reader: asyncio.StreamReader, build_response: Callable[[str], str]) -> tuple[str, bool]:
+    async def _read_request(self, reader: asyncio.StreamReader) -> tuple[bytes, bool]:
         """
-        读取请求数据，自动检测帧协议，调用build_response构造响应。
+        读取请求数据并自动检测帧协议。
 
         :param reader: 流读取器
-        :param build_response: 业务响应构造函数
-        :return: (response_xml文本, 是否长度前缀帧)
+        :return: (请求正文字节, 是否长度前缀帧)
         """
         # 长度前缀路径按声明长度精确读正文；RAW/结束符路径无显式长度边界，读到静默窗口或对端关闭收尾
         first_chunk = await asyncio.wait_for(
             reader.read(self._LENGTH_FIELD_SIZE), timeout=self._READ_TIMEOUT,
         )
         if not first_chunk:
-            return build_response(""), False
+            return b"", False
 
         body_length = self._detect_length_prefix(first_chunk)
         if body_length is not None:
             body_bytes = await asyncio.wait_for(reader.readexactly(body_length), timeout=self._READ_TIMEOUT)
-            return build_response(body_bytes.decode("utf-8", errors="ignore").strip()), True
+            return body_bytes, True
 
         body_bytes = first_chunk + await _read_until_idle(reader, self._IDLE_TIMEOUT)
-        return build_response(body_bytes.decode("utf-8", errors="ignore").strip()), False
+        return body_bytes, False
 
     def _detect_length_prefix(self, first_chunk: bytes) -> Optional[int]:
         """
@@ -571,12 +582,16 @@ class TcpMockServer(TcpTestServerBase):
 class TcpFrameTestServer(TcpTestServerBase):
     """
     按帧配置收发的TCP诊断服务器：读取侧镜像客户端AioTcpClient的组帧逻辑，每次收发记录诊断快照供统一/status查询比对。
+    响应侧按behavior模拟回显/沉默/即关/合法空帧/部分字节/前缀缺正文/前缀超限/非法前缀/延迟等行为，
+    供验证客户端tcp_async_utils的收发判定口径（0字节容忍/合法空帧/部分字节失败等）。
     """
-    # 诊断快照覆盖前缀文本/声明长度/实际长度/结束符/HEX/错误细节；用于验证TCP步骤帧配置的字段组合
+    # 诊断快照覆盖前缀文本/声明长度/实际长度/结束符/HEX/行为动作/错误细节；用于验证TCP步骤帧配置的字段组合
     # 是否产生预期报文、响应侧解析是否按同一配置工作
 
     _READ_TIMEOUT = 10.0
     _IDLE_TIMEOUT = 1.0
+    # silent行为保持连接的上限：客户端读超时后会主动断开，此窗口仅防异常客户端长期占用连接
+    _SILENT_HOLD_TIMEOUT = 60.0
 
     def __init__(self) -> None:
         super().__init__(label="TCP帧诊断服务器")
@@ -585,6 +600,8 @@ class TcpFrameTestServer(TcpTestServerBase):
         self._frame_config: Any = None
         self._frame_desc: Dict[str, Any] = {}
         self._response_text: Optional[str] = None
+        self._behavior: str = "echo"
+        self._delay_seconds: float = 6.0
         self._exchange_count: int = 0
         self._last_report: Dict[str, Any] = {}
 
@@ -600,9 +617,12 @@ class TcpFrameTestServer(TcpTestServerBase):
         """
         await self.stop()
         self._frame_config = resolve_tcp_frame_config(req)
-        self._response_text = req.response_text
-        self._host = host
+        self._behavior = req.behavior or "echo"
         self._port = req.port
+        self._validate_behavior_frame_compat()
+        self._response_text = req.response_text
+        self._delay_seconds = float(req.delay_seconds or 6.0)
+        self._host = host
         self._exchange_count = 0
         self._last_report = {}
         self._frame_desc = {
@@ -615,18 +635,19 @@ class TcpFrameTestServer(TcpTestServerBase):
             "tcp_hex_string": bool(req.tcp_hex_string),
             "tcp_encoding": self._frame_config.encoding,
             "response_mode": "回显请求" if req.response_text is None else "固定内容",
+            "behavior": self._behavior,
+            "delay_seconds": self._delay_seconds,
         }
         self._server = await asyncio.start_server(
             self._handle_client, host, req.port,
             limit=max(TCP_MAX_RESPONSE_BYTES, 65536),
         )
-        self._is_running = True
         LOGGER.info(f"TCP帧诊断服务器启动: {host}:{req.port}, 帧配置: {self._frame_desc}")
         return self.status()
 
     def status(self) -> Dict[str, Any]:
         return {
-            "is_running": self._is_running,
+            "is_running": self.is_running,
             "host": self._host,
             "port": self._port,
             "frame_config": self._frame_desc,
@@ -649,6 +670,7 @@ class TcpFrameTestServer(TcpTestServerBase):
             "include_length_prefix": cfg.include_length_prefix,
             "hex_string": cfg.hex_string,
             "encoding": cfg.encoding,
+            "behavior": self._behavior,
             "success": False,
             "errors": [],
         }
@@ -659,9 +681,7 @@ class TcpFrameTestServer(TcpTestServerBase):
             report["request_bytes"] = len(body_bytes)
             report["request_hex"] = body_bytes.hex().upper()
             report["request_text"] = body_bytes.decode(cfg.encoding, errors="replace")[:4096]
-            response_bytes = self._build_response(body_bytes, report)
-            writer.write(response_bytes)
-            await writer.drain()
+            await self._respond_by_behavior(reader, writer, body_bytes, report)
             report["success"] = True
         except asyncio.IncompleteReadError as e:
             report["errors"].append(f"请求体不完整: 前缀声明的字节数不足, 已收到{len(e.partial)}字节")
@@ -700,7 +720,6 @@ class TcpFrameTestServer(TcpTestServerBase):
             body_length = declared - cfg.radix_length if cfg.include_length_prefix else declared
             report["expect_body_length"] = body_length
             body = await asyncio.wait_for(reader.readexactly(body_length), timeout=self._READ_TIMEOUT) if body_length else b""
-            report["length_match"] = True
             return body
         if cfg.frame_mode == TcpFrameMode.TERMINATOR:
             symbol = cfg.request_end_symbol
@@ -711,6 +730,112 @@ class TcpFrameTestServer(TcpTestServerBase):
             return data[:-len(symbol)]
         # RAW请求无显式边界；客户端保持连接等待响应不会主动EOF，按静默窗口收尾
         return await _read_until_idle(reader, self._IDLE_TIMEOUT)
+
+    def _validate_behavior_frame_compat(self) -> None:
+        """
+        启动入口校验行为与帧模式兼容性，非法组合快速失败，避免运行期不可达兜底分支。
+
+        :raises ParameterException: 行为与帧模式不兼容
+        """
+        cfg = self._frame_config
+        behavior = self._behavior
+        if behavior == "empty_frame" and cfg.frame_mode == TcpFrameMode.RAW:
+            raise ParameterException(message=f"端口[{self._port}]行为[empty_frame]与RAW帧模式不兼容: 0字节+EOF即未响应语义, 无法构造合法空帧")
+        if behavior == "empty_frame" and cfg.frame_mode == TcpFrameMode.TERMINATOR and not cfg.response_end_symbol:
+            raise ParameterException(message=f"端口[{self._port}]行为[empty_frame]要求结束符模式配置响应结束符")
+        if behavior in ("prefix_no_body", "oversize_prefix", "invalid_prefix") and cfg.frame_mode != TcpFrameMode.LENGTH_PREFIX:
+            raise ParameterException(message=f"端口[{self._port}]行为[{behavior}]仅适用于长度前缀帧模式")
+
+    def _format_prefix(self, value: int) -> bytes:
+        """
+        按进制与宽度生成定宽文本数字长度前缀，响应组帧与行为模拟共用。
+
+        :param value: 待写入前缀的长度数值
+        :return: 前缀字节
+        """
+        cfg = self._frame_config
+        return format(value, "d" if cfg.radix == 10 else "x").zfill(cfg.radix_length).encode("ascii")
+
+    async def _respond_by_behavior(
+            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, body_bytes: bytes, report: Dict[str, Any]
+    ) -> None:
+        """
+        按behavior模拟响应动作：echo按帧回显/固定内容，其余行为构造客户端判定口径所需的异常/边界场景。
+        非echo行为写完即由_handle_client的finally收尾关闭连接；动作描述写入诊断快照action字段。
+
+        :param reader: 流读取器（silent行为等待客户端断开用）
+        :param writer: 流写入器
+        :param body_bytes: 请求正文（echo/delay回显用）
+        :param report: 诊断快照（就地写入动作描述）
+        """
+        cfg = self._frame_config
+        behavior = self._behavior
+        if behavior == "silent":
+            report["action"] = "读完整请求后保持连接不回复, 等待客户端读超时自行断开"
+            try:
+                # 读到EOF即客户端已断开；保持窗口仅防异常客户端长期占用连接
+                await asyncio.wait_for(reader.read(), timeout=self._SILENT_HOLD_TIMEOUT)
+            except asyncio.TimeoutError:
+                report["errors"].append(f"客户端未在{self._SILENT_HOLD_TIMEOUT}s保持窗口内断开, 服务器主动收尾")
+            return
+        if behavior == "close":
+            report["action"] = "读完整请求后立即关闭不回复"
+            return
+        if behavior == "delay":
+            if cfg.frame_mode == TcpFrameMode.LENGTH_PREFIX:
+                # 长度前缀模式整体延迟：客户端首段读超时0字节按通讯级口径容忍成功
+                report["action"] = f"延迟{self._delay_seconds}s后才发长度前缀与正文"
+                await asyncio.sleep(self._delay_seconds)
+                writer.write(self._build_response(body_bytes, report))
+            else:
+                # RAW/结束符模式先发一半再延迟：客户端已收字节后读超时→接收阶段超时失败
+                response_bytes = self._build_response(body_bytes, report)
+                split = len(response_bytes) // 2
+                report["action"] = f"先发{split}字节再延迟{self._delay_seconds}s发剩余{len(response_bytes) - split}字节"
+                writer.write(response_bytes[:split])
+                await writer.drain()
+                await asyncio.sleep(self._delay_seconds)
+                writer.write(response_bytes[split:])
+            await writer.drain()
+            return
+        if behavior == "empty_frame":
+            # 启动入口已校验兼容性：长度前缀或配响应结束符的结束符模式，二者必居其一
+            if cfg.frame_mode == TcpFrameMode.LENGTH_PREFIX:
+                report["action"] = "仅回0长度正文前缀(合法空帧)"
+                writer.write(self._format_prefix(0))
+            else:
+                report["action"] = "仅回响应结束符(合法空帧)"
+                writer.write(cfg.response_end_symbol)
+            await writer.drain()
+            return
+        if behavior == "partial":
+            if cfg.frame_mode == TcpFrameMode.LENGTH_PREFIX:
+                report["action"] = "前缀声明100字节只发10字节正文后关闭"
+                writer.write(self._format_prefix(100) + b"0123456789")
+            else:
+                report["action"] = "只发10字节无结束符后关闭"
+                writer.write(b"0123456789")
+            await writer.drain()
+            return
+        if behavior == "prefix_no_body":
+            report["action"] = "前缀声明100字节不发正文即关闭"
+            writer.write(self._format_prefix(100))
+            await writer.drain()
+            return
+        if behavior == "oversize_prefix":
+            report["action"] = f"前缀声明正文{TCP_MAX_RESPONSE_BYTES + 1}字节超出上限后关闭(仅发前缀)"
+            writer.write(self._format_prefix(TCP_MAX_RESPONSE_BYTES + 1))
+            await writer.drain()
+            return
+        if behavior == "invalid_prefix":
+            report["action"] = "回非数字前缀后关闭"
+            writer.write(b"X" * cfg.radix_length)
+            await writer.drain()
+            return
+        # echo（缺省）：按帧回显请求或固定内容
+        report["action"] = "回显请求" if self._response_text is None else "固定内容响应"
+        writer.write(self._build_response(body_bytes, report))
+        await writer.drain()
 
     def _build_response(self, body_bytes: bytes, report: Dict[str, Any]) -> bytes:
         """
@@ -725,7 +850,7 @@ class TcpFrameTestServer(TcpTestServerBase):
         report["response_bytes"] = len(out)
         if cfg.frame_mode == TcpFrameMode.LENGTH_PREFIX:
             value = len(out) + cfg.radix_length if cfg.include_length_prefix else len(out)
-            prefix = format(value, "d" if cfg.radix == 10 else "x").zfill(cfg.radix_length).encode("ascii")
+            prefix = self._format_prefix(value)
             report["response_prefix"] = prefix.decode("ascii")
             return prefix + out
         if cfg.frame_mode == TcpFrameMode.TERMINATOR and cfg.response_end_symbol:
@@ -762,7 +887,7 @@ class TcpTestServerManager:
             for cfg in configs:
                 server = self._servers.get(cfg.port)
                 if server is None:
-                    server = TcpMockServer(cfg.port, cfg.mock_type) if cfg.mock_type else TcpFrameTestServer()
+                    server = TcpMockServer() if cfg.mock_type else TcpFrameTestServer()
                     self._servers[cfg.port] = server
                 started.append(server)
                 statuses.append(await server.start(cfg, host))
@@ -875,30 +1000,15 @@ _XML_REQUEST_SAMPLE = """<?xml version="1.0" encoding="UTF-8"?>
     </Body>
 </Request>"""
 
-_XML_PREVIEW_REQUEST_SAMPLE = """<?xml version="1.0" encoding="UTF-8"?>
-<Request>
-    <Head>
-        <Channel>web</Channel>
-        <RequestID>PREVIEW</RequestID>
-        <Institution>KRUN_TEST_BANK</Institution>
-    </Head>
-    <Body>
-        <ApplicantInfo>
-            <Name>李四</Name>
-            <IDNumber>310101199001011234</IDNumber>
-            <Phone>13800138000</Phone>
-            <AnnualIncome>500000</AnnualIncome>
-            <Employer>某科技有限公司</Employer>
-        </ApplicantInfo>
-        <LoanInfo>
-            <LoanType>个人消费贷款</LoanType>
-            <Amount>200000</Amount>
-            <Term>36</Term>
-            <Purpose>房屋装修</Purpose>
-            <RepaymentMethod>等额本息</RepaymentMethod>
-        </LoanInfo>
-    </Body>
-</Request>"""
+
+def _mock_port(mock_type: str) -> int:
+    """
+    按mock类型查内置业务mock端口，与DEFAULT_TCP_TEST_SERVER_CONFIGS保持单一事实源。
+
+    :param mock_type: mock类型json/xml
+    :return: 监听端口
+    """
+    return next(cfg.port for cfg in DEFAULT_TCP_TEST_SERVER_CONFIGS if cfg.mock_type == mock_type)
 
 
 class TcpTestServerService:
@@ -911,8 +1021,9 @@ class TcpTestServerService:
 
         :return: 各端口状态快照列表
         """
-        # mock端口：9091为JSON请求→银行交易查询XML响应，9092为XML贷款请求→XML响应，帧自动检测8位十进制长度前缀或RAW；
-        # 帧诊断端口9093~9099：一次启动全部帧配置组合10进制8位/16进制4位包含/结束符/HEX/GBK/RAW/共存组合，按各端口配置组帧/解帧并回显
+        # mock端口：9091为JSON请求→银行交易查询JSON响应(嵌套对象+交易列表+汇总)，9092为XML贷款请求→XML审批响应，帧自动检测8位十进制长度前缀或RAW；
+        # 帧诊断端口9093~9099：一次启动全部帧配置组合10进制8位/16进制4位包含/结束符/HEX/GBK/RAW/共存组合，按各端口配置组帧/解帧并回显；
+        # 行为模拟端口9100~9110：沉默/即关/合法空帧/部分字节/前缀缺正文/前缀超限/非法前缀/延迟响应，验证客户端收发判定口径
         return await _tcp_test_server_manager.start(PROJECT_CONFIG.SERVER_HOST, DEFAULT_TCP_TEST_SERVER_CONFIGS)
 
     @staticmethod
@@ -938,48 +1049,53 @@ class TcpTestServerService:
         """
         获取JSON端口的银行账户交易查询请求报文示例。
 
-        :return: 示例请求字典；将此报文通过TCP连接发送到JSON端口默认9091，服务器将返回XML格式的交易明细响应
+        :return: 含端口/帧说明/请求对象的结构化示例；将此报文通过TCP连接发送到JSON端口，服务器将返回JSON格式的交易明细响应
         """
-        return _JSON_REQUEST_SAMPLE
+        return {
+            "port": _mock_port("json"),
+            "mock_type": "json",
+            "content_type": "json",
+            "frame": "8位十进制长度前缀/RAW自动检测",
+            "request": _JSON_REQUEST_SAMPLE,
+        }
 
     @staticmethod
-    def xml_request_sample() -> str:
+    def xml_request_sample() -> Dict[str, Any]:
         """
         获取XML端口的贷款申请请求报文示例。
 
-        :return: 示例请求XML文本；将此报文通过TCP连接发送到XML端口默认9092，服务器将返回XML格式的贷款审批结果
+        :return: 含端口/帧说明/请求XML文本的结构化示例；将此报文通过TCP连接发送到XML端口，服务器将返回XML格式的贷款审批结果
         """
-        return _XML_REQUEST_SAMPLE
+        return {
+            "port": _mock_port("xml"),
+            "mock_type": "xml",
+            "content_type": "xml",
+            "frame": "8位十进制长度前缀/RAW自动检测",
+            "request": _XML_REQUEST_SAMPLE,
+        }
 
     @staticmethod
-    def json_response_preview() -> str:
+    def json_response_preview() -> Dict[str, Any]:
         """
-        预览JSON端口对示例请求返回的XML响应。
+        预览JSON端口对示例请求返回的JSON响应，与端口实际响应构造同源。
 
-        :return: 交易查询结果XML文本
+        :return: 含端口与响应对象（嵌套对象+交易列表+汇总）的预览结果
         """
-        sample = orjson.dumps({
-            "request_header": {
-                "request_id": "PREVIEW",
-                "channel": "mobile",
-                "institution": "KRUN_TEST_BANK"
-            },
-            "account_info": {
-                "account_no": "6228480012345678",
-                "currency": "CNY",
-                "customer_id": "CUST00001"
-            },
-            "query_condition": {
-                "page_no": 1, "page_size": 5
-            },
-        }).decode("utf-8")
-        return _build_json_business_response(sample)
+        return {
+            "port": _mock_port("json"),
+            "content_type": "json",
+            "response": _build_json_business_payload(orjson.dumps(_JSON_REQUEST_SAMPLE).decode("utf-8")),
+        }
 
     @staticmethod
-    def xml_response_preview() -> str:
+    def xml_response_preview() -> Dict[str, Any]:
         """
-        预览XML端口对示例请求返回的XML响应。
+        预览XML端口对示例请求返回的XML响应，与端口实际响应构造同源。
 
-        :return: 贷款审批结果XML文本
+        :return: 含端口与响应XML文本（还款计划/贷款条款列表）的预览结果
         """
-        return _build_xml_business_response(_XML_PREVIEW_REQUEST_SAMPLE)
+        return {
+            "port": _mock_port("xml"),
+            "content_type": "xml",
+            "response": _build_xml_business_response(_XML_REQUEST_SAMPLE),
+        }

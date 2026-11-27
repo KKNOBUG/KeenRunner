@@ -41,7 +41,7 @@ from backend.applications.autotest.services.autotest_runtime.protocol_tcp import
     TCP_MAX_RESPONSE_BYTES,
 )
 from backend.applications.autotest.services.autotest_runtime.datagram.datagram_diff import compare_messages
-from backend.applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables
+from backend.applications.autotest.services.autotest_runtime.builtin_variables import collect_builtin_step_variables, strip_host_scheme
 from backend.applications.autotest.schemas.autotest_detail_schema import AutoTestDetailCreate
 from backend.applications.autotest.schemas.autotest_report_schema import AutoTestReportCreate
 from backend.applications.autotest.schemas.autotest_datagram_diff_schema import DatagramFieldCompareItem
@@ -3025,7 +3025,8 @@ class TcpStepExecutor(BaseStepExecutor):
 
     # 约定字段（沿用步骤基础字段，避免新增 schema 破坏兼容）：
     # - 目标主机/端口一律来自执行配置（APP 节点）解析快照 config_host/config_port，步骤自身
-    #   request_url/request_port 不参与寻址；任一为空或端口无法转 int 即失败，引擎不做端口区间校验。
+    #   request_url/request_port 不参与寻址；主机与调试同口径剥离http(s)://前缀，任一为空即失败，
+    #   端口须为纯数字（不做区间校验）。
     # - request_project_id 用于提取/断言的引用解析，必填；执行配置引用经上下文预加载解析后，
     #   请求快照写入解析名称 request_config_name 与逻辑标识 request_config_mode。
     # - 载荷选择见 select_tcp_payload：JSON 取 request_body，RAW/XML 取 request_text，
@@ -3035,7 +3036,8 @@ class TcpStepExecutor(BaseStepExecutor):
     #   否则配置了请求或响应结束符即结束符；均未配置即 RAW。
     # - 读取超时取 tcp_response_timeout（未配置时缺省30秒），连接超时取上下文 connect（与HTTP建连同源，当前15秒）；
     #   单次响应读取上限 TCP_MAX_RESPONSE_BYTES（10MB）。
-    # - tcp_connect_type=LONG 尚未实现，会按短连接降级执行；SEND_ONLY 只发不收，响应文本为空且 response_bytes=0
+    # - tcp_connect_type=LONG 尚未实现，会按短连接降级执行；SEND_ONLY 只发不收，响应文本为空且 response_bytes=0；
+    #   读取口径对齐JMeter通讯级：0字节响应（读超时/对端关闭）按连接建立+发送完成判定访达成功，收到字节仍正常解析/断言
 
     def collect_builtin_variables(self) -> List[StepVariablesBase]:
         """
@@ -3075,10 +3077,13 @@ class TcpStepExecutor(BaseStepExecutor):
                 expected_config_type=AutoTestConfigNodeType.APP,
             )
             env_name: Optional[str] = current_step_config.env_name
-            request_url: str = (current_step_config.config_host or "").strip()
+            # 主机可能按HTTP习惯带协议前缀保存，与调试同口径剥离后再寻址
+            request_url: str = strip_host_scheme(current_step_config.config_host) or ""
             request_port: Optional[str] = (current_step_config.config_port or "").strip() or None
             if not request_url or not request_port:
                 raise StepExecutionError(f"【TCP请求】请求主机[{request_url!r}]或请求端口[{request_port!r}]不是有效的配置")
+            if not request_port.isdigit():
+                raise StepExecutionError(f"【TCP请求】请求端口[{request_port!r}]不是有效的数字")
 
             # 参数化驱动：与HTTP步骤同一加载口径（引用链内层直接消费引用壳预载的快照）
             step_struct = await self.load_step_dataset(result)
@@ -3141,12 +3146,10 @@ class TcpStepExecutor(BaseStepExecutor):
                 variables=request_body,
                 step_code=self.step_code
             )
-            text_after_ds = request_text if isinstance(request_text, str) else ""
-            use_xml_placeholders = (
-                    self.step.request_args_type == AutoTestReqArgsType.XML
-                    or text_after_ds.strip().startswith("<")
-            )
-            if use_xml_placeholders and request_text:
+            # XML判定与数据驱动/调试共用resolve_datagram_is_xml统一口径（显式类型优先，RAW/NONE按内容嗅探）
+            if AutoTestToolService.resolve_datagram_is_xml(
+                    self.step.request_args_type, request_text, request_body
+            ) and request_text:
                 request_text = self.context.resolve_xml_placeholders(
                     xml_text=request_text,
                     step_code=self.step_code,
@@ -3163,7 +3166,6 @@ class TcpStepExecutor(BaseStepExecutor):
             )
 
             frame_config = resolve_tcp_frame_config(self.step)
-            max_response_bytes = TCP_MAX_RESPONSE_BYTES
             connect_td, read_td = parse_tcp_timeouts(self.context.connect, self.step.tcp_response_timeout)
 
             # 发送前先落请求快照（含帧配置与最终 payload），便于落库与排障
@@ -3189,6 +3191,22 @@ class TcpStepExecutor(BaseStepExecutor):
                 "payload": payload,
             }
 
+            # 发送前落目标地址与帧配置日志（与调试路径同口径），便于内网环境排障时核对成帧口径与超时
+            self.context.log(
+                f"【TCP请求】请求开始: \n\t"
+                f"环境名称: {env_name}\n\t"
+                f"配置名称: {current_step_config.config_name}\n\t"
+                f"配置标识: {current_step_config.config_mode}\n\t"
+                f"目标地址: {request_url}:{request_port}\n\t"
+                f"帧模式: {frame_config.frame_mode.value}, 进制: {frame_config.radix}, "
+                f"长度位宽度: {frame_config.radix_length}, "
+                f"总长度口径: {'包含长度位' if frame_config.include_length_prefix else '不包含长度位'}\n\t"
+                f"连接方式: {'只发不收' if frame_config.send_only else ('长连接' if frame_config.long_connection else '短连接')}\n\t"
+                f"连接超时: {(connect_td or timedelta(seconds=self.context.connect)).total_seconds()}s, "
+                f"响应超时: {(read_td or timedelta(seconds=self.context.timeout)).total_seconds()}s",
+                step_code=self.step_code,
+            )
+
             if frame_config.long_connection:
                 # 长连接暂未实现：按短连接降级执行，避免阻断步骤
                 self.context.log("【TCP请求】连接方式为长连接, 暂未实现, 已按短连接降级执行", step_code=self.step_code)
@@ -3198,7 +3216,7 @@ class TcpStepExecutor(BaseStepExecutor):
                     timeout=read_td or timedelta(seconds=self.context.timeout),
                     connect_timeout=connect_td,
                     length_field_size=frame_config.radix_length,
-                    max_response_bytes=max_response_bytes,
+                    max_response_bytes=TCP_MAX_RESPONSE_BYTES,
             ) as client:
                 utils = await client.tcp(
                     request_url,
@@ -3218,6 +3236,13 @@ class TcpStepExecutor(BaseStepExecutor):
                 )
                 # 只请求一次：获取原始字节后本地解析，避免解析失败时重发TCP请求
                 resp_bytes = await utils.bytes_resp()
+                # 仅对端未响应任何字节时提示；合法空帧（0长度正文/仅结束符）response_received为True不提示
+                if not frame_config.send_only and not utils.response_received:
+                    self.context.log(
+                        "【TCP请求】发送请求报文成功, 但未收到响应报文: 请检查环境配置是否正确(帧口径/响应超时); "
+                        "若对端为通讯级(只发不答)协议则属正常",
+                        step_code=self.step_code,
+                    )
                 parsed = parse_tcp_response(
                     resp_bytes,
                     encoding=frame_config.encoding,
@@ -3230,7 +3255,7 @@ class TcpStepExecutor(BaseStepExecutor):
             result.response = {
                 "response_text": resp_text,
                 "response_elapsed": f"{elapsed:.2f}",
-                "response_bytes": len(resp_bytes) if isinstance(resp_bytes, (bytes, bytearray)) else None,
+                "response_bytes": len(resp_bytes),
             }
 
             request_json_for_extract, request_text_for_extract = resolve_tcp_request_extract_sources(

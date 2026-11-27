@@ -53,7 +53,13 @@ from backend.common import AioTcpClient
 from backend.common.cache.redis_connection_pool import get_app_redis_pool
 from backend.common.url_utils import build_absolute_http_url, is_absolute_http_url
 from backend.configure import LOGGER
-from backend.core.exceptions import NotFoundException, NoPermissionException, ParameterException, ReqInvalidException
+from backend.core.exceptions import (
+    NotFoundException,
+    NoPermissionException,
+    ParameterException,
+    ReqInvalidException,
+    ResInvalidException
+)
 from backend.enums import AutoTestConfigNodeType, AutoTestReqArgsType, AutoTestStepType, ResourceTag
 from backend.services.data_scope import DataScope
 
@@ -718,9 +724,6 @@ class StepDebugService:
         :raises NotFoundException: 环境或配置不存在
         :raises NoPermissionException: 应用或配置创建人不在可见范围
         """
-        # 局部导入：仅TCP调试需要，避免模块导入期加载网络工具
-        from backend.common import AsyncTcpUtils
-
         # 流程：按env_id+config_mode解析环境配置 → 注入内置变量 → 解析占位符 → 按帧配置组包 →
         # 单次收发 → 解析响应并按执行口径提取/断言。长连接暂未实现，按短连接降级
         step_name = debug_in.step_name
@@ -729,7 +732,8 @@ class StepDebugService:
         request_config_mode: Optional[str] = (debug_in.request_config_mode or "").strip()
         request_args_type: Optional[AutoTestReqArgsType] = debug_in.request_args_type
         request_text = debug_in.request_text
-        request_body: Any = debug_in.request_body
+        # 与执行引擎同口径规范化：JSON字符串尽量解析为对象，后续占位符解析与载荷选择基于定型数据
+        request_body: Any = AutoTestToolService.try_serialize_request_body(debug_in.request_body)
         extract_variables = debug_in.extract_variables or []
         assert_validators = debug_in.assert_validators or []
 
@@ -780,6 +784,10 @@ class StepDebugService:
                     f"TCP请求调试失败, 执行配置[{endpoint.config_name}]的服务器地址或端口未配置"
                 )
             )
+        if not port.isdigit():
+            raise StepDebugException(
+                message=f"TCP请求调试失败, 执行配置[{endpoint.config_name}]的端口[{port}]不是有效数字"
+            )
 
         # 注入内置环境变量（SERVER_*/TARGET_*），TCP的TARGET_PATH固定为空字符串；供请求体占位符替换与提取断言使用
         cls.inject_builtin_variables_for_debug(
@@ -794,19 +802,24 @@ class StepDebugService:
         log("【参数替换】开始: ")
 
         finished_variables = cls.resolve_placeholders_into_pool(initial_models, merged_lookup, log)
-        if request_args_type == AutoTestReqArgsType.JSON:
-            request_body = AutoTestToolService.resolve_placeholders(
-                value=request_body, logger_object=log, finished_variables=finished_variables
+        # 对齐执行引擎：历史/导入数据可能把XML存在request_body字符串中，发送前回落到request_text
+        if not request_text and isinstance(request_body, str) and (
+                request_args_type == AutoTestReqArgsType.XML
+                or request_body.lstrip().startswith("<")
+        ):
+            request_text = request_body
+        # 对齐执行引擎：body与text无条件双解析，XML判定共用resolve_datagram_is_xml统一口径
+        request_body = AutoTestToolService.resolve_placeholders(
+            value=request_body, logger_object=log, finished_variables=finished_variables
+        )
+        if AutoTestToolService.resolve_datagram_is_xml(request_args_type, request_text, request_body) and request_text:
+            request_text = AutoTestToolService.resolve_xml_placeholders(
+                xml_text=request_text, logger_object=log, finished_variables=finished_variables
             )
-        elif request_text is not None:
-            if AutoTestToolService.resolve_datagram_is_xml(request_args_type, request_text, request_body):
-                request_text = AutoTestToolService.resolve_xml_placeholders(
-                    xml_text=request_text, logger_object=log, finished_variables=finished_variables
-                )
-            else:
-                request_text = AutoTestToolService.resolve_placeholders(
-                    value=request_text, logger_object=log, finished_variables=finished_variables
-                )
+        else:
+            request_text = AutoTestToolService.resolve_placeholders(
+                value=request_text, logger_object=log, finished_variables=finished_variables
+            )
         log("【参数替换】结束")
 
         payload = select_tcp_payload(
@@ -825,7 +838,7 @@ class StepDebugService:
             # 长连接暂未实现：调试为单次收发，按短连接降级
             log("TCP调试: 连接方式为长连接, 暂未实现, 已按短连接降级执行")
 
-        start_time = time.time()
+        start_time = time.perf_counter()
         async with AioTcpClient(
                 timeout=read_td or timedelta(seconds=cls.TIMEOUT),
                 connect_timeout=connect_td,
@@ -833,7 +846,7 @@ class StepDebugService:
                 max_response_bytes=TCP_MAX_RESPONSE_BYTES,
         ) as client:
             try:
-                utils: AsyncTcpUtils = await client.tcp(
+                utils = await client.tcp(
                     host=host,
                     port=int(port),
                     data=payload,
@@ -850,19 +863,24 @@ class StepDebugService:
                     read_timeout=read_td,
                 )
                 raw_bytes = await utils.bytes_resp()
-            except ReqInvalidException as e:
+                notice = None
+                # 仅对端未响应任何字节时提示；合法空帧（0长度正文/仅结束符）response_received为True不提示
+                if not frame_config.send_only and not utils.response_received:
+                    notice = (
+                        "请求报文发送成功, 但未收到响应报文: 请检查环境配置是否正确(帧口径/响应超时); "
+                        "若对端为通讯级(只发不答)协议则属正常"
+                    )
+                    log(f"TCP调试: {notice}")
+            except (ReqInvalidException, ResInvalidException) as e:
                 LOGGER.error(f"{e.message}\n{traceback.format_exc()}")
-                raise StepDebugException(message="TCP请求调试异常", data=str(e.message)) from e
+                # 分类文案本身即主提示（前端toast仅展示message），data保留明细供展开排查
+                raise StepDebugException(message=e.message, data=e.message) from e
             except Exception as e:
-                error_message = (
-                    f"【TCP请求调试】请求目标服务器发生未知错误,"
-                    f"错误类型: {type(e).__name__},"
-                    f"异常描述: {e}"
-                )
-                LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
-                raise StepDebugException(message="TCP请求调试异常", data=error_message) from e
+                # 真实异常与堆栈只进日志，对外兜底文案按10.9口径不暴露异常类名
+                LOGGER.error(f"【TCP请求调试】请求目标服务器发生未知错误: {e}\n{traceback.format_exc()}")
+                raise StepDebugException(message="暂时无法调试TCP请求，请稍后重试") from e
 
-        elapsed = f"{time.time() - start_time:.2f}"
+        elapsed = f"{time.perf_counter() - start_time:.2f}"
         log(f"TCP请求调试完成: 耗时: {elapsed}s")
         parsed = parse_tcp_response(
             raw_bytes,
@@ -908,6 +926,8 @@ class StepDebugService:
             },
         )
         LOGGER.info(f"TCP请求调试完成: 耗时: {elapsed}s")
+        if notice:
+            result["notice"] = notice
         return result
 
     @classmethod

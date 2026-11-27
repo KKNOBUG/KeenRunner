@@ -21,50 +21,41 @@ from backend.core.exceptions import ReqInvalidException, ResInvalidException
 
 
 class TcpFrameMode(str, Enum):
-    """
-    TCP 收发帧格式（对齐JMeter TCP取样器）；短连接与长连接均可使用。
+    """TCP收发帧格式枚举，对齐JMeter TCP取样器，短连接与长连接均可使用。"""
 
-    LENGTH_PREFIX（长度前缀，默认）：
-        - 发送：先写固定宽度的文本数字长度前缀（进制由radix决定，如 8 位十进制 ``00000123``），再写正文。
-        - 接收：先读同样宽度的长度字段按radix解析出 N，再读恰好 N 字节正文。
-        - 适用：需预先知道正文长度的协议；支持连接保持下的连续多帧。
-
-    TERMINATOR（结束符）：
-        - 发送：正文后追加请求结束符字节序列（未配置请求结束符时只发正文）。
-        - 接收：持续读取至响应结束符字节序列（未配置响应结束符时读至对端关闭连接）。
-        - 适用：靠末尾标记分包的文本TCP协议（如 ``\\r\\n``、``0x7E`` 结尾）；不适合二进制正文。
-
-    RAW：
-        - 发送：只发正文，不加任何帧标记。
-        - 接收：读至对端关闭连接（EOF），拼成完整响应。
-        - 适用：对端「发完即关」或只能靠 EOF 界定响应；不适合长连接连续多帧。
-    """
-
+    # 长度前缀（默认）: 
+    # 发送: 先写固定宽度的文本数字长度前缀（进制由radix决定，如8位十进制00000123）再写正文；
+    # 接收: 先读同宽度长度字段按radix解析出N再读恰好N字节正文；
     LENGTH_PREFIX = "length_prefix"
+    # 结束符:
+    # 发送: 在正文后追加请求结束符（未配置时只发正文）；
+    # 接收: 持续读至响应结束符（未配置时读至对端关闭）；
     TERMINATOR = "terminator"
+    # RAW:
+    # 发送: 只发正文不加帧标记；
+    # 接收: 读至对端关闭（EOF）拼成完整响应；
     RAW = "raw"
 
 
 class AsyncTcpUtils:
     """
-    异步 TCP 短连接统一调度工具；由 ``AioTcpClient.tcp`` 构造，支持链式取响应。
+    异步TCP短连接调度工具，由AioTcpClient.tcp构造，链式调用取响应。
 
-    :param client: AioTcpClient 实例
-    :param host: TCP 服务主机地址
-    :param port: TCP 服务端口
-    :param data: 发送数据（str / bytes / dict / None）
-    :param frame_mode: 帧协议，默认 LENGTH_PREFIX
-    :param length_field_size: 长度前缀宽度（位数）；缺省取 client.length_field_size
-    :param radix: 长度前缀数字进制（10 或 16），默认 10
+    :param client: AioTcpClient实例
+    :param host: TCP服务主机地址
+    :param port: TCP服务端口
+    :param data: 发送数据（str/bytes/dict/None）
+    :param frame_mode: 帧协议，默认LENGTH_PREFIX
+    :param length_field_size: 长度前缀宽度（位数）
+    :param radix: 长度前缀数字进制（10或16），默认10
     :param include_length_prefix: 长度值是否包含长度位自身宽度，默认不包含
-    :param request_end_symbol: 请求结束符字节序列（TERMINATOR 模式发送时追加）
-    :param response_end_symbol: 响应结束符字节序列（TERMINATOR 模式读取的停止标记）
-    :param hex_string: 启用后发送数据按 HEX 文本解码为二进制（每2个字符1字节）
+    :param request_end_symbol: 请求结束符字节序列（TERMINATOR模式发送时追加）
+    :param response_end_symbol: 响应结束符字节序列（TERMINATOR模式读取的停止标记）
+    :param hex_string: 启用后发送数据按HEX文本解码为二进制（每2个字符1字节）
     :param send_only: 只发不收（发送后立即返回空响应，不读取对端数据）
-    :param encoding: 文本编码，默认 utf-8
-    :param connect_timeout: 连接超时；缺省取 client.connect_timeout
-    :param read_timeout: 读写超时；缺省取 client.default_timeout
-    :param kwargs: 预留扩展关键字参数
+    :param encoding: 文本编码，默认utf-8
+    :param connect_timeout: 连接超时；缺省取client.connect_timeout
+    :param read_timeout: 读写超时；缺省取client.default_timeout
     """
 
     def __init__(
@@ -85,7 +76,6 @@ class AsyncTcpUtils:
             encoding: str = "utf-8",
             connect_timeout: Optional[timedelta] = None,
             read_timeout: Optional[timedelta] = None,
-            **kwargs: Any,
     ):
         self.client = client
         self.host = host
@@ -102,45 +92,42 @@ class AsyncTcpUtils:
         self.encoding = encoding
         self.connect_timeout = connect_timeout
         self.read_timeout = read_timeout
-        self.kwargs = kwargs
+        # 最近一次收发对端是否响应过字节：合法空帧（如0长度正文/仅结束符）为True，0字节未响应与send_only为False
+        self.response_received: bool = False
 
     async def execute(self) -> bytes:
         """
-        执行一次 TCP 收发，返回响应正文字节。
+        执行一次TCP收发，返回响应正文字节。
 
-        :return: 响应体字节（长度前缀与结束符已在内部剥离；send_only 时返回空字节）
+        :return: 响应体字节（长度前缀与结束符已在内部剥离；send_only时返回空字节），对端是否响应过字节记录于response_received
         :raises ReqInvalidException: 连接、读写或底层发送失败
         """
-        try:
-            return await self.client.exchange(
-                host=self.host,
-                port=self.port,
-                data=self.data,
-                frame_mode=self.frame_mode,
-                length_field_size=self.length_field_size,
-                radix=self.radix,
-                include_length_prefix=self.include_length_prefix,
-                request_end_symbol=self.request_end_symbol,
-                response_end_symbol=self.response_end_symbol,
-                hex_string=self.hex_string,
-                send_only=self.send_only,
-                encoding=self.encoding,
-                connect_timeout=self.connect_timeout,
-                read_timeout=self.read_timeout,
-                **self.kwargs,
-            )
-        except ReqInvalidException:
-            raise
-        except Exception as e:
-            raise ReqInvalidException(message=f"TCP请求失败: {e}")
+        body, received = await self.client.exchange(
+            host=self.host,
+            port=self.port,
+            data=self.data,
+            frame_mode=self.frame_mode,
+            length_field_size=self.length_field_size,
+            radix=self.radix,
+            include_length_prefix=self.include_length_prefix,
+            request_end_symbol=self.request_end_symbol,
+            response_end_symbol=self.response_end_symbol,
+            hex_string=self.hex_string,
+            send_only=self.send_only,
+            encoding=self.encoding,
+            connect_timeout=self.connect_timeout,
+            read_timeout=self.read_timeout,
+        )
+        self.response_received = received
+        return body
 
     async def json_resp(self) -> Any:
         """
-        收发并将响应解析为 JSON。
+        收发并将响应解析为JSON。
 
-        :return: 解析后的 JSON 对象；空响应返回 None
+        :return: 解析后的JSON对象；空响应返回None
         :raises ReqInvalidException: 请求侧失败
-        :raises ResInvalidException: 响应无法按 JSON 解析
+        :raises ResInvalidException: 响应无法按JSON解析
         """
         try:
             raw = await self.execute()
@@ -150,7 +137,7 @@ class AsyncTcpUtils:
         except ReqInvalidException:
             raise
         except orjson.JSONDecodeError as e:
-            raise ResInvalidException(message=f"TCP响应解析失败, 响应体无法进行JSON格式处理: {e}")
+            raise ResInvalidException(message=f"TCP响应解析失败: 响应不是合法JSON: {e}")
         except Exception as e:
             raise ResInvalidException(message=f"TCP响应解析异常: {e}")
 
@@ -168,7 +155,7 @@ class AsyncTcpUtils:
         except ReqInvalidException:
             raise
         except UnicodeDecodeError as e:
-            raise ResInvalidException(message=f"TCP响应解析失败, 响应体无法进行{self.encoding}格式解码: {e}")
+            raise ResInvalidException(message=f"TCP响应解析失败: 响应无法按{self.encoding}解码: {e}")
         except Exception as e:
             raise ResInvalidException(message=f"TCP响应解析异常: {e}")
 
@@ -176,24 +163,18 @@ class AsyncTcpUtils:
         """
         收发并返回原始响应字节。
 
-        :return: 响应体字节
-        :raises ReqInvalidException: 请求侧失败
-        :raises ResInvalidException: 读取异常
+        :return: 响应体字节（长度前缀与结束符已剥离；对端未响应或send_only时为空字节）
+        :raises ReqInvalidException: 连接、发送或接收失败
         """
-        try:
-            return await self.execute()
-        except ReqInvalidException:
-            raise
-        except Exception as e:
-            raise ResInvalidException(message=f"TCP响应解析失败, 响应体无法进行字节内容读取: {e}")
+        return await self.execute()
 
     async def xml_resp(self) -> Optional[str]:
         """
-        收发并将响应解析为格式化 XML 文本。
+        收发并将响应解析为格式化XML文本。
 
-        :return: pretty-print 后的 XML 字符串；空响应返回 None
+        :return: 格式化后的XML字符串；空响应返回None
         :raises ReqInvalidException: 请求侧失败
-        :raises ResInvalidException: XML 语法或解析异常
+        :raises ResInvalidException: XML语法或解析异常
         """
         try:
             raw = await self.execute()
@@ -201,7 +182,6 @@ class AsyncTcpUtils:
                 return None
             parser = etree.XMLParser(
                 recover=False,
-                # 去除仅用于缩进排版的空白文本节点, 配合pretty_print输出更稳定。
                 remove_blank_text=True,
                 encoding=self.encoding,
             )
@@ -216,17 +196,13 @@ class AsyncTcpUtils:
         except ReqInvalidException:
             raise
         except etree.XMLSyntaxError as e:
-            raise ResInvalidException(message=f"TCP响应解析失败, 响应体无法进行XML格式处理: {e}")
+            raise ResInvalidException(message=f"TCP响应解析失败: 响应不是合法XML: {e}")
         except Exception as e:
             raise ResInvalidException(message=f"TCP响应解析异常: {e}")
 
 
 class AioTcpClient:
-    """
-    异步 TCP 短连接客户端；与 AsyncTcpUtils 配合实现 ``tcp(...).json_resp()`` 链式调用。
-
-    每次 ``exchange`` / 链式调用均为独立建连、收发后关闭；多次交互请用 AsyncTcpConnection。
-    """
+    """异步TCP短连接客户端，每次调用独立建连、收发后关闭，与AsyncTcpUtils配合链式调用取响应。"""
 
     def __init__(
             self,
@@ -236,15 +212,15 @@ class AioTcpClient:
             length_field_size: int = 8,
             concurrency_limit: int = 50,
             max_response_bytes: int = 10 * 1024 * 1024,
-            **kwargs: Any,
     ):
         """
+        初始化客户端默认超时、帧宽与容量参数。
+
         :param timeout: 默认读写超时
-        :param connect_timeout: 默认连接超时；缺省与 timeout 相同
-        :param length_field_size: 长度前缀宽度（位数），默认 8
-        :param concurrency_limit: 并发连接上限，默认 50
-        :param max_response_bytes: 单次响应正文最大字节数，默认 10MB
-        :param kwargs: 预留扩展关键字参数
+        :param connect_timeout: 默认连接超时；缺省与timeout相同
+        :param length_field_size: 长度前缀宽度（位数），默认8
+        :param concurrency_limit: 并发连接上限，默认50
+        :param max_response_bytes: 单次响应正文最大字节数，默认10MB
         """
         self.default_timeout = timeout
         self.connect_timeout = connect_timeout or timeout
@@ -252,7 +228,6 @@ class AioTcpClient:
         self.concurrency_limit = concurrency_limit
         self.max_response_bytes = max_response_bytes
         self.semaphore: asyncio.Semaphore = asyncio.Semaphore(value=self.concurrency_limit)
-        self.kwargs = kwargs
 
     async def __aenter__(self) -> "AioTcpClient":
         """异步上下文进入，返回自身。"""
@@ -263,11 +238,7 @@ class AioTcpClient:
         return None
 
     async def close(self) -> None:
-        """
-        关闭会话接口（与 HTTP 客户端形态对齐）。
-
-        短连接模式下无持久会话，默认空操作。
-        """
+        """关闭会话接口，短连接无持久会话故为空操作，形态与HTTP客户端对齐。"""
         return None
 
     async def tcp(
@@ -287,27 +258,25 @@ class AioTcpClient:
             encoding: str = "utf-8",
             connect_timeout: Optional[timedelta] = None,
             read_timeout: Optional[timedelta] = None,
-            **kwargs: Any,
     ) -> AsyncTcpUtils:
         """
-        构造一次 TCP 请求调度对象，供链式调用取响应。
+        构造一次TCP请求调度对象，供链式调用取响应。
 
         :param host: 目标主机
         :param port: 目标端口
         :param data: 发送内容
-        :param frame_mode: 帧协议，见 TcpFrameMode
+        :param frame_mode: 帧协议，见TcpFrameMode
         :param length_field_size: 长度前缀宽度（位数）；缺省用客户端默认值
-        :param radix: 长度前缀数字进制（10 或 16）
+        :param radix: 长度前缀数字进制（10或16）
         :param include_length_prefix: 长度值是否包含长度位自身宽度
         :param request_end_symbol: 请求结束符字节序列
         :param response_end_symbol: 响应结束符字节序列
-        :param hex_string: 发送数据按 HEX 文本解码为二进制
+        :param hex_string: 发送数据按HEX文本解码为二进制
         :param send_only: 只发不收
         :param encoding: 文本编码
         :param connect_timeout: 连接超时
         :param read_timeout: 读写超时
-        :param kwargs: 透传至 exchange 的预留参数
-        :return: AsyncTcpUtils 实例
+        :return: AsyncTcpUtils实例
         """
         return AsyncTcpUtils(
             self,
@@ -325,7 +294,6 @@ class AioTcpClient:
             encoding=encoding,
             connect_timeout=connect_timeout,
             read_timeout=read_timeout,
-            **kwargs,
         )
 
     @staticmethod
@@ -333,11 +301,11 @@ class AioTcpClient:
         """
         将发送数据规范为字节正文。
 
-        :param data: 原始发送数据；None 视为空正文
+        :param data: 原始发送数据
         :param encoding: 字符串编码
-        :param hex_string: 启用后文本按HEX解码（去除空白后每2个字符转1字节）
-        :return: 正文字节（dict 经 orjson 序列化）
-        :raises ReqInvalidException: hex_string启用但文本不是合法HEX（奇数长度或含非HEX字符）
+        :param hex_string: 启用后文本按HEX解码
+        :return: 正文字节
+        :raises ReqInvalidException: hex_string启用但含非法字符或有效HEX字符为奇数位
         """
         if data is None:
             return b""
@@ -348,37 +316,32 @@ class AioTcpClient:
         text = str(data)
         if hex_string:
             compact = "".join(text.split())
-            if len(compact) % 2 != 0 or any(ch not in "0123456789abcdefABCDEF" for ch in compact):
-                raise ReqInvalidException(
-                    message=f"HEX报文格式非法, 启用Hex String后请求文本必须是偶数长度的HEX字符(0-9/a-f/A-F, 可含空白), 当前长度: {len(compact)}"
-                )
+            # 非法字符与奇数长度分开报错，避免偶数位非法字符被误提示为长度问题
+            invalid_char = next((ch for ch in compact if ch not in "0123456789abcdefABCDEF"), None)
+            if invalid_char is not None:
+                raise ReqInvalidException(message=f"HEX报文格式非法, 启用Hex String后报文只能包含0-9/a-f/A-F字符, 首个非法字符: {invalid_char!r}")
+            if len(compact) % 2 != 0:
+                raise ReqInvalidException(message=f"HEX报文格式非法, 启用Hex String后去空格的有效HEX字符需为偶数位, 当前长度: {len(compact)}")
             return bytes.fromhex(compact)
         return text.encode(encoding)
 
     @staticmethod
-    def _format_length_prefix(
-            length_value: int,
-            radix: int,
-            length_field_size: int,
-            encoding: str,
-    ) -> bytes:
+    def _format_length_prefix(length_value: int, radix: int, length_field_size: int, encoding: str) -> bytes:
         """
-        按进制与宽度生成文本数字长度前缀（对齐JMeter：前缀是文本数字而非二进制整数）。
+        按进制与宽度生成文本数字长度前缀。
 
-        :param length_value: 长度数值（含口径处理后的最终值）
-        :param radix: 进制（10 或 16）
+        :param length_value: 待写入前缀的长度数值
+        :param radix: 进制（10或16）
         :param length_field_size: 前缀宽度（位数）
         :param encoding: 文本编码
-        :return: 前缀字节（固定 width 个字符）
-        :raises ReqInvalidException: 进制非法或数值溢出指定宽度
+        :return: 前缀字节（固定宽度个字符，对齐JMeter为文本数字而非二进制整数）
+        :raises ReqInvalidException: 进制非法或长度数值按指定进制所需位数超出前缀宽度
         """
         if radix not in (10, 16):
             raise ReqInvalidException(message=f"长度前缀进制非法, 仅支持10/16进制, 当前: {radix}")
         text = format(length_value, "x" if radix == 16 else "d").zfill(length_field_size)
         if len(text) > length_field_size:
-            raise ReqInvalidException(
-                message=f"长度前缀溢出, 数值{length_value}按{radix}进制需要{len(text)}位, 超出宽度{length_field_size}"
-            )
+            raise ReqInvalidException(message=f"长度前缀位数非法, 按{radix}进制需要{len(text)}位, 超出宽度{length_field_size}")
         return text.encode(encoding)
 
     def _build_payload(
@@ -400,12 +363,12 @@ class AioTcpClient:
         :param frame_mode: 帧协议
         :param length_field_size: 长度前缀宽度（位数）
         :param encoding: 文本编码
-        :param radix: 长度前缀数字进制（10 或 16）
+        :param radix: 长度前缀数字进制（10或16）
         :param include_length_prefix: 长度值是否包含长度位自身宽度
-        :param request_end_symbol: 请求结束符字节序列（TERMINATOR 模式追加在正文末尾）
+        :param request_end_symbol: 请求结束符字节序列（TERMINATOR模式追加在正文末尾）
         :param hex_string: 发送数据按HEX文本解码为二进制
         :return: 完整待发送字节（含可选长度前缀/结束符）
-        :raises ReqInvalidException: 未知帧模式、HEX格式非法、长度前缀溢出
+        :raises ReqInvalidException: HEX格式非法、长度前缀溢出
         """
         body = self._encode_body(data, encoding, hex_string=hex_string)
         if frame_mode == TcpFrameMode.LENGTH_PREFIX:
@@ -414,31 +377,169 @@ class AioTcpClient:
             return prefix + body
         if frame_mode == TcpFrameMode.TERMINATOR:
             return body + request_end_symbol if request_end_symbol else body
-        if frame_mode == TcpFrameMode.RAW:
-            return body
-        raise ReqInvalidException(message=f"不被允许的TcpFrameMode枚举: {frame_mode}")
+        # RAW：只发正文不加帧标记（frame_mode由resolve_tcp_frame_config推导，三值枚举必居其一）
+        return body
 
-    async def _read_until_eof(self, reader: asyncio.StreamReader, read_timeout: float, max_bytes: int) -> bytes:
+    async def _read_until_eof(self, reader: asyncio.StreamReader, read_timeout: float, max_bytes: int) -> tuple[bytes, bool]:
         """
-        读至对端关闭（EOF）或超时；RAW模式与未配置响应结束符的TERMINATOR模式共用。
+        读至对端关闭或超时，RAW模式与未配置响应结束符的TERMINATOR模式共用。
 
         :param reader: 流读取器
-        :param read_timeout: 单次 read 超时秒数
+        :param read_timeout: 单次read超时秒数
         :param max_bytes: 累计可读上限
-        :return: 拼接后的响应字节
-        :raises ReqInvalidException: 超出 max_bytes 或读超时等
+        :return: (拼接后的响应字节, 对端是否响应过字节)；通讯级口径下一字节未收即超时/对端关闭视为对端未响应，返回空字节与False
+        :raises ReqInvalidException: 超出max_bytes；已收部分字节后读超时
         """
         total = 0
         chunks: List[bytes] = []
         while True:
-            chunk = await asyncio.wait_for(reader.read(65536), timeout=read_timeout)
+            try:
+                chunk = await asyncio.wait_for(reader.read(65536), timeout=read_timeout)
+            except asyncio.TimeoutError:
+                if total == 0:
+                    return b"", False
+                raise ReqInvalidException(message=f"TCP响应报文接收超时(超时={read_timeout}s): 已收{total}字节后对端停止响应")
             if not chunk:
                 break
             total += len(chunk)
             if total > max_bytes:
-                raise ReqInvalidException(message=f"RAW模式读取数据超出最大限制({max_bytes} bytes), 请检查对端是否未关闭连接或返回过大数据")
+                raise ReqInvalidException(message=f"TCP响应报文接收失败: RAW模式读取数据超出最大限制({max_bytes} bytes)")
             chunks.append(chunk)
+        return b"".join(chunks), total > 0
+
+    async def _read_exactly(
+            self,
+            reader: asyncio.StreamReader,
+            n: int,
+            read_timeout: float,
+            *,
+            host: str,
+            port: int,
+            phase: str,
+            empty_hint: str = "",
+            empty_ok: bool = False,
+    ) -> bytes:
+        """
+        读满恰好n字节，语义等价readexactly。
+
+        :param reader: 流读取器
+        :param n: 期待字节数
+        :param read_timeout: 单次read超时秒数
+        :param host: 目标主机（报错定位用）
+        :param port: 目标端口（报错定位用）
+        :param phase: 读取阶段描述（如长度前缀/响应正文）
+        :param empty_hint: 一字节未收且判定失败时附加的排查指引，缺省不附加（首段0字节容忍成功无需指引）
+        :param empty_ok: 首段读取0字节容忍开关，属读取阶段语义而非帧模式限制：True时超时/对端关闭且一字节未收
+                         返回空字节按通讯级口径判定访达成功，与TERMINATOR/RAW读取器的0字节容忍同口径；
+                         长度前缀模式读前缀传True，前缀已收后读正文必须为False（对端已响应而承诺正文缺失=协议异常）；
+                         已收部分字节一律报错
+        :return: 读满的n字节；增量累积，超时/提前关闭时报错回显实收字节数
+        :raises ReqInvalidException: 读超时或对端提前关闭
+        """
+        chunks: List[bytes] = []
+        received = 0
+        while received < n:
+            try:
+                chunk = await asyncio.wait_for(reader.read(n - received), timeout=read_timeout)
+            except asyncio.TimeoutError:
+                if empty_ok and received == 0:
+                    return b""
+                detail = f", {empty_hint}" if received == 0 and empty_hint else ""
+                raise ReqInvalidException(
+                    message=f"TCP响应报文读取{phase}超时({host}:{port}, 超时={read_timeout}s): 期待{n}字节, 收到{received}字节{detail}"
+                )
+            if not chunk:
+                if empty_ok and received == 0:
+                    return b""
+                detail = f", {empty_hint}" if received == 0 and empty_hint else ""
+                raise ReqInvalidException(
+                    message=f"TCP响应报文读取{phase}失败: 对端提前关闭连接({host}:{port}): 期待{n}字节, 收到{received}字节{detail}"
+                )
+            chunks.append(chunk)
+            received += len(chunk)
         return b"".join(chunks)
+
+    async def _read_until_symbol(
+            self,
+            reader: asyncio.StreamReader,
+            symbol: bytes,
+            read_timeout: float,
+            max_bytes: int,
+            *,
+            host: str,
+            port: int,
+    ) -> tuple[bytes, bool]:
+        """
+        增量读取至结束符。
+
+        :param reader: 流读取器
+        :param symbol: 结束符字节序列
+        :param read_timeout: 单次read超时秒数
+        :param max_bytes: 累计可读上限
+        :param host: 目标主机（报错定位用）
+        :param port: 目标端口（报错定位用）
+        :return: (结束符前的响应字节, 对端是否响应过字节)；仅收到结束符的空帧为(b"", True)，超时/对端关闭且0字节为(b"", False)
+        :raises ReqInvalidException: 超出读取上限、已收字节未匹配结束符
+        """
+        buf = bytearray()
+        while True:
+            try:
+                chunk = await asyncio.wait_for(reader.read(65536), timeout=read_timeout)
+            except asyncio.TimeoutError:
+                if not buf:
+                    return b"", False
+                raise ReqInvalidException(
+                    message=f"TCP响应报文读取超时({host}:{port}, 超时={read_timeout}s): 已收{len(buf)}字节未匹配到结束符"
+                )
+            if not chunk:
+                if not buf:
+                    return b"", False
+                raise ReqInvalidException(message=f"TCP响应报文接收失败: 对端提前关闭连接({host}:{port}), 已读{len(buf)}字节未匹配到结束符")
+            buf += chunk
+            if len(buf) > max_bytes:
+                raise ReqInvalidException(message=f"TCP响应报文接收失败: 响应体积超出最大限制({max_bytes} bytes)仍未读到结束符({host}:{port})")
+            scan_from = max(0, len(buf) - len(chunk) - len(symbol) + 1)
+            idx = buf.find(symbol, scan_from)
+            if idx >= 0:
+                return bytes(buf[:idx]), True
+
+    def _parse_response_length(
+            self,
+            length_bytes: bytes,
+            length_field_size: int,
+            radix: int,
+            encoding: str,
+            *,
+            include_length_prefix: bool,
+    ) -> int:
+        """
+        解析并校验响应长度前缀，返回正文字节数。单次调用，仅用于主干解耦，无复用意图。
+
+        :param length_bytes: 已读满的长度前缀字节
+        :param length_field_size: 长度前缀宽度（位数）
+        :param radix: 长度前缀数字进制（10 或 16）
+        :param encoding: 文本编码
+        :param include_length_prefix: 长度值是否包含长度位自身宽度
+        :return: 正文字节数（已按总长度口径扣除长度位自身宽度）
+        :raises ReqInvalidException: 前缀非指定进制文本数字、扣除后为负、超出响应体积上限
+        """
+        length_str = length_bytes.decode(encoding, errors="ignore").strip()
+        try:
+            length = int(length_str, radix)
+        except ValueError:
+            raise ReqInvalidException(
+                message=f"TCP响应报文接收失败: 长度前缀非法, 期待{length_field_size}位{radix}进制文本数字, "
+                        f"实收内容(HEX): {length_bytes.hex(' ')}, "
+                        f"请确认帧模式/进制/长度位宽度/编码是否与对端协议一致"
+            )
+        if include_length_prefix:
+            length -= length_field_size
+        if length < 0:
+            raise ReqInvalidException(message="TCP响应报文接收失败: 长度前缀非法, 扣除长度位自身宽度后为负, 请确认总长度口径(是否包含长度位)")
+        if length > self.max_response_bytes:
+            raise ReqInvalidException(
+                message=f"TCP响应报文接收失败: 长度前缀指示正文{length}字节, 超出响应体积最大限制({self.max_response_bytes} bytes)")
+        return length
 
     async def exchange(
             self,
@@ -457,8 +558,7 @@ class AioTcpClient:
             response_end_symbol: Optional[bytes] = None,
             hex_string: bool = False,
             send_only: bool = False,
-            **kwargs: Any,
-    ) -> bytes:
+    ) -> tuple[bytes, bool]:
         """
         短连接收发：建连、发送、按帧模式接收、关闭连接。
 
@@ -470,19 +570,21 @@ class AioTcpClient:
         :param encoding: 文本编码
         :param connect_timeout: 连接超时；缺省用客户端默认
         :param read_timeout: 读写超时；缺省用客户端默认
-        :param radix: 长度前缀数字进制（10 或 16）
+        :param radix: 长度前缀数字进制（10或16）
         :param include_length_prefix: 长度值是否包含长度位自身宽度
         :param request_end_symbol: 请求结束符字节序列
         :param response_end_symbol: 响应结束符字节序列
         :param hex_string: 发送数据按HEX文本解码为二进制
         :param send_only: 只发不收（发送后立即返回空字节）
-        :param kwargs: 预留扩展（当前忽略）
-        :return: 响应正文字节（不含长度前缀与结束符；send_only 返回空字节）
+        :return: (响应正文字节, 对端是否响应过字节)，正文不含长度前缀与结束符；通讯级口径对齐JMeter：对端未响应任何数据（0字节读超时/对端关闭）视为访达成功返回空字节与False，合法空帧（0长度正文/仅结束符）返回空字节与True，部分字节/非法帧/连接异常仍失败；send_only返回空字节与False
         :raises ReqInvalidException: 连接失败、超时、长度非法、响应过大、HEX非法等
         """
-        del kwargs  # 预留扩展(如local_addr/ssl等)
         conn_timeout = (connect_timeout or self.connect_timeout).total_seconds()
         read_to = (read_timeout or self.default_timeout).total_seconds()
+        if conn_timeout <= 0:
+            raise ReqInvalidException(message=f"TCP连接超时配置必须大于0秒, 当前: {conn_timeout}")
+        if read_to <= 0:
+            raise ReqInvalidException(message=f"TCP响应超时配置必须大于0秒, 当前: {read_to}")
 
         payload = self._build_payload(
             data,
@@ -494,89 +596,97 @@ class AioTcpClient:
             request_end_symbol=request_end_symbol,
             hex_string=hex_string,
         )
-
         async with self.semaphore:
             try:
-                # stream limit 须覆盖 max_response_bytes：TERMINATOR 的 readuntil 依赖缓冲区上限判定「未读到结束符」
                 reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(host, port, limit=max(self.max_response_bytes, 65536)),
+                    asyncio.open_connection(
+                        host=host,
+                        port=port,
+                        limit=max(self.max_response_bytes, 65536)
+                    ),
                     timeout=conn_timeout,
                 )
             except Exception as e:
-                raise ReqInvalidException(message=f"TCP服务连接失败({host}:{port}, 超时={conn_timeout}s): {e}")
+                raise ReqInvalidException(message=f"TCP连接建立失败({host}:{port}, 连接超时={conn_timeout}s): {e}")
 
             try:
-                writer.write(payload)
-                await asyncio.wait_for(writer.drain(), timeout=read_to)
+                try:
+                    writer.write(payload)
+                    await asyncio.wait_for(writer.drain(), timeout=read_to)
+                except asyncio.TimeoutError:
+                    raise ReqInvalidException(message=f"TCP请求报文发送超时({host}:{port}, 超时={read_to}s): 报文未完整写入, 请检查环境配置是否可达")
+                except Exception as e:
+                    raise ReqInvalidException(message=f"TCP请求报文发送失败({host}:{port}): {e}")
                 if send_only:
-                    return b""
+                    return b"", False
 
                 if frame_mode == TcpFrameMode.LENGTH_PREFIX:
-                    length_bytes = await asyncio.wait_for(
-                        reader.readexactly(length_field_size),
-                        timeout=read_to,
+                    length_bytes = await self._read_exactly(
+                        reader=reader,
+                        n=length_field_size,
+                        read_timeout=read_to,
+                        host=host,
+                        port=port,
+                        phase="长度前缀",
+                        empty_ok=True,
                     )
-                    length_str = length_bytes.decode(encoding, errors="ignore").strip()
-                    try:
-                        length = int(length_str, radix)
-                    except ValueError:
-                        raise ReqInvalidException(
-                            message=f"长度前缀非法, 期待的是{radix}进制文本数字, 而得到的是: {length_str}, 请确认对端协议"
-                        )
-                    if include_length_prefix:
-                        length -= length_field_size
-                    if length < 0:
-                        raise ReqInvalidException(message=f"长度前缀非法, 扣除长度位自身宽度后 length={length}")
-                    if length > self.max_response_bytes:
-                        raise ReqInvalidException(message=f"响应体积过大({length} bytes), 超出最大限制: {self.max_response_bytes} bytes")
-                    return await asyncio.wait_for(reader.readexactly(length), timeout=read_to)
+                    # 通讯级：对端未响应任何数据视为访达成功（连接建立+请求发送完成），空响应
+                    if not length_bytes:
+                        return b"", False
+                    length = self._parse_response_length(
+                        length_bytes=length_bytes,
+                        length_field_size=length_field_size,
+                        radix=radix,
+                        encoding=encoding,
+                        include_length_prefix=include_length_prefix,
+                    )
+                    # 前缀已收即对端已响应，0长度正文属合法空帧
+                    body = await self._read_exactly(
+                        reader=reader,
+                        n=length,
+                        read_timeout=read_to,
+                        host=host,
+                        port=port,
+                        phase="响应正文",
+                        empty_hint="长度前缀已接收, 但对端未响应正文数据: 请确认帧模式/进制/长度位宽度/编码是否与对端协议一致",
+                    )
+                    return body, True
 
                 if frame_mode == TcpFrameMode.TERMINATOR:
                     if response_end_symbol:
-                        try:
-                            data_bytes = await asyncio.wait_for(
-                                reader.readuntil(response_end_symbol),
-                                timeout=read_to,
-                            )
-                        except asyncio.IncompleteReadError as e:
-                            raise ReqInvalidException(
-                                message=f"对端在结束符前关闭连接({host}:{port}), 已读{len(e.partial)}字节未匹配到结束符, 请确认对端协议"
-                            )
-                        except asyncio.LimitOverrunError as e:
-                            raise ReqInvalidException(
-                                message=f"响应超出限制({self.max_response_bytes} bytes)仍未读到结束符({host}:{port}), 请确认对端协议或调整最大读取字节数"
-                            )
-                        return data_bytes[:-len(response_end_symbol)]
+                        return await self._read_until_symbol(
+                            reader=reader,
+                            symbol=response_end_symbol,
+                            read_timeout=read_to,
+                            max_bytes=self.max_response_bytes,
+                            host=host,
+                            port=port,
+                        )
                     return await self._read_until_eof(reader, read_to, self.max_response_bytes)
 
-                if frame_mode == TcpFrameMode.RAW:
-                    return await self._read_until_eof(reader, read_to, self.max_response_bytes)
-
-                raise ReqInvalidException(message=f"不被允许的TcpFrameMode枚举: {frame_mode}")
-            except asyncio.TimeoutError as e:
-                raise ReqInvalidException(message=f"TCP服务读写超时({host}:{port}, 超时={conn_timeout}s): {e}")
-            except asyncio.IncompleteReadError as e:
-                raise ReqInvalidException(message=f"TCP服务读数据不完整({host}:{port}): {e}")
+                # RAW：读至对端关闭（frame_mode由resolve_tcp_frame_config推导，三值枚举必居其一）
+                return await self._read_until_eof(reader, read_to, self.max_response_bytes)
             except ReqInvalidException:
                 raise
             except Exception as e:
-                raise ReqInvalidException(message=f"TCP服务异常({host}:{port}): {e}")
+                raise ReqInvalidException(message=f"TCP请求异常({host}:{port}): {e}")
             finally:
                 try:
                     writer.close()
                     await writer.wait_closed()
                 except Exception:
+                    # 对端RST等关闭异常不影响已完成的收发结论，静默清理
                     pass
 
 
 class AsyncTcpConnection:
     """
-    长连接 TCP 封装：同一条连接上多次发送/接收（发送与接收均按长度前缀帧）。
+    长连接TCP封装，同一条连接上按长度前缀帧多次发送接收。
 
-    :param host: TCP 服务主机地址
-    :param port: TCP 服务端口
+    :param host: TCP服务主机地址
+    :param port: TCP服务端口
     :param length_field_size: 长度前缀宽度（位数）
-    :param retries: 自动重连剩余次数（auto_reconnect=True 时生效）
+    :param retries: 自动重连剩余次数（auto_reconnect=True时生效）
     :param buffer_size: 预留缓冲区参数
     :param auto_reconnect: 是否在断连或超时后自动重连
     :param timeout: 连接与读写默认超时
@@ -621,7 +731,7 @@ class AsyncTcpConnection:
 
     async def connect(self) -> None:
         """
-        建立到目标主机的 TCP 连接。
+        建立到目标主机的TCP连接。
 
         :raises ReqInvalidException: 连接失败或超时且无法重连
         """
@@ -629,7 +739,7 @@ class AsyncTcpConnection:
 
     async def _connection(self) -> None:
         """
-        实际建连；超时且开启自动重连时转入 ``_reconnection``。
+        实际建连，超时且开启自动重连时转入_reconnection。
 
         :raises ReqInvalidException: 连接失败或超时
         """
@@ -643,9 +753,11 @@ class AsyncTcpConnection:
             if self.auto_reconnect and self.retries > 0:
                 await self._reconnection()
             else:
-                raise ReqInvalidException(message=f"TCP服务连接超时({self.host}:{self.port}, 超时={self.timeout.total_seconds()}s)")
+                raise ReqInvalidException(
+                    message=f"TCP连接建立失败: 连接超时({self.host}:{self.port}, 超时={self.timeout.total_seconds()}s), 请检查环境配置是否可达"
+                )
         except Exception as e:
-            raise ReqInvalidException(message=f"TCP服务连接失败({self.host}:{self.port}): {e}")
+            raise ReqInvalidException(message=f"TCP连接建立异常({self.host}:{self.port}): {e}")
 
     async def _reconnection(self) -> None:
         """
@@ -663,7 +775,7 @@ class AsyncTcpConnection:
         """
         按长度前缀帧发送一帧数据。
 
-        :param data: 发送内容（str / bytes / dict）
+        :param data: 发送内容（str/bytes/dict）
         :raises ReqInvalidException: 未连接且无法重连
         """
         body = AioTcpClient._encode_body(data, self.encoding)
@@ -683,7 +795,7 @@ class AsyncTcpConnection:
 
     async def receive_headers(self) -> Dict[str, str]:
         """
-        按行读取类 HTTP 头直至空行（可选能力，非长度前缀协议必需）。
+        按行读取类HTTP头直至空行。
 
         :return: 头字段字典；未连接且无法重连时返回空字典
         """
@@ -693,6 +805,7 @@ class AsyncTcpConnection:
                 await self._reconnection()
             if not (self.reader and self.connected):
                 return headers
+
         while True:
             line = await self.reader.readline()
             if line in (b"\r\n", b"\n", b""):
@@ -703,13 +816,14 @@ class AsyncTcpConnection:
                 headers[key.strip()] = value.strip()
             elif text:
                 headers[text] = ""
+
         return headers
 
     async def receive(self) -> Any:
         """
-        按长度前缀帧读取一帧；优先尝试 JSON 解析，失败则返回文本。
+        按长度前缀帧读取一帧。
 
-        :return: JSON 对象或文本字符串
+        :return: JSON对象或文本字符串，优先尝试JSON解析失败则返回文本
         :raises ReqInvalidException: 未连接、超时、长度非法或响应过大
         """
         if not (self.reader and self.connected):
@@ -722,21 +836,25 @@ class AsyncTcpConnection:
                 self.reader.readexactly(self.length_field_size),
                 timeout=self.timeout.total_seconds(),
             )
-        except asyncio.TimeoutError as e:
-            raise ReqInvalidException(message=f"TCP服务接收长度前缀超时({self.host}:{self.port}): {e}")
+        except asyncio.TimeoutError:
+            raise ReqInvalidException(
+                message=f"TCP响应报文接收失败: 长度前缀读取超时({self.host}:{self.port}, 超时={self.timeout.total_seconds()}s)"
+            )
         length_str = length_data.decode(self.encoding, errors="ignore").strip()
         if not length_str.isdigit():
-            raise ReqInvalidException(message=f"长度前缀非法, 期待的是十进制数字, 而得到的是: {length_str}, 请确认对端协议")
+            raise ReqInvalidException(message=f"TCP响应报文接收失败: 长度前缀非法, 期待十进制文本数字, 实收: {length_str!r}")
         length = int(length_str)
         if length > self.max_response_bytes:
-            raise ReqInvalidException(message=f"响应体积过大({length} bytes), 超出最大限制: {self.max_response_bytes} bytes")
+            raise ReqInvalidException(message=f"TCP响应报文接收失败: 响应体积超出最大限制: {self.max_response_bytes} bytes")
         try:
             data = await asyncio.wait_for(
                 self.reader.readexactly(length),
                 timeout=self.timeout.total_seconds(),
             )
-        except asyncio.TimeoutError as e:
-            raise ReqInvalidException(message=f"TCP服务接收正文超时({self.host}:{self.port}, bytes={length}): {e}")
+        except asyncio.TimeoutError:
+            raise ReqInvalidException(
+                message=f"TCP响应报文接收失败: 响应正文读取超时({self.host}:{self.port}, 超时={self.timeout.total_seconds()}s)"
+            )
         text = data.decode(self.encoding).strip()
         try:
             return orjson.loads(text)
@@ -757,18 +875,16 @@ class AsyncTcpConnection:
 
 async def tcp_json(host: str, port: int, data: dict, *, client: Optional[AioTcpClient] = None, **kwargs: Any) -> Any:
     """
-    短连接便捷函数：等价于AioTcpClient().tcp(...).json_resp()。
-
-    内部仍为一次建连、收发后关闭；多次交互请使用 AsyncTcpConnection。
+    短连接便捷函数，等价于AioTcpClient().tcp(...).json_resp()。
 
     :param host: 目标主机
     :param port: 目标端口
-    :param data: JSON 请求体（dict）
-    :param client: 可选复用的 AioTcpClient；未传则临时创建并在 finally 中 close
-    :param kwargs: 透传至 ``tcp``（如 frame_mode / encoding / 超时等）
-    :return: 解析后的 JSON 响应
+    :param data: JSON请求体（dict）
+    :param client: 可选复用的AioTcpClient；未传则临时创建并在finally中close
+    :param kwargs: 透传至tcp（如frame_mode/encoding/超时等）
+    :return: 解析后的JSON响应
     :raises ReqInvalidException: 请求侧失败
-    :raises ResInvalidException: 响应非合法 JSON
+    :raises ResInvalidException: 响应非合法JSON
     """
     own = client is None
     cli = client or AioTcpClient()
