@@ -580,12 +580,15 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
 
     async def _assert_configs_not_referenced(self, targets: List[AutoTestEnvConfigModel]) -> None:
         """
-        校验环境配置未被步骤或压测接口引用：逻辑标识精确匹配，DB/Redis 操作保留旧名称兜底。
+        校验环境配置删除后引用仍可解析：逻辑标识精确匹配，DB/Redis 操作保留旧名称兜底。
+
+        步骤/压测引用按 mode/名称定位、不绑定具体环境，同组（同应用同节点同名）仍有启用实例时
+        允许删除部分实例；仅当本次删除会清空整组（无任何存留启用实例）时才拒绝。
 
         :param targets: 待删除的环境配置实例列表
         :return: None
         :raises NotFoundException: 配置关联的环境绑定已不存在
-        :raises DataAlreadyExistsException: 任一配置被步骤或压测接口引用时拒绝删除
+        :raises DataAlreadyExistsException: 被引用配置所在逻辑组将被本次删除清空时拒绝删除
         """
         # 步骤与压测接口按 request_config_mode 精确匹配（旧名称列已随迁移 32 删除），
         # DB/Redis 的 operates 内仍可能残留未回填的 config_name，按同应用名称兜底；
@@ -663,24 +666,85 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
                     for target_id in mode_to_ids.get(str(row["request_config_mode"]), ()):
                         perf_counts[target_id] = perf_counts.get(target_id, 0) + 1
 
+            referenced_targets: List[AutoTestEnvConfigModel] = [
+                target for target in project_targets
+                if step_counts.get(int(target.id), 0) > 0 or perf_counts.get(int(target.id), 0) > 0
+            ]
+            if not referenced_targets:
+                continue
+            # 同组存留判定：引用不绑定环境，删除后同组仍有启用实例即可继续解析，至少保留一个
+            survivor_modes, survivor_names = await self._count_group_survivors(
+                project_id=project_id,
+                batch_targets=project_targets,
+                referenced=referenced_targets
+            )
             for target in project_targets:
                 target_id: int = int(target.id)
-                step_count: int = step_counts.get(target_id, 0)
-                perf_count: int = perf_counts.get(target_id, 0)
-                if step_count <= 0 and perf_count <= 0:
+                if target.config_mode:
+                    survivor_count: int = survivor_modes.get(str(target.config_mode), 0)
+                else:
+                    survivor_count = survivor_names.get(target.config_name, 0)
+                if survivor_count > 0:
+                    LOGGER.info(
+                        f"删除环境配置成功, 同应用同节点下仍有实例, 允许删除, "
+                        f"关键字段: [config_id={target_id}, config_name={target.config_name}, config_mode={target.config_mode}, survivor_count={survivor_count}]"
+                    )
                     continue
+                step_count: int = step_counts.get(target_id, 0)
                 references: List[str] = []
                 if step_count > 0:
                     references.append(f"{step_count}个步骤")
-                if perf_count > 0:
-                    references.append(f"{perf_count}个压测接口")
-                error_message: str = f"删除环境配置失败, 配置[{target.config_name}]被{'、'.join(references)}引用"
+                error_message: str = f"删除环境配置失败, 该配置被{'、'.join(references)}引用(同应用同节点下至少需保留一个启用实例)"
                 LOGGER.error(error_message)
                 raise DataAlreadyExistsException(message=error_message)
 
+    async def _count_group_survivors(
+            self,
+            *,
+            project_id: int,
+            batch_targets: List[AutoTestEnvConfigModel],
+            referenced: List[AutoTestEnvConfigModel],
+    ) -> Tuple[Dict[str, int], Dict[str, int]]:
+        """
+        统计被引用配置所属逻辑组在本次删除后的存留启用实例数（按绑定表定位，不依赖冗余列）。
+
+        :param project_id: 应用ID
+        :param batch_targets: 本批全部待删除配置（含未被引用行，一并从存留数中扣除）
+        :param referenced: 本批被引用的配置，用于确定需要统计的 mode/名称键
+        :return: (按 mode 的存留数, 按名称的存留数；名称键仅覆盖无 mode 的存量行)
+        """
+        mode_counts: Dict[str, int] = defaultdict(int)
+        name_counts: Dict[str, int] = defaultdict(int)
+        ref_modes = {str(item.config_mode) for item in referenced if item.config_mode}
+        ref_names = {item.config_name for item in referenced if not item.config_mode and item.config_name}
+        if not ref_modes and not ref_names:
+            return mode_counts, name_counts
+        bind_ids = list(await AutoTestEnvBindModel.filter(
+            project_id=project_id, state__not=1
+        ).values_list("id", flat=True))
+        if not bind_ids:
+            return mode_counts, name_counts
+        conditions = Q()
+        if ref_modes:
+            conditions |= Q(config_mode__in=ref_modes)
+        if ref_names:
+            conditions |= Q(config_name__in=ref_names)
+        batch_ids = {int(item.id) for item in batch_targets}
+        rows = await self.model.filter(
+            env_bind_id__in=bind_ids, state=0
+        ).filter(conditions).values("id", "config_mode", "config_name")
+        for row in rows:
+            if int(row["id"]) in batch_ids:
+                continue
+            if row["config_mode"] and str(row["config_mode"]) in ref_modes:
+                mode_counts[str(row["config_mode"])] += 1
+            if row["config_name"] and row["config_name"] in ref_names:
+                name_counts[row["config_name"]] += 1
+        return mode_counts, name_counts
+
     async def delete_config(self, config_in: AutoTestEnvConfigTypedDelete, scope: DataScope) -> AutoTestEnvConfigModel:
         """
-        按节点类型物理删除环境配置；被步骤引用时禁止删除。
+        按节点类型物理删除环境配置；被引用且同组无其他启用实例可保留时禁止删除。
 
         :param config_in: 删除入参
         :param scope: 数据权限上下文
@@ -688,7 +752,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :raises ParameterException: 环境节点类型不匹配
         :raises NotFoundException: 配置或关联环境绑定不存在
         :raises NoPermissionException: 配置创建人不在当前用户可删除范围
-        :raises DataAlreadyExistsException: 配置仍被步骤引用
+        :raises DataAlreadyExistsException: 配置被引用且同组将被清空
         """
         instance = await self.get_by_id(config_id=config_in.config_id, on_error=True)
         bind = await AutoTestEnvBindModel.filter(id=instance.env_bind_id).first()
@@ -709,7 +773,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
 
     async def delete_configs(self, config_in: AutoTestEnvConfigDelete, scope: DataScope) -> int:
         """
-        根据ID或code列表批量软删除环境配置；软删与物理删同样拒绝被步骤引用的配置。
+        根据ID或code列表批量软删除环境配置；软删与物理删同样要求被引用配置所在组至少保留一个启用实例。
 
         :param config_in: 环境配置批量删除schema
         :param scope: 数据权限上下文，仅允许删除归属人在当前用户可删除范围内的环境配置
@@ -717,7 +781,7 @@ class AutoTestEnvConfigCrud(ScaffoldCrud[AutoTestEnvConfigModel, AutoTestEnvConf
         :raises ParameterException: 两个定位参数同时为空，或列表中包含空值
         :raises NotFoundException: 任一目标配置不存在或已软删，或关联环境丢失
         :raises NoPermissionException: 任一配置创建人不在当前用户可删除范围
-        :raises DataAlreadyExistsException: 任一配置仍被步骤引用
+        :raises DataAlreadyExistsException: 任一被引用配置所在组将被本次删除清空
         """
         config_ids: Optional[List[int]] = config_in.config_ids
         config_codes: Optional[List[str]] = config_in.config_codes
