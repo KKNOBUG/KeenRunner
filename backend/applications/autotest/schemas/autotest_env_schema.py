@@ -64,9 +64,10 @@ class AutoTestEnvListQuery(BaseModel):
     project_id: Optional[List[int]] = Field(None, description="应用ID列表")
 
 
-class AutoTestEnvNameSelect(BaseModel):
-    """按环境名称列表过滤查询环境名称入参。"""
-    env_names: Optional[List[str]] = Field(None, description="环境名称列表")
+class AutoTestEnvNamesQuery(BaseModel):
+    """按应用ID列表查询环境名称映射入参。"""
+
+    project_ids: Optional[List[int]] = Field(None, description="应用ID列表")
 
 
 class AutoTestEnvPageSelect(BaseModel):

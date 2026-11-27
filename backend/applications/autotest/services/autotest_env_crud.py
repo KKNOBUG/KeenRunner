@@ -759,16 +759,14 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
             LOGGER.error(f"{error_message}\n{traceback.format_exc()}")
             raise ParameterException(message=error_message) from e
 
-    async def list_env_names(self, scope: Optional[DataScope] = None, env_names: Optional[List[str]] = None) -> List[str]:
+    async def list_env_names(self, scope: Optional[DataScope] = None) -> List[str]:
         """
         查询去重后的环境名称。
 
         :param scope: 数据权限上下文
-        :param env_names: 环境名称列表(精确匹配, 忽略大小写与首尾空白)；为空则不过滤
         :return: 环境名称列表
         """
         # 环境字典是全局共享的纯词典，必须经启用绑定过滤，避免未被任何绑定引用的孤儿字典泄漏；
-        # 限定范围时再叠加绑定归属过滤，按字典序返回便于前端稳定展示
         stmt = self.model.filter(state__not=1)
         owner_q = scope.read_q("created_user") if scope is not None else None
         if owner_q is not None:
@@ -776,11 +774,34 @@ class AutoTestEnvCrud(ScaffoldCrud[AutoTestEnvBindModel, AutoTestEnvCreate, Auto
         enum_ids = await stmt.values_list("env_enum_id", flat=True)
         if not enum_ids:
             return []
-        dict_stmt = AutoTestEnvModel.filter(id__in=list(set(enum_ids)))
-        names = list({name.strip().upper() for name in (env_names or []) if name and name.strip()})
-        if names:
-            dict_stmt = dict_stmt.filter(env_name__in=names)
-        return await dict_stmt.order_by("env_name").values_list("env_name", flat=True)
+        return await AutoTestEnvModel.filter(id__in=list(set(enum_ids))).order_by("env_name").values_list("env_name", flat=True)
+
+    async def get_names_by_projects(self, project_ids: Optional[List[int]] = None, scope: Optional[DataScope] = None) -> Dict[str, List[str]]:
+        """
+        按应用聚合去重后的环境名称。
+
+        :param project_ids: None/[]=全部应用；[ids]=指定应用（无绑定的应用也返回空列表）
+        :param scope: 数据权限上下文
+        :return: {应用ID(数字字符串): [环境名称]}，名称按字典序升序
+        """
+        # 与get_envs同口径：读启用绑定并联字典取名，绑定归属过滤后再按应用分组去重
+        base_qs = self.model.filter(state=0)
+        owner_q = scope.read_q("created_user") if scope is not None else None
+        if owner_q is not None:
+            base_qs = base_qs.filter(owner_q)
+        unique_pids: Optional[List[int]] = None
+        if project_ids:
+            unique_pids = list(dict.fromkeys(project_ids))
+            base_qs = base_qs.filter(project_id__in=unique_pids)
+        rows = await base_qs.values("project_id", "env_enum_id")
+        name_map = await self._get_dict_name_map({row["env_enum_id"] for row in rows})
+        grouped: Dict[int, set] = defaultdict(set)
+        for row in rows:
+            name = name_map.get(row["env_enum_id"])
+            if name:
+                grouped[row["project_id"]].add(name)
+        target_pids = unique_pids if unique_pids is not None else sorted(grouped.keys())
+        return {str(pid): sorted(grouped.get(pid, set())) for pid in target_pids}
 
     async def serialize_env(self, bind: AutoTestEnvBindModel, with_audit: bool = False) -> Dict[str, Any]:
         """

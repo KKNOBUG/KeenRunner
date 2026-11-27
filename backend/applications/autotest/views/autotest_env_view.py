@@ -20,7 +20,7 @@ from backend.applications.autotest.schemas.autotest_env_schema import (
     AutoTestEnvSelect,
     AutoTestEnvDelete,
     AutoTestEnvListQuery,
-    AutoTestEnvNameSelect,
+    AutoTestEnvNamesQuery,
     AutoTestEnvPageSelect,
 )
 from backend.applications.autotest.services.autotest_scope_guard import PROJECT_TAG
@@ -236,23 +236,28 @@ async def get_environment_names(
         return FailureResponse(message=f"查询失败，异常描述: {e}")
 
 
-@autotest_env.post("/get_names", summary="查询环境名称列表", description="按环境名称列表过滤查询环境名称")
+@autotest_env.post("/get_names", summary="查询环境名称列表", description="按应用ID列表查询环境名称映射")
 async def select_env_names(
-        env_in: AutoTestEnvNameSelect = Body(..., description="环境名称列表"),
+        env_in: AutoTestEnvNamesQuery = Body(..., description="查询条件"),
         services: AutoTestServices = DependAutoTestServices,
         scope: DataScope = DependTagScope,
 ):
     """
-    按环境名称列表过滤查询环境名称。
+    按应用ID列表查询环境名称映射。
 
-    :param env_in: 可选环境名称列表(精确匹配, 忽略大小写)
+    :param env_in: 可选应用ID列表，为空则查询全部应用
     :param services: 自动化测试CRUD依赖聚合
     :param scope: 数据权限上下文
-    :return: 统一HTTP响应
+    :return: 统一HTTP响应，data为{应用ID: [环境名称]}
     """
     try:
-        names: List[str] = await services.env_curd.list_env_names(scope=scope, env_names=env_in.env_names)
-        return SuccessResponse(message="查询成功", data=names, total=len(names))
+        names_map: Dict[str, List[str]] = await services.env_curd.get_names_by_projects(
+            project_ids=env_in.project_ids, scope=scope
+        )
+        total_names: int = sum(len(names) for names in names_map.values())
+        return SuccessResponse(message="查询成功", data=names_map, total=total_names)
+    except ParameterException as e:
+        return ParameterResponse(message=str(e.message))
     except Exception as e:
         LOGGER.error(f"查询环境名称列表失败，异常描述: {e}\n{traceback.format_exc()}")
         return FailureResponse(message=f"查询失败，异常描述: {e}")
